@@ -6,8 +6,7 @@ use super::util;
 use crate::error::{AppError, Result};
 use crate::models::{Memo, MemoTarget};
 
-const COLUMNS: &str =
-    "id, document_id, code_id, excerpt_id, title, body, created_at, updated_at";
+const COLUMNS: &str = "id, document_id, code_id, excerpt_id, title, body, created_at, updated_at";
 
 fn from_row(r: &Row) -> rusqlite::Result<Memo> {
     Ok(Memo {
@@ -76,9 +75,7 @@ pub fn create(conn: &Connection, target: MemoTarget, title: &str, body: &str) ->
     let id = util::new_id();
     let now = util::now();
     conn.execute(
-        &format!(
-            "INSERT INTO memos ({COLUMNS}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7)"
-        ),
+        &format!("INSERT INTO memos ({COLUMNS}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7)"),
         params![
             id,
             target.document_id,
@@ -152,50 +149,97 @@ mod tests {
     #[test]
     fn crud_on_each_target_and_cascade() {
         let p = OpenProject::in_memory("t").unwrap();
-        let doc = documents::create(&p.conn, new_doc("abc")).unwrap().summary.id;
+        let doc = documents::create(&p.conn, new_doc("abc"))
+            .unwrap()
+            .summary
+            .id;
         let code = mk_code(&p.conn, "C", None).id;
         let project_memo = create(&p.conn, MemoTarget::default(), "P", "project-level").unwrap();
         let doc_memo = create(
             &p.conn,
-            MemoTarget { document_id: Some(doc.clone()), ..Default::default() },
+            MemoTarget {
+                document_id: Some(doc.clone()),
+                ..Default::default()
+            },
             "D",
             "doc",
         )
         .unwrap();
         let code_memo = create(
             &p.conn,
-            MemoTarget { code_id: Some(code.clone()), ..Default::default() },
+            MemoTarget {
+                code_id: Some(code.clone()),
+                ..Default::default()
+            },
             "C",
             "code",
         )
         .unwrap();
-        assert_eq!(list(&p.conn, &MemoTarget::default()).unwrap(), vec![project_memo.clone()]);
         assert_eq!(
-            list(&p.conn, &MemoTarget { document_id: Some(doc.clone()), ..Default::default() }).unwrap().len(),
+            list(&p.conn, &MemoTarget::default()).unwrap(),
+            vec![project_memo.clone()]
+        );
+        assert_eq!(
+            list(
+                &p.conn,
+                &MemoTarget {
+                    document_id: Some(doc.clone()),
+                    ..Default::default()
+                }
+            )
+            .unwrap()
+            .len(),
             1
         );
         assert!(matches!(
             create(
                 &p.conn,
-                MemoTarget { document_id: Some(doc.clone()), code_id: Some(code.clone()), ..Default::default() },
+                MemoTarget {
+                    document_id: Some(doc.clone()),
+                    code_id: Some(code.clone()),
+                    ..Default::default()
+                },
                 "",
                 ""
             ),
             Err(AppError::Validation(_))
         ));
         assert!(matches!(
-            create(&p.conn, MemoTarget { excerpt_id: Some("nope".into()), ..Default::default() }, "", ""),
+            create(
+                &p.conn,
+                MemoTarget {
+                    excerpt_id: Some("nope".into()),
+                    ..Default::default()
+                },
+                "",
+                ""
+            ),
             Err(AppError::NotFound(_))
         ));
         let updated = update(&p.conn, &doc_memo.id, "D2", "changed").unwrap();
-        assert_eq!((updated.title.as_str(), updated.body.as_str()), ("D2", "changed"));
+        assert_eq!(
+            (updated.title.as_str(), updated.body.as_str()),
+            ("D2", "changed")
+        );
         let deleted = delete(&p.conn, &code_memo.id).unwrap();
-        assert!(matches!(get(&p.conn, &code_memo.id), Err(AppError::NotFound(_))));
+        assert!(matches!(
+            get(&p.conn, &code_memo.id),
+            Err(AppError::NotFound(_))
+        ));
         restore(&p.conn, &deleted).unwrap();
         assert_eq!(get(&p.conn, &code_memo.id).unwrap().body, "code");
         documents::delete(&p.conn, &doc).unwrap();
-        assert!(matches!(get(&p.conn, &doc_memo.id), Err(AppError::NotFound(_))));
-        assert!(matches!(restore(&p.conn, &updated), Err(AppError::NotFound(_))));
-        assert!(matches!(update(&p.conn, "nope", "", ""), Err(AppError::NotFound(_))));
+        assert!(matches!(
+            get(&p.conn, &doc_memo.id),
+            Err(AppError::NotFound(_))
+        ));
+        assert!(matches!(
+            restore(&p.conn, &updated),
+            Err(AppError::NotFound(_))
+        ));
+        assert!(matches!(
+            update(&p.conn, "nope", "", ""),
+            Err(AppError::NotFound(_))
+        ));
     }
 }

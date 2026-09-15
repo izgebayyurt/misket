@@ -1,0 +1,48 @@
+import { save } from "@tauri-apps/plugin-dialog";
+import { Download } from "lucide-react";
+import * as api from "@/api/export";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { toast } from "@/state/toasts";
+import type { ProjectInfo } from "@/api/types";
+
+function stem(project: ProjectInfo) {
+  return project.name.replace(/[^\w.-]+/g, "_") || "misket";
+}
+
+export function ExportMenu({ project }: { project: ProjectInfo }) {
+  async function run(kind: "codebook" | "excerpts" | "project") {
+    const ext = kind === "project" ? "json" : "csv";
+    try {
+      const path = await save({
+        defaultPath: `${stem(project)}-${kind}.${ext}`,
+        filters: [{ name: ext.toUpperCase(), extensions: [ext] }],
+      });
+      if (!path) return;
+      if (kind === "codebook") await api.exportCodebookCsv(path);
+      else if (kind === "excerpts") await api.exportExcerptsCsv(path, {});
+      else await api.exportProjectJson(path);
+      toast.info(`Exported ${kind} to ${path.split(/[\\/]/).pop()}`);
+    } catch (e) {
+      toast.error(e);
+    }
+  }
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button className="flex items-center gap-1 hover:text-fg" data-testid="export-menu">
+          <Download className="size-3.5" /> Export
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" side="top">
+        <DropdownMenuItem onSelect={() => run("codebook")}>Codebook (CSV)</DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => run("excerpts")}>All excerpts (CSV)</DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => run("project")}>Whole project (JSON)</DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}

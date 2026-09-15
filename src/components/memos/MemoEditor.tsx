@@ -26,22 +26,26 @@ export function MemoEditor({ memo, target }: { memo: Memo; target: MemoTarget })
     },
     [memo.id, memo.title, memo.body, target, update],
   );
+  const saveRef = useRef(save);
+  useEffect(() => {
+    saveRef.current = save;
+  }, [save]);
 
   function scheduleSave(t: string, b: string) {
     if (timer.current) window.clearTimeout(timer.current);
-    timer.current = window.setTimeout(() => save(t, b), 500);
+    timer.current = window.setTimeout(() => saveRef.current(t, b), 500);
   }
 
-  // Flush a pending save when the editor unmounts (e.g. switching panels).
+  // Flush a pending save only when the editor unmounts (e.g. switching panels).
   useEffect(() => {
     return () => {
       if (timer.current) {
         window.clearTimeout(timer.current);
         const { title, body } = latest.current;
-        save(title, body);
+        saveRef.current(title, body);
       }
     };
-  }, [save]);
+  }, []);
 
   return (
     <div className="group rounded-md border border-border bg-panel p-2" data-testid="memo">
@@ -64,8 +68,9 @@ export function MemoEditor({ memo, target }: { memo: Memo; target: MemoTarget })
           data-testid="memo-title"
         />
         <button
-          className="rounded p-1 text-fg-muted opacity-0 hover:bg-muted hover:text-danger group-hover:opacity-100 focus-visible:opacity-100"
+          className="rounded p-1 text-fg-muted opacity-0 hover:bg-muted hover:text-danger focus-visible:opacity-100 group-hover:opacity-100"
           aria-label="Delete memo"
+          tabIndex={-1}
           onClick={() => del.mutateAsync({ memo }).catch(toast.error)}
         >
           <Trash2 className="size-3.5" />

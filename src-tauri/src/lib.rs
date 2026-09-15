@@ -43,6 +43,9 @@ pub fn run() {
             commands::memos::update_memo,
             commands::memos::delete_memo,
             commands::memos::restore_memo,
+            commands::export::export_codebook_csv,
+            commands::export::export_excerpts_csv,
+            commands::export::export_project_json,
             commands::e2e::get_e2e_config,
         ])
         .run(tauri::generate_context!())

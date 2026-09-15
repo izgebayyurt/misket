@@ -167,7 +167,10 @@ pub fn add_codes(conn: &Connection, id: &str, code_ids: &[String]) -> Result<Exc
             params![id, code_id, now],
         )?;
     }
-    tx.execute("UPDATE excerpts SET updated_at = ?2 WHERE id = ?1", params![id, now])?;
+    tx.execute(
+        "UPDATE excerpts SET updated_at = ?2 WHERE id = ?1",
+        params![id, now],
+    )?;
     tx.commit()?;
     get(conn, id)
 }
@@ -289,7 +292,8 @@ pub fn query(conn: &Connection, filter: &ExcerptFilter) -> Result<ExcerptPage> {
         }
     }
     if filter.uncoded_only {
-        where_clauses.push("NOT EXISTS (SELECT 1 FROM excerpt_codes ec WHERE ec.excerpt_id = e.id)".into());
+        where_clauses
+            .push("NOT EXISTS (SELECT 1 FROM excerpt_codes ec WHERE ec.excerpt_id = e.id)".into());
     }
     let where_sql = where_clauses.join(" AND ");
 
@@ -398,7 +402,12 @@ mod tests {
         assert!(matches!(
             apply_codes(
                 &p.conn,
-                ApplyCodesInput { document_id: doc, start_pos: 0, end_pos: 1, code_ids: vec!["nope".into()] }
+                ApplyCodesInput {
+                    document_id: doc,
+                    start_pos: 0,
+                    end_pos: 1,
+                    code_ids: vec!["nope".into()]
+                }
             ),
             Err(AppError::NotFound(_))
         ));
@@ -415,7 +424,10 @@ mod tests {
         assert_eq!(e.code_ids, vec![b.clone()]);
         memos::create(
             &p.conn,
-            MemoTarget { excerpt_id: Some(id.clone()), ..Default::default() },
+            MemoTarget {
+                excerpt_id: Some(id.clone()),
+                ..Default::default()
+            },
             "t",
             "note",
         )
@@ -427,7 +439,10 @@ mod tests {
         assert_eq!(restored.id, id);
         assert_eq!(restored.code_ids, vec![b.clone()]);
         assert_eq!(restored.memo_count, 1);
-        assert!(matches!(restore(&p.conn, &snap), Err(AppError::Conflict(_))));
+        assert!(matches!(
+            restore(&p.conn, &snap),
+            Err(AppError::Conflict(_))
+        ));
         // Deleting the document cascades.
         documents::delete(&p.conn, &doc).unwrap();
         assert!(matches!(get(&p.conn, &id), Err(AppError::NotFound(_))));
@@ -436,7 +451,10 @@ mod tests {
     #[test]
     fn detail_and_query_with_descendants_documents_paging() {
         let (p, doc, a, b) = setup();
-        let doc2 = documents::create(&p.conn, new_doc("second document text")).unwrap().summary.id;
+        let doc2 = documents::create(&p.conn, new_doc("second document text"))
+            .unwrap()
+            .summary
+            .id;
         let e1 = apply(&p.conn, &doc, 0, 5, &[&a]).excerpt.id;
         let e2 = apply(&p.conn, &doc, 6, 11, &[&b]).excerpt.id;
         let e3 = apply(&p.conn, &doc2, 0, 6, &[]).excerpt.id;
@@ -448,31 +466,63 @@ mod tests {
 
         let all = query(&p.conn, &ExcerptFilter::default()).unwrap();
         assert_eq!(all.total, 3);
-        assert_eq!(all.rows.iter().map(|r| r.excerpt.id.clone()).collect::<Vec<_>>(), vec![e1.clone(), e2.clone(), e3.clone()]);
+        assert_eq!(
+            all.rows
+                .iter()
+                .map(|r| r.excerpt.id.clone())
+                .collect::<Vec<_>>(),
+            vec![e1.clone(), e2.clone(), e3.clone()]
+        );
         assert_eq!(all.rows[1].context_before, "héllo ");
         assert_eq!(all.rows[1].context_after, " 😀 end");
 
         let by_a = query(
             &p.conn,
-            &ExcerptFilter { code_ids: Some(vec![a.clone()]), include_descendants: true, ..Default::default() },
+            &ExcerptFilter {
+                code_ids: Some(vec![a.clone()]),
+                include_descendants: true,
+                ..Default::default()
+            },
         )
         .unwrap();
         assert_eq!(by_a.total, 2);
         let by_a_only = query(
             &p.conn,
-            &ExcerptFilter { code_ids: Some(vec![a.clone()]), include_descendants: false, ..Default::default() },
+            &ExcerptFilter {
+                code_ids: Some(vec![a.clone()]),
+                include_descendants: false,
+                ..Default::default()
+            },
         )
         .unwrap();
         assert_eq!(by_a_only.total, 1);
-        let uncoded = query(&p.conn, &ExcerptFilter { uncoded_only: true, ..Default::default() }).unwrap();
+        let uncoded = query(
+            &p.conn,
+            &ExcerptFilter {
+                uncoded_only: true,
+                ..Default::default()
+            },
+        )
+        .unwrap();
         assert_eq!(uncoded.rows[0].excerpt.id, e3);
         let doc2_only = query(
             &p.conn,
-            &ExcerptFilter { document_ids: Some(vec![doc2.clone()]), ..Default::default() },
+            &ExcerptFilter {
+                document_ids: Some(vec![doc2.clone()]),
+                ..Default::default()
+            },
         )
         .unwrap();
         assert_eq!(doc2_only.total, 1);
-        let page = query(&p.conn, &ExcerptFilter { limit: 1, offset: 1, ..Default::default() }).unwrap();
+        let page = query(
+            &p.conn,
+            &ExcerptFilter {
+                limit: 1,
+                offset: 1,
+                ..Default::default()
+            },
+        )
+        .unwrap();
         assert_eq!(page.total, 3);
         assert_eq!(page.rows.len(), 1);
         assert_eq!(page.rows[0].excerpt.id, e2);

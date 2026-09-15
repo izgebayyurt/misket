@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <radialGradient id="glass" cx="38%" cy="32%" r="70%">
+      <stop offset="0%" stop-color="#ffe9d6"/>
+      <stop offset="45%" stop-color="#e08a4a"/>
+      <stop offset="100%" stop-color="#7a3410"/>
+    </radialGradient>
+    <linearGradient id="swirl" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#fbfaf7" stop-opacity="0.95"/>
+      <stop offset="100%" stop-color="#fbfaf7" stop-opacity="0.15"/>
+    </linearGradient>
+  </defs>
+  <circle cx="512" cy="512" r="440" fill="url(#glass)"/>
+  <path d="M250 610 C 380 420, 520 700, 700 470 S 820 380, 790 330" fill="none" stroke="url(#swirl)" stroke-width="64" stroke-linecap="round"/>
+  <path d="M300 400 C 420 300, 560 330, 640 420" fill="none" stroke="#fbfaf7" stroke-opacity="0.35" stroke-width="40" stroke-linecap="round"/>
+  <ellipse cx="380" cy="330" rx="120" ry="70" fill="#ffffff" fill-opacity="0.55" transform="rotate(-25 380 330)"/>
+  <circle cx="512" cy="512" r="440" fill="none" stroke="#5a2a10" stroke-opacity="0.35" stroke-width="12"/>
+</svg>
