@@ -46,6 +46,17 @@ export function useGlobalShortcuts() {
           return;
         case "escape":
           if (ws.paletteOpen) return; // the palette closes itself
+          // An open popover, menu or dialog owns Escape; Radix closes it.
+          if (
+            document.querySelector(
+              "[data-radix-popper-content-wrapper], [role='dialog'], [role='menu']",
+            )
+          )
+            return;
+          if (handlers.escape) {
+            handlers.escape();
+            return;
+          }
           ws.setFocusedExcerptId(null);
           ws.setPendingSelection(null);
           window.getSelection()?.removeAllRanges();

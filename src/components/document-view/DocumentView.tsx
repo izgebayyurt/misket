@@ -162,6 +162,17 @@ export function DocumentView({ documentId, focusExcerptId }: Props) {
       deleteExcerpt: () => {
         if (focusedId) deleteExcerpt.mutate({ id: focusedId, documentId });
       },
+      // Escape peels one layer at a time: selection, then focus. (An open
+      // popover is closed by Radix before this runs.)
+      escape: () => {
+        const ws = useWorkspace.getState();
+        if (ws.pendingSelection) {
+          ws.setPendingSelection(null);
+          window.getSelection()?.removeAllRanges();
+          return;
+        }
+        ws.setFocusedExcerptId(null);
+      },
     });
     return unregister;
   }, [moveFocus, focusedId, deleteExcerpt, documentId, openPopover]);

@@ -15,6 +15,7 @@ export const PopoverContent = React.forwardRef<
       ref={ref}
       align={align}
       sideOffset={sideOffset}
+      onEscapeKeyDown={(e) => e.stopPropagation()}
       className={cn(
         "z-50 w-72 rounded-md border border-border bg-panel p-3 shadow-lg outline-none",
         className,

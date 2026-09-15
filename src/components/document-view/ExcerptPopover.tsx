@@ -30,6 +30,7 @@ export function ExcerptPopover({ excerpt, anchor, onClose }: Props) {
         align="start"
         className="w-80 p-2"
         onOpenAutoFocus={(e) => e.preventDefault()}
+        onCloseAutoFocus={(e) => e.preventDefault()}
         data-testid="excerpt-popover"
       >
         <div className="mb-1 flex items-center justify-between px-1">

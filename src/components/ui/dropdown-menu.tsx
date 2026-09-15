@@ -15,6 +15,7 @@ export const DropdownMenuContent = React.forwardRef<
     <DropdownMenuPrimitive.Content
       ref={ref}
       sideOffset={sideOffset}
+      onEscapeKeyDown={(e) => e.stopPropagation()}
       className={cn(
         "z-50 min-w-[10rem] rounded-md border border-border bg-panel p-1 shadow-lg",
         className,

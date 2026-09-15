@@ -56,7 +56,10 @@ export function DocumentList() {
               >
                 <button
                   className="flex min-w-0 flex-1 items-center gap-2 text-left"
-                  onClick={() => openDocument(d.id)}
+                  onClick={(e) => {
+                    e.currentTarget.blur();
+                    openDocument(d.id);
+                  }}
                   data-testid="document-item"
                 >
                   <FileText className="size-4 shrink-0 text-fg-muted" />
