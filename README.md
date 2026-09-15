@@ -62,6 +62,22 @@ cargo test --workspace  # database and domain logic tests
 pnpm tauri build        # installable bundle for this platform
 ```
 
+### Setting up on macOS from scratch
+
+```sh
+xcode-select --install                                   # compilers and system SDKs
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh   # Rust stable
+brew install node                                        # Node 22 (or use nvm)
+corepack enable && corepack prepare pnpm@10.33.0 --activate      # pnpm, pinned by package.json
+git clone https://github.com/izgebayyurt/misket.git ~/Documents/GitHub/misket
+cd ~/Documents/GitHub/misket
+pnpm install
+pnpm tauri dev
+```
+
+The first `pnpm tauri dev` compiles the Rust side and takes a few minutes; later
+runs are incremental.
+
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for how the pieces fit
 together, [docs/DATA_MODEL.md](docs/DATA_MODEL.md) for the schema, and
 [e2e/README.md](e2e/README.md) for the WebDriver smoke test.
