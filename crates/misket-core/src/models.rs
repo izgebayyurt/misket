@@ -187,7 +187,7 @@ pub struct ExcerptSnapshot {
     pub memos: Vec<Memo>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct ExcerptFilter {
     #[serde(default)]
@@ -209,6 +209,19 @@ fn default_true() -> bool {
 }
 fn default_limit() -> i64 {
     200
+}
+
+impl Default for ExcerptFilter {
+    fn default() -> Self {
+        Self {
+            code_ids: None,
+            include_descendants: true,
+            document_ids: None,
+            uncoded_only: false,
+            limit: default_limit(),
+            offset: 0,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
