@@ -1,3 +1,4 @@
+import { describe } from "@/core/keymap";
 import type { ProjectInfo } from "@/api/types";
 import { cn } from "@/lib/utils";
 import { useWorkspace } from "@/state/workspace";
@@ -44,7 +45,7 @@ export function Sidebar({ project }: { project: ProjectInfo }) {
           data-testid="open-excerpts"
         >
           <List /> Excerpts
-          <span className="ml-auto text-xs text-fg-muted">⌘E</span>
+          <span className="ml-auto text-xs text-fg-muted">{describe("excerptBrowser")}</span>
         </Button>
       </div>
     </aside>

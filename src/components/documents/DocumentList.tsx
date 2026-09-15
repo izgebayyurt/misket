@@ -1,3 +1,4 @@
+import { describe } from "@/core/keymap";
 import { useState } from "react";
 import { FileText, MoreHorizontal, Upload } from "lucide-react";
 import { useDeleteDocument, useDocuments, useRenameDocument } from "@/queries/documents";
@@ -36,7 +37,7 @@ export function DocumentList() {
           data-testid="import-documents"
         >
           <Upload /> Import…
-          <span className="ml-auto text-xs text-fg-muted">⌘I</span>
+          <span className="ml-auto text-xs text-fg-muted">{describe("import")}</span>
         </Button>
       </div>
       {docs && docs.length === 0 ? (

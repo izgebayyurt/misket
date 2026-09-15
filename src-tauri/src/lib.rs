@@ -23,6 +23,14 @@ pub fn run() {
             commands::documents::rename_document,
             commands::documents::reorder_documents,
             commands::documents::delete_document,
+            commands::codes::list_codes,
+            commands::codes::create_code,
+            commands::codes::update_code,
+            commands::codes::move_code,
+            commands::codes::delete_code,
+            commands::codes::merge_code,
+            commands::codes::count_code_impact,
+            commands::e2e::get_e2e_config,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Misket");

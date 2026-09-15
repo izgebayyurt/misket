@@ -21,7 +21,7 @@ export default tseslint.config(
     // src/core is pure logic: no React, no Tauri, no API layer.
     files: ["src/core/**/*.{ts,tsx}"],
     rules: {
-      "no-restricted-imports": [
+      "@typescript-eslint/no-restricted-imports": [
         "error",
         {
           patterns: [
@@ -32,7 +32,8 @@ export default tseslint.config(
             { group: ["@tauri-apps/*"], message: "src/core must not talk to Tauri" },
             {
               group: ["@/api", "@/api/*", "../api", "../api/*", "../../api/*"],
-              message: "src/core must not call the API layer",
+              message: "src/core must not call the API layer (type-only imports are fine)",
+              allowTypeImports: true,
             },
           ],
         },

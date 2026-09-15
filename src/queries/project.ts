@@ -17,7 +17,7 @@ export function useOpenProject() {
     mutationFn: (path: string) => api.openProject(path),
     onSuccess: () => {
       useWorkspace.getState().reset();
-      qc.clear();
+      qc.resetQueries();
     },
   });
 }
@@ -28,7 +28,7 @@ export function useCreateProject() {
     mutationFn: ({ path, name }: { path: string; name: string }) => api.createProject(path, name),
     onSuccess: () => {
       useWorkspace.getState().reset();
-      qc.clear();
+      qc.resetQueries();
     },
   });
 }
@@ -39,7 +39,7 @@ export function useCloseProject() {
     mutationFn: api.closeProject,
     onSuccess: () => {
       useWorkspace.getState().reset();
-      qc.clear();
+      qc.resetQueries();
     },
   });
 }
