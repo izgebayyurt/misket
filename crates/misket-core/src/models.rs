@@ -241,6 +241,28 @@ pub struct ExcerptSnapshot {
     pub memos: Vec<Memo>,
 }
 
+/// The two halves left by [`crate::db::excerpts::split`]; `left` keeps the original id.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct SplitResult {
+    pub left: ExcerptWithCodes,
+    pub right: ExcerptWithCodes,
+}
+
+/// The outcome of [`crate::db::excerpts::merge_adjacent`], with everything the
+/// frontend needs to invert it: the survivor as it is now, a snapshot of the
+/// excerpt that was removed, the survivor's range before the merge and the
+/// codes the merge added to it.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct MergeResult {
+    pub excerpt: ExcerptWithCodes,
+    pub removed: ExcerptSnapshot,
+    pub previous_start_pos: i64,
+    pub previous_end_pos: i64,
+    pub added_code_ids: Vec<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct ExcerptFilter {

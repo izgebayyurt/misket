@@ -29,6 +29,21 @@ const GROUPS: { title: string; actions: Action[] }[] = [
     ],
   },
   {
+    title: "Excerpt boundaries",
+    actions: [
+      "excerptEndLeft",
+      "excerptEndRight",
+      "excerptEndLeftChar",
+      "excerptEndRightChar",
+      "excerptStartLeft",
+      "excerptStartRight",
+      "excerptStartLeftChar",
+      "excerptStartRightChar",
+      "splitExcerpt",
+      "mergeExcerpt",
+    ],
+  },
+  {
     title: "Project",
     actions: ["openProject", "newProject", "import", "newMemo", "settings", "shortcutsHelp"],
   },

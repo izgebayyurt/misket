@@ -227,6 +227,25 @@ export interface ExcerptSnapshot {
   memos: Memo[];
 }
 
+/** The two halves left by `split_excerpt`; `left` keeps the original id. */
+export interface SplitResult {
+  left: ExcerptWithCodes;
+  right: ExcerptWithCodes;
+}
+
+/**
+ * The outcome of `merge_excerpts`, with everything needed to invert it: the
+ * surviving excerpt, a snapshot of the one that was removed, the survivor's
+ * range before the merge and the codes the merge added to it.
+ */
+export interface MergeResult {
+  excerpt: ExcerptWithCodes;
+  removed: ExcerptSnapshot;
+  previousStartPos: number;
+  previousEndPos: number;
+  addedCodeIds: string[];
+}
+
 export interface ExcerptFilter {
   codeIds?: string[] | null;
   includeDescendants?: boolean;

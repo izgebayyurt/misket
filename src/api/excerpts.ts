@@ -7,6 +7,8 @@ import type {
   ExcerptPage,
   ExcerptSnapshot,
   ExcerptWithCodes,
+  MergeResult,
+  SplitResult,
 } from "./types";
 
 export const applyCodes = (input: ApplyCodesInput) => invoke<ApplyResult>("apply_codes", { input });
@@ -22,3 +24,9 @@ export const restoreExcerpt = (snapshot: ExcerptSnapshot) =>
   invoke<ExcerptWithCodes>("restore_excerpt", { snapshot });
 export const queryExcerpts = (filter: ExcerptFilter) =>
   invoke<ExcerptPage>("query_excerpts", { filter });
+export const updateExcerptRange = (id: string, startPos: number, endPos: number) =>
+  invoke<ExcerptWithCodes>("update_excerpt_range", { id, startPos, endPos });
+export const splitExcerpt = (id: string, at: number) =>
+  invoke<SplitResult>("split_excerpt", { id, at });
+export const mergeExcerpts = (leftId: string, rightId: string) =>
+  invoke<MergeResult>("merge_excerpts", { leftId, rightId });

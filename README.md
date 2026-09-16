@@ -25,6 +25,10 @@ keyboard-friendly interface without a subscription.
   `>name` to create one on the spot), or press a code's hotkey. The picker
   shows each code's description and, for nested codes, its full path.
   Overlapping excerpts are drawn as stacked colored lanes.
+- **Adjust what is coded**: move an excerpt's start or end by a word or a
+  character from the keyboard, drag the grips at either end, split an excerpt
+  at the cursor, or merge it with a touching neighbour (codes and memos are
+  combined). All of it is undoable.
 - **Browse excerpts** across the project, filtered by code (with sub-codes),
   document, or uncoded only, and jump back to any of them in context.
 - **Analyse**: a code frequency table (own counts and counts with sub-codes,
@@ -51,6 +55,13 @@ keyboard-friendly interface without a subscription.
 | Next / previous excerpt                                | `Tab` / `Shift`+`Tab`                         |
 | Edit the focused excerpt                               | `Enter`                                       |
 | Delete the focused excerpt                             | `Backspace`                                   |
+| Move the excerpt's **end** by a word                   | `Alt` + `←` / `→`                             |
+| Move the excerpt's **end** by a character              | `Ctrl`/`⌘` + `Shift` + `←` / `→`              |
+| Move the excerpt's **start** by a word                 | `Ctrl`/`⌘` + `Alt` + `←` / `→`                |
+| Move the excerpt's **start** by a character            | `Ctrl`/`⌘` + `Alt` + `Shift` + `←` / `→`      |
+| Split the focused excerpt at the cursor                | `Ctrl`/`⌘` + `Shift` + `S`                    |
+| Merge the focused excerpt with its neighbour           | `Ctrl`/`⌘` + `Shift` + `M`                    |
+| Extend the selection by a word                         | `Alt` + `Shift` + `←` / `→`                   |
 | New memo on the current document, code or excerpt      | `Ctrl`/`⌘` + `M`                              |
 | Excerpt browser                                        | `Ctrl`/`⌘` + `E`                              |
 | Analysis views                                         | `Shift` + `Ctrl`/`⌘` + `A`                    |
@@ -60,6 +71,13 @@ keyboard-friendly interface without a subscription.
 | Undo / redo                                            | `Ctrl`/`⌘` + `Z` / `Shift` + `Ctrl`/`⌘` + `Z` |
 | Settings (theme, text size, confirm-delete)            | `Ctrl`/`⌘` + `,`                              |
 | Keyboard shortcuts reference                           | `Ctrl`/`⌘` + `/`                              |
+
+`Alt` + arrows move the focused excerpt's **end** edge; adding `Ctrl`/`⌘`
+moves the **start** edge instead, and adding `Shift` steps by one character
+rather than one word. The end edge's character step is the one exception to
+that rule — it drops `Alt`, because `Alt` + `Shift` + arrows already extends
+the selection. You can also drag the round grips at either end of the focused
+excerpt; every adjustment, split and merge is undoable.
 
 ## Install
 

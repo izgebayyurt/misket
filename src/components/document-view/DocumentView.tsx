@@ -1,8 +1,16 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useDocument } from "@/queries/documents";
 import { useCodes } from "@/queries/codes";
-import { useApplyCodes, useDeleteExcerpt, useDocumentExcerpts } from "@/queries/excerpts";
-import { buildOffsetMap, cpToUtf16, utf16ToCp } from "@/core/offsets";
+import {
+  useApplyCodes,
+  useDeleteExcerpt,
+  useDocumentExcerpts,
+  useMergeExcerpts,
+  useSplitExcerpt,
+  useUpdateExcerptRange,
+} from "@/queries/excerpts";
+import type { ExcerptWithCodes } from "@/api/types";
+import { buildOffsetMap, codePointCount, cpToUtf16, utf16ToCp } from "@/core/offsets";
 import {
   MAX_LANES,
   segmentParagraph,
@@ -10,8 +18,9 @@ import {
   type RenderableExcerpt,
   type Segment,
 } from "@/core/segmentation";
-import { offsetsToRange, rangeToOffsets } from "@/core/selection";
-import { isTextField, mod } from "@/core/keymap";
+import { offsetsToRange, pointToOffset, rangeToOffsets } from "@/core/selection";
+import { nextBoundary, type Direction, type Granularity } from "@/core/wordBounds";
+import { isTextField, mod, type Action } from "@/core/keymap";
 import { findMatches } from "@/core/find";
 import { useWorkspace } from "@/state/workspace";
 import { useShortcutActions } from "@/state/shortcutActions";
@@ -43,9 +52,20 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
   const setPaletteOpen = useWorkspace((s) => s.setPaletteOpen);
   const applyCodes = useApplyCodes();
   const deleteExcerpt = useDeleteExcerpt();
+  const updateRange = useUpdateExcerptRange();
+  const splitExcerpt = useSplitExcerpt();
+  const mergeExcerpts = useMergeExcerpts();
   const [flashId, setFlashId] = useState<string | null>(null);
   const [toolbarPos, setToolbarPos] = useState<{ top: number; left: number } | null>(null);
-  const [popover, setPopover] = useState<{ id: string; anchor: HTMLElement } | null>(null);
+  const [popover, setPopover] = useState<{
+    id: string;
+    anchor: HTMLElement;
+    /** Where the click landed, in code points: the "Split here" point. */
+    caret: number | null;
+  } | null>(null);
+  /** A boundary drag in progress, in code points; rendered instead of the stored range. */
+  const [drag, setDrag] = useState<DragState | null>(null);
+  const [handles, setHandles] = useState<HandleBoxes | null>(null);
   const [findOpen, setFindOpen] = useState(false);
   const [findQuery, setFindQuery] = useState("");
   const [findIndex, setFindIndex] = useState(0);
@@ -75,6 +95,67 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
   }, [excerpts, offsetMap, text]);
 
   const excerptById = useMemo(() => new Map((excerpts ?? []).map((e) => [e.id, e])), [excerpts]);
+
+  /** `renderable`, with a boundary drag in progress shown at its tentative range. */
+  const previewed = useMemo<RenderableExcerpt[]>(() => {
+    if (!drag) return renderable;
+    return renderable
+      .map((e) =>
+        e.id === drag.id
+          ? { ...e, start: cpToUtf16(offsetMap, drag.start), end: cpToUtf16(offsetMap, drag.end) }
+          : e,
+      )
+      .sort((a, b) => a.start - b.start || a.end - b.end);
+  }, [drag, offsetMap, renderable]);
+
+  const total = useMemo(() => codePointCount(offsetMap), [offsetMap]);
+
+  /**
+   * Map a viewport point to a code point offset in the document, using the
+   * browser's caret hit-testing and the same `span[data-s]` contract that
+   * `src/core/selection.ts` relies on.
+   */
+  const offsetFromPoint = useCallback(
+    (clientX: number, clientY: number): number | null => {
+      const root = rootRef.current;
+      if (!root) return null;
+      let node: Node | null = null;
+      let offset = 0;
+      const doc = document as Document & {
+        caretPositionFromPoint?: (x: number, y: number) => CaretPosition | null;
+      };
+      if (typeof doc.caretPositionFromPoint === "function") {
+        const pos = doc.caretPositionFromPoint(clientX, clientY);
+        if (pos) {
+          node = pos.offsetNode;
+          offset = pos.offset;
+        }
+      } else if (typeof document.caretRangeFromPoint === "function") {
+        const r = document.caretRangeFromPoint(clientX, clientY);
+        if (r) {
+          node = r.startContainer;
+          offset = r.startOffset;
+        }
+      }
+      if (!node) return null;
+      const u16 = pointToOffset(node, offset, root);
+      if (u16 === null) return null;
+      return utf16ToCp(offsetMap, Math.max(0, Math.min(u16, text.length)));
+    },
+    [offsetMap, text.length],
+  );
+
+  /** The collapse point of the current selection, in code points. */
+  const caretOffset = useCallback((): number | null => {
+    const root = rootRef.current;
+    const sel = window.getSelection();
+    if (!root || !sel || sel.rangeCount === 0) return null;
+    const range = sel.getRangeAt(0);
+    if (!root.contains(range.startContainer)) return null;
+    const u16 = pointToOffset(range.startContainer, range.startOffset, root);
+    if (u16 === null) return null;
+    return utf16ToCp(offsetMap, Math.max(0, Math.min(u16, text.length)));
+  }, [offsetMap, text.length]);
 
   // --- find in document -----------------------------------------------------
   const findResults = useMemo(
@@ -222,10 +303,212 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusExcerptId, !!excerpts]);
 
-  const openPopover = useCallback((id: string) => {
-    const anchor = rootRef.current?.querySelector<HTMLElement>(`[data-x~="${CSS.escape(id)}"]`);
-    setPopover(anchor ? { id, anchor } : null);
-  }, []);
+  const openPopover = useCallback(
+    (id: string) => {
+      const anchor = rootRef.current?.querySelector<HTMLElement>(`[data-x~="${CSS.escape(id)}"]`);
+      setPopover(anchor ? { id, anchor, caret: caretOffset() } : null);
+    },
+    [caretOffset],
+  );
+
+  // --- excerpt boundaries --------------------------------------------------
+
+  /** Move a text excerpt to a new range through the undoable mutation. */
+  const commitRange = useCallback(
+    (excerpt: ExcerptWithCodes, startPos: number, endPos: number, label?: string) => {
+      if (excerpt.startPos === null || excerpt.endPos === null) return;
+      if (startPos === excerpt.startPos && endPos === excerpt.endPos) return;
+      updateRange
+        .mutateAsync({
+          id: excerpt.id,
+          documentId,
+          startPos,
+          endPos,
+          previousStartPos: excerpt.startPos,
+          previousEndPos: excerpt.endPos,
+          label,
+        })
+        .catch(toast.error);
+    },
+    [documentId, updateRange],
+  );
+
+  const focusedExcerpt = useCallback((): ExcerptWithCodes | null => {
+    const id = useWorkspace.getState().focusedExcerptId;
+    const ex = id ? excerptById.get(id) : undefined;
+    if (!ex || ex.kind !== "text" || ex.startPos === null || ex.endPos === null) return null;
+    return ex;
+  }, [excerptById]);
+
+  /** Grow or shrink one edge of the focused excerpt by a word or a character. */
+  const nudgeBoundary = useCallback(
+    (edge: "start" | "end", dir: Direction, granularity: Granularity) => {
+      const ex = focusedExcerpt();
+      if (!ex) return;
+      let startPos = ex.startPos!;
+      let endPos = ex.endPos!;
+      if (edge === "start") {
+        startPos = Math.max(
+          0,
+          Math.min(nextBoundary(text, startPos, dir, granularity), endPos - 1),
+        );
+      } else {
+        endPos = Math.min(
+          total,
+          Math.max(nextBoundary(text, endPos, dir, granularity), startPos + 1),
+        );
+      }
+      commitRange(ex, startPos, endPos, "Adjust excerpt boundary");
+    },
+    [commitRange, focusedExcerpt, text, total],
+  );
+
+  /** The touching or overlapping text excerpts on either side of the focused one. */
+  const neighbours = useMemo(() => {
+    const ex = focusedId ? excerptById.get(focusedId) : undefined;
+    let prev: ExcerptWithCodes | null = null;
+    let next: ExcerptWithCodes | null = null;
+    if (!ex || ex.kind !== "text" || ex.startPos === null || ex.endPos === null)
+      return { prev, next };
+    for (const o of excerpts ?? []) {
+      if (o.id === ex.id || o.kind !== "text" || o.startPos === null || o.endPos === null) continue;
+      // Mergeable means touching or overlapping, which is what the backend accepts.
+      if (o.startPos > ex.endPos || o.endPos < ex.startPos) continue;
+      // Order by (start, end), the same order the list arrives in.
+      const before = (a: ExcerptWithCodes, b: ExcerptWithCodes) =>
+        a.startPos! < b.startPos! || (a.startPos === b.startPos && a.endPos! < b.endPos!);
+      if (before(ex, o)) {
+        if (!next || before(o, next)) next = o;
+      } else if (!prev || before(prev, o)) {
+        prev = o;
+      }
+    }
+    return { prev, next };
+  }, [excerpts, excerptById, focusedId]);
+
+  /** Merge the focused excerpt with a neighbour; the focused one survives. */
+  const mergeWith = useCallback(
+    (other: ExcerptWithCodes | null) => {
+      const ex = focusedExcerpt();
+      if (!ex || !other) return;
+      setPopover(null);
+      mergeExcerpts
+        .mutateAsync({ leftId: ex.id, rightId: other.id, documentId })
+        .catch(toast.error);
+    },
+    [documentId, focusedExcerpt, mergeExcerpts],
+  );
+
+  /** Split the focused excerpt at `at`, or at the caret when it is inside it. */
+  const splitFocused = useCallback(
+    (at?: number | null) => {
+      const ex = focusedExcerpt();
+      if (!ex) return;
+      const point = at ?? caretOffset();
+      if (point === null || point <= ex.startPos! || point >= ex.endPos!) {
+        toast.info("Put the cursor inside the excerpt to split it there.");
+        return;
+      }
+      setPopover(null);
+      splitExcerpt.mutateAsync({ id: ex.id, documentId, at: point }).catch(toast.error);
+    },
+    [caretOffset, documentId, focusedExcerpt, splitExcerpt],
+  );
+
+  // --- drag handles --------------------------------------------------------
+
+  const startDrag = useCallback(
+    (edge: "start" | "end") => (e: React.PointerEvent<HTMLDivElement>) => {
+      const ex = focusedExcerpt();
+      if (!ex) return;
+      e.preventDefault();
+      e.stopPropagation();
+      e.currentTarget.setPointerCapture(e.pointerId);
+      setPopover(null);
+      window.getSelection()?.removeAllRanges();
+      setDrag({ id: ex.id, edge, start: ex.startPos!, end: ex.endPos! });
+    },
+    [focusedExcerpt],
+  );
+
+  const moveDrag = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      if (!drag) return;
+      const cp = offsetFromPoint(e.clientX, e.clientY);
+      if (cp === null) return;
+      setDrag((d) => {
+        if (!d) return d;
+        if (d.edge === "start") {
+          const start = Math.max(0, Math.min(cp, d.end - 1));
+          return start === d.start ? d : { ...d, start };
+        }
+        const end = Math.min(total, Math.max(cp, d.start + 1));
+        return end === d.end ? d : { ...d, end };
+      });
+    },
+    [drag, offsetFromPoint, total],
+  );
+
+  const endDrag = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      if (!drag) return;
+      if (e.currentTarget.hasPointerCapture(e.pointerId))
+        e.currentTarget.releasePointerCapture(e.pointerId);
+      const d = drag;
+      setDrag(null);
+      const ex = excerptById.get(d.id);
+      if (ex) commitRange(ex, d.start, d.end, "Drag excerpt boundary");
+    },
+    [commitRange, drag, excerptById],
+  );
+
+  /** Keep the handles on the first and last client rect of the focused range. */
+  const focusedBox = useMemo(() => {
+    const e = focusedId ? previewed.find((x) => x.id === focusedId) : undefined;
+    return e ? { start: e.start, end: e.end } : null;
+  }, [focusedId, previewed]);
+
+  useLayoutEffect(() => {
+    const root = rootRef.current;
+    const container = scrollRef.current;
+    if (!root || !container || !focusedBox) {
+      setHandles(null);
+      return;
+    }
+    const measure = () => {
+      const range = offsetsToRange(root, focusedBox.start, focusedBox.end);
+      const rects = range ? Array.from(range.getClientRects()).filter((r) => r.height > 0) : [];
+      const first = rects[0];
+      const last = rects[rects.length - 1];
+      if (!first || !last) {
+        setHandles(null);
+        return;
+      }
+      const box = container.getBoundingClientRect();
+      const next: HandleBoxes = {
+        start: {
+          left: first.left - box.left + container.scrollLeft,
+          top: first.top - box.top + container.scrollTop,
+          height: first.height,
+        },
+        end: {
+          left: last.right - box.left + container.scrollLeft,
+          top: last.top - box.top + container.scrollTop,
+          height: last.height,
+        },
+      };
+      setHandles((prev) => (sameBoxes(prev, next) ? prev : next));
+    };
+    measure();
+    const observer =
+      typeof ResizeObserver === "undefined" ? null : new ResizeObserver(() => measure());
+    observer?.observe(container);
+    window.addEventListener("resize", measure);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, [focusedBox, text]);
 
   /** Grow the current selection (or the focused excerpt) by one word. */
   const extendSelection = useCallback(
@@ -277,7 +560,7 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
 
   // --- shortcut handlers registered with the global listener --------------
   useEffect(() => {
-    const unregister = useShortcutActions.getState().register({
+    const handlers: Partial<Record<Action, () => void>> = {
       nextExcerpt: () => moveFocus(1),
       prevExcerpt: () => moveFocus(-1),
       editExcerpt: () => {
@@ -310,8 +593,26 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
         }
         ws.setFocusedExcerptId(null);
       },
-    });
-    return unregister;
+    };
+    // Boundary editing is only registered while an excerpt is focused, so the
+    // arrow chords stay with the browser the rest of the time.
+    if (focusedId) {
+      Object.assign(handlers, {
+        excerptEndLeft: () => nudgeBoundary("end", -1, "word"),
+        excerptEndRight: () => nudgeBoundary("end", 1, "word"),
+        excerptEndLeftChar: () => nudgeBoundary("end", -1, "char"),
+        excerptEndRightChar: () => nudgeBoundary("end", 1, "char"),
+        excerptStartLeft: () => nudgeBoundary("start", -1, "word"),
+        excerptStartRight: () => nudgeBoundary("start", 1, "word"),
+        excerptStartLeftChar: () => nudgeBoundary("start", -1, "char"),
+        excerptStartRightChar: () => nudgeBoundary("start", 1, "char"),
+        splitExcerpt: () => splitFocused(),
+        ...(neighbours.next || neighbours.prev
+          ? { mergeExcerpt: () => mergeWith(neighbours.next ?? neighbours.prev) }
+          : {}),
+      } satisfies Partial<Record<Action, () => void>>);
+    }
+    return useShortcutActions.getState().register(handlers);
   }, [
     moveFocus,
     focusedId,
@@ -321,6 +622,10 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
     extendSelection,
     findOpen,
     closeFind,
+    nudgeBoundary,
+    splitFocused,
+    mergeWith,
+    neighbours,
   ]);
 
   const applyToSelection = useCallback(
@@ -376,12 +681,14 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
     if (seg.excerptIds.length === 0) return;
     const sel = window.getSelection();
     if (sel && !sel.isCollapsed) return; // a drag-selection, not a click
+    // Where the click landed, so the popover can offer "Split here".
+    const caret = offsetFromPoint(e.clientX, e.clientY);
     e.preventDefault();
     // Cycle through overlapping excerpts on repeated clicks.
     const idx = focusedId ? seg.excerptIds.indexOf(focusedId) : -1;
     const next = seg.excerptIds[(idx + 1) % seg.excerptIds.length]!;
     setFocusedId(next);
-    setPopover({ id: next, anchor: e.currentTarget as HTMLElement });
+    setPopover({ id: next, anchor: e.currentTarget as HTMLElement, caret });
   }
 
   if (error) return <div className="p-6 text-danger">{String(error)}</div>;
@@ -400,7 +707,7 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
           onClose={closeFind}
         />
       ) : null}
-      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto">
+      <div ref={scrollRef} className="relative min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto max-w-3xl px-10 py-10">
           <h1 className="mb-6 font-serif text-2xl font-medium">{doc.name}</h1>
           <div ref={rootRef} tabIndex={-1} className="doc-text" data-testid="doc-text">
@@ -410,7 +717,7 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
                 start={p.start}
                 end={p.end}
                 text={p.text}
-                excerpts={renderable}
+                excerpts={previewed}
                 colorById={colorById}
                 focusedId={focusedId}
                 flashId={flashId}
@@ -419,6 +726,28 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
             ))}
           </div>
         </div>
+        {handles && focusedId ? (
+          <>
+            <BoundaryHandle
+              edge="start"
+              box={handles.start}
+              active={drag?.edge === "start"}
+              onPointerDown={startDrag("start")}
+              onPointerMove={moveDrag}
+              onPointerUp={endDrag}
+              onPointerCancel={endDrag}
+            />
+            <BoundaryHandle
+              edge="end"
+              box={handles.end}
+              active={drag?.edge === "end"}
+              onPointerDown={startDrag("end")}
+              onPointerMove={moveDrag}
+              onPointerUp={endDrag}
+              onPointerCancel={endDrag}
+            />
+          </>
+        ) : null}
         {toolbarPos && pending ? (
           <SelectionToolbar pos={toolbarPos} onCode={() => setPaletteOpen(true)} />
         ) : null}
@@ -427,6 +756,14 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
             excerpt={excerptById.get(popover.id)!}
             anchor={popover.anchor}
             onClose={() => setPopover(null)}
+            canSplitHere={
+              popover.caret !== null &&
+              popover.caret > (excerptById.get(popover.id)?.startPos ?? 0) &&
+              popover.caret < (excerptById.get(popover.id)?.endPos ?? 0)
+            }
+            onSplit={() => splitFocused(popover.caret)}
+            onMergePrevious={neighbours.prev ? () => mergeWith(neighbours.prev) : undefined}
+            onMergeNext={neighbours.next ? () => mergeWith(neighbours.next) : undefined}
             onDelete={() => {
               const id = popover.id;
               setPopover(null);
@@ -451,6 +788,61 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
         ) : null}
       </div>
     </div>
+  );
+}
+
+/** A boundary drag in progress: code point offsets, live. */
+interface DragState {
+  id: string;
+  edge: "start" | "end";
+  start: number;
+  end: number;
+}
+
+interface HandleBox {
+  left: number;
+  top: number;
+  height: number;
+}
+
+interface HandleBoxes {
+  start: HandleBox;
+  end: HandleBox;
+}
+
+function sameBoxes(a: HandleBoxes | null, b: HandleBoxes): boolean {
+  if (!a) return false;
+  return (["start", "end"] as const).every(
+    (k) => a[k].left === b[k].left && a[k].top === b[k].top && a[k].height === b[k].height,
+  );
+}
+
+interface BoundaryHandleProps {
+  edge: "start" | "end";
+  box: HandleBox;
+  active?: boolean;
+  onPointerDown: (e: React.PointerEvent<HTMLDivElement>) => void;
+  onPointerMove: (e: React.PointerEvent<HTMLDivElement>) => void;
+  onPointerUp: (e: React.PointerEvent<HTMLDivElement>) => void;
+  onPointerCancel: (e: React.PointerEvent<HTMLDivElement>) => void;
+}
+
+/**
+ * A draggable grip on one edge of the focused excerpt. It lives in the scroll
+ * container, never inside `.doc-text`, because only `span[data-s]` elements
+ * with a single text node may appear there.
+ */
+function BoundaryHandle({ edge, box, active, ...handlers }: BoundaryHandleProps) {
+  return (
+    <div
+      {...handlers}
+      // A mouse affordance for what the keyboard shortcuts already do, so it
+      // stays out of the accessibility tree rather than pretending to be a slider.
+      aria-hidden="true"
+      data-testid={`excerpt-handle-${edge}`}
+      className={cn("excerpt-handle", active && "active")}
+      style={{ left: box.left, top: box.top, height: box.height }}
+    />
   );
 }
 

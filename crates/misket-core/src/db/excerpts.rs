@@ -7,7 +7,7 @@ use super::{codes, descriptors, documents, memos, text, util};
 use crate::error::{AppError, Result};
 use crate::models::{
     ApplyCodesInput, ApplyResult, DescriptorFilter, ExcerptDetail, ExcerptFilter, ExcerptPage,
-    ExcerptRow, ExcerptSnapshot, ExcerptWithCodes,
+    ExcerptRow, ExcerptSnapshot, ExcerptWithCodes, MergeResult,
 };
 
 const CONTEXT_CHARS: i64 = 120;
@@ -196,7 +196,8 @@ pub fn delete(conn: &Connection, id: &str) -> Result<ExcerptSnapshot> {
     Ok(ExcerptSnapshot { excerpt, memos })
 }
 
-/// Reinsert a deleted excerpt with its original ids (for undo).
+/// Reinsert a deleted excerpt with its original ids (for undo). Memos that
+/// still exist (because a merge moved them to another excerpt) are moved back.
 pub fn restore(conn: &Connection, snapshot: &ExcerptSnapshot) -> Result<ExcerptWithCodes> {
     let e = &snapshot.excerpt;
     documents::get_summary(conn, &e.document_id)?;
@@ -232,13 +233,229 @@ pub fn restore(conn: &Connection, snapshot: &ExcerptSnapshot) -> Result<ExcerptW
         )?;
     }
     for m in &snapshot.memos {
+        // `ON CONFLICT` covers undoing a merge: the memos were re-pointed to
+        // the survivor rather than deleted, so they are moved back here.
         tx.execute(
-            "INSERT INTO memos (id, excerpt_id, title, body, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            "INSERT INTO memos (id, excerpt_id, title, body, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+             ON CONFLICT(id) DO UPDATE SET
+               excerpt_id = excluded.excerpt_id, title = excluded.title,
+               body = excluded.body, updated_at = excluded.updated_at",
             params![m.id, e.id, m.title, m.body, m.created_at, m.updated_at],
         )?;
     }
     tx.commit()?;
     get(conn, &e.id)
+}
+
+/// The `[start, end)` range of a text excerpt, or a `Validation` error for
+/// image regions and video ranges.
+fn text_range(e: &ExcerptWithCodes) -> Result<(i64, i64)> {
+    match (e.kind.as_str(), e.start_pos, e.end_pos) {
+        ("text", Some(s), Some(end)) => Ok((s, end)),
+        _ => Err(AppError::Validation(format!(
+            "excerpt {} is not a text range",
+            e.id
+        ))),
+    }
+}
+
+fn check_range(start: i64, end: i64, len: i64) -> Result<()> {
+    if start < 0 || end <= start || end > len {
+        return Err(AppError::Validation(format!(
+            "range {start}..{end} is outside the document (length {len})"
+        )));
+    }
+    Ok(())
+}
+
+/// Is `[start, end)` already taken by a text excerpt other than `except`?
+/// The unique index `excerpts_text_range_uq` allows one text excerpt per exact
+/// range, so an occupied range is a `Conflict` rather than a silent merge.
+fn range_taken(
+    conn: &Connection,
+    document_id: &str,
+    start: i64,
+    end: i64,
+    except: &[&str],
+) -> Result<bool> {
+    let id: Option<String> = conn
+        .query_row(
+            "SELECT id FROM excerpts
+             WHERE document_id = ?1 AND kind = 'text' AND start_pos = ?2 AND end_pos = ?3",
+            params![document_id, start, end],
+            |r| r.get(0),
+        )
+        .optional()?;
+    Ok(match id {
+        Some(id) => !except.contains(&id.as_str()),
+        None => false,
+    })
+}
+
+fn snapshot_of(doc_text: &str, start: i64, end: i64) -> Result<String> {
+    text::cp_slice(doc_text, start, end)
+        .map(str::to_string)
+        .ok_or_else(|| AppError::Validation(format!("range {start}..{end} is not sliceable")))
+}
+
+/// Move a text excerpt's boundaries, recomputing its snapshot from the
+/// document text. Codes and memos stay where they are, so undo is another
+/// `update_range` back to the old offsets.
+pub fn update_range(
+    conn: &Connection,
+    id: &str,
+    start_pos: i64,
+    end_pos: i64,
+) -> Result<ExcerptWithCodes> {
+    let excerpt = get(conn, id)?;
+    text_range(&excerpt)?;
+    let (doc_text, len) = documents::get_text(conn, &excerpt.document_id)?;
+    check_range(start_pos, end_pos, len)?;
+    if range_taken(conn, &excerpt.document_id, start_pos, end_pos, &[id])? {
+        return Err(AppError::Conflict(
+            "another excerpt already covers exactly this range".into(),
+        ));
+    }
+    let tx = conn.unchecked_transaction()?;
+    tx.execute(
+        "UPDATE excerpts SET start_pos = ?2, end_pos = ?3, snapshot = ?4, updated_at = ?5
+         WHERE id = ?1",
+        params![
+            id,
+            start_pos,
+            end_pos,
+            snapshot_of(&doc_text, start_pos, end_pos)?,
+            util::now()
+        ],
+    )?;
+    tx.commit()?;
+    get(conn, id)
+}
+
+/// Split a text excerpt at code point `at` into `[start, at)` and `[at, end)`.
+/// The left half keeps the original id (and its memos); the right half is a
+/// new excerpt carrying the same codes. Inverted by `merge_adjacent`.
+pub fn split(conn: &Connection, id: &str, at: i64) -> Result<(ExcerptWithCodes, ExcerptWithCodes)> {
+    let excerpt = get(conn, id)?;
+    let (start, end) = text_range(&excerpt)?;
+    if at <= start || at >= end {
+        return Err(AppError::Validation(format!(
+            "split point {at} is not inside {start}..{end}"
+        )));
+    }
+    let (doc_text, _) = documents::get_text(conn, &excerpt.document_id)?;
+    for (s, e) in [(start, at), (at, end)] {
+        if range_taken(conn, &excerpt.document_id, s, e, &[id])? {
+            return Err(AppError::Conflict(
+                "one half of the split is already covered by another excerpt".into(),
+            ));
+        }
+    }
+    let now = util::now();
+    let right_id = util::new_id();
+    let tx = conn.unchecked_transaction()?;
+    tx.execute(
+        "UPDATE excerpts SET end_pos = ?2, snapshot = ?3, updated_at = ?4 WHERE id = ?1",
+        params![id, at, snapshot_of(&doc_text, start, at)?, now],
+    )?;
+    tx.execute(
+        "INSERT INTO excerpts (id, document_id, kind, start_pos, end_pos, snapshot, created_at, updated_at)
+         VALUES (?1, ?2, 'text', ?3, ?4, ?5, ?6, ?6)",
+        params![
+            right_id,
+            excerpt.document_id,
+            at,
+            end,
+            snapshot_of(&doc_text, at, end)?,
+            now
+        ],
+    )?;
+    for code_id in &excerpt.code_ids {
+        tx.execute(
+            "INSERT OR IGNORE INTO excerpt_codes (excerpt_id, code_id, created_at) VALUES (?1, ?2, ?3)",
+            params![right_id, code_id, now],
+        )?;
+    }
+    tx.commit()?;
+    Ok((get(conn, id)?, get(conn, &right_id)?))
+}
+
+/// Merge two touching or overlapping text excerpts of one document into
+/// `[min start, max end)`. `left_id` survives with the union of both code
+/// sets and both memo sets; `right_id` is deleted. The returned
+/// [`MergeResult`] carries everything needed to invert this.
+pub fn merge_adjacent(conn: &Connection, left_id: &str, right_id: &str) -> Result<MergeResult> {
+    if left_id == right_id {
+        return Err(AppError::Validation(
+            "an excerpt cannot be merged with itself".into(),
+        ));
+    }
+    let left = get(conn, left_id)?;
+    let right = get(conn, right_id)?;
+    if left.document_id != right.document_id {
+        return Err(AppError::Validation(
+            "excerpts from different documents cannot be merged".into(),
+        ));
+    }
+    let (ls, le) = text_range(&left)?;
+    let (rs, re) = text_range(&right)?;
+    if ls > re || rs > le {
+        return Err(AppError::Validation(
+            "the excerpts neither touch nor overlap".into(),
+        ));
+    }
+    let (start, end) = (ls.min(rs), le.max(re));
+    let (doc_text, len) = documents::get_text(conn, &left.document_id)?;
+    check_range(start, end, len)?;
+    if range_taken(conn, &left.document_id, start, end, &[left_id, right_id])? {
+        return Err(AppError::Conflict(
+            "another excerpt already covers exactly the merged range".into(),
+        ));
+    }
+    let removed = ExcerptSnapshot {
+        excerpt: right.clone(),
+        memos: memos::list_for_excerpt(conn, right_id)?,
+    };
+    let added: Vec<String> = right
+        .code_ids
+        .iter()
+        .filter(|c| !left.code_ids.contains(c))
+        .cloned()
+        .collect();
+    let now = util::now();
+    let tx = conn.unchecked_transaction()?;
+    // Memos move to the survivor before the row goes, so nothing cascades away.
+    tx.execute(
+        "UPDATE memos SET excerpt_id = ?1, updated_at = ?3 WHERE excerpt_id = ?2",
+        params![left_id, right_id, now],
+    )?;
+    tx.execute("DELETE FROM excerpts WHERE id = ?1", [right_id])?;
+    for code_id in &added {
+        tx.execute(
+            "INSERT OR IGNORE INTO excerpt_codes (excerpt_id, code_id, created_at) VALUES (?1, ?2, ?3)",
+            params![left_id, code_id, now],
+        )?;
+    }
+    tx.execute(
+        "UPDATE excerpts SET start_pos = ?2, end_pos = ?3, snapshot = ?4, updated_at = ?5
+         WHERE id = ?1",
+        params![
+            left_id,
+            start,
+            end,
+            snapshot_of(&doc_text, start, end)?,
+            now
+        ],
+    )?;
+    tx.commit()?;
+    Ok(MergeResult {
+        excerpt: get(conn, left_id)?,
+        removed,
+        previous_start_pos: ls,
+        previous_end_pos: le,
+        added_code_ids: added,
+    })
 }
 
 fn context(doc_text: &str, start: i64, end: i64) -> (String, String) {
@@ -564,6 +781,217 @@ mod tests {
         // Deleting the document cascades.
         documents::delete(&p.conn, &doc).unwrap();
         assert!(matches!(get(&p.conn, &id), Err(AppError::NotFound(_))));
+    }
+
+    #[test]
+    fn update_range_moves_boundaries_and_recomputes_the_snapshot() {
+        // "héllo wörld 😀 end": 17 code points, the emoji is one.
+        let (p, doc, a, _) = setup();
+        let id = apply(&p.conn, &doc, 0, 5, &[&a]).excerpt.id;
+        let before = get(&p.conn, &id).unwrap();
+        // `now()` has millisecond precision; make the bump observable.
+        std::thread::sleep(std::time::Duration::from_millis(2));
+
+        let e = update_range(&p.conn, &id, 6, 13).unwrap();
+        assert_eq!((e.start_pos, e.end_pos), (Some(6), Some(13)));
+        assert_eq!(e.snapshot.as_deref(), Some("wörld 😀"));
+        assert_eq!(e.code_ids, vec![a.clone()]);
+        assert_ne!(e.updated_at, before.updated_at);
+
+        // One code point past the emoji, and the whole document.
+        assert_eq!(
+            update_range(&p.conn, &id, 12, 13)
+                .unwrap()
+                .snapshot
+                .as_deref(),
+            Some("😀")
+        );
+        assert_eq!(
+            update_range(&p.conn, &id, 0, 17)
+                .unwrap()
+                .snapshot
+                .as_deref(),
+            Some("héllo wörld 😀 end")
+        );
+
+        // Bad ranges are rejected and nothing changes.
+        for (s, e2) in [(-1, 5), (5, 5), (7, 3), (0, 18)] {
+            assert!(
+                matches!(
+                    update_range(&p.conn, &id, s, e2),
+                    Err(AppError::Validation(_))
+                ),
+                "{s}..{e2}"
+            );
+        }
+        let unchanged = get(&p.conn, &id).unwrap();
+        assert_eq!(
+            (unchanged.start_pos, unchanged.end_pos),
+            (Some(0), Some(17))
+        );
+
+        // An occupied range is a conflict, but moving onto itself is fine.
+        let other = apply(&p.conn, &doc, 0, 5, &[&a]).excerpt.id;
+        assert!(matches!(
+            update_range(&p.conn, &id, 0, 5),
+            Err(AppError::Conflict(_))
+        ));
+        assert!(update_range(&p.conn, &other, 0, 5).is_ok());
+        assert!(matches!(
+            update_range(&p.conn, "nope", 0, 1),
+            Err(AppError::NotFound(_))
+        ));
+    }
+
+    #[test]
+    fn split_keeps_the_left_id_and_copies_codes() {
+        let (p, doc, a, b) = setup();
+        let id = apply(&p.conn, &doc, 0, 17, &[&a, &b]).excerpt.id;
+        memos::create(
+            &p.conn,
+            MemoTarget {
+                excerpt_id: Some(id.clone()),
+                ..Default::default()
+            },
+            "t",
+            "note",
+        )
+        .unwrap();
+
+        assert!(matches!(
+            split(&p.conn, &id, 0),
+            Err(AppError::Validation(_))
+        ));
+        assert!(matches!(
+            split(&p.conn, &id, 17),
+            Err(AppError::Validation(_))
+        ));
+
+        let (left, right) = split(&p.conn, &id, 6).unwrap();
+        assert_eq!(left.id, id);
+        assert_ne!(right.id, id);
+        assert_eq!((left.start_pos, left.end_pos), (Some(0), Some(6)));
+        assert_eq!((right.start_pos, right.end_pos), (Some(6), Some(17)));
+        assert_eq!(left.snapshot.as_deref(), Some("héllo "));
+        assert_eq!(right.snapshot.as_deref(), Some("wörld 😀 end"));
+        assert_eq!(left.code_ids, vec![a.clone(), b.clone()]);
+        assert_eq!(right.code_ids, vec![a.clone(), b.clone()]);
+        // Memos stay on the original (left) excerpt.
+        assert_eq!(left.memo_count, 1);
+        assert_eq!(right.memo_count, 0);
+        assert_eq!(list_for_document(&p.conn, &doc).unwrap().len(), 2);
+
+        // Splitting where a half is already taken conflicts.
+        let (l2, r2) = split(&p.conn, &right.id, 12).unwrap();
+        assert_eq!(l2.snapshot.as_deref(), Some("wörld "));
+        assert_eq!(r2.snapshot.as_deref(), Some("😀 end"));
+        let whole = apply(&p.conn, &doc, 6, 17, &[]).excerpt.id;
+        assert!(matches!(
+            split(&p.conn, &whole, 12),
+            Err(AppError::Conflict(_))
+        ));
+    }
+
+    #[test]
+    fn merge_unions_codes_repoints_memos_and_is_invertible() {
+        let (p, doc, a, b) = setup();
+        let left = apply(&p.conn, &doc, 0, 6, &[&a]).excerpt.id;
+        let right = apply(&p.conn, &doc, 6, 13, &[&b]).excerpt.id;
+        let memo = memos::create(
+            &p.conn,
+            MemoTarget {
+                excerpt_id: Some(right.clone()),
+                ..Default::default()
+            },
+            "t",
+            "note",
+        )
+        .unwrap();
+
+        let r = merge_adjacent(&p.conn, &left, &right).unwrap();
+        assert_eq!(r.excerpt.id, left);
+        assert_eq!(
+            (r.excerpt.start_pos, r.excerpt.end_pos),
+            (Some(0), Some(13))
+        );
+        assert_eq!(r.excerpt.snapshot.as_deref(), Some("héllo wörld 😀"));
+        assert_eq!(r.excerpt.code_ids, vec![a.clone(), b.clone()]);
+        assert_eq!(r.excerpt.memo_count, 1);
+        assert_eq!(r.added_code_ids, vec![b.clone()]);
+        assert_eq!((r.previous_start_pos, r.previous_end_pos), (0, 6));
+        assert_eq!(r.removed.excerpt.id, right);
+        assert_eq!(r.removed.memos.len(), 1);
+        assert!(matches!(get(&p.conn, &right), Err(AppError::NotFound(_))));
+        assert_eq!(
+            memos::get(&p.conn, &memo.id).unwrap().excerpt_id.as_deref(),
+            Some(left.as_str())
+        );
+
+        // Undo, exactly as the frontend does it.
+        for c in &r.added_code_ids {
+            remove_code(&p.conn, &left, c).unwrap();
+        }
+        update_range(&p.conn, &left, r.previous_start_pos, r.previous_end_pos).unwrap();
+        let back = restore(&p.conn, &r.removed).unwrap();
+        assert_eq!(back.id, right);
+        assert_eq!(back.code_ids, vec![b.clone()]);
+        assert_eq!(back.memo_count, 1);
+        assert_eq!(get(&p.conn, &left).unwrap().code_ids, vec![a.clone()]);
+        assert_eq!(
+            get(&p.conn, &left).unwrap().snapshot.as_deref(),
+            Some("héllo ")
+        );
+        assert_eq!(
+            memos::get(&p.conn, &memo.id).unwrap().excerpt_id.as_deref(),
+            Some(right.as_str())
+        );
+    }
+
+    #[test]
+    fn merge_validates_adjacency_documents_and_overlap() {
+        let (p, doc, a, _) = setup();
+        let doc2 = documents::create(&p.conn, new_doc("second document text"))
+            .unwrap()
+            .summary
+            .id;
+        let one = apply(&p.conn, &doc, 0, 5, &[&a]).excerpt.id;
+        let far = apply(&p.conn, &doc, 12, 16, &[&a]).excerpt.id;
+        let elsewhere = apply(&p.conn, &doc2, 0, 6, &[&a]).excerpt.id;
+
+        assert!(matches!(
+            merge_adjacent(&p.conn, &one, &one),
+            Err(AppError::Validation(_))
+        ));
+        assert!(matches!(
+            merge_adjacent(&p.conn, &one, &elsewhere),
+            Err(AppError::Validation(_))
+        ));
+        assert!(matches!(
+            merge_adjacent(&p.conn, &one, &far),
+            Err(AppError::Validation(_))
+        ));
+        assert!(matches!(
+            merge_adjacent(&p.conn, &one, "nope"),
+            Err(AppError::NotFound(_))
+        ));
+
+        // Overlapping ranges merge, in either order, and the right one wins
+        // the larger end.
+        let overlap = apply(&p.conn, &doc, 3, 11, &[&a]).excerpt.id;
+        let r = merge_adjacent(&p.conn, &overlap, &one).unwrap();
+        assert_eq!(
+            (r.excerpt.start_pos, r.excerpt.end_pos),
+            (Some(0), Some(11))
+        );
+        assert_eq!(r.excerpt.id, overlap);
+
+        // A range already held by a third excerpt is a conflict.
+        let next = apply(&p.conn, &doc, 11, 14, &[&a]).excerpt.id;
+        apply(&p.conn, &doc, 0, 14, &[&a]);
+        assert!(matches!(
+            merge_adjacent(&p.conn, &overlap, &next),
+            Err(AppError::Conflict(_))
+        ));
     }
 
     #[test]
