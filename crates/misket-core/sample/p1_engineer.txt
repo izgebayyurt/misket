@@ -1,0 +1,35 @@
+Interviewer: Thanks for making time for this. So, just to start, how long have you been working remotely?
+
+P1: Um, three years now. I switched right after my second kid was born, so it was kind of a - I mean, it wasn't purely a lifestyle choice, it was also just easier logistically. But yeah, three years.
+
+Interviewer: And how would you describe the shift, looking back?
+
+P1: Honestly? Better and worse in ways I didn't expect. Better because, like, I get so much more focused engineering time. Nobody's tapping me on the shoulder every twenty minutes. But worse because - and this is the thing I keep coming back to - the boundary between "at work" and "not at work" basically dissolved. My laptop is on the kitchen counter. It's just there.
+
+Interviewer: Can you say more about that boundary issue?
+
+P1: Yeah, so, the honest version is I'll close my laptop at six, we'll do dinner, bath, whatever, and then at nine o'clock I'll think, oh, let me just check if that build passed. And then I'm back in for forty minutes. It's not that anyone's asking me to. It's that the laptop is right there and the notifications are right there on my phone too, so there's no, um, there's no walk to the car that used to sort of reset my brain.
+
+Interviewer: Do you do anything to manage that?
+
+P1: I've tried a few things. I turned off Slack notifications after seven, that helped some. My manager - she's actually really good about this, she doesn't message after hours unless it's genuinely on fire, and when it is on fire she says so explicitly, like "this can wait until tomorrow" or "sorry, this one's actually urgent." That trust thing matters a lot, I think, more than any tool.
+
+Interviewer: You mentioned trust. Tell me more about that.
+
+P1: So early on I was worried I'd have to, like, prove I was working. Green dot anxiety, you know? But she's never once asked me to be online at specific hours. She cares about the code shipping and the reviews getting done. That's it. Once I realized that was actually true and not just something managers say, it changed how I planned my day. I do a lot of deep work in the morning before the kids are up, then I'm more available midday, then I might disappear for the school pickup and come back later. Nobody's tracking my hours. It's outcomes.
+
+Interviewer: How about the social side of things? Do you miss the office?
+
+P1: This is the part that's genuinely hard for me. I'm - I don't know if I'd call myself an introvert exactly, but I don't naturally reach out. In the office you'd just end up next to someone at the coffee machine and have an actual conversation. Now if I want that I have to, like, deliberately schedule a fifteen minute call, and it feels weirdly formal to schedule "let's just chat." So mostly I don't. I go days sometimes where the only conversation I have is in a pull request comment. That's - yeah, that's a real thing. There have been stretches where I've felt pretty isolated, especially in winter when I'm also not going anywhere else.
+
+Interviewer: Has anything helped with that?
+
+P1: We do have a virtual watercooler channel, people post memes and dog photos and whatever, and I like that it exists but I don't post much myself, if I'm honest. What's helped more is just being intentional - I started grabbing coffee with my sister who also works from home, like an actual in-person coffee, twice a week, just to have a human interaction that isn't through a screen. That's not a work thing, but it's kind of a response to the work thing, if that makes sense.
+
+Interviewer: If you could change one thing about how remote work is set up for you, what would it be?
+
+P1: I think I'd want the company to be a bit more explicit about the "no laptop after seven" thing, not as a rule exactly, but as a - a norm that's actually said out loud in onboarding, instead of everyone quietly figuring it out for themselves after they've already burned out a little. And maybe more real occasions to just talk to people, not structured stand-ups, just space for a bit of small talk before we get into the ticket numbers. I know that sounds small. It isn't, though, not really.
+
+Interviewer: That's really helpful, thank you.
+
+P1: Yeah, no, thanks for asking. It's nice to actually think it through instead of just muddling along with it.

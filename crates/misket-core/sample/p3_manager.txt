@@ -1,0 +1,27 @@
+Interviewer: Let's start with your role - you manage a team remotely, is that right?
+
+P3: That's right, I've managed a distributed team for about two years now. Nine people, spread across four time zones, so there's no single hour of the day when everyone's online at once. That alone changes a lot of how I think about my job.
+
+Interviewer: What's the biggest change from managing in person?
+
+P3: I think the honest answer is that I worry more about the people I can't see. In an office you notice if someone's quiet for a few days, if they seem off, you just pick it up walking past their desk. Remotely, someone can be really struggling and their Slack status just says "online," and I might not know for weeks. That's probably the thing that keeps me up more than anything else - the fear of missing that someone is isolated or burning out and I just don't have the ambient signal I used to have.
+
+Interviewer: Have you done anything to try to catch that earlier?
+
+P3: A few things. We do a weekly one-on-one with everyone, no exceptions, even when things are calm and there's nothing urgent to discuss, because the point isn't the update, it's the fifteen minutes of just checking in as a person. I also set up a channel we call "the kitchen," which is deliberately not about work at all, and I try to post first sometimes so it doesn't feel like an empty room. It's had mixed success, honestly - a few people use it a lot, a few never post anything, and I've had to accept that not everyone wants that kind of connection and pushing it doesn't help.
+
+Interviewer: You mentioned trust a moment ago. How do you think about trust with a remote team?
+
+P3: This is something I've had to actively unlearn some instincts about. Early on I caught myself glancing at whether people's calendars showed them "busy" during the day, which, looking back, was me trying to reconstruct the visual cues I'd lost from an office, and it wasn't fair to them. I've had to consciously shift to judging people by what they deliver and how they communicate, not by whether they're visibly active at ten in the morning. It's better for everyone, but it took real effort to get there, and I still catch myself slipping sometimes when I'm anxious about a deadline.
+
+Interviewer: How do you balance that with actually knowing what's going on?
+
+P3: I lean on the work itself - pull requests, documents, project boards - rather than presence. If someone's deliverables are solid and they're responsive within a reasonable window, I don't need to know they were at their desk from nine to five. That said, I do think flexibility has to come with some shared norms, otherwise a nine-person team across four time zones just never overlaps, and then nothing gets discussed together. So we protect two overlapping hours a day where everyone's expected to be reachable, and outside that, people's time is genuinely their own.
+
+Interviewer: What about your own boundaries, as the manager holding all this together?
+
+P3: Honestly, mine are the worst on the team. Because our time zones span so wide, I end up doing an early call with the folks who start their day when I'm ending mine, and a late one with the folks who are just waking up when I'm about to sleep. I tell my team to protect their evenings, and then I'm the one on a call at nine p.m. some nights. I know that's not sustainable and not a great example, and I'm trying to hand off some of those calls to a deputy, but it's a work in progress.
+
+Interviewer: What do you think keeps people on your team despite the challenges of being distributed?
+
+P3: I think it's the flexibility, genuinely. A few people have told me directly they'd never go back to a fixed office schedule, that being able to do the school run or a doctor's appointment without asking permission matters more to them than almost anything else we could offer. So even with the isolation risk and the trust stuff we're still working through, I think most of the team would say the freedom is worth it. My job is mostly figuring out how to keep the connection and the trust intact without taking that freedom away.

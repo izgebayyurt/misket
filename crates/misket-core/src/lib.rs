@@ -7,5 +7,6 @@
 pub mod db;
 pub mod error;
 pub mod models;
+pub mod sample;
 
 pub use error::{AppError, Result};

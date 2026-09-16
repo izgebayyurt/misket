@@ -33,6 +33,17 @@ export function useCreateProject() {
   });
 }
 
+export function useCreateSampleProject() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.createSampleProject(),
+    onSuccess: () => {
+      useWorkspace.getState().reset();
+      qc.resetQueries();
+    },
+  });
+}
+
 export function useCloseProject() {
   const qc = useQueryClient();
   return useMutation({
