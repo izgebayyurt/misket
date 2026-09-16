@@ -325,6 +325,32 @@ pub struct ExcerptPage {
     pub total: i64,
 }
 
+// ------------------------------------------------------- bulk operations
+
+/// What a bulk code change actually did.
+///
+/// `affected` counts the excerpts that really changed; `pairs` holds every
+/// `(excerptId, codeId)` tag that was inserted (by `add_codes_many`) or
+/// deleted (by `remove_codes_many`), skipping the ones that were already in
+/// the wanted state. Undo is the opposite operation over exactly those pairs.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct BulkCodeReport {
+    pub affected: i64,
+    pub pairs: Vec<(String, String)>,
+}
+
+/// Moving every excerpt from one code to another.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct RetagReport {
+    /// Excerpts that gained the target code and lost the source code.
+    pub moved: Vec<String>,
+    /// Excerpts that already carried the target code, so they only lost the
+    /// source. Undo must not take the target away from these.
+    pub already_had: Vec<String>,
+}
+
 // ----------------------------------------------------------------- analysis
 
 /// One row of the code frequency table. `own` counts excerpts tagged with the

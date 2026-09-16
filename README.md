@@ -11,16 +11,18 @@ keyboard-friendly interface without a subscription.
 
 ## What it does today (milestone 1)
 
-- **Import** plain text, Markdown, Word (`.docx`) and PDF (text only) documents.
-  If a file has blank-line gaps, trailing spaces or other likely-accidental
+- **Import** plain text, Markdown, Word (`.docx`) and PDF (text only) documents,
+  one at a time or a whole folder at once ("Import folder…", optionally
+  including subfolders). If a file has blank-line gaps, trailing spaces or other likely-accidental
   whitespace, Misket offers to tidy it up before import (document text is
   immutable once imported). Check "Remember my choice" in that dialog to skip
   it on future imports; its "Ask again on import" link resets that.
 - **Build a codebook**: nested codes with colors, descriptions, single-key
-  hotkeys, drag-and-drop reordering, merge and delete with impact preview.
-  Import a codebook (JSON or CSV) exported from another Misket project to
-  reuse it: merge it into the current codebook by matching code names, or add
-  it fresh under a chosen code.
+  hotkeys, drag-and-drop reordering, merge and delete with impact preview, and
+  "Move excerpts to…" to hand one code's excerpts to another without losing
+  either code. Import a codebook (JSON or CSV) exported from another Misket
+  project to reuse it: merge it into the current codebook by matching code
+  names, or add it fresh under a chosen code.
 - **Code excerpts**: select text, press `Ctrl`/`⌘`+`K` and pick a code (type
   `>name` to create one on the spot), or press a code's hotkey. The picker
   shows each code's description and, for nested codes, its full path.
@@ -31,6 +33,9 @@ keyboard-friendly interface without a subscription.
   combined). All of it is undoable.
 - **Browse excerpts** across the project, filtered by code (with sub-codes),
   document, or uncoded only, and jump back to any of them in context.
+  Tick the checkboxes (`Shift`+click for a range, or "Select all N loaded") to
+  add a code to, remove a code from, or delete many excerpts at once; `Escape`
+  clears the selection and undo reverses the whole batch.
 - **Analyse**: a code frequency table (own counts and counts with sub-codes,
   per document), a code co-occurrence matrix showing which codes overlap on the
   same text, and a code-by-document heatmap. Every cell clicks through to the

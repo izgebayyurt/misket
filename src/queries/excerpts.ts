@@ -1,6 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as api from "@/api/excerpts";
-import type { ApplyCodesInput, ExcerptFilter, ExcerptSnapshot, MergeResult } from "@/api/types";
+import type {
+  ApplyCodesInput,
+  ExcerptCodePair,
+  ExcerptFilter,
+  ExcerptSnapshot,
+  MergeResult,
+  RetagReport,
+} from "@/api/types";
 import { keys } from "./keys";
 import { useUndoStore } from "@/state/undoStore";
 import { useWorkspace } from "@/state/workspace";
@@ -208,6 +215,84 @@ export function useUpdateExcerptRange() {
   });
 }
 
+// ------------------------------------------------------- bulk operations
+
+const plural = (n: number, noun: string) => `${n} ${noun}${n === 1 ? "" : "s"}`;
+
+/** `[excerptId, codeId]` pairs regrouped as `codeId -> excerptIds`. */
+function byCode(pairs: ExcerptCodePair[]): [string, string[]][] {
+  const grouped = new Map<string, string[]>();
+  for (const [excerptId, codeId] of pairs) {
+    const ids = grouped.get(codeId);
+    if (ids) ids.push(excerptId);
+    else grouped.set(codeId, [excerptId]);
+  }
+  return [...grouped];
+}
+
+/** Delete a whole selection at once. Undo restores every snapshot. */
+export function useDeleteExcerpts() {
+  const invalidate = useInvalidateExcerpts();
+  return useMutation({
+    mutationFn: async ({ ids }: { ids: string[] }) => {
+      let snapshots: ExcerptSnapshot[] = [];
+      await useUndoStore.getState().run({
+        label: `Delete ${plural(ids.length, "excerpt")}`,
+        redo: async () => {
+          snapshots = await api.deleteExcerpts(ids);
+          const ws = useWorkspace.getState();
+          if (ws.focusedExcerptId && ids.includes(ws.focusedExcerptId))
+            ws.setFocusedExcerptId(null);
+          invalidate();
+        },
+        undo: async () => {
+          for (const snapshot of snapshots) await api.restoreExcerpt(snapshot);
+          invalidate();
+        },
+      });
+      return snapshots.length;
+    },
+  });
+}
+
+/**
+ * Tag many excerpts with many codes. Undo removes exactly the pairs that were
+ * added, so codes an excerpt already carried are left alone.
+ */
+export function useAddCodesToExcerpts() {
+  const invalidate = useInvalidateExcerpts();
+  return useMutation({
+    mutationFn: async ({
+      ids,
+      codeIds,
+      label,
+    }: {
+      ids: string[];
+      codeIds: string[];
+      /** e.g. `Add Theme A to 12 excerpts`. */
+      label?: string;
+    }) => {
+      let pairs: ExcerptCodePair[] = [];
+      let affected = 0;
+      await useUndoStore.getState().run({
+        label: label ?? `Add ${plural(codeIds.length, "code")} to ${plural(ids.length, "excerpt")}`,
+        redo: async () => {
+          const report = await api.addCodesToExcerpts(ids, codeIds);
+          pairs = report.pairs;
+          affected = report.affected;
+          invalidate();
+        },
+        undo: async () => {
+          for (const [codeId, excerptIds] of byCode(pairs))
+            await api.removeCodesFromExcerpts(excerptIds, [codeId]);
+          invalidate();
+        },
+      });
+      return affected;
+    },
+  });
+}
+
 /**
  * Split a text excerpt in two at a code point offset. Undo merges the halves
  * back together; a redo splits again and remembers the new right-hand id.
@@ -272,6 +357,77 @@ export function useMergeExcerpts() {
           invalidate(documentId, rightId);
         },
       });
+    },
+  });
+}
+
+/** The inverse of {@link useAddCodesToExcerpts}: undo re-adds what was there. */
+export function useRemoveCodesFromExcerpts() {
+  const invalidate = useInvalidateExcerpts();
+  return useMutation({
+    mutationFn: async ({
+      ids,
+      codeIds,
+      label,
+    }: {
+      ids: string[];
+      codeIds: string[];
+      label?: string;
+    }) => {
+      let pairs: ExcerptCodePair[] = [];
+      let affected = 0;
+      await useUndoStore.getState().run({
+        label:
+          label ?? `Remove ${plural(codeIds.length, "code")} from ${plural(ids.length, "excerpt")}`,
+        redo: async () => {
+          const report = await api.removeCodesFromExcerpts(ids, codeIds);
+          pairs = report.pairs;
+          affected = report.affected;
+          invalidate();
+        },
+        undo: async () => {
+          for (const [codeId, excerptIds] of byCode(pairs))
+            await api.addCodesToExcerpts(excerptIds, [codeId]);
+          invalidate();
+        },
+      });
+      return affected;
+    },
+  });
+}
+
+/**
+ * Move every excerpt from one code to another. Both codes survive, so this is
+ * undoable: give the source back to everything that had it, and take the
+ * target away only from the excerpts that gained it here.
+ */
+export function useRetagCode() {
+  const invalidate = useInvalidateExcerpts();
+  return useMutation({
+    mutationFn: async ({
+      fromCodeId,
+      toCodeId,
+      label,
+    }: {
+      fromCodeId: string;
+      toCodeId: string;
+      label?: string;
+    }) => {
+      let report: RetagReport = { moved: [], alreadyHad: [] };
+      await useUndoStore.getState().run({
+        label: label ?? "Move excerpts to another code",
+        redo: async () => {
+          report = await api.retagCode(fromCodeId, toCodeId);
+          invalidate();
+        },
+        undo: async () => {
+          const all = [...report.moved, ...report.alreadyHad];
+          if (all.length) await api.addCodesToExcerpts(all, [fromCodeId]);
+          if (report.moved.length) await api.removeCodesFromExcerpts(report.moved, [toCodeId]);
+          invalidate();
+        },
+      });
+      return report;
     },
   });
 }

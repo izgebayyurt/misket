@@ -2,6 +2,7 @@
 
 pub mod analysis;
 pub mod backup;
+pub mod bulk;
 pub mod codebook_import;
 pub mod codes;
 pub mod descriptors;

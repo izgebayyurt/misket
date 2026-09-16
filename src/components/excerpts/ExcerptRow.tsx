@@ -2,13 +2,32 @@ import type { ExcerptRow as Row } from "@/api/types";
 import { useCodeTree } from "@/queries/codes";
 import { pathOf } from "@/core/codeTree";
 import { ColorDot } from "@/components/codebook/ColorSwatch";
+import { cn } from "@/lib/utils";
 
-export function ExcerptRow({ row, onOpen }: { row: Row; onOpen: () => void }) {
+interface Props {
+  row: Row;
+  selected: boolean;
+  onOpen: () => void;
+  /** Checkbox click; `shiftKey` extends the selection from the last click. */
+  onToggle: (shiftKey: boolean) => void;
+}
+
+export function ExcerptRow({ row, selected, onOpen, onToggle }: Props) {
   const tree = useCodeTree();
   return (
-    <li>
+    <li className={cn("flex items-start gap-2 pl-3", selected && "bg-accent/10")}>
+      <input
+        type="checkbox"
+        className="mt-3.5"
+        checked={selected}
+        // Click, not change: only a MouseEvent carries the Shift modifier.
+        onClick={(e) => onToggle(e.shiftKey)}
+        onChange={() => {}}
+        aria-label={`Select excerpt from ${row.documentName}`}
+        data-testid="excerpt-select"
+      />
       <button
-        className="flex w-full flex-col gap-1 px-4 py-2.5 text-left hover:bg-muted focus-visible:bg-muted focus-visible:outline-none"
+        className="flex min-w-0 flex-1 flex-col gap-1 py-2.5 pr-4 text-left hover:bg-muted focus-visible:bg-muted focus-visible:outline-none"
         onClick={onOpen}
         data-testid="excerpt-row"
       >

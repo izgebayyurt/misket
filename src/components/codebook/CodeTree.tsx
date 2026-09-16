@@ -23,6 +23,7 @@ import { DeleteCodeDialog } from "./DeleteCodeDialog";
 import { MergeCodeDialog } from "./MergeCodeDialog";
 import { ImportCodebookDialog } from "./ImportCodebookDialog";
 import { useProjectInfo } from "@/queries/project";
+import { MoveExcerptsDialog } from "./MoveExcerptsDialog";
 import { cn } from "@/lib/utils";
 import { toast } from "@/state/toasts";
 
@@ -31,6 +32,7 @@ type DialogState =
   | { kind: "edit"; code: Code }
   | { kind: "delete"; code: Code }
   | { kind: "merge"; code: Code }
+  | { kind: "moveExcerpts"; code: Code }
   | null;
 
 interface DropTarget {
@@ -276,6 +278,8 @@ export function CodeTree() {
         <DeleteCodeDialog code={dialog.code} onClose={() => setDialog(null)} />
       ) : dialog?.kind === "merge" ? (
         <MergeCodeDialog code={dialog.code} onClose={() => setDialog(null)} />
+      ) : dialog?.kind === "moveExcerpts" ? (
+        <MoveExcerptsDialog code={dialog.code} onClose={() => setDialog(null)} />
       ) : null}
       {importFile ? (
         <ImportCodebookDialog
@@ -300,7 +304,7 @@ interface RowProps {
   onSelect: () => void;
   onKeyDown: (e: React.KeyboardEvent) => void;
   onRenameDone: () => void;
-  onAction: (kind: "rename" | "edit" | "addChild" | "merge" | "delete") => void;
+  onAction: (kind: "rename" | "edit" | "addChild" | "merge" | "moveExcerpts" | "delete") => void;
   onDragStart: () => void;
   onDragEnd: () => void;
   onDragOver: (where: DropTarget["where"]) => void;
@@ -407,6 +411,12 @@ function CodeRow(p: RowProps) {
           <DropdownMenuItem onSelect={() => p.onAction("rename")}>Rename</DropdownMenuItem>
           <DropdownMenuItem onSelect={() => p.onAction("edit")}>Edit…</DropdownMenuItem>
           <DropdownMenuItem onSelect={() => p.onAction("merge")}>Merge into…</DropdownMenuItem>
+          <DropdownMenuItem
+            onSelect={() => p.onAction("moveExcerpts")}
+            disabled={code.excerptCount === 0}
+          >
+            Move excerpts to…
+          </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem danger onSelect={() => p.onAction("delete")}>
             Delete…

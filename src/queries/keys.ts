@@ -10,6 +10,8 @@ export const keys = {
   descriptorValues: (documentId: string) => ["descriptorValues", documentId] as const,
   allDescriptorValues: ["descriptorValues"] as const,
   descriptorMatrix: ["descriptorMatrix"] as const,
+  importableFiles: (dir: string, recursive: boolean) =>
+    ["importableFiles", dir, recursive] as const,
   documentExcerpts: (documentId: string) => ["excerpts", documentId] as const,
   excerpt: (id: string) => ["excerpt", id] as const,
   excerptQuery: (filter: ExcerptFilter) => ["excerptQuery", filter] as const,
