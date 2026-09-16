@@ -65,10 +65,27 @@ deletes return snapshots that `restore_*` reinserts with the original ids.
 Operations that cannot be inverted cheaply (deleting a document or code,
 merging codes, importing) confirm first and clear the stack.
 
-## Milestone 2 (images and video)
+## Images
+
+An image document keeps its pixels inside the project file (`media_blobs`),
+with `documents.source_path` recorded as a reference to where the file came
+from. The webview never receives those bytes over the IPC bridge: `src-tauri`
+registers a `misket-media` URI scheme that reads the blob for
+`/document/<id>` from the open project, so an `<img>` tag streams it like any
+other URL (`misket-media://localhost/…`, or `http://misket-media.localhost/…`
+on Windows and Android; `src/api/media.ts` builds both).
+
+Region excerpts are rectangles in _fractions of the image_, so they survive
+any zoom level. `ImageView` lays the image out with plain `left/top/width/
+height` rather than a CSS transform and draws the regions in an SVG overlay
+with `viewBox="0 0 1 1"`, which keeps hit-testing and stroke widths honest.
+A drawn rectangle becomes the workspace's pending selection, which is a union
+of a text range and an image region, so the palette, the code hotkeys and the
+undo stack are the same code for both.
+
+## Milestone 2 (video)
 
 The `excerpts` table already has `kind` (`text` | `image_region` |
-`video_range`), `geometry` (normalized rectangle JSON) and millisecond
-`start_pos`/`end_pos` for video. Media documents will be stored by reference
-(`documents.source_path`, `media_json`). No schema migration is needed to add
-the viewers.
+`video_range`) and millisecond `start_pos`/`end_pos` for video, and
+`media_json` has room for `durationMs`, so the player needs no schema change
+beyond what images added.

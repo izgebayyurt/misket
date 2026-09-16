@@ -67,30 +67,32 @@ describe("cropStyle", () => {
     expect(image.top).toBe("-60px");
   });
 
-  it("keeps the aspect ratio and centres the crop when the size is known", () => {
+  it("keeps the aspect ratio when the image size is known", () => {
     // A 100x100 crop of a 400x200 image shown in an 80x80 box: scale 0.8.
-    const { image } = cropStyle(
+    const { container, image } = cropStyle(
       { x: 0.25, y: 0.5, w: 0.25, h: 0.5 },
       { width: 80, height: 80 },
       { width: 400, height: 200 },
     );
+    expect(container).toMatchObject({ width: "80px", height: "80px" });
     expect(image.width).toBe("320px");
     expect(image.height).toBe("160px");
-    // The crop is 80x80 already, so it sits flush against the box.
     expect(image.left).toBe("-80px");
     expect(image.top).toBe("-80px");
   });
 
-  it("letterboxes a crop that is not the box's shape", () => {
-    // A square crop of a square image in a wide box: centred horizontally.
-    const { image } = cropStyle(
+  it("shrinks the box rather than showing pixels outside the region", () => {
+    // A square crop (100x100) in a wide box: only 50px tall fits, so the
+    // container is 50x50 and no neighbouring image content leaks in.
+    const { container, image } = cropStyle(
       { x: 0, y: 0, w: 0.5, h: 0.5 },
       { width: 100, height: 50 },
       { width: 200, height: 200 },
     );
+    expect(container).toMatchObject({ width: "50px", height: "50px" });
     expect(image.width).toBe("100px");
     expect(image.height).toBe("100px");
-    expect(image.left).toBe("25px");
+    expect(image.left).toBe("0px");
     expect(image.top).toBe("0px");
   });
 

@@ -1,6 +1,6 @@
 # Misket
 
-Open-source qualitative coding for text, with images and video on the way.
+Open-source qualitative coding for text and images, with video on the way.
 Misket is a local-first desktop app: your project is a single file on your
 machine, and nothing is uploaded anywhere.
 
@@ -9,9 +9,10 @@ keyboard-friendly interface without a subscription.
 
 ![Coding a transcript](docs/screenshots/coding.png)
 
-## What it does today (milestone 1)
+## What it does today
 
-- **Import** plain text, Markdown, Word (`.docx`) and PDF (text only) documents.
+- **Import** plain text, Markdown, Word (`.docx`), PDF (text only) and image
+  (PNG, JPEG, WebP) documents.
   If a file has blank-line gaps, trailing spaces or other likely-accidental
   whitespace, Misket offers to tidy it up before import (document text is
   immutable once imported). Check "Remember my choice" in that dialog to skip
@@ -21,6 +22,12 @@ keyboard-friendly interface without a subscription.
 - **Code excerpts**: select text, press `Ctrl`/`⌘`+`K` and pick a code (type
   `>name` to create one on the spot), or press a code's hotkey. Overlapping
   excerpts are drawn as stacked colored lanes.
+- **Code image regions**: an image opens in a pan-and-zoom viewer (scroll to
+  zoom, `Alt`-drag to pan, `0` to fit). Drag a rectangle over it and code it
+  with the same palette and hotkeys; regions are drawn in their code's colour,
+  `Tab` cycles them, and the excerpt browser shows a thumbnail of each one.
+  The image is copied into the project file, so a `.misket` stays
+  self-contained.
 - **Browse excerpts** across the project, filtered by code (with sub-codes),
   document, or uncoded only, and jump back to any of them in context.
 - **Analyse**: a code frequency table (own counts and counts with sub-codes,
@@ -43,6 +50,7 @@ keyboard-friendly interface without a subscription.
 | ------------------------------------------------------ | --------------------------------------------- |
 | Code the selection / add a code to the focused excerpt | `Ctrl`/`⌘` + `K`                              |
 | Apply a code directly                                  | its hotkey (set in the code's settings)       |
+| Fit / zoom an image                                    | `0` / `+` / `-`                               |
 | Next / previous excerpt                                | `Tab` / `Shift`+`Tab`                         |
 | Edit the focused excerpt                               | `Enter`                                       |
 | Delete the focused excerpt                             | `Backspace`                                   |
@@ -106,8 +114,8 @@ together, [docs/DATA_MODEL.md](docs/DATA_MODEL.md) for the schema, and
 
 ## Roadmap
 
-- **Milestone 2**: coding image regions and video time ranges (the data model
-  already supports both).
+- **Milestone 2**: image regions are in; video time ranges and transcript
+  alignment are next (the data model already supports both).
 - Inter-rater reliability, full-text search, REFI-QDA import/export, project
   sharing.
 

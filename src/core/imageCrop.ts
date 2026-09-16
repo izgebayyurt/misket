@@ -79,35 +79,34 @@ export interface CropStyle {
 const px = (v: number) => `${Math.round(v * 100) / 100}px`;
 
 /**
- * CSS that shows only `region` of an image inside a `box`-sized element.
+ * CSS that shows exactly `region` of an image, as large as fits in `box`.
  *
- * With the image's `natural` size the crop keeps its aspect ratio and is
- * centred in the box (the usual thumbnail). Without it — before the image has
- * loaded — the crop is stretched to fill the box, which needs no measurement
- * and is replaced as soon as the size is known.
+ * With the image's `natural` size the container is the region itself, scaled
+ * to fit the box and keeping its aspect ratio, so no neighbouring pixels leak
+ * in and the thumbnail is only what was coded. Without it — the image has not
+ * loaded yet — the region is stretched to fill the box, which needs no
+ * measurement and is replaced as soon as the size is known.
  */
 export function cropStyle(region: Rect, box: Size, natural?: Size | null): CropStyle {
   const r = isValidRect(region) ? region : FULL_RECT;
   let width: number;
   let height: number;
-  let left: number;
-  let top: number;
+  let cw = box.width;
+  let ch = box.height;
   if (natural && natural.width > 0 && natural.height > 0) {
     const scale = Math.min(box.width / (r.w * natural.width), box.height / (r.h * natural.height));
     width = natural.width * scale;
     height = natural.height * scale;
-    left = (box.width - r.w * width) / 2 - r.x * width;
-    top = (box.height - r.h * height) / 2 - r.y * height;
+    cw = r.w * width;
+    ch = r.h * height;
   } else {
     width = box.width / r.w;
     height = box.height / r.h;
-    left = -r.x * width;
-    top = -r.y * height;
   }
   return {
     container: {
-      width: px(box.width),
-      height: px(box.height),
+      width: px(cw),
+      height: px(ch),
       overflow: "hidden",
       position: "relative",
     },
@@ -115,8 +114,8 @@ export function cropStyle(region: Rect, box: Size, natural?: Size | null): CropS
       position: "absolute",
       width: px(width),
       height: px(height),
-      left: px(left),
-      top: px(top),
+      left: px(-r.x * width),
+      top: px(-r.y * height),
       maxWidth: "none",
     },
   };
