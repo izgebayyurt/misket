@@ -29,6 +29,7 @@ import { MergeCodeDialog } from "./MergeCodeDialog";
 import { ImportCodebookDialog } from "./ImportCodebookDialog";
 import { useProjectInfo } from "@/queries/project";
 import { MoveExcerptsDialog } from "./MoveExcerptsDialog";
+import { RollUpDialog } from "./RollUpDialog";
 import { CodeSets } from "./CodeSets";
 import { AddToSetMenu } from "@/components/sets/AddToSetMenu";
 import { cn } from "@/lib/utils";
@@ -40,6 +41,7 @@ type DialogState =
   | { kind: "delete"; code: Code }
   | { kind: "merge"; code: Code }
   | { kind: "moveExcerpts"; code: Code }
+  | { kind: "rollUp"; parent: Code; children: Code[] }
   | null;
 
 interface DropTarget {
@@ -252,10 +254,24 @@ export function CodeTree() {
               onSelect={() => setSelectedId(node.code.id)}
               onKeyDown={(e) => onKeyDown(e, node, index)}
               onRenameDone={() => setRenamingId(null)}
+              parentName={
+                node.code.parentId ? (tree.byId.get(node.code.parentId)?.code.name ?? null) : null
+              }
               onAction={(kind) => {
                 if (kind === "rename") setRenamingId(node.code.id);
                 else if (kind === "addChild") setDialog({ kind: "create", parentId: node.code.id });
-                else setDialog({ kind, code: node.code });
+                else if (kind === "rollUpInto") {
+                  const parent = node.code.parentId
+                    ? tree.byId.get(node.code.parentId)?.code
+                    : undefined;
+                  if (parent) setDialog({ kind: "rollUp", parent, children: [node.code] });
+                } else if (kind === "rollUpChildren") {
+                  setDialog({
+                    kind: "rollUp",
+                    parent: node.code,
+                    children: node.children.map((c) => c.code),
+                  });
+                } else setDialog({ kind, code: node.code });
               }}
               onDragStart={() => setDragId(node.code.id)}
               onDragEnd={() => {
@@ -288,6 +304,12 @@ export function CodeTree() {
         <MergeCodeDialog code={dialog.code} onClose={() => setDialog(null)} />
       ) : dialog?.kind === "moveExcerpts" ? (
         <MoveExcerptsDialog code={dialog.code} onClose={() => setDialog(null)} />
+      ) : dialog?.kind === "rollUp" ? (
+        <RollUpDialog
+          parent={dialog.parent}
+          children={dialog.children}
+          onClose={() => setDialog(null)}
+        />
       ) : null}
       {importFile ? (
         <ImportCodebookDialog
@@ -312,7 +334,19 @@ interface RowProps {
   onSelect: () => void;
   onKeyDown: (e: React.KeyboardEvent) => void;
   onRenameDone: () => void;
-  onAction: (kind: "rename" | "edit" | "addChild" | "merge" | "moveExcerpts" | "delete") => void;
+  /** Name of this code's parent, for the "Roll up into …" label. */
+  parentName: string | null;
+  onAction: (
+    kind:
+      | "rename"
+      | "edit"
+      | "addChild"
+      | "merge"
+      | "moveExcerpts"
+      | "rollUpInto"
+      | "rollUpChildren"
+      | "delete",
+  ) => void;
   onDragStart: () => void;
   onDragEnd: () => void;
   onDragOver: (where: DropTarget["where"]) => void;
@@ -421,13 +455,25 @@ function CodeRow(p: RowProps) {
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <CodeRowMenuItems code={code} onAction={p.onAction} menu={dropdownMenuPrimitives} />
+              <CodeRowMenuItems
+                code={code}
+                parentName={p.parentName}
+                childCount={children.length}
+                onAction={p.onAction}
+                menu={dropdownMenuPrimitives}
+              />
             </DropdownMenuContent>
           </DropdownMenu>
         </li>
       </ContextMenuTrigger>
       <ContextMenuContent onCloseAutoFocus={(e) => e.preventDefault()}>
-        <CodeRowMenuItems code={code} onAction={p.onAction} menu={contextMenuPrimitives} />
+        <CodeRowMenuItems
+          code={code}
+          parentName={p.parentName}
+          childCount={children.length}
+          onAction={p.onAction}
+          menu={contextMenuPrimitives}
+        />
       </ContextMenuContent>
     </ContextMenu>
   );
@@ -436,10 +482,14 @@ function CodeRow(p: RowProps) {
 /** The row's action list, shared by its "…" button menu and its right-click menu. */
 function CodeRowMenuItems({
   code,
+  parentName,
+  childCount,
   onAction,
   menu,
 }: {
   code: Code;
+  parentName: string | null;
+  childCount: number;
   onAction: RowProps["onAction"];
   menu: MenuPrimitives;
 }) {
@@ -453,6 +503,12 @@ function CodeRowMenuItems({
       <Item onSelect={() => onAction("moveExcerpts")} disabled={code.excerptCount === 0}>
         Move excerpts to…
       </Item>
+      {parentName ? (
+        <Item onSelect={() => onAction("rollUpInto")}>Roll up into {parentName}…</Item>
+      ) : null}
+      {childCount > 0 ? (
+        <Item onSelect={() => onAction("rollUpChildren")}>Roll up children…</Item>
+      ) : null}
       <AddToSetMenu kind="code" memberId={code.id} memberLabel={code.name} menu={menu} />
       <Separator />
       <Item danger onSelect={() => onAction("delete")}>

@@ -489,6 +489,81 @@ export function useRemoveCodesFromExcerpts() {
 }
 
 /**
+ * Roll sub-codes up into their parent: every excerpt tagged with a child gets
+ * the parent instead, optionally followed by deleting the emptied children.
+ *
+ * Keeping the children is undoable — it is `retag_code` per child, and the
+ * inverse is the same bookkeeping `useRetagCode` does, replayed in reverse so
+ * that an excerpt two children shared ends up back with both. Deleting them
+ * is not: like every other code delete, the caller confirms first and the
+ * stack is cleared.
+ */
+export function useRollUpCodes() {
+  const invalidate = useInvalidateExcerpts();
+  const invalidateCodes = useInvalidateCodes();
+  return useMutation({
+    mutationFn: async ({
+      parentId,
+      childIds,
+      deleteEmptied,
+      label,
+    }: {
+      parentId: string;
+      childIds: string[];
+      deleteEmptied: boolean;
+      label: string;
+    }) => {
+      const retagAll = async () => {
+        const reports: [string, RetagReport][] = [];
+        for (const childId of childIds)
+          reports.push([childId, await api.retagCode(childId, parentId)]);
+        return reports;
+      };
+      const countMoved = (reports: [string, RetagReport][]) =>
+        reports.reduce((n, [, r]) => n + r.moved.length + r.alreadyHad.length, 0);
+
+      if (deleteEmptied) {
+        const reports = await retagAll();
+        // `promote` so a rolled-up code's own sub-codes survive, moving up to
+        // the parent rather than disappearing with it.
+        for (const childId of childIds) await codesApi.deleteCode(childId, "promote");
+        useUndoStore.getState().clear();
+        const ws = useWorkspace.getState();
+        if (ws.selectedCodeId && childIds.includes(ws.selectedCodeId))
+          ws.setSelectedCodeId(parentId);
+        if (ws.lastAppliedCodeId && childIds.includes(ws.lastAppliedCodeId))
+          ws.setLastAppliedCodeId(parentId);
+        invalidate();
+        invalidateCodes();
+        return countMoved(reports);
+      }
+
+      let reports: [string, RetagReport][] = [];
+      await useUndoStore.getState().run({
+        label,
+        redo: async () => {
+          reports = await retagAll();
+          invalidate();
+          invalidateCodes();
+        },
+        undo: async () => {
+          // Reverse order, so an excerpt that two children shared gets each
+          // of them back before the parent tag is taken away again.
+          for (const [childId, r] of [...reports].reverse()) {
+            const all = [...r.moved, ...r.alreadyHad];
+            if (all.length) await api.addCodesToExcerpts(all, [childId]);
+            if (r.moved.length) await api.removeCodesFromExcerpts(r.moved, [parentId]);
+          }
+          invalidate();
+          invalidateCodes();
+        },
+      });
+      return countMoved(reports);
+    },
+  });
+}
+
+/**
  * Move every excerpt from one code to another. Both codes survive, so this is
  * undoable: give the source back to everything that had it, and take the
  * target away only from the excerpts that gained it here.

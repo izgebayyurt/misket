@@ -24,7 +24,9 @@ keyboard-friendly interface without a subscription.
 - **Build a codebook**: nested codes with colors, single-key hotkeys,
   drag-and-drop reordering, merge and delete with impact preview, and
   "Move excerpts to…" to hand one code's excerpts to another without losing
-  either code. Import a codebook (JSON or CSV) exported from another Misket
+  either code. **Roll up** a sub-code into its parent — or every sub-code at
+  once — from the code's menu, with a checkbox for deleting the emptied codes
+  afterwards; leave it off and the whole roll-up is undoable. Import a codebook (JSON or CSV) exported from another Misket
   project to reuse it: merge it into the current codebook by matching code
   names, or add it fresh under a chosen code.
 - **Define codes properly**: each code has a description (what it means), an
