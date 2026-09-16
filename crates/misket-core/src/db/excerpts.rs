@@ -798,6 +798,30 @@ pub fn query(conn: &Connection, filter: &ExcerptFilter) -> Result<ExcerptPage> {
         where_clauses
             .push("NOT EXISTS (SELECT 1 FROM excerpt_codes ec WHERE ec.excerpt_id = e.id)".into());
     }
+    if let Some(other_code) = &filter.overlaps_code_id {
+        // Only text excerpts overlap in this sense (`co_occurrence` never
+        // counts image regions), so an image excerpt can never match.
+        let ids = if filter.include_descendants {
+            codes::descendant_ids(conn, std::slice::from_ref(other_code))?
+        } else {
+            vec![other_code.clone()]
+        };
+        if ids.is_empty() {
+            where_clauses.push("0 = 1".into());
+        } else {
+            let ph = ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+            where_clauses.push(format!(
+                "e.kind = 'text' AND EXISTS (
+                    SELECT 1 FROM excerpts o
+                    JOIN excerpt_codes oc ON oc.excerpt_id = o.id
+                    WHERE o.document_id = e.document_id AND o.kind = 'text'
+                      AND o.start_pos < e.end_pos AND e.start_pos < o.end_pos
+                      AND oc.code_id IN ({ph})
+                )"
+            ));
+            args.extend(ids.into_iter().map(rusqlite::types::Value::from));
+        }
+    }
     for cond in filter.descriptors.iter().flatten() {
         let (sql, cond_args) = descriptor_clause(conn, cond)?;
         where_clauses.push(sql);
@@ -1426,6 +1450,116 @@ mod tests {
         ] {
             assert_eq!(query(&p.conn, &f).unwrap().total, 0);
         }
+    }
+
+    /// `overlaps_code_id` should return exactly the excerpts that
+    /// `analysis::co_occurrence` would pair with something tagged the other
+    /// code: overlapping text ranges in the same document, or one excerpt
+    /// carrying both codes itself.
+    #[test]
+    fn overlaps_code_id_finds_the_co_occurrence_pairs() {
+        let (p, doc, a, b) = setup();
+        // "héllo wörld 😀 end", 17 code points.
+        let e1 = apply(&p.conn, &doc, 0, 5, &[&a]).excerpt.id; // overlaps e2
+        let e2 = apply(&p.conn, &doc, 3, 8, &[&b]).excerpt.id; // overlaps e1
+        let e3 = apply(&p.conn, &doc, 9, 13, &[&b]).excerpt.id; // isolated
+                                                                // Carries both codes itself: a "self" pair, like the diagonal loop in
+                                                                // `co_occurrence`. Overlaps e1 and e2, but not e3.
+        let e_both = apply(&p.conn, &doc, 1, 4, &[&a, &b]).excerpt.id;
+
+        let ids = |code: &str, other: &str| -> Vec<String> {
+            query(
+                &p.conn,
+                &ExcerptFilter {
+                    code_ids: Some(vec![code.to_string()]),
+                    overlaps_code_id: Some(other.to_string()),
+                    include_descendants: false,
+                    ..Default::default()
+                },
+            )
+            .unwrap()
+            .rows
+            .into_iter()
+            .map(|r| r.excerpt.id)
+            .collect()
+        };
+
+        assert_eq!(ids(&a, &b), vec![e1.clone(), e_both.clone()]);
+        assert_eq!(ids(&b, &a), vec![e_both.clone(), e2.clone()]);
+        assert!(!ids(&b, &a).contains(&e3));
+
+        // An unknown code matches nothing rather than everything.
+        let none = query(
+            &p.conn,
+            &ExcerptFilter {
+                overlaps_code_id: Some("nope".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(none.total, 0);
+    }
+
+    #[test]
+    fn overlaps_code_id_respects_include_descendants_and_ignores_image_excerpts() {
+        let (p, doc, a, b) = setup(); // B is a child of A.
+        let c = mk_code(&p.conn, "C", None).id;
+        let e_c = apply(&p.conn, &doc, 0, 5, &[&c]).excerpt.id;
+        // Tagged with B (a descendant of A), overlapping e_c, but never
+        // tagged A itself.
+        apply(&p.conn, &doc, 3, 8, &[&b]);
+
+        let matches = |include_descendants: bool| -> i64 {
+            query(
+                &p.conn,
+                &ExcerptFilter {
+                    code_ids: Some(vec![c.clone()]),
+                    overlaps_code_id: Some(a.clone()),
+                    include_descendants,
+                    ..Default::default()
+                },
+            )
+            .unwrap()
+            .total
+        };
+        assert_eq!(matches(true), 1); // B stands in for A's subtree.
+        assert_eq!(matches(false), 0); // Direct A only: nothing carries it here.
+        assert_eq!(
+            query(
+                &p.conn,
+                &ExcerptFilter {
+                    code_ids: Some(vec![c.clone()]),
+                    overlaps_code_id: Some(a.clone()),
+                    include_descendants: true,
+                    ..Default::default()
+                },
+            )
+            .unwrap()
+            .rows[0]
+                .excerpt
+                .id,
+            e_c
+        );
+
+        // Image excerpts never match: `co_occurrence` only counts text
+        // ranges, so `overlaps_code_id` is text-only too.
+        let (pi, image_doc, a2) = image_setup();
+        let b2 = mk_code(&pi.conn, "B2", None).id;
+        apply_codes(
+            &pi.conn,
+            region_input(&image_doc, rect(0.0, 0.0, 0.5, 0.5), &[&b2]),
+        )
+        .unwrap();
+        let img_page = query(
+            &pi.conn,
+            &ExcerptFilter {
+                overlaps_code_id: Some(a2),
+                include_descendants: false,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(img_page.total, 0);
     }
 
     #[test]

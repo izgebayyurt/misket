@@ -131,11 +131,15 @@ export function CoOccurrenceMatrix() {
                       }
                       onClick={() =>
                         n &&
-                        openExcerpts({
-                          codeIds: diagonal ? [row.id] : [row.id, col.id],
-                          includeDescendants: false,
-                          requireAllCodes: !diagonal,
-                        })
+                        openExcerpts(
+                          diagonal
+                            ? { codeIds: [row.id], includeDescendants: false }
+                            : {
+                                codeIds: [row.id],
+                                overlapsCodeId: col.id,
+                                includeDescendants: false,
+                              },
+                        )
                       }
                       data-testid={n ? "cooccurrence-cell" : undefined}
                     >

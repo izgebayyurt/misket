@@ -360,6 +360,14 @@ pub struct ExcerptFilter {
     pub document_set_ids: Option<Vec<String>>,
     #[serde(default)]
     pub uncoded_only: bool,
+    /// Restrict results to excerpts that overlap at least one excerpt
+    /// carrying this code (subject to `include_descendants`, same as the
+    /// main code filter). Matches how `analysis::co_occurrence` counts
+    /// pairs: text ranges only, half-open overlap
+    /// `a.start < b.end AND b.start < a.end` within the same document (or,
+    /// for the excerpt itself, sharing both codes).
+    #[serde(default)]
+    pub overlaps_code_id: Option<String>,
     /// Descriptor conditions, ANDed together.
     #[serde(default)]
     pub descriptors: Option<Vec<DescriptorFilter>>,
@@ -386,6 +394,7 @@ impl Default for ExcerptFilter {
             document_ids: None,
             document_set_ids: None,
             uncoded_only: false,
+            overlaps_code_id: None,
             descriptors: None,
             limit: default_limit(),
             offset: 0,

@@ -13,6 +13,9 @@ export interface FilterState {
   documentIds: string[];
   documentSetIds: string[];
   uncodedOnly: boolean;
+  /** Restrict to excerpts overlapping one carrying this code (the analysis
+   * click-through sets this; no filter control edits it directly). */
+  overlapsCodeId: string | null;
   descriptors: DescriptorFilter[];
 }
 
@@ -24,6 +27,7 @@ export const emptyFilterState: FilterState = {
   documentIds: [],
   documentSetIds: [],
   uncodedOnly: false,
+  overlapsCodeId: null,
   descriptors: [],
 };
 
@@ -37,6 +41,7 @@ export function filterState(f: ExcerptFilter | undefined | null): FilterState {
     documentIds: f?.documentIds ?? [],
     documentSetIds: f?.documentSetIds ?? [],
     uncodedOnly: f?.uncodedOnly ?? false,
+    overlapsCodeId: f?.overlapsCodeId ?? null,
     descriptors: f?.descriptors ?? [],
   };
 }
@@ -51,6 +56,7 @@ export function toFilter(state: FilterState, limit: number, offset = 0): Excerpt
     documentIds: state.documentIds.length ? state.documentIds : null,
     documentSetIds: state.documentSetIds.length ? state.documentSetIds : null,
     uncodedOnly: state.uncodedOnly,
+    overlapsCodeId: state.overlapsCodeId,
     descriptors: state.descriptors.length ? state.descriptors : null,
     limit,
     offset,
@@ -72,6 +78,7 @@ export function isFiltered(state: FilterState): boolean {
     codePickCount(state) > 0 ||
     documentPickCount(state) > 0 ||
     state.descriptors.length > 0 ||
-    state.uncodedOnly
+    state.uncodedOnly ||
+    state.overlapsCodeId !== null
   );
 }
