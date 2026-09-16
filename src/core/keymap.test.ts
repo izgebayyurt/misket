@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   describe as describeShortcut,
@@ -109,6 +111,22 @@ describe("keymap", () => {
   it("gives every action a non-empty label", () => {
     for (const action of Object.keys(SHORTCUTS) as Action[]) {
       expect(LABELS[action], `missing label for "${action}"`).toBeTruthy();
+    }
+  });
+
+  it("keeps the docs site's cheatsheet in sync with every shortcut", () => {
+    // site/docs/shortcuts.html hand-transcribes SHORTCUTS for macOS and
+    // Windows/Linux columns. Fail loudly if an action's label is missing,
+    // so the shipped page can't silently drift from the real keymap.
+    const shortcutsHtml = readFileSync(
+      path.resolve(__dirname, "../../site/docs/shortcuts.html"),
+      "utf-8",
+    );
+    for (const action of Object.keys(SHORTCUTS) as Action[]) {
+      expect(
+        shortcutsHtml.includes(LABELS[action]),
+        `"${LABELS[action]}" (action "${action}") is missing from site/docs/shortcuts.html`,
+      ).toBe(true);
     }
   });
 });

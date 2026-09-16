@@ -1,0 +1,488 @@
+/* Misket docs site — plain CSS, no build step, no framework.
+   Palette mirrors src/styles/globals.css (warm neutral, light/dark). */
+
+:root {
+  --bg: #fbfaf7;
+  --bg-panel: #ffffff;
+  --bg-muted: #f2f0ea;
+  --fg: #1f1d1a;
+  --fg-muted: #6b675f;
+  --border: #e4e0d6;
+  --accent: #b8571c;
+  --accent-fg: #ffffff;
+  --focus: #b8571c;
+  --danger: #b3261e;
+  --radius: 8px;
+  --max: 46rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1b1a18;
+    --bg-panel: #23221f;
+    --bg-muted: #2b2a26;
+    --fg: #ece8df;
+    --fg-muted: #a39e93;
+    --border: #38362f;
+    --accent: #e08a4a;
+    --accent-fg: #1b1a18;
+    --focus: #e08a4a;
+    --danger: #ff6f61;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family:
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    Roboto,
+    Helvetica,
+    Arial,
+    sans-serif;
+  line-height: 1.6;
+  font-size: 16px;
+}
+
+a {
+  color: var(--accent);
+  text-decoration-thickness: 1px;
+}
+
+a:hover {
+  text-decoration-thickness: 2px;
+}
+
+img {
+  max-width: 100%;
+  display: block;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+}
+
+code,
+pre,
+kbd {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+}
+
+code,
+kbd {
+  background: var(--bg-muted);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.1em 0.4em;
+  font-size: 0.9em;
+}
+
+pre {
+  background: var(--bg-muted);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1em;
+  overflow-x: auto;
+}
+
+pre code {
+  border: none;
+  padding: 0;
+  background: none;
+}
+
+/* --- skip link ---------------------------------------------------- */
+
+.skip-link {
+  position: absolute;
+  left: -999px;
+  top: 0;
+  background: var(--accent);
+  color: var(--accent-fg);
+  padding: 0.5em 1em;
+  border-radius: var(--radius);
+  z-index: 10;
+}
+
+.skip-link:focus {
+  left: 1em;
+  top: 1em;
+}
+
+/* --- header / nav --------------------------------------------------- */
+
+.site-header {
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-panel);
+}
+
+.site-header .wrap {
+  max-width: 64rem;
+  margin: 0 auto;
+  padding: 1rem 1.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.brand {
+  font-weight: 700;
+  font-size: 1.15rem;
+  color: var(--fg);
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.brand:hover {
+  text-decoration: none;
+}
+
+.brand .dot {
+  color: var(--accent);
+}
+
+.site-nav {
+  display: flex;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+}
+
+.site-nav a {
+  color: var(--fg-muted);
+  text-decoration: none;
+  font-size: 0.95rem;
+}
+
+.site-nav a:hover,
+.site-nav a[aria-current="page"] {
+  color: var(--fg);
+}
+
+/* --- layout ----------------------------------------------------------- */
+
+main {
+  max-width: 64rem;
+  margin: 0 auto;
+  padding: 2rem 1.25rem 4rem;
+}
+
+main.narrow {
+  max-width: var(--max);
+}
+
+.prose h1 {
+  font-size: 2rem;
+  margin: 0 0 0.5rem;
+}
+
+.prose h2 {
+  font-size: 1.4rem;
+  margin: 2.2rem 0 0.75rem;
+  border-top: 1px solid var(--border);
+  padding-top: 1.5rem;
+}
+
+.prose h2:first-of-type {
+  border-top: none;
+  padding-top: 0;
+}
+
+.prose h3 {
+  font-size: 1.1rem;
+  margin: 1.5rem 0 0.5rem;
+}
+
+.prose p {
+  margin: 0.75rem 0;
+}
+
+.prose ul,
+.prose ol {
+  padding-left: 1.4rem;
+}
+
+.prose li {
+  margin: 0.4rem 0;
+}
+
+.lede {
+  font-size: 1.15rem;
+  color: var(--fg-muted);
+  max-width: 40rem;
+}
+
+/* --- hero ------------------------------------------------------------- */
+
+.hero {
+  padding: 3rem 0 2rem;
+  text-align: center;
+}
+
+.hero h1 {
+  font-size: 2.4rem;
+  margin: 0 0 0.75rem;
+}
+
+.hero .lede {
+  margin: 0 auto 1.75rem;
+}
+
+.hero-actions {
+  display: flex;
+  justify-content: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.badge-row {
+  margin-top: 1.25rem;
+  color: var(--fg-muted);
+  font-size: 0.9rem;
+}
+
+/* --- buttons ------------------------------------------------------------ */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.65rem 1.25rem;
+  border-radius: var(--radius);
+  font-weight: 600;
+  text-decoration: none;
+  border: 1px solid transparent;
+  font-size: 1rem;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: var(--accent-fg);
+}
+
+.btn-primary:hover {
+  opacity: 0.92;
+}
+
+.btn-secondary {
+  background: transparent;
+  color: var(--fg);
+  border-color: var(--border);
+}
+
+.btn-secondary:hover {
+  background: var(--bg-muted);
+}
+
+/* --- feature grid ------------------------------------------------------- */
+
+.features {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.25rem;
+  margin: 2.5rem 0;
+}
+
+.feature {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.25rem;
+}
+
+.feature h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1.05rem;
+}
+
+.feature p {
+  color: var(--fg-muted);
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+/* --- screenshots -------------------------------------------------------- */
+
+figure {
+  margin: 1.5rem 0;
+}
+
+figcaption {
+  color: var(--fg-muted);
+  font-size: 0.85rem;
+  margin-top: 0.4rem;
+  text-align: center;
+}
+
+.shots {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1.25rem;
+  margin: 2rem 0;
+}
+
+.shot figure {
+  margin: 0;
+}
+
+.shot img {
+  width: 100%;
+}
+
+.shot figcaption {
+  color: var(--fg-muted);
+  font-size: 0.85rem;
+  margin-top: 0.4rem;
+  text-align: center;
+}
+
+.placeholder-shot {
+  aspect-ratio: 16 / 10;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--fg-muted);
+  font-size: 0.9rem;
+  text-align: center;
+  padding: 1rem;
+}
+
+/* --- tables --------------------------------------------------------- */
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1rem 0 1.5rem;
+  font-size: 0.95rem;
+}
+
+caption {
+  text-align: left;
+  color: var(--fg-muted);
+  margin-bottom: 0.5rem;
+  font-size: 0.9rem;
+}
+
+th,
+td {
+  border-bottom: 1px solid var(--border);
+  padding: 0.55rem 0.7rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+th {
+  color: var(--fg-muted);
+  font-weight: 600;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+tbody tr:hover {
+  background: var(--bg-muted);
+}
+
+/* --- callouts ------------------------------------------------------- */
+
+.callout {
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--accent);
+  background: var(--bg-panel);
+  border-radius: var(--radius);
+  padding: 1rem 1.25rem;
+  margin: 1.25rem 0;
+}
+
+.callout p:first-child {
+  margin-top: 0;
+}
+
+.callout p:last-child {
+  margin-bottom: 0;
+}
+
+.callout.warn {
+  border-left-color: var(--danger);
+}
+
+/* --- toc / on-page nav ----------------------------------------------- */
+
+.on-page-nav {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem 1.25rem;
+  margin: 1.5rem 0 2rem;
+}
+
+.on-page-nav p {
+  margin: 0 0 0.5rem;
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--fg-muted);
+}
+
+.on-page-nav ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.25rem;
+}
+
+/* --- footer ----------------------------------------------------------- */
+
+.site-footer {
+  border-top: 1px solid var(--border);
+  color: var(--fg-muted);
+  font-size: 0.9rem;
+}
+
+.site-footer .wrap {
+  max-width: 64rem;
+  margin: 0 auto;
+  padding: 1.5rem 1.25rem;
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+/* --- responsive --------------------------------------------------------- */
+
+@media (max-width: 800px) {
+  .features {
+    grid-template-columns: 1fr;
+  }
+  .shots {
+    grid-template-columns: 1fr;
+  }
+  .hero h1 {
+    font-size: 1.9rem;
+  }
+}
+
+/* --- accessibility: visible focus everywhere ----------------------------- */
+
+a:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}

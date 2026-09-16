@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Install Misket</title>
+    <meta
+      name="description"
+      content="How to install Misket on macOS, Windows and Linux, including the unsigned-app warnings, and how to build it from source."
+    />
+    <link rel="stylesheet" href="../style.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="site-header">
+      <div class="wrap">
+        <a class="brand" href="../index.html"><span class="dot">●</span> Misket</a>
+        <nav class="site-nav" aria-label="Site">
+          <a href="../index.html">Home</a>
+          <a href="install.html" aria-current="page">Install</a>
+          <a href="tutorial.html">Tutorial</a>
+          <a href="shortcuts.html">Shortcuts</a>
+          <a href="data.html">Data &amp; privacy</a>
+          <a href="https://github.com/izgebayyurt/misket">GitHub</a>
+        </nav>
+      </div>
+    </header>
+
+    <main id="main" class="prose narrow">
+      <h1>Install Misket</h1>
+      <p class="lede">
+        Builds for macOS, Windows and Linux are published on the
+        <a href="https://github.com/izgebayyurt/misket/releases">releases page</a>. They are not
+        code-signed yet, so each platform's gatekeeper will warn you the first time you open the app
+        — that is expected, not a sign anything is wrong.
+      </p>
+
+      <nav class="on-page-nav" aria-label="On this page">
+        <p>On this page</p>
+        <ul>
+          <li><a href="#macos">macOS</a></li>
+          <li><a href="#windows">Windows</a></li>
+          <li><a href="#linux">Linux</a></li>
+          <li><a href="#source">Build from source</a></li>
+        </ul>
+      </nav>
+
+      <h2 id="macos">macOS</h2>
+      <ol>
+        <li>
+          Download the <code>.dmg</code> (or <code>.app.tar.gz</code>) from the
+          <a href="https://github.com/izgebayyurt/misket/releases">releases page</a> and drag Misket
+          into <strong>Applications</strong>.
+        </li>
+        <li>
+          Open it. Because the app is not signed with an Apple Developer certificate, Gatekeeper
+          will refuse to launch it and may say it is "damaged" or "from an unidentified developer".
+        </li>
+        <li>
+          Go to <strong>System Settings → Privacy &amp; Security</strong>, scroll to the Security
+          section, and click <strong>Open Anyway</strong> next to the Misket message. Confirm in the
+          dialog that appears. You only need to do this once per release.
+        </li>
+      </ol>
+      <div class="callout warn">
+        <p>
+          If macOS does not show an "Open Anyway" button, right-click (or Control-click) the app in
+          Finder and choose <strong>Open</strong>, then confirm in the dialog.
+        </p>
+      </div>
+
+      <h2 id="windows">Windows</h2>
+      <ol>
+        <li>
+          Download the <code>.msi</code> installer from the
+          <a href="https://github.com/izgebayyurt/misket/releases">releases page</a> and run it.
+        </li>
+        <li>
+          Windows SmartScreen will show "Windows protected your PC" because the installer is not
+          signed by a recognised publisher yet.
+        </li>
+        <li>
+          Click <strong>More info</strong>, then <strong>Run anyway</strong>. This only appears on
+          the first run of a new release.
+        </li>
+      </ol>
+
+      <h2 id="linux">Linux</h2>
+      <p>Misket publishes an AppImage and a <code>.deb</code> package.</p>
+      <h3>AppImage</h3>
+      <pre><code>chmod +x Misket-*.AppImage
+./Misket-*.AppImage</code></pre>
+      <p>
+        Marking the file executable is required because most desktops download files as read-only.
+      </p>
+      <h3>Debian / Ubuntu (.deb)</h3>
+      <pre><code>sudo dpkg -i misket_*.deb
+# if it reports missing dependencies:
+sudo apt-get install -f</code></pre>
+
+      <h2 id="source">Build from source</h2>
+      <p>
+        Prerequisites: Node 22, pnpm 10, Rust stable, and the
+        <a href="https://tauri.app/start/prerequisites/">Tauri prerequisites</a> for your OS.
+      </p>
+      <pre><code>git clone https://github.com/izgebayyurt/misket.git
+cd misket
+pnpm install
+pnpm tauri dev          # run the app with hot reload
+pnpm check              # lint + typecheck + vitest
+cargo test --workspace  # database and domain logic tests
+pnpm tauri build        # installable bundle for this platform</code></pre>
+      <p>
+        See the
+        <a href="https://github.com/izgebayyurt/misket#setting-up-on-macos-from-scratch"
+          >README's macOS-from-scratch section</a
+        >
+        for exact rustup/nvm/pnpm setup steps, and
+        <a href="https://github.com/izgebayyurt/misket/blob/main/docs/ARCHITECTURE.md"
+          >docs/ARCHITECTURE.md</a
+        >
+        for how the pieces fit together.
+      </p>
+    </main>
+
+    <footer class="site-footer">
+      <div class="wrap">
+        <span>Misket is free software, MIT-licensed.</span>
+        <span
+          ><a href="https://github.com/izgebayyurt/misket">Source on GitHub</a> ·
+          <a href="https://github.com/izgebayyurt/misket/blob/main/ROADMAP.md">Roadmap</a></span
+        >
+      </div>
+    </footer>
+  </body>
+</html>
