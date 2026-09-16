@@ -64,10 +64,15 @@ pnpm tauri build        # installable bundle for this platform
 
 ### Setting up on macOS from scratch
 
+Minimums: Rust 1.85 or newer (some dependencies use the 2024 edition) and
+Node 22. Use rustup for Rust and a version manager such as nvm for Node; the
+Homebrew `rust` and `node@22` packages are easy to end up with stale or
+mismatched libraries.
+
 ```sh
 xcode-select --install                                   # compilers and system SDKs
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh   # Rust stable
-brew install node                                        # Node 22 (or use nvm)
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh   # Rust stable (or: rustup update stable)
+brew install nvm && nvm install 22                       # Node 22 (follow nvm's shell-setup notes first)
 corepack enable && corepack prepare pnpm@10.33.0 --activate      # pnpm, pinned by package.json
 git clone https://github.com/izgebayyurt/misket.git ~/Documents/GitHub/misket
 cd ~/Documents/GitHub/misket

@@ -4,6 +4,7 @@ description = "Misket: open-source qualitative coding for text, images and video
 authors = ["İzge Bayyurt"]
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 
