@@ -8,7 +8,11 @@ use tauri::{AppHandle, State};
 use crate::recent;
 use crate::state::AppState;
 
-fn install(state: &AppState, app: &AppHandle, project: OpenProject) -> Result<ProjectInfo> {
+pub(crate) fn install(
+    state: &AppState,
+    app: &AppHandle,
+    project: OpenProject,
+) -> Result<ProjectInfo> {
     let info = project.info()?;
     recent::touch(app, &info.path, &info.name)?;
     let mut guard = state

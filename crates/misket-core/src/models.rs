@@ -390,6 +390,19 @@ pub struct Memo {
     pub updated_at: String,
 }
 
+// ------------------------------------------------------------------- backups
+
+/// One timestamped backup file next to the project.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct BackupInfo {
+    pub path: String,
+    /// RFC 3339 UTC, derived from the timestamp encoded in the file name.
+    pub created_at: String,
+    pub reason: String,
+    pub size_bytes: u64,
+}
+
 // ------------------------------------------------------------------- search
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

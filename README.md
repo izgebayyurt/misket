@@ -63,8 +63,18 @@ Builds for macOS, Windows and Linux are published on the
 code-signed yet: macOS will ask you to allow the app under System Settings >
 Privacy & Security, and Windows SmartScreen will show a warning the first time.
 
-Your project is a `.misket` file (a SQLite database). Back it up like any other
-file.
+## Your data
+
+Your project is a `.misket` file (a SQLite database) on your own disk; nothing
+leaves your computer. Before a destructive change — deleting a document,
+deleting a code that has excerpts, or merging one code into another — Misket
+writes a timestamped copy into a `<project name>.backups/` folder next to the
+project file, and keeps the newest 20 (configurable in Settings). Use
+**Backups…** in the status bar to browse them, see their size and reason, and
+restore one (which first backs up the current state too, so restoring is
+itself never destructive). Use **Export > Save a copy as…** at any time for a
+manual snapshot. None of this replaces your own backup discipline for
+anything that matters.
 
 ## Development
 
