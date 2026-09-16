@@ -22,7 +22,9 @@ import { offsetsToRange, pointToOffset, rangeToOffsets } from "@/core/selection"
 import { nextBoundary, type Direction, type Granularity } from "@/core/wordBounds";
 import { isTextField, mod, type Action } from "@/core/keymap";
 import { findMatches } from "@/core/find";
+import { useProjectInfo } from "@/queries/project";
 import { useWorkspace } from "@/state/workspace";
+import { useReadingPositions } from "@/state/readingPositions";
 import { useShortcutActions } from "@/state/shortcutActions";
 import { useSettings } from "@/state/settings";
 import { SelectionToolbar } from "./SelectionToolbar";
@@ -44,6 +46,7 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
   const { data: doc, error } = useDocument(documentId);
   const { data: excerpts } = useDocumentExcerpts(documentId);
   const { data: codes } = useCodes();
+  const { data: projectInfo } = useProjectInfo();
   const rootRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const pending = useWorkspace((s) => s.pendingSelection);
@@ -282,6 +285,83 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
     setGoToOpen(false);
     rootRef.current?.focus();
   }, []);
+
+  // --- reading position ------------------------------------------------------
+  // Remembered as the code point offset of the first visible paragraph rather
+  // than a pixel scroll position, so it survives a change of text size, line
+  // height or window width.
+  const projectPath = projectInfo?.path ?? "";
+
+  /** The first paragraph still visible in the scroller, in code points. */
+  const firstVisibleOffset = useCallback((): number | null => {
+    const root = rootRef.current;
+    const container = scrollRef.current;
+    if (!root || !container) return null;
+    const ps = root.querySelectorAll<HTMLElement>("p[data-p]");
+    if (ps.length === 0) return null;
+    // `offsetTop` is monotonic down the document, so the last paragraph that
+    // starts at or above the viewport top is the one the reader is looking at.
+    const y = container.scrollTop;
+    let lo = 0;
+    let hi = ps.length - 1;
+    let best = 0;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      if (ps[mid]!.offsetTop <= y + 1) {
+        best = mid;
+        lo = mid + 1;
+      } else {
+        hi = mid - 1;
+      }
+    }
+    const u16 = Number(ps[best]!.dataset.p);
+    if (!Number.isFinite(u16)) return null;
+    return utf16ToCp(offsetMap, Math.max(0, Math.min(u16, text.length)));
+  }, [offsetMap, text.length]);
+
+  useEffect(() => {
+    const container = scrollRef.current;
+    if (!container || !text || !projectPath) return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const onScroll = () => {
+      if (timer) clearTimeout(timer);
+      // Debounced: scrolling past a passage on the way somewhere else should
+      // not be what gets remembered.
+      timer = setTimeout(() => {
+        const cp = firstVisibleOffset();
+        if (cp !== null) {
+          useReadingPositions.getState().remember(projectPath, documentId, cp);
+        }
+      }, 250);
+    };
+    container.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      if (timer) clearTimeout(timer);
+      container.removeEventListener("scroll", onScroll);
+    };
+  }, [documentId, firstVisibleOffset, projectPath, text]);
+
+  /** Which document the position has already been restored for. */
+  const restoredFor = useRef<string | null>(null);
+
+  useLayoutEffect(() => {
+    if (restoredFor.current === documentId) return;
+    if (!text || !projectPath) return;
+    const root = rootRef.current;
+    const container = scrollRef.current;
+    if (!root || !container) return;
+    restoredFor.current = documentId;
+    // An explicit target (an excerpt or a search hit) wins over the
+    // remembered position; those effects do their own scrolling.
+    if (focusExcerptId !== undefined || scrollToOffset !== undefined) return;
+    const cp = useReadingPositions.getState().recall(projectPath, documentId);
+    if (cp === null || cp <= 0) return;
+    const u16 = cpToUtf16(offsetMap, Math.min(cp, codePointCount(offsetMap)));
+    const el = root.querySelector<HTMLElement>(`p[data-p="${u16}"]`);
+    if (!el) return;
+    container.scrollTop +=
+      el.getBoundingClientRect().top - container.getBoundingClientRect().top - 12;
+  }, [documentId, focusExcerptId, offsetMap, projectPath, scrollToOffset, text]);
 
   // --- selection -> pendingSelection ---------------------------------------
   const readSelection = useCallback(() => {
