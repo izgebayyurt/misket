@@ -1,6 +1,6 @@
 # Misket
 
-Open-source qualitative coding for text, with images and video on the way.
+Open-source qualitative coding for text and images, with video on the way.
 Misket is a local-first desktop app: your project is a single file on your
 machine, and nothing is uploaded anywhere.
 
@@ -12,11 +12,12 @@ keyboard-friendly interface without a subscription.
 
 ![Coding a transcript](docs/screenshots/coding.png)
 
-## What it does today (milestone 1)
+## What it does today
 
-- **Import** plain text, Markdown, Word (`.docx`) and PDF (text only) documents,
-  one at a time or a whole folder at once ("Import folder…", optionally
-  including subfolders). If a file has blank-line gaps, trailing spaces or other likely-accidental
+- **Import** plain text, Markdown, Word (`.docx`), PDF (text only) and image
+  (PNG, JPEG, WebP) documents, one at a time or a whole folder at once
+  ("Import folder…", optionally including subfolders).
+  If a file has blank-line gaps, trailing spaces or other likely-accidental
   whitespace, Misket offers to tidy it up before import (document text is
   immutable once imported). Check "Remember my choice" in that dialog to skip
   it on future imports; its "Ask again on import" link resets that.
@@ -30,7 +31,13 @@ keyboard-friendly interface without a subscription.
   `>name` to create one on the spot), or press a code's hotkey. The picker
   shows each code's description and, for nested codes, its full path.
   Overlapping excerpts are drawn as stacked colored lanes.
-- **Adjust what is coded**: move an excerpt's start or end by a word or a
+- **Code image regions**: an image opens in a pan-and-zoom viewer (scroll to
+  zoom, `Alt`-drag to pan, `0` to fit). Drag a rectangle over it and code it
+  with the same palette and hotkeys; regions are drawn in their code's colour,
+  `Tab` cycles them, and the excerpt browser shows a thumbnail of each one.
+  The image is copied into the project file, so a `.misket` stays
+  self-contained.
+- **Adjust what is coded**: move a text excerpt's start or end by a word or a
   character from the keyboard, drag the grips at either end, split an excerpt
   at the cursor, or merge it with a touching neighbour (codes and memos are
   combined). All of it is undoable.
@@ -60,6 +67,7 @@ keyboard-friendly interface without a subscription.
 | ------------------------------------------------------ | --------------------------------------------- |
 | Code the selection / add a code to the focused excerpt | `Ctrl`/`⌘` + `K`                              |
 | Apply a code directly                                  | its hotkey (set in the code's settings)       |
+| Fit / zoom an image                                    | `0` / `+` / `-`                               |
 | Next / previous excerpt                                | `Tab` / `Shift`+`Tab`                         |
 | Edit the focused excerpt                               | `Enter`                                       |
 | Delete the focused excerpt                             | `Backspace`                                   |
@@ -151,8 +159,8 @@ together, [docs/DATA_MODEL.md](docs/DATA_MODEL.md) for the schema, and
 
 ## Roadmap
 
-- **Milestone 2**: coding image regions and video time ranges (the data model
-  already supports both).
+- **Milestone 2**: image regions are in; video time ranges and transcript
+  alignment are next (the data model already supports both).
 - Inter-rater reliability, full-text search, REFI-QDA import/export, project
   sharing.
 

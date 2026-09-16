@@ -140,6 +140,7 @@ pub fn excerpts_csv<W: Write>(conn: &Connection, filter: &ExcerptFilter, w: W) -
         "document".into(),
         "start".into(),
         "end".into(),
+        "geometry".into(),
         "text".into(),
         "codes".into(),
         "memo_count".into(),
@@ -160,6 +161,7 @@ pub fn excerpts_csv<W: Write>(conn: &Connection, filter: &ExcerptFilter, w: W) -
             row.document_name.clone(),
             e.start_pos.map(|v| v.to_string()).unwrap_or_default(),
             e.end_pos.map(|v| v.to_string()).unwrap_or_default(),
+            e.geometry.clone().unwrap_or_default(),
             e.snapshot.clone().unwrap_or_default(),
             code_list,
             e.memo_count.to_string(),
@@ -248,9 +250,10 @@ mod tests {
             &p.conn,
             ApplyCodesInput {
                 document_id: doc.summary.id.clone(),
-                start_pos: 0,
-                end_pos: 18,
+                start_pos: Some(0),
+                end_pos: Some(18),
                 code_ids: vec![a.id.clone(), b.id.clone()],
+                ..Default::default()
             },
         )
         .unwrap();
@@ -314,7 +317,7 @@ mod tests {
         // One column per descriptor field, after the fixed columns.
         assert!(
             s.starts_with(
-                "excerpt_id,document,start,end,text,codes,memo_count,created_at,Site,Age\n"
+                "excerpt_id,document,start,end,geometry,text,codes,memo_count,created_at,Site,Age\n"
             ),
             "{s}"
         );
@@ -354,5 +357,57 @@ mod tests {
         assert_eq!(values[0]["value"], "North");
         assert_eq!(values[0]["documentId"], v["documents"][0]["id"]);
         assert_eq!(values[1]["value"], "41");
+    }
+
+    #[test]
+    fn image_excerpts_export_their_geometry_and_snapshot() {
+        let p = OpenProject::in_memory("With an image").unwrap();
+        let img = documents::create_image(&p.conn, crate::db::documents::tests::new_image(b"png"))
+            .unwrap()
+            .summary
+            .id;
+        let code = mk_code(&p.conn, "Layout", None);
+        excerpts::apply_codes(
+            &p.conn,
+            ApplyCodesInput {
+                document_id: img.clone(),
+                kind: Some("image_region".into()),
+                geometry: Some(crate::models::Rect {
+                    x: 0.3,
+                    y: 0.4,
+                    w: 0.12,
+                    h: 0.08,
+                }),
+                code_ids: vec![code.id.clone()],
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        let mut buf = vec![];
+        excerpts_csv(&p.conn, &ExcerptFilter::default(), &mut buf).unwrap();
+        let s = String::from_utf8(buf).unwrap();
+        let row = s.lines().nth(1).unwrap();
+        // Empty start/end, the canonical geometry, and the readable snapshot.
+        assert!(row.contains(",Poster,,,"), "{row}");
+        assert!(
+            row.contains(r#""{""x"":0.3,""y"":0.4,""w"":0.12,""h"":0.08}""#),
+            "{row}"
+        );
+        assert!(row.contains("region 12%×8% at (30%, 40%)"), "{row}");
+        assert!(row.contains(",Layout,"), "{row}");
+
+        let mut buf = vec![];
+        project_json(&p.conn, &mut buf).unwrap();
+        let v: serde_json::Value = serde_json::from_slice(&buf).unwrap();
+        assert_eq!(v["documents"][0]["kind"], "image");
+        assert_eq!(v["documents"][0]["media"]["width"], 800);
+        assert_eq!(v["documents"][0]["media"]["mime"], "image/png");
+        assert_eq!(v["documents"][0]["text"], serde_json::Value::Null);
+        assert_eq!(v["excerpts"][0]["kind"], "image_region");
+        assert_eq!(
+            v["excerpts"][0]["geometry"],
+            r#"{"x":0.3,"y":0.4,"w":0.12,"h":0.08}"#
+        );
     }
 }

@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use misket_core::db::documents;
-use misket_core::models::{Document, DocumentSummary, NewDocument};
+use misket_core::models::{Document, DocumentSummary, NewDocument, NewImageDocument};
 use misket_core::{AppError, Result};
 use tauri::{AppHandle, State};
 
@@ -11,6 +11,17 @@ use crate::state::AppState;
 #[tauri::command]
 pub fn create_document(state: State<'_, AppState>, input: NewDocument) -> Result<Document> {
     state.with_project(|p| documents::create(&p.conn, input))
+}
+
+/// Import an image. The bytes are copied into the project file; when the
+/// frontend does not send them they are read from `sourcePath`, which avoids
+/// pushing several megabytes back through the IPC bridge.
+#[tauri::command]
+pub fn create_image_document(
+    state: State<'_, AppState>,
+    input: NewImageDocument,
+) -> Result<Document> {
+    state.with_project(|p| documents::create_image(&p.conn, input))
 }
 
 #[tauri::command]
@@ -45,9 +56,12 @@ pub fn delete_document(state: State<'_, AppState>, app: AppHandle, id: String) -
     })
 }
 
-/// Extensions the importers in `src/core/importers` can parse. Keep in sync
-/// with `SUPPORTED_EXTENSIONS` there.
-const IMPORTABLE_EXTENSIONS: [&str; 5] = ["txt", "md", "markdown", "docx", "pdf"];
+/// Extensions `src/core/importers` can take: the ones it parses into text,
+/// plus the image formats it imports as media. Keep in sync with
+/// `SUPPORTED_EXTENSIONS` there.
+const IMPORTABLE_EXTENSIONS: [&str; 9] = [
+    "txt", "md", "markdown", "docx", "pdf", "png", "jpg", "jpeg", "webp",
+];
 
 fn is_importable(path: &Path) -> bool {
     path.extension()
@@ -120,7 +134,14 @@ mod tests {
     fn lists_supported_files_sorted_by_name() {
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path();
-        for name in ["b.txt", "a.md", "C.PDF", "notes.rtf", ".hidden.txt"] {
+        for name in [
+            "b.txt",
+            "a.md",
+            "C.PDF",
+            "shot.png",
+            "notes.rtf",
+            ".hidden.txt",
+        ] {
             std::fs::write(root.join(name), b"x").unwrap();
         }
         std::fs::create_dir(root.join("sub")).unwrap();
@@ -141,8 +162,11 @@ mod tests {
                 })
                 .collect()
         };
-        assert_eq!(names(false), ["a.md", "b.txt", "C.PDF"]);
-        assert_eq!(names(true), ["a.md", "b.txt", "C.PDF", "deep.docx"]);
+        assert_eq!(names(false), ["a.md", "b.txt", "C.PDF", "shot.png"]);
+        assert_eq!(
+            names(true),
+            ["a.md", "b.txt", "C.PDF", "deep.docx", "shot.png"]
+        );
         assert!(matches!(
             list_importable_files("/definitely/not/here".into(), false),
             Err(AppError::NotFound(_))

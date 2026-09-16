@@ -1,5 +1,5 @@
-//! Excerpts: coded ranges of a document. Milestone 1 handles text ranges;
-//! image regions and video ranges reuse the same table.
+//! Excerpts: coded ranges of a document. Text ranges and image regions share
+//! this table; video ranges will reuse it too.
 
 use rusqlite::{params, Connection, OptionalExtension, Row};
 
@@ -7,10 +7,14 @@ use super::{codes, descriptors, documents, memos, text, util};
 use crate::error::{AppError, Result};
 use crate::models::{
     ApplyCodesInput, ApplyResult, DescriptorFilter, ExcerptDetail, ExcerptFilter, ExcerptPage,
-    ExcerptRow, ExcerptSnapshot, ExcerptWithCodes, MergeResult,
+    ExcerptRow, ExcerptSnapshot, ExcerptWithCodes, MergeResult, Rect,
 };
 
 const CONTEXT_CHARS: i64 = 120;
+
+/// Slack allowed when a region is checked against the image bounds: the UI
+/// works in device pixels, so a millionth of the width is far below one pixel.
+const GEOMETRY_EPSILON: f64 = 1e-6;
 
 const COLUMNS: &str = "e.id, e.document_id, e.kind, e.start_pos, e.end_pos, e.geometry, e.snapshot,
      (SELECT count(*) FROM memos m WHERE m.excerpt_id = e.id) AS memo_count,
@@ -83,7 +87,8 @@ pub fn get(conn: &Connection, id: &str) -> Result<ExcerptWithCodes> {
 pub fn list_for_document(conn: &Connection, document_id: &str) -> Result<Vec<ExcerptWithCodes>> {
     documents::get_summary(conn, document_id)?;
     let mut stmt = conn.prepare(&format!(
-        "SELECT {COLUMNS} FROM excerpts e WHERE e.document_id = ?1 ORDER BY e.start_pos, e.end_pos"
+        "SELECT {COLUMNS} FROM excerpts e WHERE e.document_id = ?1
+         ORDER BY e.start_pos, e.end_pos, e.created_at, e.id"
     ))?;
     let mut rows: Vec<ExcerptWithCodes> = stmt
         .query_map([document_id], from_row)?
@@ -99,37 +104,171 @@ fn ensure_codes_exist(conn: &Connection, code_ids: &[String]) -> Result<()> {
     Ok(())
 }
 
-/// Create the text excerpt for this exact range if needed, then attach codes.
-pub fn apply_codes(conn: &Connection, input: ApplyCodesInput) -> Result<ApplyResult> {
-    let (doc_text, len) = documents::get_text(conn, &input.document_id)?;
-    if input.start_pos < 0 || input.end_pos <= input.start_pos || input.end_pos > len {
-        return Err(AppError::Validation(format!(
-            "range {}..{} is outside the document (length {len})",
-            input.start_pos, input.end_pos
-        )));
+/// Validate and canonicalize an image region.
+///
+/// Rectangles are stored rounded to six decimals so that two drags of the
+/// same region produce byte-identical JSON, which is what makes the partial
+/// unique index on `(document_id, geometry)` behave like the text one.
+pub fn canonical_geometry(rect: &Rect) -> Result<String> {
+    let round = |v: f64| (v * 1e6).round() / 1e6;
+    let invalid = || {
+        AppError::Validation(format!(
+            "region ({}, {}) {}×{} is not inside the image: x and y must be ≥ 0, \
+             width and height > 0, and the rectangle must stay within 1×1",
+            rect.x, rect.y, rect.w, rect.h
+        ))
+    };
+    if ![rect.x, rect.y, rect.w, rect.h]
+        .iter()
+        .all(|v| v.is_finite())
+    {
+        return Err(invalid());
     }
+    let r = Rect {
+        x: round(rect.x),
+        y: round(rect.y),
+        w: round(rect.w),
+        h: round(rect.h),
+    };
+    if r.x < 0.0
+        || r.y < 0.0
+        || r.w <= 0.0
+        || r.h <= 0.0
+        || r.x + r.w > 1.0 + GEOMETRY_EPSILON
+        || r.y + r.h > 1.0 + GEOMETRY_EPSILON
+    {
+        return Err(invalid());
+    }
+    Ok(serde_json::to_string(&r)?)
+}
+
+/// A short human-readable stand-in for the excerpted pixels, so the excerpt
+/// browser, the exports and the memo lists always have something to show.
+pub fn region_snapshot(rect: &Rect) -> String {
+    let pct = |v: f64| (v * 100.0).round() as i64;
+    format!(
+        "region {}%×{}% at ({}%, {}%)",
+        pct(rect.w),
+        pct(rect.h),
+        pct(rect.x),
+        pct(rect.y)
+    )
+}
+
+/// What `apply_codes` is about to code: a text range or an image region.
+enum Target {
+    Text {
+        start: i64,
+        end: i64,
+        snapshot: String,
+    },
+    Region {
+        geometry: String,
+        snapshot: String,
+    },
+}
+
+/// Create the excerpt for this exact range or region if needed, then attach
+/// codes. `input.kind` defaults to `text`; `image_region` carries a geometry
+/// instead of offsets and upserts on the exact same rectangle.
+pub fn apply_codes(conn: &Connection, input: ApplyCodesInput) -> Result<ApplyResult> {
+    let kind = input.kind.as_deref().unwrap_or("text");
+    let target = match kind {
+        "text" => {
+            let (doc_text, len) = documents::get_text(conn, &input.document_id)?;
+            let (start, end) = match (input.start_pos, input.end_pos) {
+                (Some(s), Some(e)) => (s, e),
+                _ => {
+                    return Err(AppError::Validation(
+                        "a text excerpt needs a start and an end".into(),
+                    ))
+                }
+            };
+            if start < 0 || end <= start || end > len {
+                return Err(AppError::Validation(format!(
+                    "range {start}..{end} is outside the document (length {len})"
+                )));
+            }
+            let snapshot = text::cp_slice(&doc_text, start, end)
+                .ok_or_else(|| AppError::Validation("invalid range".into()))?
+                .to_string();
+            Target::Text {
+                start,
+                end,
+                snapshot,
+            }
+        }
+        "image_region" => {
+            let doc = documents::get_summary(conn, &input.document_id)?;
+            if doc.kind != "image" {
+                return Err(AppError::Validation(format!(
+                    "{:?} is not an image document",
+                    doc.name
+                )));
+            }
+            let rect = input
+                .geometry
+                .ok_or_else(|| AppError::Validation("an image excerpt needs a region".into()))?;
+            Target::Region {
+                geometry: canonical_geometry(&rect)?,
+                snapshot: region_snapshot(&rect),
+            }
+        }
+        other => {
+            return Err(AppError::Validation(format!(
+                "unknown excerpt kind {other:?}"
+            )))
+        }
+    };
     ensure_codes_exist(conn, &input.code_ids)?;
     let tx = conn.unchecked_transaction()?;
-    let existing: Option<String> = tx
-        .query_row(
-            "SELECT id FROM excerpts WHERE document_id = ?1 AND kind = 'text' AND start_pos = ?2 AND end_pos = ?3",
-            params![input.document_id, input.start_pos, input.end_pos],
-            |r| r.get(0),
-        )
-        .optional()?;
     let now = util::now();
-    let (id, created) = match existing {
-        Some(id) => (id, false),
-        None => {
-            let id = util::new_id();
-            let snapshot = text::cp_slice(&doc_text, input.start_pos, input.end_pos)
-                .ok_or_else(|| AppError::Validation("invalid range".into()))?;
-            tx.execute(
-                "INSERT INTO excerpts (id, document_id, kind, start_pos, end_pos, snapshot, created_at, updated_at)
-                 VALUES (?1, ?2, 'text', ?3, ?4, ?5, ?6, ?6)",
-                params![id, input.document_id, input.start_pos, input.end_pos, snapshot, now],
-            )?;
-            (id, true)
+    let (id, created) = match &target {
+        Target::Text {
+            start,
+            end,
+            snapshot,
+        } => {
+            let existing: Option<String> = tx
+                .query_row(
+                    "SELECT id FROM excerpts WHERE document_id = ?1 AND kind = 'text' AND start_pos = ?2 AND end_pos = ?3",
+                    params![input.document_id, start, end],
+                    |r| r.get(0),
+                )
+                .optional()?;
+            match existing {
+                Some(id) => (id, false),
+                None => {
+                    let id = util::new_id();
+                    tx.execute(
+                        "INSERT INTO excerpts (id, document_id, kind, start_pos, end_pos, snapshot, created_at, updated_at)
+                         VALUES (?1, ?2, 'text', ?3, ?4, ?5, ?6, ?6)",
+                        params![id, input.document_id, start, end, snapshot, now],
+                    )?;
+                    (id, true)
+                }
+            }
+        }
+        Target::Region { geometry, snapshot } => {
+            let existing: Option<String> = tx
+                .query_row(
+                    "SELECT id FROM excerpts WHERE document_id = ?1 AND kind = 'image_region' AND geometry = ?2",
+                    params![input.document_id, geometry],
+                    |r| r.get(0),
+                )
+                .optional()?;
+            match existing {
+                Some(id) => (id, false),
+                None => {
+                    let id = util::new_id();
+                    tx.execute(
+                        "INSERT INTO excerpts (id, document_id, kind, geometry, snapshot, created_at, updated_at)
+                         VALUES (?1, ?2, 'image_region', ?3, ?4, ?5, ?5)",
+                        params![id, input.document_id, geometry, snapshot, now],
+                    )?;
+                    (id, true)
+                }
+            }
         }
     };
     let mut added = vec![];
@@ -219,7 +358,11 @@ pub fn restore(conn: &Connection, snapshot: &ExcerptSnapshot) -> Result<ExcerptW
     )
     .map_err(|err| {
         if err.to_string().contains("UNIQUE") {
-            AppError::Conflict("an excerpt with this range already exists".into())
+            AppError::Conflict(if e.kind == "image_region" {
+                "an excerpt for this region already exists".into()
+            } else {
+                "an excerpt with this range already exists".to_string()
+            })
         } else {
             AppError::from(err)
         }
@@ -645,7 +788,7 @@ pub fn query(conn: &Connection, filter: &ExcerptFilter) -> Result<ExcerptPage> {
             substr(d.text, e.end_pos + 1, {CONTEXT_CHARS}) AS after_ctx
          FROM excerpts e JOIN documents d ON d.id = e.document_id
          WHERE {where_sql}
-         ORDER BY d.sort_order, d.created_at, e.start_pos, e.end_pos
+         ORDER BY d.sort_order, d.created_at, e.start_pos, e.end_pos, e.created_at, e.id
          LIMIT ? OFFSET ?"
     );
     let mut page_args = args.clone();
@@ -677,7 +820,7 @@ mod tests {
     use super::*;
     use crate::db::codes::tests::mk as mk_code;
     use crate::db::descriptors::tests::mk_field;
-    use crate::db::documents::tests::new_doc;
+    use crate::db::documents::tests::{new_doc, new_image};
     use crate::db::OpenProject;
     use crate::models::MemoTarget;
 
@@ -690,16 +833,31 @@ mod tests {
     }
 
     fn apply(conn: &Connection, doc: &str, s: i64, e: i64, codes: &[&str]) -> ApplyResult {
-        apply_codes(
-            conn,
-            ApplyCodesInput {
-                document_id: doc.into(),
-                start_pos: s,
-                end_pos: e,
-                code_ids: codes.iter().map(|c| c.to_string()).collect(),
-            },
-        )
-        .unwrap()
+        apply_codes(conn, text_input(doc, s, e, codes)).unwrap()
+    }
+
+    fn text_input(doc: &str, s: i64, e: i64, codes: &[&str]) -> ApplyCodesInput {
+        ApplyCodesInput {
+            document_id: doc.into(),
+            start_pos: Some(s),
+            end_pos: Some(e),
+            code_ids: codes.iter().map(|c| c.to_string()).collect(),
+            ..Default::default()
+        }
+    }
+
+    fn region_input(doc: &str, rect: Rect, codes: &[&str]) -> ApplyCodesInput {
+        ApplyCodesInput {
+            document_id: doc.into(),
+            kind: Some("image_region".into()),
+            geometry: Some(rect),
+            code_ids: codes.iter().map(|c| c.to_string()).collect(),
+            ..Default::default()
+        }
+    }
+
+    fn rect(x: f64, y: f64, w: f64, h: f64) -> Rect {
+        Rect { x, y, w, h }
     }
 
     #[test]
@@ -721,29 +879,35 @@ mod tests {
     fn range_validation() {
         let (p, doc, a, _) = setup();
         for (s, e) in [(-1, 3), (3, 3), (5, 2), (0, 99)] {
-            let r = apply_codes(
-                &p.conn,
-                ApplyCodesInput {
-                    document_id: doc.clone(),
-                    start_pos: s,
-                    end_pos: e,
-                    code_ids: vec![a.clone()],
-                },
-            );
+            let r = apply_codes(&p.conn, text_input(&doc, s, e, &[&a]));
             assert!(matches!(r, Err(AppError::Validation(_))), "{s}..{e}");
         }
-        // Whole document is fine (length 16 code points).
-        apply(&p.conn, &doc, 0, 16, &[&a]);
+        // A text excerpt without offsets, and an unknown kind, are rejected.
         assert!(matches!(
             apply_codes(
                 &p.conn,
                 ApplyCodesInput {
-                    document_id: doc,
-                    start_pos: 0,
-                    end_pos: 1,
-                    code_ids: vec!["nope".into()]
+                    document_id: doc.clone(),
+                    code_ids: vec![a.clone()],
+                    ..Default::default()
                 }
             ),
+            Err(AppError::Validation(_))
+        ));
+        assert!(matches!(
+            apply_codes(
+                &p.conn,
+                ApplyCodesInput {
+                    kind: Some("video_range".into()),
+                    ..text_input(&doc, 0, 1, &[&a])
+                }
+            ),
+            Err(AppError::Validation(_))
+        ));
+        // Whole document is fine (length 16 code points).
+        apply(&p.conn, &doc, 0, 16, &[&a]);
+        assert!(matches!(
+            apply_codes(&p.conn, text_input(&doc, 0, 1, &["nope"])),
             Err(AppError::NotFound(_))
         ));
     }
@@ -1262,5 +1426,260 @@ mod tests {
             );
             assert!(r.is_err(), "{bad:?}");
         }
+    }
+
+    // ------------------------------------------------------------- images
+
+    fn image_setup() -> (OpenProject, String, String) {
+        let p = OpenProject::in_memory("t").unwrap();
+        let doc = documents::create_image(&p.conn, new_image(b"\x89PNG pixels"))
+            .unwrap()
+            .summary
+            .id;
+        let a = mk_code(&p.conn, "A", None).id;
+        (p, doc, a)
+    }
+
+    /// Boundary edits are text-only: a region has no offsets to move.
+    #[test]
+    fn boundary_edits_reject_image_regions() {
+        let (p, doc, a) = image_setup();
+        let left = apply_codes(&p.conn, region_input(&doc, rect(0.1, 0.2, 0.3, 0.4), &[&a]))
+            .unwrap()
+            .excerpt
+            .id;
+        let right = apply_codes(&p.conn, region_input(&doc, rect(0.5, 0.5, 0.2, 0.2), &[&a]))
+            .unwrap()
+            .excerpt
+            .id;
+        assert!(matches!(
+            update_range(&p.conn, &left, 0, 5),
+            Err(AppError::Validation(_))
+        ));
+        assert!(matches!(
+            split(&p.conn, &left, 3),
+            Err(AppError::Validation(_))
+        ));
+        assert!(matches!(
+            merge_adjacent(&p.conn, &left, &right),
+            Err(AppError::Validation(_))
+        ));
+        // Nothing was changed by the attempts.
+        assert_eq!(list_for_document(&p.conn, &doc).unwrap().len(), 2);
+    }
+
+    #[test]
+    fn canonical_geometry_rounds_and_validates() {
+        assert_eq!(
+            canonical_geometry(&rect(0.3, 0.4, 0.12, 0.08)).unwrap(),
+            r#"{"x":0.3,"y":0.4,"w":0.12,"h":0.08}"#
+        );
+        // Two drags that differ below the rounding step canonicalize equally.
+        assert_eq!(
+            canonical_geometry(&rect(0.30000004, 0.4, 0.12, 0.08)).unwrap(),
+            canonical_geometry(&rect(0.29999996, 0.4, 0.12, 0.08)).unwrap()
+        );
+        // The whole image is fine, and so is a rectangle ending exactly at 1.
+        canonical_geometry(&rect(0.0, 0.0, 1.0, 1.0)).unwrap();
+        canonical_geometry(&rect(0.5, 0.5, 0.5, 0.5)).unwrap();
+        for bad in [
+            rect(-0.01, 0.0, 0.5, 0.5),
+            rect(0.0, -0.01, 0.5, 0.5),
+            rect(0.0, 0.0, 0.0, 0.5),
+            rect(0.0, 0.0, 0.5, 0.0),
+            rect(0.0, 0.0, 0.5, -0.5),
+            rect(0.6, 0.0, 0.5, 0.5),
+            rect(0.0, 0.6, 0.5, 0.5),
+            rect(f64::NAN, 0.0, 0.5, 0.5),
+            rect(0.0, 0.0, f64::INFINITY, 0.5),
+        ] {
+            assert!(
+                matches!(canonical_geometry(&bad), Err(AppError::Validation(_))),
+                "{bad:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn region_snapshot_reads_as_percentages() {
+        assert_eq!(
+            region_snapshot(&rect(0.3, 0.4, 0.12, 0.08)),
+            "region 12%×8% at (30%, 40%)"
+        );
+        assert_eq!(
+            region_snapshot(&rect(0.0, 0.0, 1.0, 1.0)),
+            "region 100%×100% at (0%, 0%)"
+        );
+    }
+
+    #[test]
+    fn apply_creates_an_image_region_then_upserts_on_the_same_rectangle() {
+        let (p, doc, a) = image_setup();
+        let b = mk_code(&p.conn, "B", None).id;
+        let r1 = apply_codes(
+            &p.conn,
+            region_input(&doc, rect(0.3, 0.4, 0.12, 0.08), &[&a]),
+        )
+        .unwrap();
+        assert!(r1.created);
+        assert_eq!(r1.excerpt.kind, "image_region");
+        assert_eq!(r1.excerpt.start_pos, None);
+        assert_eq!(r1.excerpt.end_pos, None);
+        assert_eq!(
+            r1.excerpt.geometry.as_deref(),
+            Some(r#"{"x":0.3,"y":0.4,"w":0.12,"h":0.08}"#)
+        );
+        assert_eq!(
+            r1.excerpt.snapshot.as_deref(),
+            Some("region 12%×8% at (30%, 40%)")
+        );
+        // The same rectangle (to within rounding) adds codes to the same excerpt.
+        let r2 = apply_codes(
+            &p.conn,
+            region_input(&doc, rect(0.3000000001, 0.4, 0.12, 0.08), &[&a, &b]),
+        )
+        .unwrap();
+        assert!(!r2.created);
+        assert_eq!(r2.excerpt.id, r1.excerpt.id);
+        assert_eq!(r2.added_code_ids, vec![b.clone()]);
+        assert_eq!(list_for_document(&p.conn, &doc).unwrap().len(), 1);
+        // A different rectangle is a different excerpt.
+        let r3 = apply_codes(&p.conn, region_input(&doc, rect(0.1, 0.1, 0.2, 0.2), &[&a])).unwrap();
+        assert!(r3.created);
+        assert_eq!(list_for_document(&p.conn, &doc).unwrap().len(), 2);
+    }
+
+    #[test]
+    fn image_regions_are_validated_against_the_document_and_the_bounds() {
+        let (p, doc, a) = image_setup();
+        // No geometry.
+        assert!(matches!(
+            apply_codes(
+                &p.conn,
+                ApplyCodesInput {
+                    document_id: doc.clone(),
+                    kind: Some("image_region".into()),
+                    code_ids: vec![a.clone()],
+                    ..Default::default()
+                }
+            ),
+            Err(AppError::Validation(_))
+        ));
+        // Out of bounds.
+        assert!(matches!(
+            apply_codes(&p.conn, region_input(&doc, rect(0.9, 0.1, 0.2, 0.2), &[&a])),
+            Err(AppError::Validation(_))
+        ));
+        // A text document cannot hold a region, and an image cannot hold text.
+        let text_doc = documents::create(&p.conn, new_doc("words here"))
+            .unwrap()
+            .summary
+            .id;
+        assert!(matches!(
+            apply_codes(
+                &p.conn,
+                region_input(&text_doc, rect(0.0, 0.0, 0.5, 0.5), &[&a])
+            ),
+            Err(AppError::Validation(_))
+        ));
+        assert!(matches!(
+            apply_codes(&p.conn, text_input(&doc, 0, 3, &[&a])),
+            Err(AppError::NotFound(_))
+        ));
+        // An unknown code still fails before anything is written.
+        assert!(matches!(
+            apply_codes(
+                &p.conn,
+                region_input(&doc, rect(0.0, 0.0, 0.5, 0.5), &["nope"])
+            ),
+            Err(AppError::NotFound(_))
+        ));
+        assert!(list_for_document(&p.conn, &doc).unwrap().is_empty());
+    }
+
+    #[test]
+    fn image_excerpts_survive_delete_restore_detail_and_query() {
+        let (p, doc, a) = image_setup();
+        let e = apply_codes(
+            &p.conn,
+            region_input(&doc, rect(0.25, 0.5, 0.25, 0.25), &[&a]),
+        )
+        .unwrap()
+        .excerpt;
+        memos::create(
+            &p.conn,
+            MemoTarget {
+                excerpt_id: Some(e.id.clone()),
+                ..Default::default()
+            },
+            "m",
+            "what is in the corner",
+        )
+        .unwrap();
+
+        // detail: no context text, but the snapshot and geometry are there.
+        let d = detail(&p.conn, &e.id).unwrap();
+        assert_eq!(d.context_before, "");
+        assert_eq!(d.context_after, "");
+        assert_eq!(d.excerpt.geometry, e.geometry);
+        assert_eq!(d.document_name, "Poster");
+        assert_eq!(d.memos.len(), 1);
+
+        // query: image rows come back with empty context.
+        let page = query(&p.conn, &ExcerptFilter::default()).unwrap();
+        assert_eq!(page.total, 1);
+        assert_eq!(page.rows[0].excerpt.id, e.id);
+        assert_eq!(page.rows[0].context_before, "");
+        assert_eq!(page.rows[0].context_after, "");
+        assert_eq!(page.rows[0].excerpt.code_ids, vec![a.clone()]);
+
+        // delete + restore keeps the geometry, and the region stays unique.
+        let snap = delete(&p.conn, &e.id).unwrap();
+        assert_eq!(snap.memos.len(), 1);
+        let restored = restore(&p.conn, &snap).unwrap();
+        assert_eq!(restored.id, e.id);
+        assert_eq!(restored.geometry, e.geometry);
+        assert_eq!(restored.memo_count, 1);
+        assert!(matches!(
+            restore(&p.conn, &snap),
+            Err(AppError::Conflict(_))
+        ));
+
+        // Codes work the same way as on text.
+        let b = mk_code(&p.conn, "B", None).id;
+        let with_b = add_codes(&p.conn, &e.id, std::slice::from_ref(&b)).unwrap();
+        assert_eq!(with_b.code_ids.len(), 2);
+        assert_eq!(remove_code(&p.conn, &e.id, &a).unwrap().code_ids, vec![b]);
+
+        // Deleting the image takes its excerpt (and blob) with it.
+        documents::delete(&p.conn, &doc).unwrap();
+        assert!(matches!(get(&p.conn, &e.id), Err(AppError::NotFound(_))));
+    }
+
+    #[test]
+    fn a_project_can_mix_text_and_image_excerpts() {
+        let (p, image, a) = image_setup();
+        let text_doc = documents::create(&p.conn, new_doc("héllo wörld"))
+            .unwrap()
+            .summary
+            .id;
+        let t = apply(&p.conn, &text_doc, 0, 5, &[&a]).excerpt.id;
+        let r = apply_codes(
+            &p.conn,
+            region_input(&image, rect(0.0, 0.0, 0.5, 0.5), &[&a]),
+        )
+        .unwrap()
+        .excerpt
+        .id;
+        let page = query(&p.conn, &ExcerptFilter::default()).unwrap();
+        assert_eq!(page.total, 2);
+        // Document order: the image was imported first.
+        assert_eq!(
+            page.rows
+                .iter()
+                .map(|row| row.excerpt.id.clone())
+                .collect::<Vec<_>>(),
+            vec![r, t]
+        );
     }
 }

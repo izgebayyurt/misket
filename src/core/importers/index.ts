@@ -9,7 +9,30 @@ export interface ImportedDocument {
   text: string;
 }
 
-export const SUPPORTED_EXTENSIONS = ["txt", "md", "markdown", "docx", "pdf"] as const;
+/** Extensions parsed into document text. */
+export const TEXT_EXTENSIONS = ["txt", "md", "markdown", "docx", "pdf"] as const;
+
+/** Extensions imported as image documents (coded with rectangle regions). */
+export const IMAGE_EXTENSIONS = ["png", "jpg", "jpeg", "webp"] as const;
+
+export const SUPPORTED_EXTENSIONS = [...TEXT_EXTENSIONS, ...IMAGE_EXTENSIONS] as const;
+
+const IMAGE_MIMES: Record<string, string> = {
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  webp: "image/webp",
+};
+
+/** The MIME type for an image extension, or null for anything else. */
+export function imageMimeForExtension(ext: string): string | null {
+  return IMAGE_MIMES[ext.toLowerCase()] ?? null;
+}
+
+/** Whether this path is imported as an image rather than parsed into text. */
+export function imageMimeForPath(path: string): string | null {
+  return imageMimeForExtension(extensionOf(path));
+}
 
 export function extensionOf(path: string): string {
   const base = path.split(/[\\/]/).pop() ?? path;
@@ -23,7 +46,10 @@ export function baseName(path: string): string {
   return dot <= 0 ? base : base.slice(0, dot);
 }
 
-/** Parse a file's bytes into plain text according to its extension. */
+/**
+ * Parse a file's bytes into plain text according to its extension. Images do
+ * not go through here: they keep their bytes (see `imageMimeForPath`).
+ */
 export async function importFile(path: string, bytes: Uint8Array): Promise<ImportedDocument> {
   const ext = extensionOf(path);
   const name = baseName(path);
@@ -39,6 +65,8 @@ export async function importFile(path: string, bytes: Uint8Array): Promise<Impor
     case "pdf":
       return { name, sourceFormat: "pdf", text: await importPdf(bytes) };
     default:
-      throw new Error(`Unsupported file type ".${ext}". Supported: txt, md, docx, pdf.`);
+      throw new Error(
+        `Unsupported file type ".${ext}". Supported: ${SUPPORTED_EXTENSIONS.join(", ")}.`,
+      );
   }
 }

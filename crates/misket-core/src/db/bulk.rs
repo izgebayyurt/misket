@@ -202,9 +202,9 @@ pub fn retag_code(conn: &Connection, from_code_id: &str, to_code_id: &str) -> Re
 mod tests {
     use super::*;
     use crate::db::codes::tests::mk as mk_code;
-    use crate::db::documents::tests::new_doc;
+    use crate::db::documents::tests::{new_doc, new_image};
     use crate::db::{documents, OpenProject};
-    use crate::models::{ApplyCodesInput, MemoTarget};
+    use crate::models::{ApplyCodesInput, MemoTarget, Rect};
 
     struct Fixture {
         p: OpenProject,
@@ -229,9 +229,36 @@ mod tests {
             &f.p.conn,
             ApplyCodesInput {
                 document_id: f.doc.clone(),
-                start_pos: start,
-                end_pos: end,
+                start_pos: Some(start),
+                end_pos: Some(end),
                 code_ids: code_ids.iter().map(|c| c.to_string()).collect(),
+                ..Default::default()
+            },
+        )
+        .unwrap()
+        .excerpt
+        .id
+    }
+
+    /// An image document with one region excerpt on it, tagged `A`.
+    fn image_region(f: &Fixture) -> String {
+        let img = documents::create_image(&f.p.conn, new_image(b"\x89PNG pixels"))
+            .unwrap()
+            .summary
+            .id;
+        excerpts::apply_codes(
+            &f.p.conn,
+            ApplyCodesInput {
+                document_id: img,
+                kind: Some("image_region".into()),
+                geometry: Some(Rect {
+                    x: 0.1,
+                    y: 0.2,
+                    w: 0.3,
+                    h: 0.4,
+                }),
+                code_ids: vec![f.a.clone()],
+                ..Default::default()
             },
         )
         .unwrap()
@@ -441,5 +468,28 @@ mod tests {
         // Moving a code with no excerpts anywhere is an empty no-op.
         let empty = retag_code(&f.p.conn, &c, &f.b).unwrap();
         assert!(empty.moved.is_empty() && empty.already_had.is_empty());
+    }
+
+    /// Bulk edits are about excerpts, not about text: an image region is
+    /// tagged, deleted and restored like any other excerpt.
+    #[test]
+    fn bulk_edits_cover_image_regions() {
+        let f = setup();
+        let region = image_region(&f);
+        let text = apply(&f, 0, 3, &[&f.a]);
+
+        let both = [region.clone(), text];
+        let report = add_codes_many(&f.p.conn, &both, std::slice::from_ref(&f.b)).unwrap();
+        assert_eq!(report.affected, 2);
+        assert_eq!(codes_of(&f, &region), vec![f.a.clone(), f.b.clone()]);
+
+        let snapshots = delete_many(&f.p.conn, &both).unwrap();
+        assert_eq!(count(&f), 0);
+        let restored = excerpts::restore(&f.p.conn, &snapshots[0]).unwrap();
+        assert_eq!(restored.id, region);
+        assert_eq!(restored.kind, "image_region");
+        assert_eq!(restored.geometry, snapshots[0].excerpt.geometry);
+        assert_eq!(restored.start_pos, None);
+        assert_eq!(codes_of(&f, &region).len(), 2);
     }
 }

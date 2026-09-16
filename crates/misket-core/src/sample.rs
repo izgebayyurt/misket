@@ -216,9 +216,10 @@ pub fn create_sample_project(path: &Path) -> Result<()> {
             conn,
             ApplyCodesInput {
                 document_id: doc_ids[&e.document].clone(),
-                start_pos: start,
-                end_pos: end,
+                start_pos: Some(start),
+                end_pos: Some(end),
                 code_ids: ids,
+                ..Default::default()
             },
         )?;
     }

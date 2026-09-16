@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { ExcerptFilter } from "@/api/types";
+import type { ExcerptFilter, Rect } from "@/api/types";
 
 export type AnalysisTab = "frequencies" | "cooccurrence" | "matrix";
 
@@ -26,12 +26,13 @@ export interface PaletteTarget {
   onPick: (codeId: string) => void | Promise<void>;
 }
 
-/** A text selection in the active document, in code point offsets. */
-export interface PendingSelection {
-  documentId: string;
-  start: number;
-  end: number;
-}
+/**
+ * What the palette and the code hotkeys will code next: a text selection in
+ * code point offsets, or a rectangle drawn on an image (fractions, 0..1).
+ */
+export type PendingSelection =
+  | { documentId: string; kind: "text"; start: number; end: number }
+  | { documentId: string; kind: "image"; geometry: Rect };
 
 interface WorkspaceState {
   view: View;

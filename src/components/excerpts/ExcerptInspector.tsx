@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { MemoList } from "@/components/memos/MemoList";
 import { useWorkspace } from "@/state/workspace";
 import { toast } from "@/state/toasts";
+import { RegionThumbnail } from "./RegionThumbnail";
 
 /** Right-panel view of the focused excerpt: context, codes, memos. */
 export function ExcerptInspector({ excerptId }: { excerptId: string }) {
@@ -21,14 +22,30 @@ export function ExcerptInspector({ excerptId }: { excerptId: string }) {
         <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-fg-muted">
           Excerpt
         </h3>
-        <p className="font-serif text-sm leading-snug">
-          <span className="text-fg-muted">…{detail.contextBefore.slice(-60)}</span>
-          <mark className="rounded bg-accent/20 px-0.5 text-fg">{detail.snapshot}</mark>
-          <span className="text-fg-muted">{detail.contextAfter.slice(0, 60)}…</span>
-        </p>
-        <p className="mt-1 text-[11px] text-fg-muted">
-          {detail.documentName} · {detail.startPos}–{detail.endPos}
-        </p>
+        {detail.kind === "image_region" ? (
+          <>
+            <RegionThumbnail
+              documentId={detail.documentId}
+              geometry={detail.geometry}
+              width={244}
+              height={140}
+            />
+            <p className="mt-1 text-[11px] text-fg-muted">
+              {detail.documentName} · {detail.snapshot}
+            </p>
+          </>
+        ) : (
+          <>
+            <p className="font-serif text-sm leading-snug">
+              <span className="text-fg-muted">…{detail.contextBefore.slice(-60)}</span>
+              <mark className="rounded bg-accent/20 px-0.5 text-fg">{detail.snapshot}</mark>
+              <span className="text-fg-muted">{detail.contextAfter.slice(0, 60)}…</span>
+            </p>
+            <p className="mt-1 text-[11px] text-fg-muted">
+              {detail.documentName} · {detail.startPos}–{detail.endPos}
+            </p>
+          </>
+        )}
       </div>
       <div className="border-b border-border p-3">
         <div className="flex items-center justify-between">

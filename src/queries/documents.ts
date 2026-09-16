@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as api from "@/api/documents";
-import type { NewDocument } from "@/api/types";
+import type { NewDocument, NewImageDocument } from "@/api/types";
 import { keys } from "./keys";
 
 export function useDocuments() {
@@ -39,6 +39,14 @@ export function useCreateDocument() {
   const invalidate = useInvalidateDocuments();
   return useMutation({
     mutationFn: (input: NewDocument) => api.createDocument(input),
+    onSuccess: invalidate,
+  });
+}
+
+export function useCreateImageDocument() {
+  const invalidate = useInvalidateDocuments();
+  return useMutation({
+    mutationFn: (input: NewImageDocument) => api.createImageDocument(input),
     onSuccess: invalidate,
   });
 }
