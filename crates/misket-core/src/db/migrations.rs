@@ -7,6 +7,7 @@ use crate::error::Result;
 const MIGRATIONS: &[(i64, &str)] = &[
     (1, include_str!("migrations/0001_init.sql")),
     (2, include_str!("migrations/0002_descriptors.sql")),
+    (3, include_str!("migrations/0003_sets.sql")),
 ];
 
 pub fn latest_version() -> i64 {
@@ -78,5 +79,29 @@ mod tests {
             )
             .unwrap();
         assert_eq!(n, 2);
+    }
+
+    #[test]
+    fn set_tables_exist_at_the_latest_version() {
+        let conn = Connection::open_in_memory().unwrap();
+        migrate(&conn).unwrap();
+        let n: i64 = conn
+            .query_row(
+                "SELECT count(*) FROM sqlite_master WHERE type = 'table'
+                 AND name IN ('sets','set_members','saved_filters')",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(n, 3);
+        let triggers: i64 = conn
+            .query_row(
+                "SELECT count(*) FROM sqlite_master WHERE type = 'trigger'
+                 AND name IN ('set_members_code_deleted','set_members_document_deleted')",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(triggers, 2);
     }
 }

@@ -12,6 +12,7 @@ pub mod export;
 pub mod memos;
 pub mod migrations;
 pub mod search;
+pub mod sets;
 pub mod text;
 pub mod util;
 
@@ -227,7 +228,12 @@ mod tests {
             let p = OpenProject::create(&path, "Old", "0.1.0").unwrap();
             p.conn
                 .execute_batch(
-                    "DROP TABLE descriptor_values;
+                    "DROP TRIGGER set_members_code_deleted;
+                     DROP TRIGGER set_members_document_deleted;
+                     DROP TABLE saved_filters;
+                     DROP TABLE set_members;
+                     DROP TABLE sets;
+                     DROP TABLE descriptor_values;
                      DROP TABLE descriptor_fields;
                      PRAGMA user_version = 1;",
                 )
@@ -246,9 +252,9 @@ mod tests {
             .query_row("PRAGMA user_version", [], |r| r.get(0))
             .unwrap();
         assert_eq!(backup_version, 1);
-        // The descriptor tables the migration added are usable.
+        // The tables the later migrations added are usable.
         p.conn
-            .execute_batch("SELECT count(*) FROM descriptor_fields;")
+            .execute_batch("SELECT count(*) FROM descriptor_fields; SELECT count(*) FROM sets;")
             .unwrap();
     }
 
