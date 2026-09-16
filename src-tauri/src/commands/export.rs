@@ -28,3 +28,8 @@ pub fn export_excerpts_csv(
 pub fn export_project_json(state: State<'_, AppState>, path: String) -> Result<()> {
     state.with_project(|p| export::project_json(&p.conn, BufWriter::new(File::create(&path)?)))
 }
+
+#[tauri::command]
+pub fn export_codebook_json(state: State<'_, AppState>, path: String) -> Result<()> {
+    state.with_project(|p| export::codebook_json(&p.conn, BufWriter::new(File::create(&path)?)))
+}

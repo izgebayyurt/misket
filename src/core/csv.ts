@@ -28,3 +28,70 @@ export interface MatrixRow {
 export function matrixCsv(corner: string, columns: string[], rows: MatrixRow[]): string {
   return toCsv([[corner, ...columns], ...rows.map((r) => [r.label, ...r.values])]);
 }
+
+/**
+ * RFC 4180 CSV reading: quoted fields (with embedded commas, newlines and
+ * doubled quotes), CRLF or LF line endings, and a trailing blank line
+ * ignored. Every row has the same number of fields as the widest row seen
+ * so far is not enforced here; callers check column counts themselves.
+ */
+export function parseCsv(text: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let field = "";
+  let inQuotes = false;
+  let i = 0;
+  const n = text.length;
+  const endField = () => {
+    row.push(field);
+    field = "";
+  };
+  const endRow = () => {
+    endField();
+    rows.push(row);
+    row = [];
+  };
+  while (i < n) {
+    const c = text[i];
+    if (inQuotes) {
+      if (c === '"') {
+        if (text[i + 1] === '"') {
+          field += '"';
+          i += 2;
+          continue;
+        }
+        inQuotes = false;
+        i++;
+        continue;
+      }
+      field += c;
+      i++;
+      continue;
+    }
+    if (c === '"') {
+      inQuotes = true;
+      i++;
+      continue;
+    }
+    if (c === ",") {
+      endField();
+      i++;
+      continue;
+    }
+    if (c === "\r") {
+      i++;
+      continue;
+    }
+    if (c === "\n") {
+      endRow();
+      i++;
+      continue;
+    }
+    field += c;
+    i++;
+  }
+  // Trailing content (no final newline) becomes one more row; a lone
+  // trailing newline should not add an empty row.
+  if (field !== "" || row.length > 0) endRow();
+  return rows;
+}

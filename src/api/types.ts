@@ -104,6 +104,16 @@ export interface CodeImpact {
   excerptCount: number;
 }
 
+/** `merge` matches existing codes by full name path; `add-under` grafts
+ * everything fresh under `parentId` (root if omitted/null), unmatched. */
+export type CodebookImportMode = "merge" | "add-under";
+
+export interface ImportReport {
+  created: number;
+  matched: number;
+  skippedShortcuts: string[];
+}
+
 export type ExcerptKind = "text" | "image_region" | "video_range";
 
 export interface ExcerptWithCodes {

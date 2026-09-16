@@ -18,9 +18,13 @@ keyboard-friendly interface without a subscription.
   it on future imports; its "Ask again on import" link resets that.
 - **Build a codebook**: nested codes with colors, descriptions, single-key
   hotkeys, drag-and-drop reordering, merge and delete with impact preview.
+  Import a codebook (JSON or CSV) exported from another Misket project to
+  reuse it: merge it into the current codebook by matching code names, or add
+  it fresh under a chosen code.
 - **Code excerpts**: select text, press `Ctrl`/`⌘`+`K` and pick a code (type
-  `>name` to create one on the spot), or press a code's hotkey. Overlapping
-  excerpts are drawn as stacked colored lanes.
+  `>name` to create one on the spot), or press a code's hotkey. The picker
+  shows each code's description and, for nested codes, its full path.
+  Overlapping excerpts are drawn as stacked colored lanes.
 - **Browse excerpts** across the project, filtered by code (with sub-codes),
   document, or uncoded only, and jump back to any of them in context.
 - **Analyse**: a code frequency table (own counts and counts with sub-codes,
@@ -33,7 +37,8 @@ keyboard-friendly interface without a subscription.
   "Site is any of North, South").
 - **Memos** on documents, codes, excerpts and the project.
 - **Undo/redo** for every coding and codebook action.
-- **Export** the codebook and excerpts as CSV, or the whole project as JSON.
+- **Export** the codebook as CSV or a reusable JSON file, excerpts as CSV, or
+  the whole project as JSON.
 
 ![Excerpt browser](docs/screenshots/browser.png)
 
@@ -67,7 +72,8 @@ Privacy & Security, and Windows SmartScreen will show a warning the first time.
 
 Your project is a `.misket` file (a SQLite database) on your own disk; nothing
 leaves your computer. Before a destructive change — deleting a document,
-deleting a code that has excerpts, or merging one code into another — Misket
+deleting a code that has excerpts, merging one code into another, or importing
+a codebook — Misket
 writes a timestamped copy into a `<project name>.backups/` folder next to the
 project file, and keeps the newest 20 (configurable in Settings). Use
 **Backups…** in the status bar to browse them, see their size and reason, and
