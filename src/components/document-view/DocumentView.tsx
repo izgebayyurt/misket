@@ -285,7 +285,9 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
 
   const closeGoTo = useCallback(() => {
     setGoToOpen(false);
-    rootRef.current?.focus();
+    // `preventScroll`: focusing the text root would otherwise scroll it back
+    // to its own top and undo the jump we just started.
+    rootRef.current?.focus({ preventScroll: true });
   }, []);
 
   // --- reading position ------------------------------------------------------

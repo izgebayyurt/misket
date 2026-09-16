@@ -72,30 +72,32 @@ function TitleInput({ initial, className, onCommit, onCancel }: TitleInputProps)
     else onCancel();
   }
 
+  // The input sits inside a wrapper carrying the heading's typography: the
+  // base stylesheet gives inputs `font: inherit`, so it picks up the same
+  // family, size and weight and the title does not visibly change shape.
   return (
-    <input
-      autoFocus
-      value={value}
-      aria-label="Document name"
-      data-testid="document-title-input"
-      className={cn(
-        className,
-        "w-full rounded-md border border-border bg-panel px-1.5 outline-none focus-visible:ring-2 focus-visible:ring-focus",
-      )}
-      onChange={(e) => setValue(e.target.value)}
-      onFocus={(e) => e.currentTarget.select()}
-      onBlur={() => finish(true)}
-      onKeyDown={(e) => {
-        if (e.key === "Enter") {
-          e.preventDefault();
-          e.stopPropagation();
-          finish(true);
-        } else if (e.key === "Escape") {
-          e.preventDefault();
-          e.stopPropagation();
-          finish(false);
-        }
-      }}
-    />
+    <span className={cn(className, "block")}>
+      <input
+        autoFocus
+        value={value}
+        aria-label="Document name"
+        data-testid="document-title-input"
+        className="w-full rounded-md border border-border bg-panel px-1.5 outline-none focus-visible:ring-2 focus-visible:ring-focus"
+        onChange={(e) => setValue(e.target.value)}
+        onFocus={(e) => e.currentTarget.select()}
+        onBlur={() => finish(true)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            e.stopPropagation();
+            finish(true);
+          } else if (e.key === "Escape") {
+            e.preventDefault();
+            e.stopPropagation();
+            finish(false);
+          }
+        }}
+      />
+    </span>
   );
 }
