@@ -7,6 +7,7 @@ import {
   type Command,
   type UndoState,
 } from "@/core/undo";
+import { logUndo } from "@/api/activity";
 import { toast } from "./toasts";
 
 interface UndoStore extends UndoState {
@@ -38,6 +39,9 @@ export const useUndoStore = create<UndoStore>((set, get) => ({
       await r.cmd.undo();
       set(r.next);
       toast.info(`Undid: ${r.cmd.label}`);
+      void logUndo(false, r.cmd.label).catch(() => {
+        // Best-effort: the change itself is already logged by the backend.
+      });
     } catch (e) {
       toast.error(e);
       set(emptyUndo());
@@ -53,6 +57,9 @@ export const useUndoStore = create<UndoStore>((set, get) => ({
       await r.cmd.redo();
       set(r.next);
       toast.info(`Redid: ${r.cmd.label}`);
+      void logUndo(true, r.cmd.label).catch(() => {
+        // Best-effort: the change itself is already logged by the backend.
+      });
     } catch (e) {
       toast.error(e);
       set(emptyUndo());
