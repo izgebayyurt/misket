@@ -345,23 +345,98 @@ Because a merge re-points memos to the survivor rather than deleting them,
 `restore` upserts memos (`ON CONFLICT(id) DO UPDATE`) so undoing a merge moves
 them back instead of failing on the primary key.
 
-## The activity log
+## History
 
-`activity_log` (schema 5) records who changed what, and when. It is a table in
-the project file rather than a sidecar, so the trail is copied by
-`backup::save_copy`, written into every timestamped backup, and restored with
-the data it describes.
+`history` (schema 8) is both the audit trail and the undo stack. It replaced
+`activity_log`, which was append-only and could only be read; a history row
+also carries the operation and its exact opposite, so a change can be walked
+back and forward long after the window that made it has closed. It is a table
+in the project file rather than a sidecar, so the trail _and_ the undo are
+copied by `backup::save_copy`, written into every timestamped backup, and
+restored with the data they describe.
 
-Every write path in `db::` logs its own entry, inside the same transaction as
-the change:
+| Column                             | Holds                                                                                   |
+| ---------------------------------- | --------------------------------------------------------------------------------------- |
+| `id`                               | the write order; the log is read by `id`, never by `at` (see below)                     |
+| `parent_id`                        | the step this one followed — the edge that makes the log a tree. `NULL` for a root      |
+| `at`, `actor`                      | when, and whoever was at the keyboard                                                   |
+| `kind`, `target_kind`, `target_id` | the dotted verb and what it happened to                                                 |
+| `summary`, `detail_json`           | the sentence the UI shows, and the structured before/after values behind it             |
+| `forward_json`, `inverse_json`     | the operation and its opposite, as replayable JSON. `NULL` = this step cannot be walked |
+| `branch_name`                      | the name "fork here" gave this node                                                     |
+| `preferred_child`                  | which child redo follows when there is more than one                                    |
 
-```rust
-activity::record(&tx, "code.moved", "code", Some(id), summary, detail)?;
+`history_blobs(node_id, name, bytes)` holds what is too big for a JSON
+payload — a deleted document's text, an image's pixels — keyed by node and by
+a name the payload refers to.
+
+`project_meta.history_head` is the id of the node undo would take back next;
+empty means "before the first node". `history_root_child` is the same idea for
+redo at the very beginning.
+
+### The tree
+
+Undo walks toward the root, redo toward a leaf. An edit made _after_ an undo
+becomes a second child of the same parent rather than discarding the path it
+left, so nothing is ever thrown away:
+
+```
+c1 ── c2 ── c3          ← undo to c1, then edit again
+       └─── c4 (head)   ← c2 and c3 are still there
 ```
 
-so an entry can never outlive — or be lost by — what it describes. Nothing is
-logged at the Tauri layer except `undo`/`redo`, which the backend cannot infer
-because the undo stack lives in the frontend.
+`history::checkout(id)` moves the project to any node: it computes the path
+from the head up to the lowest common ancestor and down the other side, and
+applies the inverses and then the forwards in one transaction, so a path that
+turns out to contain a step with no payload leaves the project untouched.
+`fork_here(name)` labels a node, `tree()` reads the whole shape, and
+`compact_before(id)` throws away everything that is not `id` or under it,
+making `id` a root with its payloads cleared; it refuses while the project is
+somewhere else in the tree, because that state would become unreachable.
+
+### Payload conventions
+
+A payload is `serde_json::Value`, self-contained, and carries the **original
+ids**, so a restore puts the same row back rather than a copy that only looks
+the same. Timestamps travel with it too (`created_at` on a tag, `updated_at`
+on a code or an excerpt), because "put it back as it was" includes when it
+last changed. There is one vocabulary per family, and the same shape serves
+both directions:
+
+| Family                               | Payload                                                                                                                                      |
+| ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `code.*`                             | a `CodeOp`: `restore` (a `CodeTreeSnapshot`, plus children to re-parent and tags to take back), `drop`, `delete`, `update`, `move`, `merge`  |
+| `excerpt.*`, `bulk.*`                | an `ExcerptChange`: memos to move, excerpts to delete, ranges to set, snapshots to restore, tags to remove, tags to add, timestamps to touch |
+| `memo.*`                             | a `MemoChange`: memo ids to delete and whole rows to upsert                                                                                  |
+| an operation that writes two entries | the first is `{"op":"linked"}` and the second carries the payloads, so one undo takes the pair back together                                 |
+
+A `CodeTreeSnapshot` is everything deleting a branch of the codebook would
+take with it: the rows parents-first, the sibling order of the groups
+involved, the tags, the memos, the set memberships, the framework cells and
+the example-excerpt pointers. `codes::snapshot_subtree` reads it before the
+delete; `codes::restore_subtree` puts it back, skipping any row whose target
+(an excerpt, a set, a matrix) has gone in the meantime rather than failing.
+
+### Recording, and the replay flag
+
+Every write path in `db::` records its own node, inside the same transaction
+as the change:
+
+```rust
+activity::record(&tx, "code.moved", "code", Some(id), summary, detail, forward, inverse)?;
+```
+
+so an entry can never outlive — or be lost by — what it describes. Passing
+`None` for both payloads records a step that reads correctly but cannot be
+undone; that is what the kinds phase 2 still has to cover do today, and what
+every row copied over from `activity_log` looks like.
+
+Replaying a node calls the ordinary domain functions, which would log the
+replay as a fresh edit. `history::with_replay` raises a flag in a `TEMP`
+table (`temp.history_state`, per connection, never in the file) that turns
+`record` into a no-op for the duration, and always lowers it again. Because
+those functions open transactions of their own, every write path uses
+`util::tx`, a `SAVEPOINT` that nests where `BEGIN` cannot.
 
 **The actor.** Misket has no user accounts, so it is a plain string: the name
 set in Settings (`AppSettings.coderName`) or the OS user name
@@ -372,20 +447,20 @@ tables per connection and outside the database file, so two people opening the
 same project never see each other's name and the `.misket` is unchanged by it.
 A `&Connection` that was never told (every core test) logs an empty actor.
 
-**Kinds.** The verb is dotted, `noun.past_tense`:
+**Kinds.** The verb is dotted, `noun.past_tense`. Everything in the first four
+groups is undoable; the rest is recorded with no payloads until phase 2.
 
 | Group        | Kinds                                                                                                                           |
 | ------------ | ------------------------------------------------------------------------------------------------------------------------------- |
 | `code`       | `created`, `updated`, `moved`, `deleted`, `merged_into` (the source), `merged_from` (the survivor)                              |
 | `excerpt`    | `created`, `codes_added`, `code_removed`, `range_updated`, `split`, `split_off`, `merged`, `merged_into`, `deleted`, `restored` |
-| `bulk`       | `excerpts_deleted`, `codes_added`, `codes_removed`, `retagged`                                                                  |
+| `bulk`       | `excerpts_deleted`, `codes_added`, `codes_removed`, `retagged`, `auto_coded`                                                    |
 | `memo`       | `created`, `updated`, `deleted`, `restored`                                                                                     |
 | `descriptor` | `field_created`, `field_updated`, `field_deleted`, `value_set`                                                                  |
 | `set`        | `created`, `renamed`, `members_changed`, `deleted`                                                                              |
 | `filter`     | `saved`, `deleted`                                                                                                              |
 | `document`   | `imported`, `renamed`, `deleted`                                                                                                |
 | `codebook`   | `imported`                                                                                                                      |
-| —            | `undo`, `redo`                                                                                                                  |
 
 `target_kind` is `code`, `excerpt`, `document`, `descriptor_field`, `set`,
 `saved_filter`, `codebook` or `project`. Three conventions make the per-target
@@ -407,7 +482,9 @@ timelines readable:
 whatever context the summary leaves out. `activity::code_history` and
 `activity::excerpt_history` are `target_kind`/`target_id` lookups ordered by
 `id`; `activity::list` pages the whole log newest first and also returns every
-kind present, so the UI builds its filter from one call.
+kind present, so the UI builds its filter from one call. An `ActivityEntry`
+also carries `parentId`, `undoable`, `branchName` and `isHead`, so the feed
+can show where the project currently stands.
 
 Ordering is by `id`, never by `at`: `util::now()` formats RFC 3339 with
 trailing zeros trimmed, so `…:00Z` sorts _after_ `…:00.5Z` as a string.

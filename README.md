@@ -118,7 +118,8 @@ keyboard-friendly interface without a subscription.
   history as a timeline with the values before and after, and the whole log
   exports as CSV. Set your name under Settings → "Your name (for the activity
   log)"; without one Misket uses your computer's user name.
-- **Undo/redo** for every coding and codebook action.
+- **Undo/redo**: every change is undoable, including deleting or merging codes;
+  history is kept in the project file, so it survives closing the app.
 - **Export** the codebook as CSV or a reusable JSON file, excerpts as CSV, the
   activity log as CSV, or the whole project as JSON.
 
