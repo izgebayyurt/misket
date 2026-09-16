@@ -4,11 +4,13 @@ import { cn } from "@/lib/utils";
 import { CodeFrequencies } from "./CodeFrequencies";
 import { CoOccurrenceMatrix } from "./CoOccurrenceMatrix";
 import { CodeByDocumentMatrix } from "./CodeByDocumentMatrix";
+import { FrameworkMatrixView } from "./FrameworkMatrixView";
 
 const TABS: { id: AnalysisTab; label: string }[] = [
   { id: "frequencies", label: "Frequencies" },
   { id: "cooccurrence", label: "Co-occurrence" },
   { id: "matrix", label: "Code × document" },
+  { id: "framework", label: "Framework" },
 ];
 
 export function AnalysisView({ tab }: { tab: AnalysisTab }) {
@@ -38,6 +40,8 @@ export function AnalysisView({ tab }: { tab: AnalysisTab }) {
           <CodeFrequencies />
         ) : tab === "cooccurrence" ? (
           <CoOccurrenceMatrix />
+        ) : tab === "framework" ? (
+          <FrameworkMatrixView />
         ) : (
           <CodeByDocumentMatrix />
         )}

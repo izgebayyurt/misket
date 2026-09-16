@@ -35,8 +35,10 @@ export function useInvalidateDescriptors() {
     qc.invalidateQueries({ queryKey: keys.descriptorMatrix });
     if (documentId) qc.invalidateQueries({ queryKey: keys.descriptorValues(documentId) });
     else qc.invalidateQueries({ queryKey: keys.allDescriptorValues });
-    // Descriptor conditions change what the excerpt browser shows.
+    // Descriptor conditions change what the excerpt browser shows, and
+    // descriptor values are the rows of a framework matrix.
     qc.invalidateQueries({ queryKey: keys.excerptQueries });
+    qc.invalidateQueries({ queryKey: keys.analysis });
     qc.invalidateQueries({ queryKey: keys.stats });
   };
 }

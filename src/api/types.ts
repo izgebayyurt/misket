@@ -426,6 +426,71 @@ export interface SearchHit {
   contextAfter: string;
 }
 
+// ---------------------------------------------------------------- framework
+
+export type FrameworkRowKind = "document" | "descriptor_value";
+
+/**
+ * A saved framework matrix: cases down the side, themes across the top. Only
+ * the configuration is stored; `getFrameworkMatrix` recomputes the rows.
+ */
+export interface FrameworkMatrix {
+  id: string;
+  name: string;
+  rowKind: FrameworkRowKind;
+  /** The descriptor field the rows group by, when `rowKind` is `descriptor_value`. */
+  rowFieldId: string | null;
+  /** Restrict the rows to this document set's members; null means every document. */
+  rowSetId: string | null;
+  /** Take the columns from this code set; null means use `codeIds`. */
+  codeSetId: string | null;
+  /** The columns, in column order, when `codeSetId` is null. */
+  codeIds: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** A whole configuration, so undo is "apply the previous one". */
+export interface FrameworkMatrixInput {
+  name: string;
+  rowKind: FrameworkRowKind;
+  rowFieldId?: string | null;
+  rowSetId?: string | null;
+  codeSetId?: string | null;
+  codeIds: string[];
+}
+
+export interface FrameworkRow {
+  /** The document id, or the descriptor value (empty for "no value"). */
+  rowKey: string;
+  label: string;
+  documentIds: string[];
+}
+
+export interface FrameworkCell {
+  rowKey: string;
+  codeId: string;
+  summary: string;
+  /** Distinct excerpts in the row's documents carrying this code or a descendant. */
+  excerptCount: number;
+}
+
+export interface FrameworkMatrixView {
+  matrix: FrameworkMatrix;
+  rows: FrameworkRow[];
+  /** Code ids, in column order. */
+  columns: string[];
+  /** One per (row, column) pair, rows outermost. */
+  cells: FrameworkCell[];
+}
+
+/** A deleted matrix with every summary it held, so undo can put it back. */
+export interface FrameworkMatrixWithCells {
+  matrix: FrameworkMatrix;
+  /** `[rowKey, codeId, summary]`. */
+  cells: [string, string, string][];
+}
+
 // ------------------------------------------------------------------ backups
 
 export interface BackupInfo {
