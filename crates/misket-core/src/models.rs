@@ -988,6 +988,12 @@ pub struct HistoryNode {
     pub inverse: Option<serde_json::Value>,
     pub branch_name: Option<String>,
     pub preferred_child: Option<i64>,
+    /// The compound step this node belongs to, named by the id of the node
+    /// that leads it. `None` for a write that stands on its own.
+    pub group_id: Option<i64>,
+    /// Set on the leading node of a group only: the label the history view
+    /// shows in place of the steps inside it.
+    pub group_summary: Option<String>,
 }
 
 /// A node as the history view draws it: no payloads, but the shape of the
@@ -1004,6 +1010,9 @@ pub struct HistoryNodeSummary {
     pub branch_name: Option<String>,
     pub undoable: bool,
     pub is_head: bool,
+    /// How many writes this node stands for: 1 normally, more when it is a
+    /// compound step (a merge, an import of several files) shown as one.
+    pub step_count: i64,
     /// Oldest first; more than one means the tree branches here.
     pub children: Vec<i64>,
 }

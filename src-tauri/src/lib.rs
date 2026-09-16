@@ -189,6 +189,8 @@ pub fn run() {
             commands::history::history_fork,
             commands::history::history_rename_branch,
             commands::history::history_compact,
+            commands::history::history_begin_group,
+            commands::history::history_end_group,
             commands::export::export_activity_csv,
             commands::export::export_codebook_csv,
             commands::export::export_excerpts_csv,

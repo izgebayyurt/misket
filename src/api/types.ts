@@ -729,6 +729,10 @@ export interface HistoryNode {
   inverse: unknown | null;
   branchName: string | null;
   preferredChild: number | null;
+  /** The compound step this node belongs to, named by its leading node's id. */
+  groupId: number | null;
+  /** Set on a group's leading node: the label shown instead of its steps. */
+  groupSummary: string | null;
 }
 
 /** A node as the history view draws it: no payloads, but the shape around it. */
@@ -742,6 +746,8 @@ export interface HistoryNodeSummary {
   branchName: string | null;
   undoable: boolean;
   isHead: boolean;
+  /** How many writes this node stands for; more than 1 for a compound step. */
+  stepCount: number;
   /** Oldest first; more than one means the tree branches here. */
   children: number[];
 }

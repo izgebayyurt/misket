@@ -993,29 +993,31 @@ pub fn merge(conn: &Connection, source_id: &str, target_id: &str) -> Result<Code
     )?;
     // Two entries, one per side: a merge is the one operation both codes'
     // histories have to show, and the source's row is about to disappear.
+    // One group, so undo takes the whole merge back in one step.
+    let summary = format!("Merged code \"{}\" into \"{target_name}\"", source.name);
+    history::begin_group(&tx, &summary)?;
     activity::record(
         &tx,
         "code.merged_into",
         "code",
         Some(source_id),
-        format!("Merged code \"{}\" into \"{target_name}\"", source.name),
+        &summary,
         json!({
             "name": source.name,
             "targetId": target_id,
             "targetName": target_name,
             "movedExcerptCount": moved_excerpts,
         }),
-        // Two entries, one operation: the first is glued to the second, which
-        // carries the payloads, so one undo takes the whole merge back.
-        Some(history::linked()),
-        Some(history::linked()),
+        // The second entry carries the payloads for both.
+        Some(history::noop()),
+        Some(history::noop()),
     )?;
     activity::record(
         &tx,
         "code.merged_from",
         "code",
         Some(target_id),
-        format!("Merged code \"{}\" into \"{target_name}\"", source.name),
+        &summary,
         json!({
             "name": target_name,
             "sourceId": source_id,
@@ -1034,6 +1036,7 @@ pub fn merge(conn: &Connection, source_id: &str, target_id: &str) -> Result<Code
             remove_tags: gained,
         })),
     )?;
+    history::end_group(&tx)?;
     tx.commit()?;
     get(conn, target_id)
 }

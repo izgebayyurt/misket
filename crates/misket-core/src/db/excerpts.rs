@@ -867,9 +867,10 @@ pub fn split(conn: &Connection, id: &str, at: i64) -> Result<(ExcerptWithCodes, 
         ranges: vec![range_row(&excerpt)],
         ..Default::default()
     };
-    // Two entries, one operation: the left half's is glued to the right
+    // Two entries, one group: the left half's is recorded beside the right
     // half's, which carries the payloads, so one undo puts the excerpt back
     // in one piece.
+    history::begin_group(&tx, &summary)?;
     activity::record(
         &tx,
         "excerpt.split",
@@ -877,8 +878,8 @@ pub fn split(conn: &Connection, id: &str, at: i64) -> Result<(ExcerptWithCodes, 
         Some(id),
         &summary,
         detail.clone(),
-        Some(history::linked()),
-        Some(history::linked()),
+        Some(history::noop()),
+        Some(history::noop()),
     )?;
     activity::record(
         &tx,
@@ -890,6 +891,7 @@ pub fn split(conn: &Connection, id: &str, at: i64) -> Result<(ExcerptWithCodes, 
         Some(history::payload(&forward)),
         Some(history::payload(&inverse)),
     )?;
+    history::end_group(&tx)?;
     tx.commit()?;
     Ok((get(conn, id)?, get(conn, &right_id)?))
 }
@@ -1009,7 +1011,9 @@ pub fn merge_adjacent(conn: &Connection, left_id: &str, right_id: &str) -> Resul
         ..Default::default()
     };
     // Both the survivor and the excerpt that disappeared get an entry; the
-    // second carries the payloads for the pair.
+    // second carries the payloads for the pair, and the group makes them one
+    // step to undo.
+    history::begin_group(&tx, &summary)?;
     activity::record(
         &tx,
         "excerpt.merged",
@@ -1017,8 +1021,8 @@ pub fn merge_adjacent(conn: &Connection, left_id: &str, right_id: &str) -> Resul
         Some(left_id),
         &summary,
         detail.clone(),
-        Some(history::linked()),
-        Some(history::linked()),
+        Some(history::noop()),
+        Some(history::noop()),
     )?;
     activity::record(
         &tx,
@@ -1030,6 +1034,7 @@ pub fn merge_adjacent(conn: &Connection, left_id: &str, right_id: &str) -> Resul
         Some(history::payload(&forward)),
         Some(history::payload(&inverse)),
     )?;
+    history::end_group(&tx)?;
     tx.commit()?;
     Ok(MergeResult {
         excerpt: get(conn, left_id)?,

@@ -61,29 +61,49 @@ fn set_head(conn: &Connection, id: Option<i64>) -> Result<()> {
     )
 }
 
-// ----------------------------------------------------------- replay flag
+// ------------------------------------------------- per-connection state
 
-/// Whether this connection is replaying a node right now.
+/// Two things that are true of a connection rather than of the project: is it
+/// replaying a node right now, and is it in the middle of a compound step.
 ///
 /// A `TEMP` table, like the actor: per connection, never written to the file,
-/// and always reset even if the replay fails.
-pub fn replaying(conn: &Connection) -> bool {
+/// and always reset even if what it guards fails.
+const STATE_DDL: &str = "CREATE TEMP TABLE IF NOT EXISTS history_state (
+        replaying     INTEGER NOT NULL DEFAULT 0,
+        group_depth   INTEGER NOT NULL DEFAULT 0,
+        group_id      INTEGER NULL,
+        group_summary TEXT NOT NULL DEFAULT ''
+     )";
+
+fn ensure_state(conn: &Connection) -> Result<()> {
+    conn.execute_batch(STATE_DDL)?;
+    conn.execute(
+        "INSERT INTO temp.history_state (replaying) SELECT 0
+           WHERE NOT EXISTS (SELECT 1 FROM temp.history_state)",
+        [],
+    )?;
+    Ok(())
+}
+
+/// One column of the state row, or its zero value when there is no row yet.
+fn state_i64(conn: &Connection, column: &str) -> i64 {
     conn.query_row(
-        "SELECT replaying FROM temp.history_state LIMIT 1",
+        &format!("SELECT COALESCE({column}, 0) FROM temp.history_state LIMIT 1"),
         [],
         |r| r.get::<_, i64>(0),
     )
-    .map(|v| v != 0)
-    .unwrap_or(false)
+    .unwrap_or(0)
+}
+
+/// Whether this connection is replaying a node right now.
+pub fn replaying(conn: &Connection) -> bool {
+    state_i64(conn, "replaying") != 0
 }
 
 fn set_replaying(conn: &Connection, on: bool) -> Result<()> {
-    conn.execute_batch(
-        "CREATE TEMP TABLE IF NOT EXISTS history_state (replaying INTEGER NOT NULL)",
-    )?;
-    conn.execute("DELETE FROM temp.history_state", [])?;
+    ensure_state(conn)?;
     conn.execute(
-        "INSERT INTO temp.history_state (replaying) VALUES (?1)",
+        "UPDATE temp.history_state SET replaying = ?1",
         [i64::from(on)],
     )?;
     Ok(())
@@ -97,6 +117,89 @@ pub fn with_replay<T>(conn: &Connection, f: impl FnOnce(&Connection) -> Result<T
     let out = f(conn);
     set_replaying(conn, was)?;
     out
+}
+
+// ----------------------------------------------------------- compound steps
+
+/// Start a compound step. Every node recorded until the matching
+/// [`end_group`] joins one group, which [`undo`], [`redo`] and [`checkout`]
+/// move over as a single step and [`tree`] draws as a single node labelled
+/// `summary`.
+///
+/// Each write still gets its own node, with its own exact inverse and its own
+/// line in the activity feed; the group only says they belong together.
+/// Nested calls join the group already open, so an operation that groups its
+/// own writes stays correct when a bigger one calls it.
+pub fn begin_group(conn: &Connection, summary: &str) -> Result<()> {
+    ensure_state(conn)?;
+    if state_i64(conn, "group_depth") == 0 {
+        conn.execute(
+            "UPDATE temp.history_state
+                SET group_depth = 1, group_id = NULL, group_summary = ?1",
+            [summary],
+        )?;
+    } else {
+        conn.execute(
+            "UPDATE temp.history_state SET group_depth = group_depth + 1",
+            [],
+        )?;
+    }
+    Ok(())
+}
+
+/// Close the group [`begin_group`] opened. Closing one that was never opened
+/// is harmless, so a frontend whose import failed half-way can always call it.
+pub fn end_group(conn: &Connection) -> Result<()> {
+    ensure_state(conn)?;
+    if state_i64(conn, "group_depth") <= 1 {
+        conn.execute(
+            "UPDATE temp.history_state
+                SET group_depth = 0, group_id = NULL, group_summary = ''",
+            [],
+        )?;
+    } else {
+        conn.execute(
+            "UPDATE temp.history_state SET group_depth = group_depth - 1",
+            [],
+        )?;
+    }
+    Ok(())
+}
+
+/// [`begin_group`] and [`end_group`] around `f`, closed even when it fails.
+pub fn group<T>(
+    conn: &Connection,
+    summary: &str,
+    f: impl FnOnce(&Connection) -> Result<T>,
+) -> Result<T> {
+    begin_group(conn, summary)?;
+    let out = f(conn);
+    end_group(conn)?;
+    out
+}
+
+/// The ids of every node in `group_id`, oldest first.
+fn group_members(conn: &Connection, group_id: i64) -> Result<Vec<i64>> {
+    let mut stmt = conn.prepare("SELECT id FROM history WHERE group_id = ?1 ORDER BY id")?;
+    let ids = stmt.query_map([group_id], |r| r.get(0))?;
+    Ok(ids.collect::<rusqlite::Result<_>>()?)
+}
+
+/// The whole step `id` belongs to, oldest first: its group, or just itself.
+fn step_of(conn: &Connection, id: i64) -> Result<Vec<i64>> {
+    Ok(match get(conn, id)?.group_id {
+        Some(g) => group_members(conn, g)?,
+        None => vec![id],
+    })
+}
+
+/// The node a step is shown as: its first, wearing the group's summary.
+fn step_label(conn: &Connection, members: &[i64]) -> Result<HistoryNode> {
+    let mut node = get(conn, *members.first().unwrap_or(&0))?;
+    if let Some(summary) = node.group_summary.clone() {
+        node.summary = summary;
+    }
+    Ok(node)
 }
 
 // -------------------------------------------------------------- recording
@@ -122,10 +225,20 @@ pub fn record(
         return Ok(0);
     }
     let parent = head(conn)?;
+    let in_group = state_i64(conn, "group_depth") > 0;
+    // NULL until the first node of a group has an id to name it by.
+    let group_id: Option<i64> = if in_group {
+        conn.query_row("SELECT group_id FROM temp.history_state LIMIT 1", [], |r| {
+            r.get(0)
+        })
+        .unwrap_or(None)
+    } else {
+        None
+    };
     conn.execute(
         "INSERT INTO history (parent_id, at, actor, kind, target_kind, target_id,
-                              summary, detail_json, forward_json, inverse_json)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+                              summary, detail_json, forward_json, inverse_json, group_id)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
         params![
             parent,
             util::now(),
@@ -137,9 +250,26 @@ pub fn record(
             detail.to_string(),
             forward.as_ref().map(Value::to_string),
             inverse.as_ref().map(Value::to_string),
+            group_id,
         ],
     )?;
     let id = conn.last_insert_rowid();
+    if in_group && group_id.is_none() {
+        // This node leads the group, and lends it both its id and the label
+        // the history view shows in place of the steps inside it.
+        let summary: String = conn
+            .query_row(
+                "SELECT group_summary FROM temp.history_state LIMIT 1",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap_or_default();
+        conn.execute(
+            "UPDATE history SET group_id = ?1, group_summary = ?2 WHERE id = ?1",
+            params![id, summary],
+        )?;
+        conn.execute("UPDATE temp.history_state SET group_id = ?1", [id])?;
+    }
     match parent {
         Some(p) => {
             conn.execute(
@@ -205,7 +335,8 @@ pub fn blob(conn: &Connection, node_id: i64, name: &str) -> Result<Option<Vec<u8
 // ------------------------------------------------------------ reading nodes
 
 pub(super) const COLUMNS: &str = "id, parent_id, at, actor, kind, target_kind, target_id,
-     summary, detail_json, forward_json, inverse_json, branch_name, preferred_child";
+     summary, detail_json, forward_json, inverse_json, branch_name, preferred_child,
+     group_id, group_summary";
 
 fn json_or_empty(s: String) -> Value {
     // A payload written by a newer build (or hand-edited) reads back as an
@@ -229,6 +360,8 @@ pub(super) fn node_from_row(r: &Row) -> rusqlite::Result<HistoryNode> {
         inverse: r.get::<_, Option<String>>(10)?.map(json_or_empty),
         branch_name: r.get(11)?,
         preferred_child: r.get(12)?,
+        group_id: r.get(13)?,
+        group_summary: r.get(14)?,
     })
 }
 
@@ -276,19 +409,21 @@ fn children_of(conn: &Connection, id: Option<i64>) -> Result<Vec<i64>> {
 // same vocabulary, so `code.created` is a `restore` one way and a `drop` the
 // other, and nothing needs to know which direction it is running in.
 
-/// A node that belongs to the same user action as its child — the first half
-/// of an operation that writes two entries, one per side of a merge or split.
-/// Undo and redo run straight through it.
-pub fn linked() -> Value {
-    json!({ "op": "linked" })
+/// A step whose effect is carried by another node of the same group — the
+/// first half of a merge or a split, which the second half already undoes in
+/// one go. Replaying it does nothing, in either direction.
+///
+/// `"linked"` is the name schema 8 wrote before groups existed, and is still
+/// read so a project from that build keeps undoing.
+pub fn noop() -> Value {
+    json!({ "op": "noop" })
 }
 
-fn is_linked(payload: Option<&Value>) -> bool {
-    payload.and_then(|p| p.get("op")).and_then(Value::as_str) == Some("linked")
-}
-
-fn node_is_linked(node: &HistoryNode) -> bool {
-    is_linked(node.forward.as_ref()) || is_linked(node.inverse.as_ref())
+fn is_noop(payload: &Value) -> bool {
+    matches!(
+        payload.get("op").and_then(Value::as_str),
+        Some("noop") | Some("linked")
+    )
 }
 
 /// One code put back where it was after its parent was restored around it.
@@ -575,7 +710,7 @@ impl MemoChange {
 /// for yet; it is still recorded (with no payloads) so the history reads
 /// correctly, but walking over it is refused rather than silently skipped.
 fn apply(conn: &Connection, kind: &str, payload: &Value) -> Result<()> {
-    if is_linked(Some(payload)) {
+    if is_noop(payload) {
         return Ok(());
     }
     match kind {
@@ -623,29 +758,27 @@ pub fn apply_inverse(conn: &Connection, node: &HistoryNode) -> Result<()> {
 
 // ------------------------------------------------------------ walking
 
-/// Take back the head node and move the head to its parent.
+/// Take back the step at the head and move the head to its parent.
 ///
-/// Returns the node that was undone, or `None` when the head is already
-/// before the first node. An operation that wrote two entries (both sides of
-/// a merge or a split) is undone as one step.
+/// Returns the step that was undone, or `None` when the head is already
+/// before the first node. A compound step (a merge, an import of several
+/// files) comes off as one: every node of the group is inverted, newest
+/// first, inside one transaction.
 pub fn undo(conn: &Connection) -> Result<Option<HistoryNode>> {
-    let Some(mut id) = head(conn)? else {
+    let Some(id) = head(conn)? else {
         return Ok(None);
     };
     let tx = util::tx(conn)?;
-    let mut undone = get(&tx, id)?;
-    loop {
-        let node = get(&tx, id)?;
+    // A group can only have been entered from its first node, so the head is
+    // its last; guard anyway rather than invert steps that never ran.
+    let members: Vec<i64> = step_of(&tx, id)?.into_iter().filter(|m| *m <= id).collect();
+    let leader = get(&tx, *members.first().unwrap_or(&id))?;
+    for m in members.iter().rev() {
+        let node = get(&tx, *m)?;
         apply_inverse(&tx, &node)?;
-        set_head(&tx, node.parent_id)?;
-        if !node_is_linked(&node) {
-            undone = node.clone();
-        }
-        match node.parent_id {
-            Some(parent) if node_is_linked(&get(&tx, parent)?) => id = parent,
-            _ => break,
-        }
     }
+    set_head(&tx, leader.parent_id)?;
+    let undone = step_label(&tx, &members)?;
     tx.commit()?;
     Ok(Some(undone))
 }
@@ -684,29 +817,24 @@ fn prefer(conn: &Connection, parent: Option<i64>, child: i64) -> Result<()> {
 }
 
 /// Step forward onto a child of the head: the one named, else the branch
-/// redo followed last, else the newest.
+/// redo followed last, else the newest. A compound step goes back on whole.
 pub fn redo(conn: &Connection, child: Option<i64>) -> Result<Option<HistoryNode>> {
     let parent = head(conn)?;
     let tx = util::tx(conn)?;
-    let Some(mut id) = next_child(&tx, parent, child)? else {
+    let Some(start) = next_child(&tx, parent, child)? else {
         return Ok(None);
     };
-    let mut redone;
-    loop {
-        let node = get(&tx, id)?;
+    let members: Vec<i64> = step_of(&tx, start)?
+        .into_iter()
+        .filter(|m| *m >= start)
+        .collect();
+    for m in &members {
+        let node = get(&tx, *m)?;
         apply_forward(&tx, &node)?;
         prefer(&tx, node.parent_id, node.id)?;
-        set_head(&tx, Some(node.id))?;
-        redone = node.clone();
-        if node_is_linked(&node) {
-            match next_child(&tx, Some(node.id), None)? {
-                Some(next) => id = next,
-                None => break,
-            }
-        } else {
-            break;
-        }
     }
+    set_head(&tx, members.last().copied())?;
+    let redone = step_label(&tx, &members)?;
     tx.commit()?;
     Ok(Some(redone))
 }
@@ -717,10 +845,13 @@ pub fn redo(conn: &Connection, child: Option<i64>) -> Result<Option<HistoryNode>
 /// then down the other side applying forwards, in one transaction — so a
 /// branch that turns out to be unreachable leaves the project untouched.
 pub fn checkout(conn: &Connection, node_id: i64) -> Result<HistoryNode> {
-    let target = get(conn, node_id)?;
+    // Landing inside a compound step would leave the project half-way
+    // through one operation, so a node in a group stands for the whole group.
+    let members = step_of(conn, node_id)?;
+    let node_id = members.last().copied().unwrap_or(node_id);
     let here = head(conn)?;
     if here == Some(node_id) {
-        return Ok(target);
+        return step_label(conn, &members);
     }
     let up_chain = ancestry(conn, here)?;
     let down_chain = ancestry(conn, Some(node_id))?;
@@ -751,8 +882,9 @@ pub fn checkout(conn: &Connection, node_id: i64) -> Result<HistoryNode> {
         prefer(&tx, node.parent_id, node.id)?;
         set_head(&tx, Some(node.id))?;
     }
+    let landed = step_label(&tx, &members)?;
     tx.commit()?;
-    Ok(target)
+    Ok(landed)
 }
 
 // ------------------------------------------------------------- branches
@@ -762,6 +894,9 @@ pub fn fork_here(conn: &Connection, name: &str) -> Result<HistoryNode> {
     let id = head(conn)?.ok_or_else(|| {
         AppError::Validation("there is nothing to fork from yet: make a change first".into())
     })?;
+    // The name belongs on the node the history view draws, which for a
+    // compound step is the one that leads it.
+    let id = step_of(conn, id)?.first().copied().unwrap_or(id);
     rename_branch(conn, id, Some(name))
 }
 
@@ -777,14 +912,19 @@ pub fn rename_branch(conn: &Connection, node_id: i64, name: Option<&str>) -> Res
 }
 
 /// The whole tree, oldest first, with each node's children.
+///
+/// A compound step collapses into the one node that leads it: it wears the
+/// group's summary, reports how many writes it stands for in `step_count`,
+/// and inherits the children of the group's last node, so the tree the view
+/// draws has one node per user action.
 pub fn tree(conn: &Connection) -> Result<Vec<HistoryNodeSummary>> {
     let head = head(conn)?;
-    let mut children: HashMap<Option<i64>, Vec<i64>> = HashMap::new();
     let mut stmt = conn.prepare(
-        "SELECT id, parent_id, at, actor, kind, summary, branch_name, inverse_json IS NOT NULL
+        "SELECT id, parent_id, at, actor, kind, summary, branch_name,
+                inverse_json IS NOT NULL, group_id, group_summary
          FROM history ORDER BY id",
     )?;
-    /// id, parent, at, actor, kind, summary, branch name, undoable.
+    /// id, parent, at, actor, kind, summary, branch name, undoable, group, group summary.
     type TreeRow = (
         i64,
         Option<i64>,
@@ -794,6 +934,8 @@ pub fn tree(conn: &Connection) -> Result<Vec<HistoryNodeSummary>> {
         String,
         Option<String>,
         bool,
+        Option<i64>,
+        Option<String>,
     );
     let rows: Vec<TreeRow> = stmt
         .query_map([], |r| {
@@ -806,29 +948,68 @@ pub fn tree(conn: &Connection) -> Result<Vec<HistoryNodeSummary>> {
                 r.get(5)?,
                 r.get(6)?,
                 r.get(7)?,
+                r.get(8)?,
+                r.get(9)?,
             ))
         })?
         .collect::<rusqlite::Result<_>>()?;
-    for (id, parent, ..) in &rows {
-        children.entry(*parent).or_default().push(*id);
-    }
-    Ok(rows
+
+    // Every node stands for the step it belongs to: itself, or the node that
+    // leads its group.
+    let rep = |group: Option<i64>, id: i64| group.unwrap_or(id);
+    let leader_of: HashMap<i64, i64> = rows
         .iter()
-        .map(
-            |(id, parent_id, at, actor, kind, summary, branch_name, undoable)| HistoryNodeSummary {
-                id: *id,
-                parent_id: *parent_id,
-                at: at.clone(),
-                actor: actor.clone(),
-                kind: kind.clone(),
-                summary: summary.clone(),
-                branch_name: branch_name.clone(),
-                undoable: *undoable,
-                is_head: head == Some(*id),
-                children: children.get(&Some(*id)).cloned().unwrap_or_default(),
-            },
-        )
-        .collect())
+        .map(|(id, _, _, _, _, _, _, _, group, _)| (*id, rep(*group, *id)))
+        .collect();
+
+    let mut children: HashMap<i64, Vec<i64>> = HashMap::new();
+    for (id, parent, .., group, _) in &rows {
+        let me = rep(*group, *id);
+        let Some(parent) = parent else { continue };
+        let parent = leader_of.get(parent).copied().unwrap_or(*parent);
+        if parent == me {
+            continue; // the next write of the same step
+        }
+        let kids = children.entry(parent).or_default();
+        if !kids.contains(&me) {
+            kids.push(me);
+        }
+    }
+
+    let mut out: Vec<HistoryNodeSummary> = vec![];
+    for (id, parent_id, at, actor, kind, summary, branch_name, undoable, group, group_summary) in
+        &rows
+    {
+        if rep(*group, *id) != *id {
+            // Folded into the node that leads its group; its branch name and
+            // its "cannot be undone" still count for the step as a whole.
+            let step = out.last_mut().expect("a group is led by an earlier node");
+            step.undoable &= *undoable;
+            step.step_count += 1;
+            if branch_name.is_some() {
+                step.branch_name = branch_name.clone();
+            }
+            step.is_head |= head == Some(*id);
+            continue;
+        }
+        out.push(HistoryNodeSummary {
+            id: *id,
+            parent_id: parent_id.map(|p| leader_of.get(&p).copied().unwrap_or(p)),
+            at: at.clone(),
+            actor: actor.clone(),
+            kind: kind.clone(),
+            summary: group_summary.clone().unwrap_or_else(|| summary.clone()),
+            branch_name: branch_name.clone(),
+            undoable: *undoable,
+            is_head: head == Some(*id),
+            step_count: 1,
+            children: vec![],
+        });
+    }
+    for node in &mut out {
+        node.children = children.get(&node.id).cloned().unwrap_or_default();
+    }
+    Ok(out)
 }
 
 /// Throw away everything before `node_id`, making it a new root.
@@ -837,7 +1018,8 @@ pub fn tree(conn: &Connection) -> Result<Vec<HistoryNodeSummary>> {
 /// and any side branch left behind. Refuses while the project is somewhere
 /// else in the tree, because that state would become unreachable.
 pub fn compact_before(conn: &Connection, node_id: i64) -> Result<CompactReport> {
-    get(conn, node_id)?;
+    let step = step_of(conn, node_id)?;
+    let node_id = step.first().copied().unwrap_or(node_id);
     let head = head(conn)?;
     let keep: HashSet<i64> = descendants(conn, node_id)?;
     if !head.is_some_and(|h| keep.contains(&h)) {
@@ -856,9 +1038,17 @@ pub fn compact_before(conn: &Connection, node_id: i64) -> Result<CompactReport> 
     let dropped_branches: Vec<String> = doomed.iter().filter_map(|(_, n)| n.clone()).collect();
 
     // Detach first: deleting an ancestor would cascade the kept branch away.
+    // The new root is where the project's past ends, so nothing replays it —
+    // including the rest of its own step, whose bytes go too.
+    for id in &step {
+        tx.execute(
+            "UPDATE history SET forward_json = NULL, inverse_json = NULL WHERE id = ?1",
+            [id],
+        )?;
+        tx.execute("DELETE FROM history_blobs WHERE node_id = ?1", [id])?;
+    }
     tx.execute(
-        "UPDATE history SET parent_id = NULL, forward_json = NULL, inverse_json = NULL
-         WHERE id = ?1",
+        "UPDATE history SET parent_id = NULL WHERE id = ?1",
         [node_id],
     )?;
     for (id, _) in &doomed {
@@ -1198,11 +1388,15 @@ mod tests {
         assert_round_trip(c, "merge", |c| {
             codes::merge(c, &source, &target).unwrap();
         });
-        // A merge writes an entry per side, but it is one step: a single undo
-        // after the redo brings the source back whole.
+        // A merge writes an entry per side, but they share a group, so it is
+        // one step: a single undo after the redo brings the source back whole.
         assert!(codes::get(c, &source).is_err(), "the redo merged it away");
         let undone = undo(c).unwrap().unwrap();
-        assert_eq!(undone.kind, "code.merged_from");
+        assert_eq!(
+            undone.kind, "code.merged_into",
+            "the step is named by its first write"
+        );
+        assert!(undone.group_id.is_some());
         assert!(codes::get(c, &source).is_ok());
         assert_eq!(head(c).unwrap(), before_merge, "both entries came off");
     }
@@ -1421,6 +1615,119 @@ mod tests {
         assert_round_trip(c, "memo restore", |c| {
             memos::restore(c, &edited).unwrap();
         });
+    }
+
+    // -------------------------------------------------- compound steps
+
+    /// Several writes bracketed by [`begin_group`] are one step in every
+    /// direction: one undo, one redo, one node in the tree.
+    #[test]
+    fn a_group_of_writes_undoes_redoes_and_draws_as_a_single_step() {
+        let f = Fixture::new();
+        let c = f.conn();
+        let a = f.code("Alpha", None);
+        let before = dump_state(c);
+        let start = head(c).unwrap().unwrap();
+
+        group(c, "Tidy the codebook", |c| {
+            codes::update(
+                c,
+                &a,
+                CodePatch {
+                    name: Some("Alpha renamed".into()),
+                    ..Default::default()
+                },
+            )?;
+            codes::tests::mk(c, "Beta", None);
+            codes::tests::mk(c, "Gamma", None);
+            Ok(())
+        })
+        .unwrap();
+        let after = dump_state(c);
+        assert_eq!(codes::list(c).unwrap().len(), 3);
+
+        let undone = undo(c).unwrap().unwrap();
+        assert_eq!(undone.summary, "Tidy the codebook");
+        assert_eq!(undone.id, start + 1, "the step is named by its first write");
+        assert_same(&before, &dump_state(c), "undoing the group");
+        assert_eq!(head(c).unwrap(), Some(start), "all three came off at once");
+
+        let redone = redo(c, None).unwrap().unwrap();
+        assert_eq!(redone.id, undone.id);
+        assert_same(&after, &dump_state(c), "redoing the group");
+
+        // The tree shows one node for the three writes, and it is the head.
+        let tree = tree(c).unwrap();
+        assert_eq!(tree.len(), 3, "the document, the code, and the group");
+        let step = tree.last().unwrap();
+        assert_eq!(step.summary, "Tidy the codebook");
+        assert_eq!(step.step_count, 3);
+        assert!(step.is_head && step.undoable);
+        assert_eq!(step.children, Vec::<i64>::new());
+        assert_eq!(step.parent_id, Some(start));
+        assert_eq!(tree.iter().filter(|n| n.is_head).count(), 1);
+    }
+
+    /// Checking out a node inside a group lands on the whole group, and a
+    /// branch taken after one is drawn hanging off the collapsed node.
+    #[test]
+    fn checkout_never_stops_half_way_through_a_group() {
+        let f = Fixture::new();
+        let c = f.conn();
+        let a = f.code("Alpha", None);
+        let fork = head(c).unwrap().unwrap();
+        group(c, "Two renames", |c| {
+            for name in ["One", "Two"] {
+                codes::update(
+                    c,
+                    &a,
+                    CodePatch {
+                        name: Some(name.into()),
+                        ..Default::default()
+                    },
+                )?;
+            }
+            Ok(())
+        })
+        .unwrap();
+        let inside = head(c).unwrap().unwrap() - 1;
+        let at_end = dump_state(c);
+
+        checkout(c, fork).unwrap();
+        assert_eq!(codes::get(c, &a).unwrap().name, "Alpha");
+        // Naming the middle of the group asks for the group.
+        let landed = checkout(c, inside).unwrap();
+        assert_eq!(landed.summary, "Two renames");
+        assert_eq!(landed.id, inside);
+        assert_same(&at_end, &dump_state(c), "checking out the group");
+
+        // A second branch from the fork hangs off the collapsed step, not off
+        // one of the writes inside it.
+        checkout(c, fork).unwrap();
+        codes::tests::mk(c, "Side", None);
+        let side = head(c).unwrap().unwrap();
+        let tree = tree(c).unwrap();
+        let at_fork = tree.iter().find(|n| n.id == fork).unwrap();
+        assert_eq!(at_fork.children, vec![inside, side]);
+        assert_eq!(tree.iter().find(|n| n.id == inside).unwrap().step_count, 2);
+        assert!(tree.iter().all(|n| n.id != inside + 1));
+    }
+
+    #[test]
+    fn a_group_left_open_by_a_failure_closes_without_swallowing_the_next_edit() {
+        let f = Fixture::new();
+        let c = f.conn();
+        let failed = group(c, "Half an import", |c| {
+            codes::tests::mk(c, "Alpha", None);
+            Err::<(), _>(AppError::Validation("boom".into()))
+        });
+        assert!(failed.is_err());
+        // The group closed, so what comes next is a step of its own.
+        let b = codes::tests::mk(c, "Beta", None).id;
+        undo(c).unwrap().unwrap();
+        assert!(codes::get(c, &b).is_err());
+        assert!(codes::list(c).unwrap().iter().any(|x| x.name == "Alpha"));
+        end_group(c).unwrap(); // closing one that is not open is harmless
     }
 
     // ------------------------------------------------------- the tree
