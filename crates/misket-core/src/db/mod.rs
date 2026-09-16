@@ -18,6 +18,7 @@ pub mod search;
 pub mod sets;
 pub mod stats;
 pub mod text;
+pub mod transcripts;
 pub mod util;
 
 use std::path::{Path, PathBuf};
@@ -251,6 +252,7 @@ mod tests {
                 .execute_batch(
                     "DROP TRIGGER framework_cells_code_deleted;
                      DROP TABLE framework_cells;
+                     ALTER TABLE documents DROP COLUMN transcript_json;
                      DROP TABLE framework_matrices;
                      DROP TABLE activity_log;
                      DROP TABLE descriptor_values;
@@ -292,7 +294,8 @@ mod tests {
                  SELECT count(*) FROM activity_log;
                  SELECT count(*) FROM framework_matrices;
                  SELECT count(*) FROM codes WHERE inclusion = '' AND exclusion = ''
-                   AND example_excerpt_id IS NULL;",
+                   AND example_excerpt_id IS NULL;
+                 SELECT count(*) FROM documents WHERE transcript_json IS NULL;",
             )
             .unwrap();
     }

@@ -114,6 +114,12 @@ pub struct DocumentSummary {
     pub media: Option<MediaInfo>,
     pub sort_order: i64,
     pub excerpt_count: i64,
+    /// The speakers the document's transcript format finds, in first-seen
+    /// order; empty for anything that is not a transcript. Read from the
+    /// cache in `documents.transcript_json`, so a listing never re-scans the
+    /// text (see `db::transcripts`).
+    #[serde(default)]
+    pub speakers: Vec<String>,
     pub created_at: String,
     pub updated_at: String,
 }

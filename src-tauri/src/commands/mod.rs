@@ -14,3 +14,4 @@ pub mod project;
 pub mod search;
 pub mod sets;
 pub mod settings;
+pub mod transcripts;

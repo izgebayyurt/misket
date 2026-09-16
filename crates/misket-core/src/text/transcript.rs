@@ -240,9 +240,11 @@ pub fn compile(format: &TranscriptFormat) -> Result<Option<Regex>> {
             .ok_or_else(|| {
                 AppError::Validation("a custom transcript pattern is required".into())
             })?,
-        other => return Err(AppError::Validation(format!(
+        other => {
+            return Err(AppError::Validation(format!(
             "unknown transcript format kind {other:?}; expected \"preset\", \"regex\" or \"none\""
-        ))),
+        )))
+        }
     };
     let re = Regex::new(&pattern)
         .map_err(|e| AppError::Validation(format!("that pattern does not compile: {e}")))?;
