@@ -15,6 +15,8 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { useImportFiles } from "./useImportFiles";
 import { ImportFolderDialog } from "./ImportFolderDialog";
+import { DocumentSets } from "./DocumentSets";
+import { AddToSetMenu } from "@/components/sets/AddToSetMenu";
 import { toast } from "@/state/toasts";
 import { useUndoStore } from "@/state/undoStore";
 import type { DocumentSummary } from "@/api/types";
@@ -111,6 +113,7 @@ export function DocumentList() {
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
                     <DropdownMenuItem onSelect={() => setRenaming(d)}>Rename…</DropdownMenuItem>
+                    <AddToSetMenu kind="document" memberId={d.id} memberLabel={d.name} />
                     <DropdownMenuItem danger onSelect={() => setDeleting(d)}>
                       Delete…
                     </DropdownMenuItem>
@@ -121,6 +124,7 @@ export function DocumentList() {
           );
         })}
       </ul>
+      <DocumentSets />
       {renaming ? <RenameDialog doc={renaming} onClose={() => setRenaming(null)} /> : null}
       {deleting ? <DeleteDialog doc={deleting} onClose={() => setDeleting(null)} /> : null}
       {folder ? <ImportFolderDialog dir={folder} onClose={() => setFolder(null)} /> : null}

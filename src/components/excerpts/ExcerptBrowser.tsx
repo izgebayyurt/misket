@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import type { DescriptorFilter, ExcerptFilter } from "@/api/types";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import type { ExcerptFilter } from "@/api/types";
 import { useExcerptQuery } from "@/queries/excerpts";
 import { useWorkspace } from "@/state/workspace";
 import { useShortcutActions } from "@/state/shortcutActions";
@@ -11,6 +11,13 @@ import {
   selectedInOrder,
   toggleAll,
 } from "@/core/multiSelect";
+import {
+  codePickCount,
+  filterState,
+  isFiltered,
+  toFilter,
+  type FilterState,
+} from "@/core/excerptFilter";
 import { ExcerptFilters } from "./ExcerptFilters";
 import { ExcerptRow } from "./ExcerptRow";
 import { BulkActionBar } from "./BulkActionBar";
@@ -21,32 +28,30 @@ const PAGE = 200;
 export function ExcerptBrowser() {
   // The analysis views open the browser with a filter already set; it is read
   // once, on mount (Workspace remounts this component when it changes).
-  const [initial] = useState<ExcerptFilter>(() => {
+  const [state, setState] = useState<FilterState>(() => {
     const view = useWorkspace.getState().view;
-    return (view.kind === "excerpts" && view.initialFilter) || {};
+    return filterState(view.kind === "excerpts" ? view.initialFilter : null);
   });
-  const [codeIds, setCodeIds] = useState<string[]>(initial.codeIds ?? []);
-  const [includeDescendants, setIncludeDescendants] = useState(initial.includeDescendants ?? true);
-  const [requireAllCodes, setRequireAllCodes] = useState(initial.requireAllCodes ?? false);
-  const [documentIds, setDocumentIds] = useState<string[]>(initial.documentIds ?? []);
-  const [uncodedOnly, setUncodedOnly] = useState(initial.uncodedOnly ?? false);
-  const [descriptors, setDescriptors] = useState<DescriptorFilter[]>(initial.descriptors ?? []);
   const [pages, setPages] = useState(1);
   const openDocument = useWorkspace((s) => s.openDocument);
 
-  const filter = useMemo<ExcerptFilter>(
-    () => ({
-      codeIds: codeIds.length ? codeIds : null,
-      includeDescendants,
-      requireAllCodes,
-      documentIds: documentIds.length ? documentIds : null,
-      uncodedOnly,
-      descriptors: descriptors.length ? descriptors : null,
-      limit: PAGE * pages,
-      offset: 0,
-    }),
-    [codeIds, includeDescendants, requireAllCodes, documentIds, uncodedOnly, descriptors, pages],
+  /** Any filter change starts the result list over at one page. */
+  const update = useCallback((patch: Partial<FilterState>) => {
+    setState((s) => ({ ...s, ...patch }));
+    setPages(1);
+  }, []);
+  /**
+   * Applying a saved filter sets every field rather than merging into what is
+   * there, so anything the saved filter leaves out goes back to its default.
+   */
+  const applyFilter = useCallback(
+    (f: ExcerptFilter) => {
+      update(filterState(f));
+    },
+    [update],
   );
+
+  const filter = useMemo<ExcerptFilter>(() => toFilter(state, PAGE * pages), [state, pages]);
   const { data, isFetching } = useExcerptQuery(filter);
 
   const rows = useMemo(() => data?.rows ?? [], [data]);
@@ -70,30 +75,24 @@ export function ExcerptBrowser() {
   return (
     <div className="relative flex h-full flex-col" data-testid="excerpt-browser">
       <ExcerptFilters
-        codeIds={codeIds}
-        onCodeIds={(v) => {
-          setCodeIds(v);
-          setPages(1);
-        }}
-        includeDescendants={includeDescendants}
-        onIncludeDescendants={setIncludeDescendants}
-        requireAllCodes={requireAllCodes}
-        onRequireAllCodes={setRequireAllCodes}
-        documentIds={documentIds}
-        onDocumentIds={(v) => {
-          setDocumentIds(v);
-          setPages(1);
-        }}
-        uncodedOnly={uncodedOnly}
-        onUncodedOnly={(v) => {
-          setUncodedOnly(v);
-          setPages(1);
-        }}
-        descriptors={descriptors}
-        onDescriptors={(v) => {
-          setDescriptors(v);
-          setPages(1);
-        }}
+        codeIds={state.codeIds}
+        onCodeIds={(codeIds) => update({ codeIds })}
+        codeSetIds={state.codeSetIds}
+        onCodeSetIds={(codeSetIds) => update({ codeSetIds })}
+        includeDescendants={state.includeDescendants}
+        onIncludeDescendants={(includeDescendants) => update({ includeDescendants })}
+        requireAllCodes={state.requireAllCodes}
+        onRequireAllCodes={(requireAllCodes) => update({ requireAllCodes })}
+        documentIds={state.documentIds}
+        onDocumentIds={(documentIds) => update({ documentIds })}
+        documentSetIds={state.documentSetIds}
+        onDocumentSetIds={(documentSetIds) => update({ documentSetIds })}
+        uncodedOnly={state.uncodedOnly}
+        onUncodedOnly={(uncodedOnly) => update({ uncodedOnly })}
+        descriptors={state.descriptors}
+        onDescriptors={(descriptors) => update({ descriptors })}
+        filter={filter}
+        onApplyFilter={applyFilter}
         total={data?.total ?? 0}
       />
       {rows.length > 0 ? (
@@ -116,13 +115,9 @@ export function ExcerptBrowser() {
       <div className="min-h-0 flex-1 overflow-y-auto">
         {data && data.rows.length === 0 ? (
           <p className="p-6 text-sm text-fg-muted">
-            {data.total === 0 &&
-            !codeIds.length &&
-            !documentIds.length &&
-            !descriptors.length &&
-            !uncodedOnly
+            {data.total === 0 && !isFiltered(state)
               ? "No excerpts yet. Select text in a document and press the palette shortcut to code it."
-              : requireAllCodes && codeIds.length > 1
+              : state.requireAllCodes && codePickCount(state) > 1
                 ? "No single excerpt carries all of these codes. Untick “match all selected codes” to see excerpts carrying any of them."
                 : "Nothing matches these filters."}
           </p>

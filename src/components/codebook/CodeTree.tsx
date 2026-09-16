@@ -24,6 +24,8 @@ import { MergeCodeDialog } from "./MergeCodeDialog";
 import { ImportCodebookDialog } from "./ImportCodebookDialog";
 import { useProjectInfo } from "@/queries/project";
 import { MoveExcerptsDialog } from "./MoveExcerptsDialog";
+import { CodeSets } from "./CodeSets";
+import { AddToSetMenu } from "@/components/sets/AddToSetMenu";
 import { cn } from "@/lib/utils";
 import { toast } from "@/state/toasts";
 
@@ -226,7 +228,7 @@ export function CodeTree() {
           ref={listRef}
           role="tree"
           aria-label="Codebook"
-          className="flex-1 overflow-y-auto pb-4"
+          className="min-h-0 flex-1 overflow-y-auto pb-4"
           onDragLeave={(e) => {
             if (!listRef.current?.contains(e.relatedTarget as Node)) setDropTarget(null);
           }}
@@ -265,6 +267,7 @@ export function CodeTree() {
           ))}
         </ul>
       )}
+      <CodeSets />
       {dialog?.kind === "create" ? (
         <CodeDialog
           mode="create"
@@ -417,6 +420,7 @@ function CodeRow(p: RowProps) {
           >
             Move excerpts to…
           </DropdownMenuItem>
+          <AddToSetMenu kind="code" memberId={code.id} memberLabel={code.name} />
           <DropdownMenuSeparator />
           <DropdownMenuItem danger onSelect={() => p.onAction("delete")}>
             Delete…

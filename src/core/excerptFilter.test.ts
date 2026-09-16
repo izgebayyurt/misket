@@ -1,0 +1,111 @@
+import { describe, expect, it } from "vitest";
+import {
+  codePickCount,
+  documentPickCount,
+  emptyFilterState,
+  filterState,
+  isFiltered,
+  toFilter,
+} from "./excerptFilter";
+
+describe("filterState", () => {
+  it("fills in the browser's defaults for a missing filter", () => {
+    expect(filterState(undefined)).toEqual(emptyFilterState);
+    expect(filterState(null)).toEqual(emptyFilterState);
+    expect(filterState({})).toEqual(emptyFilterState);
+  });
+
+  it("reads every field a saved filter can carry", () => {
+    const state = filterState({
+      codeIds: ["c1"],
+      codeSetIds: ["s1"],
+      includeDescendants: false,
+      requireAllCodes: true,
+      documentIds: ["d1"],
+      documentSetIds: ["s2"],
+      uncodedOnly: true,
+      descriptors: [{ fieldId: "f", op: "eq", values: ["x"] }],
+      limit: 10,
+    });
+    expect(state).toEqual({
+      codeIds: ["c1"],
+      codeSetIds: ["s1"],
+      includeDescendants: false,
+      requireAllCodes: true,
+      documentIds: ["d1"],
+      documentSetIds: ["s2"],
+      uncodedOnly: true,
+      descriptors: [{ fieldId: "f", op: "eq", values: ["x"] }],
+    });
+  });
+
+  it("resets fields a saved filter leaves out instead of merging them", () => {
+    // Applying a filter is an assignment, so a filter that does not mention
+    // documents must clear whatever documents were picked before.
+    const before = filterState({ documentIds: ["d1"], uncodedOnly: true });
+    const after = filterState({ codeSetIds: ["s1"] });
+    expect(after.documentIds).toEqual([]);
+    expect(after.uncodedOnly).toBe(false);
+    expect(before.documentIds).toEqual(["d1"]);
+  });
+});
+
+describe("toFilter", () => {
+  it("sends empty lists as null and round-trips through filterState", () => {
+    const f = toFilter(emptyFilterState, 200);
+    expect(f).toEqual({
+      codeIds: null,
+      codeSetIds: null,
+      includeDescendants: true,
+      requireAllCodes: false,
+      documentIds: null,
+      documentSetIds: null,
+      uncodedOnly: false,
+      descriptors: null,
+      limit: 200,
+      offset: 0,
+    });
+    expect(filterState(f)).toEqual(emptyFilterState);
+  });
+
+  it("keeps sets alongside individually picked ids", () => {
+    const state = { ...emptyFilterState, codeIds: ["c1"], codeSetIds: ["s1", "s2"] };
+    const f = toFilter(state, 50, 50);
+    expect(f.codeIds).toEqual(["c1"]);
+    expect(f.codeSetIds).toEqual(["s1", "s2"]);
+    expect(f.limit).toBe(50);
+    expect(f.offset).toBe(50);
+    expect(filterState(f)).toEqual(state);
+  });
+});
+
+describe("counts and isFiltered", () => {
+  it("counts a set as one pick on each side", () => {
+    const state = {
+      ...emptyFilterState,
+      codeIds: ["c1", "c2"],
+      codeSetIds: ["s1"],
+      documentSetIds: ["s2"],
+    };
+    expect(codePickCount(state)).toBe(3);
+    expect(documentPickCount(state)).toBe(1);
+  });
+
+  it("is only unfiltered when nothing narrows the result set", () => {
+    expect(isFiltered(emptyFilterState)).toBe(false);
+    // Sub-code and match-all settings alone change nothing on their own.
+    expect(
+      isFiltered({ ...emptyFilterState, includeDescendants: false, requireAllCodes: true }),
+    ).toBe(false);
+    for (const patch of [
+      { codeIds: ["c"] },
+      { codeSetIds: ["s"] },
+      { documentIds: ["d"] },
+      { documentSetIds: ["s"] },
+      { uncodedOnly: true },
+      { descriptors: [{ fieldId: "f", op: "empty" as const, values: [] }] },
+    ]) {
+      expect(isFiltered({ ...emptyFilterState, ...patch })).toBe(true);
+    }
+  });
+});
