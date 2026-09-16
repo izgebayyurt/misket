@@ -1,7 +1,15 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { createRequire } from "node:module";
 import { baseName, extensionOf, importFile } from "./index";
+import { configurePdfWorker, linesFromItems } from "./pdf";
+import type { TextItem } from "pdfjs-dist/types/src/display/api";
+
+// Node has no Web Worker; pdf.js falls back to importing the worker module.
+configurePdfWorker(
+  createRequire(import.meta.url).resolve("pdfjs-dist/legacy/build/pdf.worker.mjs"),
+);
 
 const fixtures = path.resolve(__dirname, "../../../fixtures");
 const read = (name: string) => new Uint8Array(readFileSync(path.join(fixtures, name)));
@@ -30,7 +38,34 @@ describe("importers", () => {
     expect(doc.text).toBe("Hello from Word.\nSecond paragraph with émoji 😀.\n");
   });
 
+  it("extracts lines and pages from a pdf", async () => {
+    const doc = await importFile("sample.pdf", read("sample.pdf"));
+    expect(doc.sourceFormat).toBe("pdf");
+    expect(doc.text).toBe("Hello from a PDF.\nSecond line on page one.\n\nPage two starts here.\n");
+  });
+
+  it("groups positioned runs into lines with spaces at gaps", () => {
+    const run = (str: string, x: number, y: number, width = str.length * 5): TextItem =>
+      ({
+        str,
+        transform: [1, 0, 0, 1, x, y],
+        width,
+        height: 10,
+        dir: "ltr",
+        fontName: "F1",
+        hasEOL: false,
+      }) as TextItem;
+    const text = linesFromItems([
+      run("world", 70, 700), // out of order on purpose
+      run("Hello", 10, 701), // baseline within tolerance of 700
+      run("Below", 10, 680),
+      run("same", 40, 700, 20),
+      run("tight", 96, 700), // touches "world" (ends at 95): no space
+    ]);
+    expect(text).toBe("Hello same worldtight\nBelow");
+  });
+
   it("rejects unknown extensions", async () => {
-    await expect(importFile("x.pdf", new Uint8Array())).rejects.toThrow(/Unsupported/);
+    await expect(importFile("x.rtf", new Uint8Array())).rejects.toThrow(/Unsupported/);
   });
 });

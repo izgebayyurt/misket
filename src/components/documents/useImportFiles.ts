@@ -3,6 +3,10 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { readSourceFile } from "@/api/project";
 import { listDocuments } from "@/api/documents";
 import { importFile, SUPPORTED_EXTENSIONS } from "@/core/importers";
+import { configurePdfWorker } from "@/core/importers/pdf";
+import pdfWorkerUrl from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
+
+configurePdfWorker(pdfWorkerUrl);
 import { useCreateDocument } from "@/queries/documents";
 import { useWorkspace } from "@/state/workspace";
 import { toast } from "@/state/toasts";

@@ -1,6 +1,7 @@
 import { importText } from "./text";
 import { importMarkdown } from "./markdown";
 import { importDocx } from "./docx";
+import { importPdf } from "./pdf";
 
 export interface ImportedDocument {
   name: string;
@@ -8,7 +9,7 @@ export interface ImportedDocument {
   text: string;
 }
 
-export const SUPPORTED_EXTENSIONS = ["txt", "md", "markdown", "docx"] as const;
+export const SUPPORTED_EXTENSIONS = ["txt", "md", "markdown", "docx", "pdf"] as const;
 
 export function extensionOf(path: string): string {
   const base = path.split(/[\\/]/).pop() ?? path;
@@ -35,7 +36,9 @@ export async function importFile(path: string, bytes: Uint8Array): Promise<Impor
       return { name, sourceFormat: "md", text: importMarkdown(bytes) };
     case "docx":
       return { name, sourceFormat: "docx", text: await importDocx(bytes) };
+    case "pdf":
+      return { name, sourceFormat: "pdf", text: await importPdf(bytes) };
     default:
-      throw new Error(`Unsupported file type ".${ext}". Supported: txt, md, docx.`);
+      throw new Error(`Unsupported file type ".${ext}". Supported: txt, md, docx, pdf.`);
   }
 }

@@ -11,7 +11,7 @@ keyboard-friendly interface without a subscription.
 
 ## What it does today (milestone 1)
 
-- **Import** plain text, Markdown and Word (`.docx`) documents.
+- **Import** plain text, Markdown, Word (`.docx`) and PDF (text only) documents.
 - **Build a codebook**: nested codes with colors, descriptions, single-key
   hotkeys, drag-and-drop reordering, merge and delete with impact preview.
 - **Code excerpts**: select text, press `Ctrl`/`⌘`+`K` and pick a code (type
