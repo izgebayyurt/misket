@@ -9,8 +9,9 @@
 use std::collections::HashSet;
 
 use rusqlite::{params, Connection};
+use serde_json::json;
 
-use super::{codes, excerpts, memos, util};
+use super::{activity, codes, excerpts, memos, util};
 use crate::error::{AppError, Result};
 use crate::models::{BulkCodeReport, ExcerptSnapshot, RetagReport};
 
@@ -62,6 +63,16 @@ pub fn delete_many(conn: &Connection, ids: &[String]) -> Result<Vec<ExcerptSnaps
         tx.execute("DELETE FROM excerpts WHERE id = ?1", [id])?;
         snapshots.push(ExcerptSnapshot { excerpt, memos });
     }
+    if !ids.is_empty() {
+        activity::record(
+            &tx,
+            "bulk.excerpts_deleted",
+            "excerpt",
+            None,
+            format!("Deleted {} excerpts", ids.len()),
+            json!({ "excerptIds": ids, "count": ids.len() }),
+        )?;
+    }
     tx.commit()?;
     Ok(snapshots)
 }
@@ -100,8 +111,48 @@ pub fn add_codes_many(
             )?;
         }
     }
+    log_bulk_codes(&tx, "bulk.codes_added", "Added", &code_ids, &report)?;
     tx.commit()?;
     Ok(report)
+}
+
+/// The one entry a bulk tagging writes: what changed, over how many excerpts.
+fn log_bulk_codes(
+    conn: &Connection,
+    kind: &str,
+    verb: &str,
+    code_ids: &[String],
+    report: &BulkCodeReport,
+) -> Result<()> {
+    if report.affected == 0 {
+        return Ok(());
+    }
+    let names: Vec<String> = code_ids
+        .iter()
+        .map(|id| activity::code_name(conn, id))
+        .collect();
+    let preposition = if verb == "Added" { "to" } else { "from" };
+    activity::record(
+        conn,
+        kind,
+        "excerpt",
+        None,
+        format!(
+            "{verb} {} {preposition} {} excerpts",
+            names.join(", "),
+            report.affected
+        ),
+        json!({
+            "codeIds": code_ids,
+            "codeNames": names,
+            "affected": report.affected,
+            "excerptIds": report
+                .pairs
+                .iter()
+                .map(|(e, _)| e.clone())
+                .collect::<Vec<_>>(),
+        }),
+    )
 }
 
 /// Drop every listed code from every listed excerpt. `pairs` holds only the
@@ -137,6 +188,7 @@ pub fn remove_codes_many(
             )?;
         }
     }
+    log_bulk_codes(&tx, "bulk.codes_removed", "Removed", &code_ids, &report)?;
     tx.commit()?;
     Ok(report)
 }
@@ -194,6 +246,26 @@ pub fn retag_code(conn: &Connection, from_code_id: &str, to_code_id: &str) -> Re
             params![excerpt_id, now],
         )?;
     }
+    let (from_name, to_name) = (
+        activity::code_name(&tx, from_code_id),
+        activity::code_name(&tx, to_code_id),
+    );
+    let total = report.moved.len() + report.already_had.len();
+    activity::record(
+        &tx,
+        "bulk.retagged",
+        "code",
+        Some(from_code_id),
+        format!("Moved {total} excerpts from \"{from_name}\" to \"{to_name}\""),
+        json!({
+            "fromCodeId": from_code_id,
+            "fromCodeName": from_name,
+            "toCodeId": to_code_id,
+            "toCodeName": to_name,
+            "moved": report.moved,
+            "alreadyHad": report.already_had,
+        }),
+    )?;
     tx.commit()?;
     Ok(report)
 }

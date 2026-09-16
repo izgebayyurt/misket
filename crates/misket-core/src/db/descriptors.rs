@@ -9,8 +9,9 @@
 use std::collections::BTreeMap;
 
 use rusqlite::{params, Connection, OptionalExtension, Row};
+use serde_json::{json, Value};
 
-use super::{documents, util};
+use super::{activity, documents, util};
 use crate::error::{AppError, Result};
 use crate::models::{
     DescriptorField, DescriptorFieldPatch, DescriptorMatrix, DescriptorMatrixRow, DescriptorValue,
@@ -207,7 +208,19 @@ pub fn create_field(conn: &Connection, input: NewDescriptorField) -> Result<Desc
         params![id, name, kind, options_json, sort_order, now],
     )
     .map_err(|e| map_unique(e, name))?;
-    get_field(conn, &id)
+    let field = get_field(conn, &id)?;
+    activity::record(
+        conn,
+        "descriptor.field_created",
+        "descriptor_field",
+        Some(&field.id),
+        format!(
+            "Created descriptor field \"{}\" ({})",
+            field.name, field.kind
+        ),
+        json!({ "name": field.name, "kind": field.kind, "options": field.options }),
+    )?;
+    Ok(field)
 }
 
 /// Rename a field, change its options, or (only while it has no values)
@@ -264,14 +277,76 @@ pub fn update_field(
         params![id, name, kind, options_json, util::now()],
     )
     .map_err(|e| map_unique(e, &name))?;
-    get_field(conn, id)
+    let after = get_field(conn, id)?;
+    let mut detail = serde_json::Map::new();
+    let mut fields: Vec<&str> = vec![];
+    if current.name != after.name {
+        fields.push("name");
+        detail.insert(
+            "name".into(),
+            activity::change(current.name.clone(), after.name.clone()),
+        );
+    }
+    if current.kind != after.kind {
+        fields.push("kind");
+        detail.insert(
+            "kind".into(),
+            activity::change(current.kind.clone(), after.kind.clone()),
+        );
+    }
+    if current.options != after.options {
+        fields.push("options");
+        detail.insert(
+            "options".into(),
+            activity::change(current.options.clone(), after.options.clone()),
+        );
+    }
+    if !fields.is_empty() {
+        detail.insert("changed".into(), json!(fields));
+        let summary = if current.name != after.name {
+            format!(
+                "Renamed descriptor field \"{}\" to \"{}\"",
+                current.name, after.name
+            )
+        } else {
+            format!(
+                "Changed {} of descriptor field \"{}\"",
+                fields.join(", "),
+                after.name
+            )
+        };
+        activity::record(
+            conn,
+            "descriptor.field_updated",
+            "descriptor_field",
+            Some(&after.id),
+            summary,
+            Value::Object(detail),
+        )?;
+    }
+    Ok(after)
 }
 
 /// Delete a field; its values go with it.
 pub fn delete_field(conn: &Connection, id: &str) -> Result<DescriptorField> {
     let field = get_field(conn, id)?;
-    conn.execute("DELETE FROM descriptor_fields WHERE id = ?1", [id])?;
-    renumber(conn)?;
+    let tx = conn.unchecked_transaction()?;
+    tx.execute("DELETE FROM descriptor_fields WHERE id = ?1", [id])?;
+    renumber(&tx)?;
+    activity::record(
+        &tx,
+        "descriptor.field_deleted",
+        "descriptor_field",
+        Some(id),
+        format!("Deleted descriptor field \"{}\"", field.name),
+        json!({
+            "name": field.name,
+            "kind": field.kind,
+            "options": field.options,
+            "valueCount": field.value_count,
+        }),
+    )?;
+    tx.commit()?;
     Ok(field)
 }
 
@@ -327,25 +402,78 @@ pub fn set_value(
 ) -> Result<Option<DescriptorValue>> {
     documents::get_summary(conn, document_id)?;
     let field = get_field(conn, field_id)?;
+    let before: Option<String> = conn
+        .query_row(
+            "SELECT value FROM descriptor_values WHERE document_id = ?1 AND field_id = ?2",
+            params![document_id, field_id],
+            |r| r.get(0),
+        )
+        .optional()?;
     let raw = value.map(str::trim).filter(|v| !v.is_empty());
     let Some(raw) = raw else {
-        conn.execute(
+        let tx = conn.unchecked_transaction()?;
+        tx.execute(
             "DELETE FROM descriptor_values WHERE document_id = ?1 AND field_id = ?2",
             params![document_id, field_id],
         )?;
+        if before.is_some() {
+            log_value(&tx, document_id, &field, before.as_deref(), None)?;
+        }
+        tx.commit()?;
         return Ok(None);
     };
     let canonical = canonical_value(&field, raw)?;
-    conn.execute(
+    let tx = conn.unchecked_transaction()?;
+    tx.execute(
         "INSERT INTO descriptor_values (document_id, field_id, value) VALUES (?1, ?2, ?3)
          ON CONFLICT(document_id, field_id) DO UPDATE SET value = excluded.value",
         params![document_id, field_id, canonical],
     )?;
+    if before.as_deref() != Some(canonical.as_str()) {
+        log_value(
+            &tx,
+            document_id,
+            &field,
+            before.as_deref(),
+            Some(&canonical),
+        )?;
+    }
+    tx.commit()?;
     Ok(Some(DescriptorValue {
         document_id: document_id.to_string(),
         field_id: field_id.to_string(),
         value: canonical,
     }))
+}
+
+/// One entry per descriptor value that really changed, attributed to the
+/// document it describes so it shows up next to that document's other edits.
+fn log_value(
+    conn: &Connection,
+    document_id: &str,
+    field: &DescriptorField,
+    before: Option<&str>,
+    after: Option<&str>,
+) -> Result<()> {
+    let doc_name = activity::document_name(conn, document_id);
+    let summary = match after {
+        Some(v) => format!("Set {} of \"{doc_name}\" to \"{v}\"", field.name),
+        None => format!("Cleared {} of \"{doc_name}\"", field.name),
+    };
+    activity::record(
+        conn,
+        "descriptor.value_set",
+        "document",
+        Some(document_id),
+        summary,
+        json!({
+            "documentId": document_id,
+            "documentName": doc_name,
+            "fieldId": field.id,
+            "fieldName": field.name,
+            "value": activity::change(before.map(String::from), after.map(String::from)),
+        }),
+    )
 }
 
 pub fn values_for_document(conn: &Connection, document_id: &str) -> Result<Vec<DescriptorValue>> {

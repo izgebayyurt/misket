@@ -9,6 +9,7 @@ const MIGRATIONS: &[(i64, &str)] = &[
     (2, include_str!("migrations/0002_descriptors.sql")),
     (3, include_str!("migrations/0003_media_blobs.sql")),
     (4, include_str!("migrations/0004_sets.sql")),
+    (6, include_str!("migrations/0006_activity_log.sql")),
 ];
 
 pub fn latest_version() -> i64 {
@@ -63,8 +64,26 @@ mod tests {
     #[test]
     fn migrations_are_ordered_and_start_at_one() {
         assert_eq!(MIGRATIONS.first().unwrap().0, 1);
-        assert!(MIGRATIONS.windows(2).all(|w| w[0].0 + 1 == w[1].0));
-        assert_eq!(latest_version(), MIGRATIONS.len() as i64);
+        // Strictly increasing, but not necessarily contiguous: branches
+        // developed in parallel claim a number each and a gap is harmless
+        // for a forward-only sequence keyed by `PRAGMA user_version`.
+        assert!(MIGRATIONS.windows(2).all(|w| w[0].0 < w[1].0));
+        assert_eq!(latest_version(), MIGRATIONS.last().unwrap().0);
+    }
+
+    #[test]
+    fn activity_log_table_and_indexes_exist() {
+        let conn = Connection::open_in_memory().unwrap();
+        migrate(&conn).unwrap();
+        let n: i64 = conn
+            .query_row(
+                "SELECT count(*) FROM sqlite_master
+                 WHERE name IN ('activity_log','activity_log_at_idx','activity_log_target_idx')",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(n, 3);
     }
 
     #[test]

@@ -1,5 +1,6 @@
 //! Project database: one SQLite file per project.
 
+pub mod activity;
 pub mod analysis;
 pub mod backup;
 pub mod bulk;
@@ -243,7 +244,8 @@ mod tests {
             let p = OpenProject::create(&path, "Old", "0.1.0").unwrap();
             p.conn
                 .execute_batch(
-                    "DROP TABLE descriptor_values;
+                    "DROP TABLE activity_log;
+                     DROP TABLE descriptor_values;
                      DROP TABLE descriptor_fields;
                      DROP TABLE media_blobs;
                      DROP INDEX excerpts_image_region_uq;
@@ -274,7 +276,8 @@ mod tests {
             .execute_batch(
                 "SELECT count(*) FROM descriptor_fields;
                  SELECT count(*) FROM media_blobs;
-                 SELECT count(*) FROM sets;",
+                 SELECT count(*) FROM sets;
+                 SELECT count(*) FROM activity_log;",
             )
             .unwrap();
     }
