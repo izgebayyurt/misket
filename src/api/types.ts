@@ -228,6 +228,27 @@ export interface ExcerptFilter {
   offset?: number;
 }
 
+/** `[excerptId, codeId]`. */
+export type ExcerptCodePair = [string, string];
+
+/**
+ * What a bulk code change actually did. `affected` counts the excerpts that
+ * really changed; `pairs` holds every tag inserted (by `addCodesToExcerpts`)
+ * or deleted (by `removeCodesFromExcerpts`), which is exactly what undo has
+ * to reverse.
+ */
+export interface BulkCodeReport {
+  affected: number;
+  pairs: ExcerptCodePair[];
+}
+
+export interface RetagReport {
+  /** Excerpts that gained the target code and lost the source code. */
+  moved: string[];
+  /** Excerpts that already carried the target, so they only lost the source. */
+  alreadyHad: string[];
+}
+
 export interface ExcerptRow extends ExcerptWithCodes {
   documentName: string;
   contextBefore: string;
