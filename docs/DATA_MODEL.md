@@ -96,6 +96,100 @@ kind compares as text, which is also the right order for ISO dates. Because
 `neq` and `empty` are `NOT EXISTS`, documents with no value for the field match
 them.
 
+### The code-by-descriptor cross-tab
+
+`db::analysis::code_by_descriptor` turns one descriptor field into the columns
+of a matrix whose rows are codes — the mixed-methods comparison ("how often
+does each theme come up at each site"). It takes a `CrosstabRequest` rather
+than a row of arguments: the field, the codes to use as rows (every code when
+none are picked), `include_descendants`, the usual document ids and document
+sets, a bin count, and a mode.
+
+Columns come from the values the **documents in scope** actually have, so a
+matrix never carries a column nobody used:
+
+| Kind     | Columns                                                                                                                                                  | Click-through operator |
+| -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- |
+| `choice` | one per option in use, in the field's own option order                                                                                                   | `eq`                   |
+| `text`   | one per distinct value, sorted case-insensitively                                                                                                        | `eq`                   |
+| `number` | `bins` equal-width bins between the smallest and the largest value (4 by default); half-open, except the last, which is closed so the maximum has a home | `between`              |
+| `date`   | one per year-month that occurs, ascending                                                                                                                | `between`              |
+
+A `(no value)` column (`empty`) is appended only when some document in scope
+has no value for the field. Every column carries the `DescriptorFilter` that
+reproduces it, so a cell click opens the excerpt browser on exactly what the
+cell counted. `between` is inclusive on both ends, which is what the browser
+supports, so a document sitting exactly on a bin edge is reachable from either
+neighbouring column even though it was counted in only one.
+
+A cell counts excerpts — de-duplicated, so an excerpt tagged with both a code
+and one of its sub-codes counts once — or, with `mode = "documents"`, distinct
+documents. Every document belongs to exactly one column, so a row's cells add
+up to its total either way; `documentsPerColumn` is the denominator, the
+documents in scope per column whether or not anything in them is coded.
+
+## Boolean and proximity queries
+
+`ExcerptFilter.query` is the one condition that is not SQL. It is a small
+recursive expression:
+
+```jsonc
+{
+  "op": "near",
+  "terms": [
+    { "codeId": "…", "includeDescendants": true },
+    { "op": "or", "terms": [{ "codeId": "…" }, { "codeId": "…" }] },
+  ],
+  "within": { "kind": "paragraph" },
+}
+```
+
+A term is either a code (with the same "include sub-codes" choice as the rest
+of the browser) or a nested query, told apart by their fields. `op` is `and`,
+`or`, `not` or `near`; `within` applies only to `near` and is either
+`{"kind":"paragraph"}` (the default) or `{"kind":"chars","n":…}`.
+
+The semantics are **co-located**, not per-excerpt: an excerpt satisfies a term
+when it carries the code itself _or_ overlaps an excerpt that does, using the
+same half-open `a.start < b.end AND b.start < a.end` as `co_occurrence` and
+`overlaps_code_id`. That is the only reading that is useful on real coding,
+where two coders rarely draw byte-identical ranges. Because an excerpt always
+overlaps itself, one carrying both codes matches `and` and `near` on its own,
+and is excluded from `not`.
+
+| `op`   | An excerpt matches when it…                                                      |
+| ------ | -------------------------------------------------------------------------------- |
+| `and`  | satisfies every term                                                             |
+| `or`   | satisfies any term                                                               |
+| `not`  | satisfies the first term and does not overlap any excerpt satisfying a later one |
+| `near` | satisfies the first term and lies near an excerpt satisfying each later one      |
+
+`near` in paragraph scope means the two excerpts touch a common paragraph;
+paragraphs are the document text split on `\n`, and an excerpt's paragraph
+span is computed from its offsets, so an excerpt crossing a break belongs to
+both. In character scope it means at most `n` **code points** lie between them
+(overlapping or touching counts as zero), so emoji and CJK text measure the way
+the offsets do.
+
+Image regions never match: a query is defined on ranges, exactly like
+`overlaps_code_id`.
+
+`db::query_expr` evaluates it in Rust rather than in SQL: `excerpts::query`
+runs the rest of the filter, takes the candidate ids **in result order**, and
+for each document involved loads that document's text excerpts once and
+evaluates the expression over bitmasks. The neighbours a term looks at are
+every text excerpt of the document, not only the candidates — asking whether
+an excerpt overlaps something coded B is a question about the document, not
+about what the browser would otherwise have shown. Filtering happens before
+paging, so `total` is the number of real matches and the page is then re-read
+by id. `validate` rejects an unknown operator, a `not`/`near` with fewer than
+two terms, an empty code id, an out-of-range distance or excessive nesting
+before any of that runs; `src/core/query.ts` mirrors those rules so the
+builder can grey out "Apply" instead of bouncing off an error.
+
+A saved filter is a whole `ExcerptFilter`, so queries save with it and the
+saved-filter list shows `describeQuery` under the name.
+
 ## Sets and saved filters
 
 A **set** is a named group of codes or of documents. The two kinds live in one
@@ -183,6 +277,9 @@ them back instead of failing on the primary key.
   de-duplicate excerpts, and co-occurrence pairs text excerpts in one document
   whose ranges overlap (`a.start < b.end AND b.start < a.end`), counting each
   pair of excerpts once per pair of codes.
+- The code-by-descriptor cross-tab reads `descriptor_values` for one field,
+  maps every in-scope document to exactly one column, and then counts the
+  excerpt tags in Rust; nothing about the binning belongs in SQL.
 
 ## Exports
 

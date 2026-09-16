@@ -51,10 +51,18 @@ keyboard-friendly interface without a subscription.
   Tick the checkboxes (`Shift`+click for a range, or "Select all N loaded") to
   add a code to, remove a code from, or delete many excerpts at once; `Escape`
   clears the selection and undo reverses the whole batch.
+- **Query**: build Boolean and proximity retrievals in the browser — "Access
+  and Barriers", "Access not Barriers", "Access near Barriers in the same
+  paragraph" or within N characters — with one level of grouping, and save
+  them with the rest of the filter. Codes count as together when their
+  excerpts overlap, not only when one excerpt carries both.
 - **Analyse**: a code frequency table (own counts and counts with sub-codes,
   per document), a code co-occurrence matrix showing which codes overlap on the
-  same text, and a code-by-document heatmap. Every cell clicks through to the
-  matching excerpts, and each view exports to CSV.
+  same text, a code-by-document heatmap, and a code-by-descriptor cross-tab
+  putting codes against the values of any document attribute — sites, waves,
+  age bands binned automatically, dates by month — counting excerpts or
+  documents. Every cell clicks through to the matching excerpts, and each view
+  exports to CSV.
 - **Descriptors**: define document attributes (text, number, choice or date)
   such as site, interview wave or age group, set them per document or in a
   table of every document, and filter excerpts by them ("Age is more than 30",
