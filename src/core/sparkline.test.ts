@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { sparklineAreaPath, sparklineLinePath, sparklinePoints } from "./sparkline";
+import { sparklineAreaPath, sparklineLinePath, sparklinePoints, zeroFillDays } from "./sparkline";
 
 describe("sparklinePoints", () => {
   it("returns nothing for an empty series", () => {
@@ -50,5 +50,48 @@ describe("sparklineAreaPath", () => {
   it("closes the line down to the baseline under the last and first points", () => {
     const d = sparklineAreaPath([0, 2, 4], { width: 20, height: 10 });
     expect(d).toBe("M0,10 L10,5 L20,0 L20,10 L0,10 Z");
+  });
+});
+
+describe("zeroFillDays", () => {
+  const today = new Date(Date.UTC(2024, 2, 10)); // 2024-03-10
+
+  it("zero-fills every day in the window, oldest first, ending on `today`", () => {
+    const series = zeroFillDays([], 5, today);
+    expect(series).toEqual([
+      ["2024-03-06", 0],
+      ["2024-03-07", 0],
+      ["2024-03-08", 0],
+      ["2024-03-09", 0],
+      ["2024-03-10", 0],
+    ]);
+  });
+
+  it("fills in counts for the days that have them", () => {
+    const series = zeroFillDays(
+      [
+        ["2024-03-08", 3],
+        ["2024-03-10", 1],
+      ],
+      5,
+      today,
+    );
+    expect(series).toEqual([
+      ["2024-03-06", 0],
+      ["2024-03-07", 0],
+      ["2024-03-08", 3],
+      ["2024-03-09", 0],
+      ["2024-03-10", 1],
+    ]);
+  });
+
+  it("ignores counts outside the window", () => {
+    const series = zeroFillDays([["2020-01-01", 99]], 3, today);
+    expect(series.reduce((sum, [, c]) => sum + c, 0)).toBe(0);
+  });
+
+  it("defaults to the real current date when `today` is omitted", () => {
+    const series = zeroFillDays([], 1);
+    expect(series).toEqual([[new Date().toISOString().slice(0, 10), 0]]);
   });
 });

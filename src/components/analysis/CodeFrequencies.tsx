@@ -3,7 +3,8 @@ import { ChevronDown, ChevronUp } from "lucide-react";
 import type { CodeFrequency } from "@/api/types";
 import { flattenTree, pathOf } from "@/core/codeTree";
 import { toCsv } from "@/core/csv";
-import { useCodeFrequencies } from "@/queries/analysis";
+import { sparklineAreaPath, sparklineLinePath, zeroFillDays } from "@/core/sparkline";
+import { useCodeFrequencies, useCodeTimeline } from "@/queries/analysis";
 import { useCodeTree } from "@/queries/codes";
 import { useDocuments } from "@/queries/documents";
 import { ColorDot } from "@/components/codebook/ColorSwatch";
@@ -124,6 +125,9 @@ export function CodeFrequencies() {
                 {header("own", "Own", "w-24 text-right")}
                 {header("withDescendants", "With sub-codes", "w-32 text-right")}
                 {header("documentCount", "Documents", "w-28 text-right")}
+                <th className="w-28 px-3 py-1.5 text-right font-medium" scope="col">
+                  Last 30 days
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -154,6 +158,9 @@ export function CodeFrequencies() {
                     ) : null}
                   </td>
                   <td className="px-3 py-1.5 text-right tabular-nums">{r.documentCount}</td>
+                  <td className="px-3 py-1.5" onClick={(e) => e.stopPropagation()}>
+                    <CodeTimelineCell codeId={r.codeId} />
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -161,5 +168,38 @@ export function CodeFrequencies() {
         )}
       </div>
     </div>
+  );
+}
+
+const MINI_SPARK_WIDTH = 90;
+const MINI_SPARK_HEIGHT = 22;
+
+/** A tiny, label-free 30-day coding-activity sparkline for one code (with
+ * its sub-codes), for the frequencies table's rightmost column. */
+function CodeTimelineCell({ codeId }: { codeId: string }) {
+  const { data } = useCodeTimeline(codeId, true, "day");
+  const values = useMemo(() => zeroFillDays(data ?? [], 30).map(([, c]) => c), [data]);
+  const total = values.reduce((a, b) => a + b, 0);
+  if (total === 0) {
+    return <span className="block text-right text-xs text-fg-muted">–</span>;
+  }
+  const options = { width: MINI_SPARK_WIDTH, height: MINI_SPARK_HEIGHT };
+  return (
+    <svg
+      viewBox={`0 0 ${MINI_SPARK_WIDTH} ${MINI_SPARK_HEIGHT}`}
+      className="ml-auto block h-5 w-[90px]"
+      preserveAspectRatio="none"
+      role="img"
+      aria-label={`${total} excerpts coded in the last 30 days`}
+      data-testid="code-timeline-sparkline"
+    >
+      <path d={sparklineAreaPath(values, options)} fill="var(--color-accent)" opacity="0.15" />
+      <path
+        d={sparklineLinePath(values, options)}
+        fill="none"
+        stroke="var(--color-accent)"
+        strokeWidth="1.5"
+      />
+    </svg>
   );
 }

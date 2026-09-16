@@ -4,9 +4,11 @@ import { useProjectInfo, useProjectStats, useRenameProject } from "@/queries/pro
 import { useDocuments } from "@/queries/documents";
 import { useCodes, useCodeTree } from "@/queries/codes";
 import { useCreateMemo, useMemos } from "@/queries/memos";
+import { useCodeTimeline } from "@/queries/analysis";
 import { useSets } from "@/queries/sets";
 import { pathOf } from "@/core/codeTree";
-import { sparklineAreaPath, sparklineLinePath } from "@/core/sparkline";
+import { sparklineAreaPath, sparklineLinePath, zeroFillDays } from "@/core/sparkline";
+import { CodePicker } from "@/components/analysis/shared";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ColorDot } from "@/components/codebook/ColorSwatch";
@@ -27,6 +29,7 @@ export function OverviewView() {
   const tree = useCodeTree();
   const [editingName, setEditingName] = useState(false);
   const [creatingCode, setCreatingCode] = useState(false);
+  const [sparklineCodeId, setSparklineCodeId] = useState<string | null>(null);
   const rename = useRenameProject();
   const { pickAndImport } = useImportFiles();
   const openDocument = useWorkspace((s) => s.openDocument);
@@ -114,10 +117,22 @@ export function OverviewView() {
         </section>
 
         <section>
-          <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-fg-muted">
-            Excerpts coded, last 30 days
-          </h2>
-          <Sparkline data={stats?.excerptsPerDay ?? []} />
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <h2 className="text-xs font-semibold uppercase tracking-wide text-fg-muted">
+              Excerpts coded, last 30 days
+            </h2>
+            <CodePicker
+              value={sparklineCodeId}
+              onChange={setSparklineCodeId}
+              allLabel="All codes"
+              testId="overview-sparkline-code-picker"
+            />
+          </div>
+          {sparklineCodeId ? (
+            <CodeSparkline codeId={sparklineCodeId} />
+          ) : (
+            <Sparkline data={stats?.excerptsPerDay ?? []} />
+          )}
         </section>
 
         <section>
@@ -405,6 +420,15 @@ function Sparkline({ data }: { data: [string, number][] }) {
       </div>
     </div>
   );
+}
+
+/** The same 30-day sparkline as `Sparkline`, but for one code (with its
+ * sub-codes) rather than every excerpt, zero-filled the same way. */
+function CodeSparkline({ codeId }: { codeId: string }) {
+  const { data, isPending } = useCodeTimeline(codeId, true, "day");
+  const filled = zeroFillDays(data ?? [], 30);
+  if (isPending) return null;
+  return <Sparkline data={filled} />;
 }
 
 function TopCodes({

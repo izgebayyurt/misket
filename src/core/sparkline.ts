@@ -53,3 +53,31 @@ export function sparklineAreaPath(values: number[], options: SparklineOptions): 
   const last = points[points.length - 1]!;
   return `${line} L${round(last.x)},${round(options.height)} L${round(first.x)},${round(options.height)} Z`;
 }
+
+function dayKey(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * Turn sparse `[dateKey, count]` pairs (as `code_timeline(bucket: "day")`
+ * returns) into a zero-filled series covering the last `days` days ending
+ * today (UTC "YYYY-MM-DD" keys), oldest first — the same shape
+ * `ProjectStats.excerptsPerDay` comes in, so both can feed the same
+ * sparkline renderer. `today` is injectable for tests.
+ */
+export function zeroFillDays(
+  counts: [string, number][],
+  days: number,
+  today: Date = new Date(),
+): [string, number][] {
+  const byDay = new Map(counts);
+  const out: [string, number][] = [];
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(
+      Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate() - i),
+    );
+    const key = dayKey(d);
+    out.push([key, byDay.get(key) ?? 0]);
+  }
+  return out;
+}
