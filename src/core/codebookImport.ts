@@ -10,6 +10,9 @@ export interface ParsedCodebookEntry {
   path: string[];
   color?: string;
   description: string;
+  /** Empty for codebooks written before the definition fields existed. */
+  inclusion: string;
+  exclusion: string;
   shortcut?: string;
 }
 
@@ -31,6 +34,8 @@ interface JsonCode {
   name: string;
   color?: string;
   description?: string;
+  inclusion?: string;
+  exclusion?: string;
   shortcut?: string | null;
 }
 
@@ -64,18 +69,23 @@ function parseCodebookJson(text: string): ParsedCodebookEntry[] {
       path: parts,
       color: c.color || undefined,
       description: c.description ?? "",
+      inclusion: c.inclusion ?? "",
+      exclusion: c.exclusion ?? "",
       shortcut: c.shortcut ?? undefined,
     };
   });
 }
 
-const CSV_HEADER = ["name", "parent", "color", "description", "shortcut"];
+const CSV_HEADER = ["name", "parent", "color", "description", "inclusion", "exclusion", "shortcut"];
+/** The header Misket wrote before the definition fields existed. */
+const CSV_HEADER_LEGACY = ["name", "parent", "color", "description", "shortcut"];
 
 function parseCodebookCsv(text: string): ParsedCodebookEntry[] {
   const rows = parseCsv(text).filter((r) => !(r.length === 1 && r[0] === ""));
   if (rows.length === 0) throw new Error("Empty CSV file.");
   const header = rows[0]!.map((h) => h.trim().toLowerCase());
-  if (header.join(",") !== CSV_HEADER.join(",")) {
+  const legacy = header.join(",") === CSV_HEADER_LEGACY.join(",");
+  if (!legacy && header.join(",") !== CSV_HEADER.join(",")) {
     throw new Error(`Expected CSV header "${CSV_HEADER.join(",")}", found "${header.join(",")}".`);
   }
   const entries: ParsedCodebookEntry[] = [];
@@ -91,7 +101,9 @@ function parseCodebookCsv(text: string): ParsedCodebookEntry[] {
       path,
       color: get(2) || undefined,
       description: get(3),
-      shortcut: get(4) || undefined,
+      inclusion: legacy ? "" : get(4),
+      exclusion: legacy ? "" : get(5),
+      shortcut: (legacy ? get(4) : get(6)) || undefined,
     });
   }
   return entries;

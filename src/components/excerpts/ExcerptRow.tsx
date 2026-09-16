@@ -8,6 +8,8 @@ import { RegionThumbnail } from "./RegionThumbnail";
 interface Props {
   row: Row;
   selected?: boolean;
+  /** The row push-down review is pointed at, highlighted like a cursor. */
+  active?: boolean;
   onOpen: () => void;
   /**
    * Checkbox click; `shiftKey` extends the selection from the last click.
@@ -17,11 +19,18 @@ interface Props {
   onToggle?: (shiftKey: boolean) => void;
 }
 
-export function ExcerptRow({ row, selected = false, onOpen, onToggle }: Props) {
+export function ExcerptRow({ row, selected = false, active, onOpen, onToggle }: Props) {
   const tree = useCodeTree();
   const isRegion = row.kind === "image_region";
   return (
-    <li className={cn("flex items-start gap-2 pl-3", selected && "bg-accent/10")}>
+    <li
+      className={cn(
+        "flex items-start gap-2 pl-3",
+        selected && "bg-accent/10",
+        active && "bg-muted ring-2 ring-inset ring-focus",
+      )}
+      aria-current={active ? "true" : undefined}
+    >
       {onToggle ? (
         <input
           type="checkbox"

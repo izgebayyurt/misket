@@ -1,10 +1,12 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useDocument } from "@/queries/documents";
-import { useCodes } from "@/queries/codes";
+import { useCodes, useCodeTree } from "@/queries/codes";
+import { inVivoName, siblingNames, uniqueSiblingName } from "@/core/codeTree";
 import {
   useApplyCodes,
   useDeleteExcerpt,
   useDocumentExcerpts,
+  useInVivoCode,
   useMergeExcerpts,
   useSplitExcerpt,
   useUpdateExcerptRange,
@@ -48,6 +50,7 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
   const { data: doc, error } = useDocument(documentId);
   const { data: excerpts } = useDocumentExcerpts(documentId);
   const { data: codes } = useCodes();
+  const tree = useCodeTree();
   const { data: projectInfo } = useProjectInfo();
   const rootRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -57,6 +60,7 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
   const setFocusedId = useWorkspace((s) => s.setFocusedExcerptId);
   const setPaletteOpen = useWorkspace((s) => s.setPaletteOpen);
   const applyCodes = useApplyCodes();
+  const inVivoCode = useInVivoCode();
   const deleteExcerpt = useDeleteExcerpt();
   const updateRange = useUpdateExcerptRange();
   const splitExcerpt = useSplitExcerpt();
@@ -790,19 +794,19 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
     [applyCodes, documentId, setPending, setFocusedId],
   );
 
-  // --- code hotkeys: a single key applies a code to the selection/focus ---
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (isTextField(e.target) || mod(e) || e.altKey || e.key.length !== 1) return;
-      if (useWorkspace.getState().paletteOpen) return;
-      const codeId = shortcutToCode.get(e.key.toLowerCase());
-      if (!codeId) return;
+  /**
+   * Apply one code to whatever is currently the target — the pending text
+   * selection, else the focused excerpt. Shared by the code hotkeys and by
+   * quick-code; returns whether there was anything to code at all.
+   */
+  const applyCodeToTarget = useCallback(
+    (codeId: string): boolean => {
       const ws = useWorkspace.getState();
       if (ws.pendingSelection?.kind === "text" && ws.pendingSelection.documentId === documentId) {
-        e.preventDefault();
         void applyToSelection([codeId]);
-      } else if (ws.focusedExcerptId) {
-        e.preventDefault();
+        return true;
+      }
+      if (ws.focusedExcerptId) {
         const ex = excerptById.get(ws.focusedExcerptId);
         if (ex && ex.startPos !== null && ex.endPos !== null) {
           applyCodes.mutate({
@@ -811,12 +815,85 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
             endPos: ex.endPos,
             codeIds: [codeId],
           });
+          return true;
         }
       }
+      return false;
+    },
+    [applyCodes, applyToSelection, documentId, excerptById],
+  );
+
+  // --- code hotkeys: a single key applies a code to the selection/focus ---
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (isTextField(e.target) || mod(e) || e.altKey || e.key.length !== 1) return;
+      if (useWorkspace.getState().paletteOpen) return;
+      const codeId = shortcutToCode.get(e.key.toLowerCase());
+      if (!codeId) return;
+      if (applyCodeToTarget(codeId)) e.preventDefault();
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [shortcutToCode, documentId, excerptById, applyToSelection, applyCodes]);
+  }, [shortcutToCode, applyCodeToTarget]);
+
+  /**
+   * In vivo coding: name a code after the words on the page. The name is the
+   * selection with its whitespace collapsed and capped, made unique among its
+   * siblings; the parent is whichever code the tree has selected, else the
+   * root. Creating and applying it is one undoable command.
+   */
+  const inVivo = useCallback(async () => {
+    const ws = useWorkspace.getState();
+    const p = ws.pendingSelection;
+    if (p?.kind !== "text" || p.documentId !== documentId) {
+      toast.info("Select some text to name a code after it.");
+      return;
+    }
+    const quoted = text.slice(cpToUtf16(offsetMap, p.start), cpToUtf16(offsetMap, p.end));
+    const base = inVivoName(quoted);
+    if (!base) {
+      toast.info("That selection has no words to name a code after.");
+      return;
+    }
+    const parentId =
+      ws.selectedCodeId && tree.byId.has(ws.selectedCodeId) ? ws.selectedCodeId : null;
+    const name = uniqueSiblingName(base, siblingNames(tree, parentId));
+    try {
+      const r = await inVivoCode.mutateAsync({
+        documentId,
+        startPos: p.start,
+        endPos: p.end,
+        name,
+        parentId,
+      });
+      window.getSelection()?.removeAllRanges();
+      setPending(null);
+      setFocusedId(r.excerptId);
+      toast.info(`Created "${name}" and applied it.`);
+    } catch (e) {
+      toast.error(e);
+    }
+  }, [documentId, inVivoCode, offsetMap, setFocusedId, setPending, text, tree]);
+
+  useEffect(() => {
+    return useShortcutActions.getState().register({ inVivoCode: () => void inVivo() });
+  }, [inVivo]);
+
+  // Quick-code: repeat whatever code was applied last, from anywhere in the
+  // document. The status bar names it, so this is never a guess.
+  useEffect(() => {
+    return useShortcutActions.getState().register({
+      quickCode: () => {
+        const codeId = useWorkspace.getState().lastAppliedCodeId;
+        if (!codeId) {
+          toast.info("No code has been applied yet — pick one from the palette first.");
+          return;
+        }
+        if (!applyCodeToTarget(codeId))
+          toast.info("Select some text or focus an excerpt to code first.");
+      },
+    });
+  }, [applyCodeToTarget]);
 
   function onSegmentClick(e: React.MouseEvent, seg: Segment) {
     if (seg.excerptIds.length === 0) return;

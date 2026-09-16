@@ -5,8 +5,12 @@ export type AnalysisTab = "frequencies" | "cooccurrence" | "matrix" | "descripto
 
 export type View =
   | { kind: "document"; documentId: string; focusExcerptId?: string; scrollToOffset?: number }
-  /** `initialFilter` seeds the browser's filters when it mounts. */
-  | { kind: "excerpts"; initialFilter?: ExcerptFilter }
+  /**
+   * `initialFilter` seeds the browser's filters when it mounts. `review` puts
+   * it in push-down mode for one parent code: the review bar at the top
+   * re-files the parent's own excerpts under its children.
+   */
+  | { kind: "excerpts"; initialFilter?: ExcerptFilter; review?: { parentCodeId: string } }
   | { kind: "analysis"; tab: AnalysisTab }
   | { kind: "search" }
   | { kind: "descriptorTable" }
@@ -45,12 +49,20 @@ interface WorkspaceState {
   focusedExcerptId: string | null;
   paletteOpen: boolean;
   paletteTarget: PaletteTarget | null;
+  /**
+   * The code most recently applied to something, by any path: the palette,
+   * a code hotkey, in vivo coding, a bulk "Add code…". It is what the
+   * quick-code shortcut applies, and what the status bar advertises, so the
+   * user can see what the key will do before pressing it.
+   */
+  lastAppliedCodeId: string | null;
   settingsOpen: boolean;
   shortcutsHelpOpen: boolean;
   setView: (view: View) => void;
   openDocument: (documentId: string, focusExcerptId?: string, scrollToOffset?: number) => void;
-  /** Open the excerpt browser, optionally pre-filtered (analysis click-through). */
-  openExcerpts: (initialFilter?: ExcerptFilter) => void;
+  /** Open the excerpt browser, optionally pre-filtered (analysis click-through)
+   * and optionally in push-down review mode for one parent code. */
+  openExcerpts: (initialFilter?: ExcerptFilter, review?: { parentCodeId: string }) => void;
   setSidebarTab: (tab: SidebarTab) => void;
   setSelectedCodeId: (id: string | null) => void;
   setPendingSelection: (sel: PendingSelection | null) => void;
@@ -58,6 +70,7 @@ interface WorkspaceState {
   setPaletteOpen: (open: boolean) => void;
   /** Open the palette as a code picker rather than as a coding action. */
   openCodePicker: (target: PaletteTarget) => void;
+  setLastAppliedCodeId: (id: string | null) => void;
   setSettingsOpen: (open: boolean) => void;
   setShortcutsHelpOpen: (open: boolean) => void;
   reset: () => void;
@@ -71,6 +84,7 @@ const initial = {
   focusedExcerptId: null,
   paletteOpen: false,
   paletteTarget: null as PaletteTarget | null,
+  lastAppliedCodeId: null as string | null,
   settingsOpen: false,
   shortcutsHelpOpen: false,
 };
@@ -84,9 +98,9 @@ export const useWorkspace = create<WorkspaceState>((set) => ({
       pendingSelection: null,
       focusedExcerptId: focusExcerptId ?? null,
     }),
-  openExcerpts: (initialFilter) =>
+  openExcerpts: (initialFilter, review) =>
     set({
-      view: { kind: "excerpts", initialFilter },
+      view: { kind: "excerpts", initialFilter, review },
       pendingSelection: null,
       focusedExcerptId: null,
     }),
@@ -99,6 +113,7 @@ export const useWorkspace = create<WorkspaceState>((set) => ({
   setPaletteOpen: (paletteOpen) =>
     set(paletteOpen ? { paletteOpen } : { paletteOpen, paletteTarget: null }),
   openCodePicker: (paletteTarget) => set({ paletteTarget, paletteOpen: true }),
+  setLastAppliedCodeId: (lastAppliedCodeId) => set({ lastAppliedCodeId }),
   setSettingsOpen: (settingsOpen) => set({ settingsOpen }),
   setShortcutsHelpOpen: (shortcutsHelpOpen) => set({ shortcutsHelpOpen }),
   reset: () => set({ ...initial }),

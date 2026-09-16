@@ -262,6 +262,10 @@ mod tests {
                      DROP TABLE saved_filters;
                      DROP TABLE set_members;
                      DROP TABLE sets;
+                     DROP INDEX codes_example_excerpt_idx;
+                     ALTER TABLE codes DROP COLUMN example_excerpt_id;
+                     ALTER TABLE codes DROP COLUMN exclusion;
+                     ALTER TABLE codes DROP COLUMN inclusion;
                      PRAGMA user_version = 1;",
                 )
                 .unwrap();
@@ -286,7 +290,9 @@ mod tests {
                  SELECT count(*) FROM media_blobs;
                  SELECT count(*) FROM sets;
                  SELECT count(*) FROM activity_log;
-                 SELECT count(*) FROM framework_matrices;",
+                 SELECT count(*) FROM framework_matrices;
+                 SELECT count(*) FROM codes WHERE inclusion = '' AND exclusion = ''
+                   AND example_excerpt_id IS NULL;",
             )
             .unwrap();
     }

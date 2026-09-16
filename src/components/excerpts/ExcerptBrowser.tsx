@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ExcerptFilter } from "@/api/types";
 import { useExcerptQuery } from "@/queries/excerpts";
 import { useWorkspace } from "@/state/workspace";
 import { useShortcutActions } from "@/state/shortcutActions";
+import { isTextField, mod } from "@/core/keymap";
 import {
   clickRow,
   codesInSelection,
@@ -21,7 +22,12 @@ import {
 import { ExcerptFilters } from "./ExcerptFilters";
 import { ExcerptRow } from "./ExcerptRow";
 import { BulkActionBar } from "./BulkActionBar";
+import { ReviewBar } from "./ReviewBar";
 import { Button } from "@/components/ui/button";
+import { CodeDialog } from "@/components/codebook/CodeDialog";
+import { useCodeTree } from "@/queries/codes";
+import { usePushDownExcerpt } from "@/queries/excerpts";
+import { toast } from "@/state/toasts";
 
 const PAGE = 200;
 
@@ -34,6 +40,20 @@ export function ExcerptBrowser() {
   });
   const [pages, setPages] = useState(1);
   const openDocument = useWorkspace((s) => s.openDocument);
+
+  // Push-down review, read on mount like the filter. Closing the bar is local
+  // state: nothing else re-reads the view, and remounting would throw away
+  // the scroll position mid-review.
+  const [reviewParentId, setReviewParentId] = useState<string | null>(() => {
+    const view = useWorkspace.getState().view;
+    return view.kind === "excerpts" ? (view.review?.parentCodeId ?? null) : null;
+  });
+  const tree = useCodeTree();
+  const reviewParent = reviewParentId ? tree.byId.get(reviewParentId) : undefined;
+  const pushDown = usePushDownExcerpt();
+  const [reviewIndex, setReviewIndex] = useState(0);
+  const [newChildOpen, setNewChildOpen] = useState(false);
+  const listRef = useRef<HTMLUListElement>(null);
 
   /** Any filter change starts the result list over at one page. */
   const update = useCallback((patch: Partial<FilterState>) => {
@@ -55,6 +75,7 @@ export function ExcerptBrowser() {
   const { data, isFetching } = useExcerptQuery(filter);
 
   const rows = useMemo(() => data?.rows ?? [], [data]);
+  const rowCount = rows.length;
   const rowIds = useMemo(() => rows.map((r) => r.id), [rows]);
   const [rawSelection, setSelection] = useState(emptySelection);
   const register = useShortcutActions((s) => s.register);
@@ -72,8 +93,81 @@ export function ExcerptBrowser() {
   const selectedIds = selectedInOrder(selection, rowIds);
   const allSelected = rowIds.length > 0 && selectedIds.length === rowIds.length;
 
+  // --- push-down review -----------------------------------------------------
+  const reviewChildren = useMemo(
+    () => (reviewParent ? reviewParent.children.map((n) => n.code) : []),
+    [reviewParent],
+  );
+
+  /** Re-file the focused row under one of the parent's children. */
+  const pushDownRow = useCallback(
+    async (childId: string) => {
+      if (!reviewParent) return;
+      const row = rows[reviewIndex];
+      if (!row) return;
+      const child = tree.byId.get(childId)?.code;
+      try {
+        await pushDown.mutateAsync({
+          excerptId: row.id,
+          fromCodeId: reviewParent.code.id,
+          toCodeId: childId,
+          label: `Push down to ${child?.name ?? "sub-code"}`,
+        });
+        // The row leaves the result set, so the next one takes its index;
+        // clamping keeps the focus on the last row once the list runs out.
+        setReviewIndex((i) => Math.max(0, Math.min(i, rows.length - 2)));
+      } catch (e) {
+        toast.error(e);
+      }
+    },
+    [pushDown, reviewIndex, reviewParent, rows, tree],
+  );
+
+  // Number keys pick a child, arrows walk the list. Bound only while
+  // reviewing, so digits mean nothing in the ordinary browser.
+  useEffect(() => {
+    if (!reviewParent) return;
+    function onKey(e: KeyboardEvent) {
+      if (isTextField(e.target) || mod(e) || e.altKey) return;
+      if (useWorkspace.getState().paletteOpen) return;
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault();
+        const step = e.key === "ArrowDown" ? 1 : -1;
+        setReviewIndex((i) => Math.max(0, Math.min(rowCount - 1, i + step)));
+        return;
+      }
+      const n = Number(e.key);
+      if (!Number.isInteger(n) || n < 1 || n > 9) return;
+      const child = reviewChildren[n - 1];
+      if (!child) return;
+      e.preventDefault();
+      void pushDownRow(child.id);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [reviewParent, pushDownRow, reviewChildren, rowCount]);
+
+  // Keep the focused row on screen as it advances.
+  useEffect(() => {
+    if (!reviewParent) return;
+    const items = listRef.current?.querySelectorAll("li");
+    items?.[reviewIndex]?.scrollIntoView({ block: "nearest" });
+  }, [reviewIndex, reviewParent, rows]);
+
   return (
     <div className="relative flex h-full flex-col" data-testid="excerpt-browser">
+      {reviewParent ? (
+        <ReviewBar
+          parent={reviewParent.code}
+          remaining={data?.total ?? rows.length}
+          hasTarget={!!rows[reviewIndex]}
+          busy={pushDown.isPending}
+          onPushDown={(childId) => void pushDownRow(childId)}
+          onNewChild={() => setNewChildOpen(true)}
+          onDone={() => setReviewParentId(null)}
+          childCodes={reviewChildren}
+        />
+      ) : null}
       <ExcerptFilters
         codeIds={state.codeIds}
         onCodeIds={(codeIds) => update({ codeIds })}
@@ -126,13 +220,18 @@ export function ExcerptBrowser() {
                 : "Nothing matches these filters."}
           </p>
         ) : null}
-        <ul className="divide-y divide-border">
+        <ul ref={listRef} className="divide-y divide-border">
           {rows.map((row, index) => (
             <ExcerptRow
               key={row.id}
               row={row}
               selected={selection.ids.has(row.id)}
-              onOpen={() => openDocument(row.documentId, row.id)}
+              // In review mode a click picks the row the child buttons act
+              // on, rather than leaving for the document.
+              active={reviewParent ? index === reviewIndex : false}
+              onOpen={() =>
+                reviewParent ? setReviewIndex(index) : openDocument(row.documentId, row.id)
+              }
               onToggle={(shiftKey) => setSelection(clickRow(selection, rowIds, index, shiftKey))}
             />
           ))}
@@ -145,6 +244,13 @@ export function ExcerptBrowser() {
           </div>
         ) : null}
       </div>
+      {newChildOpen && reviewParent ? (
+        <CodeDialog
+          mode="create"
+          parentId={reviewParent.code.id}
+          onClose={() => setNewChildOpen(false)}
+        />
+      ) : null}
       {selectedIds.length > 0 ? (
         <BulkActionBar
           ids={selectedIds}

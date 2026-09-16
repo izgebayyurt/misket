@@ -23,8 +23,22 @@ describe("parseCodebookFile: JSON", () => {
     const { format, entries } = parseCodebookFile(jsonDoc);
     expect(format).toBe("json");
     expect(entries).toEqual([
-      { path: ["Attitudes"], color: "#D9534F", description: "Top theme", shortcut: undefined },
-      { path: ["Attitudes", "Positive"], color: "#5CB85C", description: "", shortcut: "p" },
+      {
+        path: ["Attitudes"],
+        color: "#D9534F",
+        description: "Top theme",
+        inclusion: "",
+        exclusion: "",
+        shortcut: undefined,
+      },
+      {
+        path: ["Attitudes", "Positive"],
+        color: "#5CB85C",
+        description: "",
+        inclusion: "",
+        exclusion: "",
+        shortcut: "p",
+      },
     ]);
   });
 
@@ -46,11 +60,20 @@ describe("parseCodebookFile: CSV", () => {
     const { format, entries } = parseCodebookFile(csv);
     expect(format).toBe("csv");
     expect(entries).toEqual([
-      { path: ["Theme"], color: "#5CB85C", description: "A top theme", shortcut: "t" },
+      {
+        path: ["Theme"],
+        color: "#5CB85C",
+        description: "A top theme",
+        inclusion: "",
+        exclusion: "",
+        shortcut: "t",
+      },
       {
         path: ["Theme", "Sub", "Leaf"],
         color: undefined,
         description: "Deepest level",
+        inclusion: "",
+        exclusion: "",
         shortcut: undefined,
       },
     ]);
@@ -69,6 +92,30 @@ describe("parseCodebookFile: CSV", () => {
   it("ignores a trailing blank line", () => {
     const { entries } = parseCodebookFile("name,parent,color,description,shortcut\nAlpha,,,,\n\n");
     expect(entries).toHaveLength(1);
+  });
+
+  it("reads the definition-field CSV header and still accepts the legacy one", () => {
+    const { entries } = parseCodebookFile(
+      "name,parent,color,description,inclusion,exclusion,shortcut\n" +
+        "Trust,,,Trusting the service,Names trust,Not satisfaction,t\n",
+    );
+    expect(entries[0]).toMatchObject({
+      path: ["Trust"],
+      description: "Trusting the service",
+      inclusion: "Names trust",
+      exclusion: "Not satisfaction",
+      shortcut: "t",
+    });
+
+    const legacy = parseCodebookFile(
+      "name,parent,color,description,shortcut\nDoubt,,,Hesitation,d\n",
+    );
+    expect(legacy.entries[0]).toMatchObject({
+      description: "Hesitation",
+      inclusion: "",
+      exclusion: "",
+      shortcut: "d",
+    });
   });
 });
 

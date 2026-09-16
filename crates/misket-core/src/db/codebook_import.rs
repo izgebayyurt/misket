@@ -1,5 +1,7 @@
 //! Import a codebook (a `misket-codebook` JSON export, or CSV with header
-//! `name,parent,color,description,shortcut`) into the current project.
+//! `name,parent,color,description,inclusion,exclusion,shortcut`) into the
+//! current project. The pre-schema-5 header without `inclusion,exclusion`
+//! is still accepted, so codebooks written by older builds keep importing.
 
 use std::collections::HashMap;
 
@@ -18,6 +20,8 @@ struct ParsedCode {
     path: Vec<String>,
     color: Option<String>,
     description: String,
+    inclusion: String,
+    exclusion: String,
     shortcut: Option<String>,
 }
 
@@ -54,13 +58,26 @@ fn parse_json(codes: &[CodebookJsonCode]) -> Result<Vec<ParsedCode>> {
             path: parts,
             color: Some(c.color.clone()).filter(|s| !s.is_empty()),
             description: c.description.clone(),
+            inclusion: c.inclusion.clone(),
+            exclusion: c.exclusion.clone(),
             shortcut: c.shortcut.clone().filter(|s| !s.is_empty()),
         });
     }
     Ok(out)
 }
 
-const CSV_HEADER: [&str; 5] = ["name", "parent", "color", "description", "shortcut"];
+const CSV_HEADER: [&str; 7] = [
+    "name",
+    "parent",
+    "color",
+    "description",
+    "inclusion",
+    "exclusion",
+    "shortcut",
+];
+/// The header this file used before schema 5; still read, with the two new
+/// fields left empty.
+const CSV_HEADER_LEGACY: [&str; 5] = ["name", "parent", "color", "description", "shortcut"];
 
 fn parse_csv(text: &str) -> Result<Vec<ParsedCode>> {
     let mut rdr = csv::ReaderBuilder::new().from_reader(text.as_bytes());
@@ -72,7 +89,8 @@ fn parse_csv(text: &str) -> Result<Vec<ParsedCode>> {
         .iter()
         .map(|h| h.trim().to_ascii_lowercase())
         .collect();
-    if got != CSV_HEADER {
+    let legacy = got == CSV_HEADER_LEGACY;
+    if !legacy && got != CSV_HEADER {
         return Err(AppError::Validation(format!(
             "expected CSV header \"{}\", found \"{}\"",
             CSV_HEADER.join(","),
@@ -96,7 +114,7 @@ fn parse_csv(text: &str) -> Result<Vec<ParsedCode>> {
         };
         path.push(name.to_string());
         let color = get(2);
-        let shortcut = get(4);
+        let shortcut = if legacy { get(4) } else { get(6) };
         out.push(ParsedCode {
             path,
             color: if color.is_empty() {
@@ -105,6 +123,8 @@ fn parse_csv(text: &str) -> Result<Vec<ParsedCode>> {
                 Some(color.to_string())
             },
             description: get(3).to_string(),
+            inclusion: if legacy { "" } else { get(4) }.to_string(),
+            exclusion: if legacy { "" } else { get(5) }.to_string(),
             shortcut: if shortcut.is_empty() {
                 None
             } else {
@@ -134,6 +154,8 @@ fn create_leaf(
         name: segment.to_string(),
         color,
         description: Some(pc.description.clone()),
+        inclusion: Some(pc.inclusion.clone()),
+        exclusion: Some(pc.exclusion.clone()),
         parent_id: parent_id.map(String::from),
         shortcut: pc.shortcut.clone(),
     };
@@ -167,6 +189,12 @@ fn fill_leaf(
     if current.description.trim().is_empty() && !pc.description.trim().is_empty() {
         patch.description = Some(pc.description.clone());
     }
+    if current.inclusion.trim().is_empty() && !pc.inclusion.trim().is_empty() {
+        patch.inclusion = Some(pc.inclusion.clone());
+    }
+    if current.exclusion.trim().is_empty() && !pc.exclusion.trim().is_empty() {
+        patch.exclusion = Some(pc.exclusion.clone());
+    }
     if current.color.trim().is_empty() {
         if let Some(c) = pc.color.as_deref().filter(|c| is_valid_hex_color(c)) {
             patch.color = Some(c.to_string());
@@ -177,8 +205,11 @@ fn fill_leaf(
             patch.shortcut = Some(Some(sc.to_string()));
         }
     }
-    let has_patch =
-        patch.color.is_some() || patch.description.is_some() || patch.shortcut.is_some();
+    let has_patch = patch.color.is_some()
+        || patch.description.is_some()
+        || patch.inclusion.is_some()
+        || patch.exclusion.is_some()
+        || patch.shortcut.is_some();
     if !has_patch {
         return Ok(());
     }
@@ -188,7 +219,11 @@ fn fill_leaf(
             report.skipped_shortcuts.push(label.to_string());
             let mut retry = patch;
             retry.shortcut = None;
-            if retry.color.is_some() || retry.description.is_some() {
+            if retry.color.is_some()
+                || retry.description.is_some()
+                || retry.inclusion.is_some()
+                || retry.exclusion.is_some()
+            {
                 codes::update(conn, id, retry)?;
             }
             Ok(())
@@ -445,6 +480,80 @@ mod tests {
         assert_eq!(leaf.parent_id.as_deref(), Some(sub.id.as_str()));
         assert_eq!(leaf.color, "#ABCDEF");
         assert_eq!(leaf.description, "Deepest level");
+    }
+
+    #[test]
+    fn csv_carries_inclusion_and_exclusion_and_still_reads_the_legacy_header() {
+        let p = OpenProject::in_memory("t").unwrap();
+        let input = CodebookImport::Csv {
+            text: "name,parent,color,description,inclusion,exclusion,shortcut\n\
+                   Trust,,,Trusting the service,Names trust or reliance,Mere satisfaction,t\n"
+                .to_string(),
+        };
+        import_codebook(&p.conn, input, ImportMode::Merge).unwrap();
+        let all = codes::list(&p.conn).unwrap();
+        let first = by_name(&all);
+        assert_eq!(first["Trust"].inclusion, "Names trust or reliance");
+        assert_eq!(first["Trust"].exclusion, "Mere satisfaction");
+
+        // The header older builds wrote still imports, with both rules empty.
+        let legacy = CodebookImport::Csv {
+            text: "name,parent,color,description,shortcut\nDoubt,,,Hesitation,d\n".to_string(),
+        };
+        import_codebook(&p.conn, legacy, ImportMode::Merge).unwrap();
+        let after = codes::list(&p.conn).unwrap();
+        let by_name = by_name(&after);
+        assert_eq!(by_name["Doubt"].description, "Hesitation");
+        assert_eq!(by_name["Doubt"].inclusion, "");
+        assert_eq!(by_name["Doubt"].exclusion, "");
+    }
+
+    #[test]
+    fn merge_fills_empty_rules_without_overwriting_written_ones() {
+        let p = OpenProject::in_memory("t").unwrap();
+        let trust = mk(&p.conn, "Trust", None);
+        codes::update(
+            &p.conn,
+            &trust.id,
+            CodePatch {
+                inclusion: Some("Mine, already written".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let input = CodebookImport::Csv {
+            text: "name,parent,color,description,inclusion,exclusion,shortcut\n\
+                   Trust,,,,Theirs,Not satisfaction,\n"
+                .to_string(),
+        };
+        import_codebook(&p.conn, input, ImportMode::Merge).unwrap();
+        let all = codes::list(&p.conn).unwrap();
+        let by_name = by_name(&all);
+        assert_eq!(by_name["Trust"].inclusion, "Mine, already written");
+        assert_eq!(by_name["Trust"].exclusion, "Not satisfaction");
+    }
+
+    #[test]
+    fn json_round_trip_carries_the_definition_fields() {
+        let src = OpenProject::in_memory("src").unwrap();
+        let a = mk(&src.conn, "Trust", None);
+        codes::update(
+            &src.conn,
+            &a.id,
+            CodePatch {
+                inclusion: Some("Names trust".into()),
+                exclusion: Some("Not satisfaction".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let input = json_of(&src);
+        let dst = OpenProject::in_memory("dst").unwrap();
+        import_codebook(&dst.conn, input, ImportMode::Merge).unwrap();
+        let all = codes::list(&dst.conn).unwrap();
+        let by_name = by_name(&all);
+        assert_eq!(by_name["Trust"].inclusion, "Names trust");
+        assert_eq!(by_name["Trust"].exclusion, "Not satisfaction");
     }
 
     #[test]

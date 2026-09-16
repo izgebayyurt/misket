@@ -129,6 +129,7 @@ fn create_codes(
                 description: Some(c.description.clone()),
                 parent_id: parent_id.map(str::to_string),
                 shortcut: None,
+                ..Default::default()
             },
         )?;
         out.insert(c.key.clone(), code.id.clone());

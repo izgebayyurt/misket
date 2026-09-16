@@ -26,6 +26,8 @@ const GROUPS: { title: string; actions: Action[] }[] = [
     title: "Coding",
     actions: [
       "palette",
+      "inVivoCode",
+      "quickCode",
       "editExcerpt",
       "deleteExcerpt",
       "extendSelectionLeft",

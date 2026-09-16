@@ -4,9 +4,11 @@ import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { useWorkspace } from "@/state/workspace";
 import { useCodes, useCodeTree, useCreateCode } from "@/queries/codes";
 import { useAddExcerptCodes, useApplyCodes } from "@/queries/excerpts";
-import { flattenTree, pathOf } from "@/core/codeTree";
+import { flattenTree, inVivoName, pathOf } from "@/core/codeTree";
 import { ColorDot } from "@/components/codebook/ColorSwatch";
 import { toast } from "@/state/toasts";
+import { useDocument } from "@/queries/documents";
+import { cpToUtf16, buildOffsetMap } from "@/core/offsets";
 import { useDocumentExcerpts } from "@/queries/excerpts";
 
 /**
@@ -54,6 +56,26 @@ function PaletteBody({ close }: { close: () => void }) {
   const addCodes = useAddExcerptCodes();
   const createCode = useCreateCode();
   const [query, setQuery] = useState("");
+  const { data: doc } = useDocument(pending?.kind === "text" ? pending.documentId : null);
+
+  /** The selected words, ready to be a code name (empty when there are none). */
+  const selectionName = useMemo(() => {
+    if (pending?.kind !== "text" || !doc?.text) return "";
+    const map = buildOffsetMap(doc.text);
+    return inVivoName(doc.text.slice(cpToUtf16(map, pending.start), cpToUtf16(map, pending.end)));
+  }, [pending, doc]);
+
+  /**
+   * In vivo from the palette: typing ">" with a text selection fills the name
+   * in from the selected words, so the common case is one keystroke and the
+   * rare case is still an ordinary editable field. Only the transition into
+   * ">" expands; editing what follows it is left alone, and deleting back to
+   * ">" does not re-expand.
+   */
+  function onQueryChange(next: string) {
+    if (next === ">" && !query.startsWith(">") && selectionName) setQuery(`>${selectionName}`);
+    else setQuery(next);
+  }
 
   const focused = focusedId && !picker ? excerpts?.find((e) => e.id === focusedId) : undefined;
   const target = picker
@@ -134,7 +156,7 @@ function PaletteBody({ close }: { close: () => void }) {
         <Command.Input
           autoFocus
           value={query}
-          onValueChange={setQuery}
+          onValueChange={onQueryChange}
           placeholder="Type a code name, or >new code"
           className="h-11 flex-1 bg-transparent text-sm outline-none placeholder:text-fg-muted"
           data-testid="palette-input"
@@ -180,6 +202,9 @@ function PaletteBody({ close }: { close: () => void }) {
                         </span>
                       ) : null}
                     </span>
+                    {/* The description only, on one line: the inclusion and
+                        exclusion rules belong in the code dialog and the
+                        right-hand panel, not in a list you scan mid-coding. */}
                     {n.code.description ? (
                       <span className="block truncate text-xs text-fg-muted">
                         {n.code.description}
@@ -201,7 +226,7 @@ function PaletteBody({ close }: { close: () => void }) {
       <div className="flex gap-3 border-t border-border px-3 py-1.5 text-[11px] text-fg-muted">
         <span>↵ {picker ? "pick" : "apply"}</span>
         <span>⇧↵ {picker ? "pick" : "apply"} and keep open</span>
-        <span>&gt;name creates</span>
+        <span>{selectionName ? "> names a code after the selection" : ">name creates"}</span>
         <span>esc close</span>
       </div>
     </Command>

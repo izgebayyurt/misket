@@ -21,15 +21,29 @@ keyboard-friendly interface without a subscription.
   whitespace, Misket offers to tidy it up before import (document text is
   immutable once imported). Check "Remember my choice" in that dialog to skip
   it on future imports; its "Ask again on import" link resets that.
-- **Build a codebook**: nested codes with colors, descriptions, single-key
-  hotkeys, drag-and-drop reordering, merge and delete with impact preview, and
+- **Build a codebook**: nested codes with colors, single-key hotkeys,
+  drag-and-drop reordering, merge and delete with impact preview, and
   "Move excerpts to…" to hand one code's excerpts to another without losing
-  either code. Import a codebook (JSON or CSV) exported from another Misket
+  either code. **Roll up** a sub-code into its parent — or every sub-code at
+  once — from the code's menu, with a checkbox for deleting the emptied codes
+  afterwards; leave it off and the whole roll-up is undoable. Import a codebook (JSON or CSV) exported from another Misket
   project to reuse it: merge it into the current codebook by matching code
   names, or add it fresh under a chosen code.
+- **Define codes properly**: each code has a description (what it means), an
+  "Include when" and an "Exclude when" rule, and one excerpt pinned as its
+  canonical example — press the star next to a code in the excerpt popover or
+  inspector. The whole definition, example quote included, sits in the right
+  panel whenever the code is selected; the palette shows only the description,
+  so it stays scannable while you code. Definitions travel with the codebook
+  export and import.
 - **Code excerpts**: select text, press `Ctrl`/`⌘`+`K` and pick a code (type
   `>name` to create one on the spot), or press a code's hotkey. The picker
   shows each code's description and, for nested codes, its full path.
+  `Ctrl`/`⌘`+`.` repeats whichever code you applied last — the status bar
+  names it, so the key is never a guess. `Ctrl`/`⌘`+`Shift`+`I` codes
+  **in vivo**: it names a new code after the selected words (under the code
+  selected in the tree, if any) and applies it in one undoable step; typing
+  `>` in the palette with a selection fills the same name in, still editable.
   Overlapping excerpts are drawn as stacked colored lanes.
 - **Code image regions**: an image opens in a pan-and-zoom viewer (scroll to
   zoom, `Alt`-drag to pan, `0` to fit). Drag a rectangle over it and code it
@@ -46,6 +60,12 @@ keyboard-friendly interface without a subscription.
   character from the keyboard, drag the grips at either end, split an excerpt
   at the cursor, or merge it with a touching neighbour (codes and memos are
   combined). All of it is undoable.
+- **Push down later**: code to the parent while reading, then pick "Review
+  excerpts…" on that code to work through its _own_ excerpts (not its
+  sub-codes') with a review bar pinned above the list. Click a row, press a
+  sub-code button or its number key, and the excerpt moves from the parent to
+  that sub-code and the focus advances — one undoable step each, with a
+  "New child…" button for the sub-code you did not know you needed yet.
 - **Browse excerpts** across the project, filtered by code (with sub-codes),
   document, or uncoded only, and jump back to any of them in context.
   Tick the checkboxes (`Shift`+click for a range, or "Select all N loaded") to
@@ -110,6 +130,8 @@ keyboard-friendly interface without a subscription.
 | ------------------------------------------------------ | --------------------------------------------- |
 | Code the selection / add a code to the focused excerpt | `Ctrl`/`⌘` + `K`                              |
 | Apply a code directly                                  | its hotkey (set in the code's settings)       |
+| In vivo code: name a code after the selected words     | `Ctrl`/`⌘` + `Shift` + `I`                    |
+| Apply the last code used again (quick code)            | `Ctrl`/`⌘` + `.`                              |
 | Fit / zoom an image                                    | `0` / `+` / `-`                               |
 | Next / previous excerpt                                | `Tab` / `Shift`+`Tab`                         |
 | Jump to the top / bottom of the document               | `Ctrl`/`⌘` + `Home` / `End`                   |

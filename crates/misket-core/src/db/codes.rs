@@ -13,7 +13,8 @@ pub const PALETTE: [&str; 12] = [
     "#4A6FA5", "#8AA63B", "#B05C8A", "#6C757D",
 ];
 
-const COLUMNS: &str = "c.id, c.parent_id, c.name, c.color, c.description, c.shortcut, c.sort_order,
+const COLUMNS: &str = "c.id, c.parent_id, c.name, c.color, c.description,
+     c.inclusion, c.exclusion, c.example_excerpt_id, c.shortcut, c.sort_order,
      (SELECT count(*) FROM excerpt_codes ec WHERE ec.code_id = c.id) AS excerpt_count,
      c.created_at, c.updated_at";
 
@@ -24,11 +25,14 @@ fn from_row(r: &Row) -> rusqlite::Result<Code> {
         name: r.get(2)?,
         color: r.get(3)?,
         description: r.get(4)?,
-        shortcut: r.get(5)?,
-        sort_order: r.get(6)?,
-        excerpt_count: r.get(7)?,
-        created_at: r.get(8)?,
-        updated_at: r.get(9)?,
+        inclusion: r.get(5)?,
+        exclusion: r.get(6)?,
+        example_excerpt_id: r.get(7)?,
+        shortcut: r.get(8)?,
+        sort_order: r.get(9)?,
+        excerpt_count: r.get(10)?,
+        created_at: r.get(11)?,
+        updated_at: r.get(12)?,
     })
 }
 
@@ -117,6 +121,26 @@ fn ensure_exists(conn: &Connection, id: &str) -> Result<()> {
     get(conn, id).map(|_| ())
 }
 
+/// An example excerpt has to be a real excerpt; anything else is a `NotFound`
+/// rather than a dangling pointer the UI would have to explain later.
+fn validate_example(conn: &Connection, excerpt_id: Option<&str>) -> Result<Option<String>> {
+    match excerpt_id.map(str::trim).filter(|s| !s.is_empty()) {
+        None => Ok(None),
+        Some(id) => {
+            let exists: bool = conn.query_row(
+                "SELECT EXISTS (SELECT 1 FROM excerpts WHERE id = ?1)",
+                [id],
+                |r| r.get(0),
+            )?;
+            if exists {
+                Ok(Some(id.to_string()))
+            } else {
+                Err(AppError::NotFound(format!("excerpt {id} not found")))
+            }
+        }
+    }
+}
+
 pub fn create(conn: &Connection, input: NewCode) -> Result<Code> {
     let name = validate_name(&input.name)?;
     if let Some(p) = &input.parent_id {
@@ -137,14 +161,17 @@ pub fn create(conn: &Connection, input: NewCode) -> Result<Code> {
     let now = util::now();
     let sort_order = next_sort_order(conn, input.parent_id.as_deref())?;
     conn.execute(
-        "INSERT INTO codes (id, parent_id, name, color, description, shortcut, sort_order, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8)",
+        "INSERT INTO codes (id, parent_id, name, color, description, inclusion, exclusion,
+                            shortcut, sort_order, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?10)",
         params![
             id,
             input.parent_id,
             name,
             color,
             input.description.unwrap_or_default(),
+            input.inclusion.unwrap_or_default(),
+            input.exclusion.unwrap_or_default(),
             shortcut,
             sort_order,
             now
@@ -184,13 +211,31 @@ pub fn update(conn: &Connection, id: &str, patch: CodePatch) -> Result<Code> {
         None => current.color.clone(),
     };
     let description = patch.description.unwrap_or(current.description.clone());
+    let inclusion = patch.inclusion.unwrap_or(current.inclusion.clone());
+    let exclusion = patch.exclusion.unwrap_or(current.exclusion.clone());
     let shortcut = match patch.shortcut {
         Some(s) => validate_shortcut(s.as_deref())?,
         None => current.shortcut.clone(),
     };
+    let example_excerpt_id = match patch.example_excerpt_id {
+        Some(e) => validate_example(conn, e.as_deref())?,
+        None => current.example_excerpt_id.clone(),
+    };
     conn.execute(
-        "UPDATE codes SET name = ?2, color = ?3, description = ?4, shortcut = ?5, updated_at = ?6 WHERE id = ?1",
-        params![id, name, color, description, shortcut, util::now()],
+        "UPDATE codes SET name = ?2, color = ?3, description = ?4, inclusion = ?5, exclusion = ?6,
+                          shortcut = ?7, example_excerpt_id = ?8, updated_at = ?9
+         WHERE id = ?1",
+        params![
+            id,
+            name,
+            color,
+            description,
+            inclusion,
+            exclusion,
+            shortcut,
+            example_excerpt_id,
+            util::now()
+        ],
     )
     .map_err(|e| map_unique(e, &name, shortcut.as_deref()))?;
     let updated = get(conn, id)?;
@@ -225,11 +270,35 @@ fn log_update(conn: &Connection, before: &Code, after: &Code) -> Result<()> {
             activity::change(before.color.clone(), after.color.clone()),
         );
     }
+    if before.inclusion != after.inclusion {
+        fields.push("inclusion");
+        detail.insert(
+            "inclusion".into(),
+            activity::change(before.inclusion.clone(), after.inclusion.clone()),
+        );
+    }
+    if before.exclusion != after.exclusion {
+        fields.push("exclusion");
+        detail.insert(
+            "exclusion".into(),
+            activity::change(before.exclusion.clone(), after.exclusion.clone()),
+        );
+    }
     if before.shortcut != after.shortcut {
         fields.push("shortcut");
         detail.insert(
             "shortcut".into(),
             activity::change(before.shortcut.clone(), after.shortcut.clone()),
+        );
+    }
+    if before.example_excerpt_id != after.example_excerpt_id {
+        fields.push("example");
+        detail.insert(
+            "example".into(),
+            activity::change(
+                before.example_excerpt_id.clone(),
+                after.example_excerpt_id.clone(),
+            ),
         );
     }
     if fields.is_empty() {
@@ -692,6 +761,112 @@ pub(crate) mod tests {
         assert!(matches!(get(&p.conn, &c.id), Err(AppError::NotFound(_))));
         assert_eq!(get(&p.conn, &z.id).unwrap().sort_order, 0);
         assert_eq!(list(&p.conn).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn definition_fields_default_empty_and_round_trip() {
+        let p = OpenProject::in_memory("t").unwrap();
+        let a = create(
+            &p.conn,
+            NewCode {
+                name: "Trust".into(),
+                description: Some("Talk about trusting the service".into()),
+                inclusion: Some("Named trust, reliance or confidence".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(a.description, "Talk about trusting the service");
+        assert_eq!(a.inclusion, "Named trust, reliance or confidence");
+        assert_eq!(a.exclusion, "");
+        assert_eq!(a.example_excerpt_id, None);
+
+        // A bare code starts with both rules empty.
+        let b = mk(&p.conn, "Other", None);
+        assert_eq!((b.inclusion.as_str(), b.exclusion.as_str()), ("", ""));
+
+        let a = update(
+            &p.conn,
+            &a.id,
+            CodePatch {
+                exclusion: Some("Mere satisfaction; use Satisfaction".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(a.exclusion, "Mere satisfaction; use Satisfaction");
+        // A patch that touches nothing else leaves inclusion alone.
+        assert_eq!(a.inclusion, "Named trust, reliance or confidence");
+    }
+
+    #[test]
+    fn example_excerpt_must_exist_and_clears_with_null() {
+        let p = OpenProject::in_memory("t").unwrap();
+        let doc = crate::db::documents::create(
+            &p.conn,
+            crate::db::documents::tests::new_doc("hello there friend"),
+        )
+        .unwrap()
+        .summary
+        .id;
+        let code = mk(&p.conn, "Greeting", None);
+        let excerpt = crate::db::excerpts::apply_codes(
+            &p.conn,
+            crate::models::ApplyCodesInput {
+                document_id: doc,
+                start_pos: Some(0),
+                end_pos: Some(5),
+                code_ids: vec![code.id.clone()],
+                ..Default::default()
+            },
+        )
+        .unwrap()
+        .excerpt
+        .id;
+
+        assert!(matches!(
+            update(
+                &p.conn,
+                &code.id,
+                CodePatch {
+                    example_excerpt_id: Some(Some("nope".into())),
+                    ..Default::default()
+                }
+            ),
+            Err(AppError::NotFound(_))
+        ));
+        let code = update(
+            &p.conn,
+            &code.id,
+            CodePatch {
+                example_excerpt_id: Some(Some(excerpt.clone())),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(code.example_excerpt_id.as_deref(), Some(excerpt.as_str()));
+        // An unrelated patch leaves the example in place.
+        let code = update(
+            &p.conn,
+            &code.id,
+            CodePatch {
+                description: Some("Saying hello".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(code.example_excerpt_id.as_deref(), Some(excerpt.as_str()));
+        // Explicit null clears it.
+        let code = update(
+            &p.conn,
+            &code.id,
+            CodePatch {
+                example_excerpt_id: Some(None),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(code.example_excerpt_id, None);
     }
 
     #[test]

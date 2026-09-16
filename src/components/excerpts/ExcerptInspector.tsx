@@ -3,6 +3,7 @@ import { useExcerptDetail, useRemoveExcerptCode } from "@/queries/excerpts";
 import { useCodeTree } from "@/queries/codes";
 import { pathOf } from "@/core/codeTree";
 import { ColorDot } from "@/components/codebook/ColorSwatch";
+import { UseAsExampleButton } from "@/components/codebook/UseAsExampleButton";
 import { Button } from "@/components/ui/button";
 import { MemoList } from "@/components/memos/MemoList";
 import { ExcerptHistory } from "@/components/activity/HistoryTimeline";
@@ -63,6 +64,7 @@ export function ExcerptInspector({ excerptId }: { excerptId: string }) {
             >
               <ColorDot color={tree.byId.get(id)?.code.color ?? "#999"} />
               <span className="min-w-0 flex-1 truncate">{pathOf(tree, id)}</span>
+              <UseAsExampleButton codeId={id} excerptId={detail.id} />
               <button
                 className="rounded p-0.5 text-fg-muted opacity-0 hover:bg-border group-hover:opacity-100"
                 aria-label="Remove code"

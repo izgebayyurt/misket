@@ -6,6 +6,7 @@ import { useCodeTree } from "@/queries/codes";
 import { useRemoveExcerptCode } from "@/queries/excerpts";
 import { pathOf } from "@/core/codeTree";
 import { ColorDot } from "@/components/codebook/ColorSwatch";
+import { UseAsExampleButton } from "@/components/codebook/UseAsExampleButton";
 import { describe } from "@/core/keymap";
 import { useWorkspace } from "@/state/workspace";
 import { toast } from "@/state/toasts";
@@ -73,6 +74,7 @@ export function ExcerptPopover({
               <span className="min-w-0 flex-1 truncate">
                 {pathOf(tree, id) || "(deleted code)"}
               </span>
+              <UseAsExampleButton codeId={id} excerptId={excerpt.id} />
               <button
                 className="rounded p-0.5 text-fg-muted opacity-0 hover:bg-border group-hover:opacity-100"
                 aria-label="Remove code"

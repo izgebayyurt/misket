@@ -15,7 +15,7 @@ stays a single file that can be copied while open), `synchronous = NORMAL`.
 | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `project_meta`       | key/value: `schema_version`, `project_id`, `name`, `created_at`, `created_with_app_version`                                                                                                                                                                                   |
 | `documents`          | imported sources. `kind` is `text` or `image` (`video` later). `text` is immutable and NULL for media; `text_length` is the code point count; `media_json` holds `{width,height,mime}`; `content_hash` de-duplicates imports                                                  |
-| `codes`              | the codebook tree: adjacency list (`parent_id`) with `sort_order` among siblings, `color`, optional single-key `shortcut`. Sibling names are unique case-insensitively                                                                                                        |
+| `codes`              | the codebook tree: adjacency list (`parent_id`) with `sort_order` among siblings, `color`, optional single-key `shortcut`, and the definition fields `description`, `inclusion`, `exclusion` and `example_excerpt_id`. Sibling names are unique case-insensitively            |
 | `excerpts`           | coded ranges. `kind` = `text` (code point `start_pos`/`end_pos`), `video_range` (milliseconds) or `image_region` (`geometry` JSON `{x,y,w,h}` normalized 0..1). `snapshot` stores the excerpted text or a description of the region. One excerpt per exact range or rectangle |
 | `excerpt_codes`      | many-to-many between excerpts and codes                                                                                                                                                                                                                                       |
 | `media_blobs`        | the bytes of an image document, with their MIME type, one row per document. Deleting the document drops them                                                                                                                                                                  |
@@ -68,6 +68,31 @@ region 12%×8% at (30%, 40%)
 
 The excerpt context (`contextBefore` / `contextAfter`) is empty for image
 excerpts.
+
+## Code definitions
+
+A code carries three pieces of prose plus one pointer (schema 5):
+
+| Column               | Holds                                                       |
+| -------------------- | ----------------------------------------------------------- |
+| `description`        | what the code means                                         |
+| `inclusion`          | when to apply it                                            |
+| `exclusion`          | when not to, and what to use instead                        |
+| `example_excerpt_id` | one already-coded excerpt held up as the canonical instance |
+
+`inclusion` and `exclusion` are `TEXT NOT NULL DEFAULT ''`, so every existing
+code migrates with both rules empty and nothing has to be back-filled.
+`example_excerpt_id` is a real foreign key with `ON DELETE SET NULL`: deleting
+the excerpt someone picked as an example clears the pointer and leaves the
+code (and its other excerpts) untouched. `codes::update` validates the id
+against `excerpts` first, so a dangling pointer is a `NotFound` at write time
+rather than a blank panel later. The patch uses a double option, so
+`{"exampleExcerptId": null}` clears it and omitting the field leaves it alone
+— the same convention as `shortcut`.
+
+Only `description` is shown in the code palette, which has to stay scannable
+while coding; the full definition lives in the code dialog and in the memo
+panel, next to a quote of the example excerpt's snapshot.
 
 ## Descriptors
 
@@ -411,9 +436,11 @@ trailing zeros trimmed, so `…:00Z` sorts _after_ `…:00.5Z` as a string.
 
 ## Exports
 
-- Codebook CSV: `id, path, name, parent_id, color, description, shortcut, excerpt_count`
-- Codebook JSON: `{ format: "misket-codebook", version: 1, codes: [{ id, parentId, name, color, description, shortcut, sortOrder }] }`,
-  codes listed parents-before-children (depth-first in path order, like the CSV)
+- Codebook CSV: `id, path, name, parent_id, color, description, inclusion, exclusion, shortcut, excerpt_count`
+- Codebook JSON: `{ format: "misket-codebook", version: 1, codes: [{ id, parentId, name, color, description, inclusion, exclusion, shortcut, sortOrder }] }`,
+  codes listed parents-before-children (depth-first in path order, like the CSV).
+  `example_excerpt_id` is deliberately left out of both: it points at an
+  excerpt that does not exist in the importing project
 - Excerpts CSV: `excerpt_id, document, start, end, geometry, text, codes, memo_count, created_at`
   (codes are full paths separated by `; `), then one column per descriptor
   field, named after the field, holding the excerpt's document's value.
@@ -433,14 +460,17 @@ trailing zeros trimmed, so `…:00Z` sorts _after_ `…:00.5Z` as a string.
 
 `db::codebook_import::import_codebook` (`crates/misket-core/src/db/codebook_import.rs`)
 reads either a codebook JSON export or CSV with header
-`name, parent, color, description, shortcut` (`parent` is a full path with
-`/` separators, matching the CSV export above), reducing both to a flat
-list of full name paths. One transaction:
+`name, parent, color, description, inclusion, exclusion, shortcut` (`parent`
+is a full path with `/` separators, matching the CSV export above), reducing
+both to a flat list of full name paths. The pre-schema-5 header
+`name, parent, color, description, shortcut` is still accepted and imports
+with both rules empty, and JSON entries missing `inclusion`/`exclusion`
+default to empty strings. One transaction:
 
 - `merge` matches existing codes by full path, case-insensitively. A matched
-  code only gets its `description`/`color`/`shortcut` filled in where they
-  are empty — never overwritten. Codes with no match are created under the
-  matched parent (or at the root).
+  code only gets its `description`/`inclusion`/`exclusion`/`color`/`shortcut`
+  filled in where they are empty — never overwritten. Codes with no match are
+  created under the matched parent (or at the root).
 - `add-under` grafts every imported code fresh under a given parent (or the
   root), without matching against the existing codebook at all.
 

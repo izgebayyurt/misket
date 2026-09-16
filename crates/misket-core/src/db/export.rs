@@ -79,6 +79,8 @@ pub fn codebook_csv<W: Write>(conn: &Connection, w: W) -> Result<()> {
         "parent_id",
         "color",
         "description",
+        "inclusion",
+        "exclusion",
         "shortcut",
         "excerpt_count",
     ])?;
@@ -93,6 +95,8 @@ pub fn codebook_csv<W: Write>(conn: &Connection, w: W) -> Result<()> {
             c.parent_id.as_deref().unwrap_or(""),
             c.color.as_str(),
             c.description.as_str(),
+            c.inclusion.as_str(),
+            c.exclusion.as_str(),
             c.shortcut.as_deref().unwrap_or(""),
             &c.excerpt_count.to_string(),
         ])?;
@@ -127,6 +131,8 @@ pub fn codebook_json<W: Write>(conn: &Connection, w: W) -> Result<()> {
                 name: c.name,
                 color: c.color,
                 description: c.description,
+                inclusion: c.inclusion,
+                exclusion: c.exclusion,
                 shortcut: c.shortcut,
                 sort_order: c.sort_order,
             })
@@ -371,7 +377,7 @@ mod tests {
         let lines: Vec<_> = s.lines().collect();
         assert_eq!(
             lines[0],
-            "id,path,name,parent_id,color,description,shortcut,excerpt_count"
+            "id,path,name,parent_id,color,description,inclusion,exclusion,shortcut,excerpt_count"
         );
         assert!(lines[1].contains(",Greeting,Greeting,,#"));
         assert!(lines[2].contains("\"Greeting / Formal, sort of\",\"Formal, sort of\","));

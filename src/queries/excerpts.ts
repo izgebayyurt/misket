@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as api from "@/api/excerpts";
+import * as codesApi from "@/api/codes";
 import type {
   ApplyCodesInput,
   AutoCodeHit,
@@ -11,6 +12,7 @@ import type {
   RetagReport,
 } from "@/api/types";
 import { keys } from "./keys";
+import { useInvalidateCodes } from "./codes";
 import { useUndoStore } from "@/state/undoStore";
 import { useWorkspace } from "@/state/workspace";
 
@@ -53,12 +55,24 @@ export function useInvalidateExcerpts() {
   };
 }
 
+/**
+ * Remember what was just coded, so the quick-code shortcut and the status bar
+ * always mean the last code the user actually applied — whichever path they
+ * used. Every apply funnels through one of the mutations below, so this is the
+ * one place that has to know.
+ */
+function rememberApplied(codeIds: string[]) {
+  const last = codeIds[codeIds.length - 1];
+  if (last) useWorkspace.getState().setLastAppliedCodeId(last);
+}
+
 /** Apply codes to a range (creating the excerpt if needed). Undo removes what was added. */
 export function useApplyCodes() {
   const invalidate = useInvalidateExcerpts();
   return useMutation({
     mutationFn: async (input: ApplyCodesInput) => {
       const first = await api.applyCodes(input);
+      rememberApplied(input.codeIds);
       let excerptId = first.excerpt.id;
       let created = first.created;
       let added = first.addedCodeIds;
@@ -98,6 +112,81 @@ export function useApplyCodes() {
   });
 }
 
+/**
+ * In vivo coding: create a code named after the selected text and apply it to
+ * that selection, as one entry on the undo stack. Two commands would let a
+ * single undo leave a stray empty code behind, which is exactly the mess this
+ * shortcut exists to avoid.
+ *
+ * A redo after an undo creates the code again, so it gets a fresh id — the
+ * same trade-off `useCreateCode` already makes.
+ */
+export function useInVivoCode() {
+  const invalidate = useInvalidateExcerpts();
+  const invalidateCodes = useInvalidateCodes();
+  return useMutation({
+    mutationFn: async ({
+      documentId,
+      startPos,
+      endPos,
+      name,
+      parentId,
+    }: {
+      documentId: string;
+      startPos: number;
+      endPos: number;
+      /** Already collapsed, capped and made unique among its siblings. */
+      name: string;
+      parentId: string | null;
+    }) => {
+      let codeId = "";
+      let excerptId = "";
+      let createdExcerpt = false;
+      let added: string[] = [];
+      await useUndoStore.getState().run({
+        label: `In vivo code "${name}"`,
+        redo: async () => {
+          const code = await codesApi.createCode({ name, parentId });
+          codeId = code.id;
+          const r = await api.applyCodes({
+            documentId,
+            startPos,
+            endPos,
+            codeIds: [codeId],
+          });
+          excerptId = r.excerpt.id;
+          createdExcerpt = r.created;
+          added = r.addedCodeIds;
+          rememberApplied([codeId]);
+          invalidate(documentId, excerptId);
+          invalidateCodes();
+        },
+        undo: async () => {
+          if (createdExcerpt) {
+            // The excerpt was created by this command, so it can carry no
+            // memos of its own; a redo re-applies and recreates it.
+            await api.deleteExcerpt(excerptId);
+            const ws = useWorkspace.getState();
+            if (ws.focusedExcerptId === excerptId) ws.setFocusedExcerptId(null);
+          } else {
+            for (const c of added) await api.removeExcerptCode(excerptId, c);
+          }
+          // Safe to delete outright: the code was created a moment ago and
+          // has just lost its only excerpt.
+          await codesApi.deleteCode(codeId, "delete");
+          const ws = useWorkspace.getState();
+          if (ws.lastAppliedCodeId === codeId) ws.setLastAppliedCodeId(null);
+          if (ws.selectedCodeId === codeId) ws.setSelectedCodeId(null);
+          codeId = "";
+          invalidate(documentId, excerptId);
+          invalidateCodes();
+        },
+      });
+      return { codeId, excerptId };
+    },
+  });
+}
+
 export function useAddExcerptCodes() {
   const invalidate = useInvalidateExcerpts();
   return useMutation({
@@ -113,6 +202,7 @@ export function useAddExcerptCodes() {
       const before = await api.getExcerpt(id);
       const added = codeIds.filter((c) => !before.codeIds.includes(c));
       if (added.length === 0) return;
+      rememberApplied(added);
       await useUndoStore.getState().run({
         label: "Add code to excerpt",
         redo: async () => {
@@ -277,6 +367,7 @@ export function useAddCodesToExcerpts() {
     }) => {
       let pairs: ExcerptCodePair[] = [];
       let affected = 0;
+      rememberApplied(codeIds);
       await useUndoStore.getState().run({
         label: label ?? `Add ${plural(codeIds.length, "code")} to ${plural(ids.length, "excerpt")}`,
         redo: async () => {
@@ -437,6 +528,123 @@ export function useRemoveCodesFromExcerpts() {
         },
       });
       return affected;
+    },
+  });
+}
+
+/**
+ * Push one excerpt down from a parent code to one of its children: it loses
+ * the parent and gains the child, as a single undoable step. This is the
+ * "code to the parent now, refine later" loop, so it has to be cheap to do
+ * and cheap to take back.
+ */
+export function usePushDownExcerpt() {
+  const invalidate = useInvalidateExcerpts();
+  return useMutation({
+    mutationFn: async ({
+      excerptId,
+      fromCodeId,
+      toCodeId,
+      label,
+    }: {
+      excerptId: string;
+      fromCodeId: string;
+      toCodeId: string;
+      label: string;
+    }) => {
+      let removed: ExcerptCodePair[] = [];
+      let added: ExcerptCodePair[] = [];
+      await useUndoStore.getState().run({
+        label,
+        redo: async () => {
+          removed = (await api.removeCodesFromExcerpts([excerptId], [fromCodeId])).pairs;
+          added = (await api.addCodesToExcerpts([excerptId], [toCodeId])).pairs;
+          rememberApplied([toCodeId]);
+          invalidate(undefined, excerptId);
+        },
+        undo: async () => {
+          // Only undo what actually changed: an excerpt that already carried
+          // the child must not lose it here.
+          if (added.length) await api.removeCodesFromExcerpts([excerptId], [toCodeId]);
+          if (removed.length) await api.addCodesToExcerpts([excerptId], [fromCodeId]);
+          invalidate(undefined, excerptId);
+        },
+      });
+    },
+  });
+}
+
+/**
+ * Roll sub-codes up into their parent: every excerpt tagged with a child gets
+ * the parent instead, optionally followed by deleting the emptied children.
+ *
+ * Keeping the children is undoable — it is `retag_code` per child, and the
+ * inverse is the same bookkeeping `useRetagCode` does, replayed in reverse so
+ * that an excerpt two children shared ends up back with both. Deleting them
+ * is not: like every other code delete, the caller confirms first and the
+ * stack is cleared.
+ */
+export function useRollUpCodes() {
+  const invalidate = useInvalidateExcerpts();
+  const invalidateCodes = useInvalidateCodes();
+  return useMutation({
+    mutationFn: async ({
+      parentId,
+      childIds,
+      deleteEmptied,
+      label,
+    }: {
+      parentId: string;
+      childIds: string[];
+      deleteEmptied: boolean;
+      label: string;
+    }) => {
+      const retagAll = async () => {
+        const reports: [string, RetagReport][] = [];
+        for (const childId of childIds)
+          reports.push([childId, await api.retagCode(childId, parentId)]);
+        return reports;
+      };
+      const countMoved = (reports: [string, RetagReport][]) =>
+        reports.reduce((n, [, r]) => n + r.moved.length + r.alreadyHad.length, 0);
+
+      if (deleteEmptied) {
+        const reports = await retagAll();
+        // `promote` so a rolled-up code's own sub-codes survive, moving up to
+        // the parent rather than disappearing with it.
+        for (const childId of childIds) await codesApi.deleteCode(childId, "promote");
+        useUndoStore.getState().clear();
+        const ws = useWorkspace.getState();
+        if (ws.selectedCodeId && childIds.includes(ws.selectedCodeId))
+          ws.setSelectedCodeId(parentId);
+        if (ws.lastAppliedCodeId && childIds.includes(ws.lastAppliedCodeId))
+          ws.setLastAppliedCodeId(parentId);
+        invalidate();
+        invalidateCodes();
+        return countMoved(reports);
+      }
+
+      let reports: [string, RetagReport][] = [];
+      await useUndoStore.getState().run({
+        label,
+        redo: async () => {
+          reports = await retagAll();
+          invalidate();
+          invalidateCodes();
+        },
+        undo: async () => {
+          // Reverse order, so an excerpt that two children shared gets each
+          // of them back before the parent tag is taken away again.
+          for (const [childId, r] of [...reports].reverse()) {
+            const all = [...r.moved, ...r.alreadyHad];
+            if (all.length) await api.addCodesToExcerpts(all, [childId]);
+            if (r.moved.length) await api.removeCodesFromExcerpts(r.moved, [parentId]);
+          }
+          invalidate();
+          invalidateCodes();
+        },
+      });
+      return countMoved(reports);
     },
   });
 }

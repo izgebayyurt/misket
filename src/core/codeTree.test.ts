@@ -1,6 +1,17 @@
 import { describe, expect, it } from "vitest";
 import type { Code } from "@/api/types";
-import { buildCodeTree, descendantIds, flattenTree, nextColor, PALETTE, pathOf } from "./codeTree";
+import {
+  buildCodeTree,
+  descendantIds,
+  flattenTree,
+  IN_VIVO_NAME_MAX,
+  inVivoName,
+  nextColor,
+  PALETTE,
+  pathOf,
+  siblingNames,
+  uniqueSiblingName,
+} from "./codeTree";
 
 const mk = (id: string, parentId: string | null, sortOrder: number, color = "#000000"): Code => ({
   id,
@@ -8,6 +19,9 @@ const mk = (id: string, parentId: string | null, sortOrder: number, color = "#00
   name: id.toUpperCase(),
   color,
   description: "",
+  inclusion: "",
+  exclusion: "",
+  exampleExcerptId: null,
   shortcut: null,
   sortOrder,
   excerptCount: 0,
@@ -57,5 +71,38 @@ describe("codeTree", () => {
     expect(nextColor([mk("a", null, 0, PALETTE[0]!)])).toBe(PALETTE[1]);
     const all = PALETTE.map((c, i) => mk(String(i), null, i, c));
     expect(nextColor([...all, mk("z", null, 99, PALETTE[0]!)])).toBe(PALETTE[1]);
+  });
+});
+
+describe("in vivo names", () => {
+  it("collapses whitespace and trims", () => {
+    expect(inVivoName("  it just\n  feels   safer ")).toBe("it just feels safer");
+    expect(inVivoName("\n\t ")).toBe("");
+  });
+
+  it("caps the name without leaving a trailing space", () => {
+    const long = "word ".repeat(40);
+    const name = inVivoName(long);
+    expect(name.length).toBeLessThanOrEqual(IN_VIVO_NAME_MAX);
+    expect(name).toBe(name.trimEnd());
+    // A selection exactly at the limit is kept whole.
+    const exact = "x".repeat(IN_VIVO_NAME_MAX);
+    expect(inVivoName(exact)).toBe(exact);
+  });
+
+  it("de-duplicates against sibling names, case-insensitively", () => {
+    expect(uniqueSiblingName("Trust", [])).toBe("Trust");
+    expect(uniqueSiblingName("Trust", ["Doubt"])).toBe("Trust");
+    expect(uniqueSiblingName("Trust", ["trust"])).toBe("Trust (2)");
+    expect(uniqueSiblingName("Trust", ["Trust", "Trust (2)"])).toBe("Trust (3)");
+    // A gap is filled rather than skipped past.
+    expect(uniqueSiblingName("Trust", ["Trust", "Trust (3)"])).toBe("Trust (2)");
+  });
+
+  it("reads sibling names from the tree, root level included", () => {
+    const tree = buildCodeTree([mk("a", null, 0), mk("b", null, 1), mk("a1", "a", 0)]);
+    expect(siblingNames(tree, null)).toEqual(["A", "B"]);
+    expect(siblingNames(tree, "a")).toEqual(["A1"]);
+    expect(siblingNames(tree, "missing")).toEqual([]);
   });
 });

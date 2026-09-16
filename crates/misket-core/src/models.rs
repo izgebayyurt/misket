@@ -135,7 +135,15 @@ pub struct Code {
     pub parent_id: Option<String>,
     pub name: String,
     pub color: String,
+    /// What the code means.
     pub description: String,
+    /// When to apply it.
+    pub inclusion: String,
+    /// When not to apply it, and what to use instead.
+    pub exclusion: String,
+    /// One already-coded excerpt held up as the canonical instance. Deleting
+    /// that excerpt clears the pointer (`ON DELETE SET NULL`).
+    pub example_excerpt_id: Option<String>,
     pub shortcut: Option<String>,
     pub sort_order: i64,
     pub excerpt_count: i64,
@@ -152,13 +160,18 @@ pub struct NewCode {
     #[serde(default)]
     pub description: Option<String>,
     #[serde(default)]
+    pub inclusion: Option<String>,
+    #[serde(default)]
+    pub exclusion: Option<String>,
+    #[serde(default)]
     pub parent_id: Option<String>,
     #[serde(default)]
     pub shortcut: Option<String>,
 }
 
-/// Partial update. `shortcut` uses a double option so the frontend can clear
-/// it (`{"shortcut": null}`) or leave it untouched (field absent).
+/// Partial update. `shortcut` and `example_excerpt_id` use a double option so
+/// the frontend can clear them (`{"shortcut": null}`) or leave them untouched
+/// (field absent).
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct CodePatch {
@@ -168,8 +181,14 @@ pub struct CodePatch {
     pub color: Option<String>,
     #[serde(default)]
     pub description: Option<String>,
+    #[serde(default)]
+    pub inclusion: Option<String>,
+    #[serde(default)]
+    pub exclusion: Option<String>,
     #[serde(default, with = "double_option")]
     pub shortcut: Option<Option<String>>,
+    #[serde(default, with = "double_option")]
+    pub example_excerpt_id: Option<Option<String>>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
@@ -205,6 +224,11 @@ pub struct CodebookJsonCode {
     pub color: String,
     #[serde(default)]
     pub description: String,
+    /// Added in schema 5; absent in codebooks written by older builds.
+    #[serde(default)]
+    pub inclusion: String,
+    #[serde(default)]
+    pub exclusion: String,
     #[serde(default)]
     pub shortcut: Option<String>,
     #[serde(default)]
@@ -213,8 +237,10 @@ pub struct CodebookJsonCode {
 
 /// What `db::codebook_import::import_codebook` should read: either the
 /// parsed contents of a `misket-codebook` JSON file, or raw CSV text with
-/// header `name,parent,color,description,shortcut` (`parent` is a full path
-/// with ` / ` separators, the same convention as the codebook CSV export).
+/// header `name,parent,color,description,inclusion,exclusion,shortcut`
+/// (`parent` is a full path with ` / ` separators, the same convention as the
+/// codebook CSV export). The pre-schema-5 header without `inclusion,exclusion`
+/// is still accepted.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum CodebookImport {

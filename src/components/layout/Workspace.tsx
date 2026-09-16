@@ -46,9 +46,11 @@ export function Workspace({ project }: { project: ProjectInfo }) {
               scrollToOffset={view.scrollToOffset}
             />
           ) : view.kind === "excerpts" ? (
-            // Remount when the analysis views hand over a new filter, which
-            // the browser only reads on mount.
-            <ExcerptBrowser key={JSON.stringify(view.initialFilter ?? null)} />
+            // Remount when the analysis views hand over a new filter, or the
+            // codebook starts a review: the browser reads both only on mount.
+            <ExcerptBrowser
+              key={JSON.stringify([view.initialFilter ?? null, view.review ?? null])}
+            />
           ) : view.kind === "analysis" ? (
             <AnalysisView tab={view.tab} />
           ) : view.kind === "search" ? (
