@@ -131,6 +131,15 @@ itself never destructive). Use **Export > Save a copy as…** at any time for a
 manual snapshot. None of this replaces your own backup discipline for
 anything that matters.
 
+If you create or open a project inside a folder a cloud sync client manages
+(Dropbox, OneDrive, Google Drive, iCloud Drive, Box, Nextcloud, ownCloud,
+Syncthing, MEGA, pCloud…), Misket shows a dismissable banner: sync clients can
+rewrite a file out from under an open database and corrupt it, a documented
+failure mode in other QDA tools. Keep it there only if you close Misket before
+the folder syncs to another machine, or use the banner's **Move project…** to
+copy it to a local folder and switch to the copy (the original file is left in
+place, just in case).
+
 No project yet? Click "Try Misket with sample data" on the start screen for a
 ready-made study to explore.
 

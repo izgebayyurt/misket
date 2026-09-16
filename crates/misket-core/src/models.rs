@@ -10,6 +10,11 @@ pub struct ProjectInfo {
     pub project_id: String,
     pub schema_version: i64,
     pub counts: ProjectCounts,
+    /// Set when the project file lives inside a folder a cloud sync client
+    /// manages (Dropbox, OneDrive, iCloud Drive, ...); see `crate::sync`.
+    /// The message is ready to show as-is.
+    #[serde(default)]
+    pub sync_warning: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]

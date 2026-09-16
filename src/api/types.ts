@@ -16,6 +16,9 @@ export interface ProjectInfo {
   projectId: string;
   schemaVersion: number;
   counts: ProjectCounts;
+  /** Set when the project file lives inside a cloud-synced folder (Dropbox,
+   * OneDrive, iCloud Drive, ...); ready to show as-is. */
+  syncWarning: string | null;
 }
 
 export interface RecentProject {
