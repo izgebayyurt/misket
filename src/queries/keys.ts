@@ -23,6 +23,10 @@ export const keys = {
   coOccurrence: (documentIds: string[], documentSetIds: string[]) =>
     ["analysis", "cooccurrence", documentIds, documentSetIds] as const,
   codeByDocument: ["analysis", "codeByDocument"] as const,
+  /** The saved matrix configurations. */
+  frameworkMatrices: ["framework", "matrices"] as const,
+  /** One rendered grid. Under "analysis" so a coding change refetches it. */
+  frameworkMatrix: (id: string) => ["analysis", "framework", id] as const,
   memos: (target: MemoTarget) => ["memos", target] as const,
   allMemos: ["memos"] as const,
   sets: (kind: SetKind) => ["sets", kind] as const,

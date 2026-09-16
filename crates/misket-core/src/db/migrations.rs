@@ -10,6 +10,7 @@ const MIGRATIONS: &[(i64, &str)] = &[
     (3, include_str!("migrations/0003_media_blobs.sql")),
     (4, include_str!("migrations/0004_sets.sql")),
     (5, include_str!("migrations/0005_activity_log.sql")),
+    (6, include_str!("migrations/0006_framework.sql")),
 ];
 
 pub fn latest_version() -> i64 {
@@ -136,6 +137,48 @@ mod tests {
             )
             .unwrap();
         assert_eq!(n, 2);
+    }
+
+    #[test]
+    fn framework_tables_exist_at_the_latest_version() {
+        let conn = Connection::open_in_memory().unwrap();
+        migrate(&conn).unwrap();
+        let n: i64 = conn
+            .query_row(
+                "SELECT count(*) FROM sqlite_master WHERE type = 'table'
+                 AND name IN ('framework_matrices','framework_cells')",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(n, 2);
+        // Deleting a code takes its cells with it.
+        conn.execute_batch(
+            "INSERT INTO codes (id, name, color, sort_order, created_at, updated_at)
+               VALUES ('c', 'Access', '#112233', 0, 't', 't');
+             INSERT INTO framework_matrices (id, name, row_kind, created_at, updated_at)
+               VALUES ('m', 'Wave 1', 'document', 't', 't');
+             INSERT INTO framework_cells (matrix_id, row_key, code_id, summary, updated_at)
+               VALUES ('m', 'd', 'c', 'Said little about it.', 't');
+             DELETE FROM codes WHERE id = 'c';",
+        )
+        .unwrap();
+        let left: i64 = conn
+            .query_row("SELECT count(*) FROM framework_cells", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(left, 0);
+        // Deleting the matrix cascades to whatever cells are left.
+        conn.execute_batch(
+            "PRAGMA foreign_keys = ON;
+             INSERT INTO framework_cells (matrix_id, row_key, code_id, summary, updated_at)
+               VALUES ('m', 'd', 'gone', 'x', 't');
+             DELETE FROM framework_matrices WHERE id = 'm';",
+        )
+        .unwrap();
+        let left: i64 = conn
+            .query_row("SELECT count(*) FROM framework_cells", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(left, 0);
     }
 
     #[test]

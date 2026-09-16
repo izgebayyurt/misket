@@ -11,20 +11,22 @@ stays a single file that can be copied while open), `synchronous = NORMAL`.
 
 ## Tables
 
-| Table               | Purpose                                                                                                                                                                                                                                                                       |
-| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `project_meta`      | key/value: `schema_version`, `project_id`, `name`, `created_at`, `created_with_app_version`                                                                                                                                                                                   |
-| `documents`         | imported sources. `kind` is `text` or `image` (`video` later). `text` is immutable and NULL for media; `text_length` is the code point count; `media_json` holds `{width,height,mime}`; `content_hash` de-duplicates imports                                                  |
-| `codes`             | the codebook tree: adjacency list (`parent_id`) with `sort_order` among siblings, `color`, optional single-key `shortcut`. Sibling names are unique case-insensitively                                                                                                        |
-| `excerpts`          | coded ranges. `kind` = `text` (code point `start_pos`/`end_pos`), `video_range` (milliseconds) or `image_region` (`geometry` JSON `{x,y,w,h}` normalized 0..1). `snapshot` stores the excerpted text or a description of the region. One excerpt per exact range or rectangle |
-| `excerpt_codes`     | many-to-many between excerpts and codes                                                                                                                                                                                                                                       |
-| `media_blobs`       | the bytes of an image document, with their MIME type, one row per document. Deleting the document drops them                                                                                                                                                                  |
-| `memos`             | notes with at most one target: `document_id`, `code_id`, `excerpt_id`, or none (project memo). Each target is a real foreign key so deletes cascade                                                                                                                           |
-| `descriptor_fields` | document attributes ("Site", "Age group"). `kind` is `text`, `number`, `choice` or `date`; `options_json` holds a choice field's options as a JSON array of strings; `sort_order` is the order they are shown in. Names are unique case-insensitively                         |
-| `descriptor_values` | one value per (`document_id`, `field_id`), `WITHOUT ROWID`. Both foreign keys cascade, so deleting a document or a field takes its values with it                                                                                                                             |
-| `sets`              | named groups of codes or of documents. `kind` is `code` or `document`; names are unique per kind, case-insensitively, so "Round 1" can be both                                                                                                                                |
-| `set_members`       | `(set_id, member_id)`, `WITHOUT ROWID`. `member_id` is a code id or a document id depending on the set's kind, so it is not a foreign key; two triggers stand in for the cascade                                                                                              |
-| `saved_filters`     | a whole `ExcerptFilter` as JSON under a unique (case-insensitive) name                                                                                                                                                                                                        |
+| Table                | Purpose                                                                                                                                                                                                                                                                       |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `project_meta`       | key/value: `schema_version`, `project_id`, `name`, `created_at`, `created_with_app_version`                                                                                                                                                                                   |
+| `documents`          | imported sources. `kind` is `text` or `image` (`video` later). `text` is immutable and NULL for media; `text_length` is the code point count; `media_json` holds `{width,height,mime}`; `content_hash` de-duplicates imports                                                  |
+| `codes`              | the codebook tree: adjacency list (`parent_id`) with `sort_order` among siblings, `color`, optional single-key `shortcut`. Sibling names are unique case-insensitively                                                                                                        |
+| `excerpts`           | coded ranges. `kind` = `text` (code point `start_pos`/`end_pos`), `video_range` (milliseconds) or `image_region` (`geometry` JSON `{x,y,w,h}` normalized 0..1). `snapshot` stores the excerpted text or a description of the region. One excerpt per exact range or rectangle |
+| `excerpt_codes`      | many-to-many between excerpts and codes                                                                                                                                                                                                                                       |
+| `media_blobs`        | the bytes of an image document, with their MIME type, one row per document. Deleting the document drops them                                                                                                                                                                  |
+| `memos`              | notes with at most one target: `document_id`, `code_id`, `excerpt_id`, or none (project memo). Each target is a real foreign key so deletes cascade                                                                                                                           |
+| `descriptor_fields`  | document attributes ("Site", "Age group"). `kind` is `text`, `number`, `choice` or `date`; `options_json` holds a choice field's options as a JSON array of strings; `sort_order` is the order they are shown in. Names are unique case-insensitively                         |
+| `descriptor_values`  | one value per (`document_id`, `field_id`), `WITHOUT ROWID`. Both foreign keys cascade, so deleting a document or a field takes its values with it                                                                                                                             |
+| `sets`               | named groups of codes or of documents. `kind` is `code` or `document`; names are unique per kind, case-insensitively, so "Round 1" can be both                                                                                                                                |
+| `set_members`        | `(set_id, member_id)`, `WITHOUT ROWID`. `member_id` is a code id or a document id depending on the set's kind, so it is not a foreign key; two triggers stand in for the cascade                                                                                              |
+| `saved_filters`      | a whole `ExcerptFilter` as JSON under a unique (case-insensitive) name                                                                                                                                                                                                        |
+| `framework_matrices` | a saved framework matrix: its name, how to make its rows (`row_kind`, `row_field_id`, `row_set_id`) and where its columns come from (`code_set_id`, or `code_ids_json`). Names are unique case-insensitively                                                                  |
+| `framework_cells`    | the written summary for one (`matrix_id`, `row_key`, `code_id`), `WITHOUT ROWID`. `row_key` is a document id or a descriptor value; a trigger stands in for the missing `code_id` cascade                                                                                     |
 
 All ids are UUID v4 strings so deleted rows can be restored with their original
 identity (undo) and so exports are stable.
@@ -143,6 +145,65 @@ the "Sets" group in the analysis views' document picker behaves exactly like
 the excerpt browser's: a set that is picked but empty or unknown matches no
 document, not every document. `code_by_document` and the sets UI itself take
 no code filter, so there is no `code_set_ids` in the analysis views.
+
+## Framework matrices
+
+A framework matrix (Ritchie & Spencer; NVivo calls them "framework matrices")
+is a grid of **cases** by **themes** where every cell holds a short written
+summary of what that case says about that theme, with the excerpts behind it
+one click away. `framework_matrices` stores only the _configuration_; the grid
+itself is recomputed on every read by `db::framework::get_matrix`, so
+importing a document, filling in a descriptor or coding another passage
+changes the grid without rewriting anything.
+
+| Column                          | Meaning                                                                                          |
+| ------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `row_kind = 'document'`         | one row per document: every document, or the members of `row_set_id`                             |
+| `row_kind = 'descriptor_value'` | one row per distinct value of `row_field_id` among those documents; the row pools their excerpts |
+| `code_set_id`                   | the columns are that code set's members, in codebook order                                       |
+| `code_ids_json`                 | otherwise the columns are this JSON array of code ids, in column order                           |
+
+Rows come out in project document order; grouped rows follow the field's own
+order (a `choice` field's options in the order they are defined, numbers
+numerically, everything else — including ISO dates — as text), and documents
+with no value gather into a last row labelled `(no value)` whose `row_key` is
+the empty string. A row set or grouping field that no longer exists yields no
+rows, and a column code that no longer exists is dropped, rather than making
+the matrix unopenable.
+
+`row_field_id`, `row_set_id` and `code_set_id` are deliberately **not**
+foreign keys. Deleting a set or a descriptor field is undoable and recreates
+it with its original id, so a matrix that names one keeps pointing at it
+instead of being silently rewritten by `ON DELETE SET NULL`.
+
+A cell's `excerptCount` is the distinct excerpts in that row's documents
+carrying that code **or any of its descendants** — the same
+descendant-inclusive counting `code_frequencies` does, so the badge and the
+drawer agree. `get_matrix` returns one cell per (row, column) pair, summary
+included, which is exactly what the grid renders.
+
+`framework_cells.row_key` is the document id or the descriptor value rather
+than a row index, so reordering documents or reshaping the matrix never moves
+a summary onto the wrong case. `set_cell_summary` returns the previous text so
+the frontend's undo stack can put it back, and deletes the row when the new
+summary is blank instead of storing an empty one. `code_id` is not a foreign
+key for the same reason `set_members.member_id` is not, so a trigger takes the
+place of the cascade:
+
+```sql
+CREATE TRIGGER framework_cells_code_deleted AFTER DELETE ON codes BEGIN
+  DELETE FROM framework_cells WHERE code_id = OLD.id;
+END;
+```
+
+A deleted _document_ keeps its summaries: the row simply stops being listed,
+and undoing the delete brings the row and its text back together.
+
+`delete_matrix` hands back the matrix with every summary it held
+(`FrameworkMatrixWithCells`) and `restore_matrix` puts both back, so deleting
+a matrix is undoable like everything else. `export_csv` writes the row label
+then one column per code holding that cell's summary, with the code paths as
+the header.
 
 ## Adjusting excerpts
 
