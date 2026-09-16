@@ -8,11 +8,11 @@ use std::collections::{BTreeSet, HashMap, HashSet};
 use rusqlite::{types::Value, Connection};
 
 use super::meta;
-use super::{codes, descriptors, documents, sets};
+use super::{codes, descriptors, documents, sets, transcripts};
 use crate::error::{AppError, Result};
 use crate::models::{
     CoOccurrence, CodeByDescriptor, CodeByDocument, CodeFrequency, CrosstabColumn, CrosstabRequest,
-    CrosstabRow, WordFrequency, WordFrequencyOptions, WordFrequencyScope,
+    CrosstabRow, DescriptorField, WordFrequency, WordFrequencyOptions, WordFrequencyScope,
 };
 use crate::text::{self, stem};
 
@@ -647,6 +647,198 @@ fn build_columns(kind: &str, options: &[String], values: &[String], bins: i64) -
     Columns { columns, index_of }
 }
 
+/// The virtual descriptor field standing for "who was speaking". It is not a
+/// row of `descriptor_fields`; `code_by_descriptor` special-cases it.
+pub const SPEAKER_FIELD_ID: &str = "speaker";
+
+/// The cross-tab's `mode`, validated once for both paths.
+fn crosstab_mode(req: &CrosstabRequest) -> Result<&str> {
+    let mode = req.mode.as_deref().unwrap_or("excerpts");
+    if mode != "excerpts" && mode != "documents" {
+        return Err(AppError::Validation(format!(
+            "unknown cross-tab mode {mode:?}; expected \"excerpts\" or \"documents\""
+        )));
+    }
+    Ok(mode)
+}
+
+/// Codes against speakers: "which themes does each participant raise".
+///
+/// The columns are the speakers the documents in scope actually have, sorted
+/// case-insensitively, plus a trailing `(no speaker)` column when something
+/// in scope is not a transcript. An excerpt belongs to the speaker whose turn
+/// it starts in (`db::transcripts`), so — unlike the descriptor cross-tab,
+/// where a document belongs to exactly one column — one document usually
+/// feeds several columns, and `documentsPerColumn` is the documents that
+/// speaker appears in, coded or not.
+fn code_by_speaker(conn: &Connection, req: &CrosstabRequest) -> Result<CodeByDescriptor> {
+    let mode = crosstab_mode(req)?;
+    let include_descendants = req.include_descendants;
+    let (doc_sql, doc_args) = document_clause(
+        conn,
+        req.document_ids.as_deref(),
+        req.document_set_ids.as_deref(),
+    )?;
+
+    // Documents in scope, in project order, exactly as `code_by_descriptor`
+    // works them out.
+    let doc_sets = req.document_set_ids.as_deref().unwrap_or_default();
+    let picked_docs = sets::union_with_sets(conn, req.document_ids.as_deref(), doc_sets)?;
+    let wanted: Option<HashSet<&str>> = if picked_docs.is_empty() && doc_sets.is_empty() {
+        None
+    } else {
+        Some(picked_docs.iter().map(String::as_str).collect())
+    };
+    let scope: Vec<String> = documents::list(conn)?
+        .into_iter()
+        .filter(|d| wanted.as_ref().is_none_or(|w| w.contains(d.id.as_str())))
+        .map(|d| d.id)
+        .collect();
+
+    // Columns: every speaker in scope, and the documents each appears in.
+    let mut documents_with: HashMap<String, HashSet<&str>> = HashMap::new();
+    let mut without_transcript = 0i64;
+    for document_id in &scope {
+        let found = transcripts::ensure(conn, document_id)?;
+        if found.speakers.is_empty() {
+            without_transcript += 1;
+        }
+        for speaker in found.speakers {
+            documents_with
+                .entry(speaker.name)
+                .or_default()
+                .insert(document_id.as_str());
+        }
+    }
+    let mut names: Vec<String> = documents_with.keys().cloned().collect();
+    names.sort_by_key(|n| n.to_lowercase());
+    let mut columns: Vec<CrosstabColumn> = names
+        .iter()
+        .map(|name| CrosstabColumn {
+            label: name.clone(),
+            op: "speaker".into(),
+            values: vec![name.clone()],
+        })
+        .collect();
+    let mut documents_per_column: Vec<i64> = names
+        .iter()
+        .map(|n| documents_with.get(n).map(|d| d.len() as i64).unwrap_or(0))
+        .collect();
+    let index_of: HashMap<&str, usize> = names
+        .iter()
+        .enumerate()
+        .map(|(i, n)| (n.as_str(), i))
+        .collect();
+    // Anything not inside a turn — an excerpt in an ordinary document, or one
+    // above the transcript's first label — gathers in a last column. It has no
+    // filter that reproduces it, so `values` is empty and a click does nothing.
+    let no_speaker = columns.len();
+    columns.push(CrosstabColumn {
+        label: "(no speaker)".into(),
+        op: "speaker".into(),
+        values: vec![],
+    });
+    documents_per_column.push(without_transcript);
+
+    // Rows: the picked codes, or the whole codebook, in codebook order.
+    let picked: Option<HashSet<&str>> = req
+        .code_ids
+        .as_deref()
+        .filter(|ids| !ids.is_empty())
+        .map(|ids| ids.iter().map(String::as_str).collect());
+    let rows_codes: Vec<String> = codes::list(conn)?
+        .into_iter()
+        .filter(|c| picked.as_ref().is_none_or(|p| p.contains(c.id.as_str())))
+        .map(|c| c.id)
+        .collect();
+
+    // Every tag once, with the position that decides which column it lands in.
+    let mut stmt = conn.prepare(&format!(
+        "SELECT ec.code_id, ec.excerpt_id, e.document_id, e.start_pos
+         FROM excerpt_codes ec JOIN excerpts e ON e.id = ec.excerpt_id
+         WHERE 1 = 1{doc_sql}"
+    ))?;
+    let tags: Vec<(String, String, String, Option<i64>)> = stmt
+        .query_map(rusqlite::params_from_iter(doc_args.iter()), |r| {
+            Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))
+        })?
+        .collect::<rusqlite::Result<_>>()?;
+
+    // One transcript read per document, however many excerpts it holds.
+    let mut index = transcripts::TurnIndex::new();
+    let mut column_of: HashMap<&str, usize> = HashMap::new();
+    for (_, excerpt_id, document_id, start_pos) in &tags {
+        if column_of.contains_key(excerpt_id.as_str()) {
+            continue;
+        }
+        let speaker = match start_pos {
+            Some(pos) => index.speaker_at(conn, document_id, *pos)?,
+            None => None,
+        };
+        let i = speaker
+            .as_deref()
+            .and_then(|s| index_of.get(s).copied())
+            .unwrap_or(no_speaker);
+        column_of.insert(excerpt_id.as_str(), i);
+    }
+    let mut by_code: HashMap<&str, Vec<(&str, &str)>> = HashMap::new();
+    for (code_id, excerpt_id, document_id, _) in &tags {
+        by_code
+            .entry(code_id.as_str())
+            .or_default()
+            .push((excerpt_id.as_str(), document_id.as_str()));
+    }
+
+    let mut rows = Vec::with_capacity(rows_codes.len());
+    for code_id in &rows_codes {
+        let subtree = if include_descendants {
+            codes::descendant_ids(conn, std::slice::from_ref(code_id))?
+        } else {
+            vec![code_id.clone()]
+        };
+        let mut cells = vec![0i64; columns.len()];
+        // De-duplicate per excerpt (one tagged with both a code and its child
+        // counts once) and, in document mode, per (column, document).
+        let mut seen: HashSet<&str> = HashSet::new();
+        let mut seen_docs: HashSet<(usize, &str)> = HashSet::new();
+        for id in &subtree {
+            for (excerpt_id, document_id) in by_code.get(id.as_str()).into_iter().flatten() {
+                let Some(i) = column_of.get(excerpt_id).copied() else {
+                    continue;
+                };
+                if mode == "documents" {
+                    if seen_docs.insert((i, document_id)) {
+                        cells[i] += 1;
+                    }
+                } else if seen.insert(excerpt_id) {
+                    cells[i] += 1;
+                }
+            }
+        }
+        rows.push(CrosstabRow {
+            code_id: code_id.clone(),
+            cells,
+        });
+    }
+
+    Ok(CodeByDescriptor {
+        field: DescriptorField {
+            id: SPEAKER_FIELD_ID.into(),
+            name: "Speaker".into(),
+            kind: "text".into(),
+            options: names,
+            sort_order: -1,
+            value_count: scope.len() as i64 - without_transcript,
+            created_at: String::new(),
+            updated_at: String::new(),
+        },
+        columns,
+        rows,
+        documents_per_column,
+        mode: mode.to_string(),
+    })
+}
+
 /// Codes against the values of one descriptor field: the mixed-methods
 /// cross-tab ("how often does each code appear in interviews from each site").
 ///
@@ -659,6 +851,13 @@ fn build_columns(kind: &str, options: &[String], values: &[String], bins: i64) -
 /// in that column. Because every document belongs to exactly one column, a
 /// row's cells add up to its total either way.
 pub fn code_by_descriptor(conn: &Connection, req: &CrosstabRequest) -> Result<CodeByDescriptor> {
+    // "Speaker" is not a descriptor field at all — it is a property of where
+    // an excerpt sits in its document's transcript — but to the person asking
+    // it is one more thing to cross-tabulate codes against, so it arrives as
+    // a field id and answers in the same shape.
+    if req.field_id == SPEAKER_FIELD_ID {
+        return code_by_speaker(conn, req);
+    }
     let CrosstabRequest {
         field_id,
         code_ids,
@@ -674,12 +873,7 @@ pub fn code_by_descriptor(conn: &Connection, req: &CrosstabRequest) -> Result<Co
         document_set_ids.as_deref(),
     );
     let include_descendants = *include_descendants;
-    let mode = req.mode.as_deref().unwrap_or("excerpts");
-    if mode != "excerpts" && mode != "documents" {
-        return Err(AppError::Validation(format!(
-            "unknown cross-tab mode {mode:?}; expected \"excerpts\" or \"documents\""
-        )));
-    }
+    let mode = crosstab_mode(req)?;
     let field = descriptors::get_field(conn, field_id)?;
 
     // Documents in scope, in project order, and their value for the field.
@@ -1643,5 +1837,110 @@ mod tests {
 
             assert!(code_timeline(conn, &parent, false, "year").is_err());
         }
+    }
+
+    #[test]
+    fn the_speaker_cross_tab_counts_excerpts_by_the_turn_they_fall_in() {
+        let p = OpenProject::in_memory("t").unwrap();
+        let conn = &p.conn;
+        // "Alice: " is 7 characters: Alice speaks 7..16 and 36..40,
+        // Bob 22..28 and 46..54.
+        let text = "Alice: Hi there.\nBob: Hello.\nAlice: Bye.\nBob: Bye now.\n";
+        let doc = documents::create(conn, new_doc(text)).unwrap().summary.id;
+        let plain = documents::create(
+            conn,
+            NewDocument {
+                name: "Field notes".into(),
+                ..new_doc("Ordinary prose with no labels at all.")
+            },
+        )
+        .unwrap()
+        .summary
+        .id;
+        let a = mk_code(conn, "A", None).id;
+        let b = mk_code(conn, "B", None).id;
+        apply(conn, &doc, 7, 16, &[&a]); // Alice
+        apply(conn, &doc, 36, 40, &[&a]); // Alice again
+        apply(conn, &doc, 22, 28, &[&b]); // Bob
+        apply(conn, &plain, 0, 8, &[&a]); // nobody
+
+        let req = CrosstabRequest {
+            field_id: SPEAKER_FIELD_ID.into(),
+            ..Default::default()
+        };
+        let out = code_by_descriptor(conn, &req).unwrap();
+        assert_eq!(out.field.id, SPEAKER_FIELD_ID);
+        assert_eq!(out.field.name, "Speaker");
+        assert_eq!(
+            out.columns
+                .iter()
+                .map(|c| c.label.as_str())
+                .collect::<Vec<_>>(),
+            vec!["Alice", "Bob", "(no speaker)"]
+        );
+        // Every column reproduces itself as a speaker filter, except the last.
+        assert_eq!(out.columns[0].op, "speaker");
+        assert_eq!(out.columns[0].values, vec!["Alice".to_string()]);
+        assert!(out.columns[2].values.is_empty());
+        // Alice appears in one document, Bob in one, and one document has no
+        // transcript at all.
+        assert_eq!(out.documents_per_column, vec![1, 1, 1]);
+        let row = |code: &str| {
+            out.rows
+                .iter()
+                .find(|r| r.code_id == code)
+                .unwrap()
+                .cells
+                .clone()
+        };
+        assert_eq!(row(&a), vec![2, 0, 1]);
+        assert_eq!(row(&b), vec![0, 1, 0]);
+
+        // Counting documents instead: Alice's two excerpts are one document.
+        let out = code_by_descriptor(
+            conn,
+            &CrosstabRequest {
+                mode: Some("documents".into()),
+                ..req.clone()
+            },
+        )
+        .unwrap();
+        assert_eq!(
+            out.rows.iter().find(|r| r.code_id == a).unwrap().cells,
+            vec![1, 0, 1]
+        );
+
+        // A document filter narrows the columns to that document's speakers.
+        let out = code_by_descriptor(
+            conn,
+            &CrosstabRequest {
+                document_ids: Some(vec![plain.clone()]),
+                ..req.clone()
+            },
+        )
+        .unwrap();
+        assert_eq!(
+            out.columns
+                .iter()
+                .map(|c| c.label.as_str())
+                .collect::<Vec<_>>(),
+            vec!["(no speaker)"]
+        );
+        assert_eq!(
+            out.rows.iter().find(|r| r.code_id == a).unwrap().cells,
+            vec![1]
+        );
+
+        // An unknown mode is still refused on this path.
+        assert!(matches!(
+            code_by_descriptor(
+                conn,
+                &CrosstabRequest {
+                    mode: Some("sideways".into()),
+                    ..req
+                }
+            ),
+            Err(AppError::Validation(_))
+        ));
     }
 }
