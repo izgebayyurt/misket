@@ -90,7 +90,9 @@ export function BulkActionBar({ ids, codeIds, onClear }: Props) {
         className="absolute bottom-4 left-1/2 z-30 flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-border bg-panel px-3 py-2 shadow-xl"
         data-testid="bulk-action-bar"
       >
-        <span className="px-1 text-sm font-medium tabular-nums">{excerpts} selected</span>
+        <span className="whitespace-nowrap px-1 text-sm font-medium tabular-nums">
+          {excerpts} selected
+        </span>
         <Button size="sm" variant="outline" onClick={addCode} disabled={busy}>
           <TagPlus /> Add code…
         </Button>
