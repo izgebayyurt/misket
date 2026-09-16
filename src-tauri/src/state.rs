@@ -6,6 +6,8 @@ use misket_core::{AppError, Result};
 #[derive(Default)]
 pub struct AppState {
     pub project: Mutex<Option<OpenProject>>,
+    /// A project file the OS asked us to open (double-click, "Open with").
+    pub pending_open: Mutex<Option<String>>,
 }
 
 impl AppState {

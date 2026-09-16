@@ -10,6 +10,8 @@ export const getProjectInfo = () => invoke<ProjectInfo | null>("get_project_info
 export const listRecentProjects = () => invoke<RecentProject[]>("list_recent_projects");
 export const removeRecentProject = (path: string) =>
   invoke<void>("remove_recent_project", { path });
+/** A project file the OS asked the app to open at launch (double-click). */
+export const takePendingOpenPath = () => invoke<string | null>("take_pending_open_path");
 
 /** Raw bytes of a file on disk (for importers). */
 export async function readSourceFile(path: string): Promise<Uint8Array> {

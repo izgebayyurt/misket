@@ -10,7 +10,7 @@ import {
   type RenderableExcerpt,
   type Segment,
 } from "@/core/segmentation";
-import { rangeToOffsets } from "@/core/selection";
+import { offsetsToRange, rangeToOffsets } from "@/core/selection";
 import { isTextField, mod } from "@/core/keymap";
 import { useWorkspace } from "@/state/workspace";
 import { useShortcutActions } from "@/state/shortcutActions";
@@ -135,6 +135,38 @@ export function DocumentView({ documentId, focusExcerptId }: Props) {
     setPopover(anchor ? { id, anchor } : null);
   }, []);
 
+  /** Grow the current selection (or the focused excerpt) by one word. */
+  const extendSelection = useCallback(
+    (dir: "left" | "right") => {
+      const root = rootRef.current;
+      const sel = window.getSelection();
+      if (!root || !sel) return;
+      if (sel.isCollapsed || !root.contains(sel.anchorNode)) {
+        // Start from the focused excerpt's range, if any.
+        const id = useWorkspace.getState().focusedExcerptId;
+        const ex = id ? renderable.find((e) => e.id === id) : undefined;
+        if (!ex) return;
+        const range = offsetsToRange(root, ex.start, ex.end);
+        if (!range) return;
+        sel.removeAllRanges();
+        if (dir === "left") {
+          // Focus end at the start so "extend backward" grows leftwards.
+          sel.setBaseAndExtent(
+            range.endContainer,
+            range.endOffset,
+            range.startContainer,
+            range.startOffset,
+          );
+        } else {
+          sel.addRange(range);
+        }
+      }
+      sel.modify("extend", dir === "left" ? "backward" : "forward", "word");
+      readSelection();
+    },
+    [renderable, readSelection],
+  );
+
   const moveFocus = useCallback(
     (delta: 1 | -1) => {
       if (renderable.length === 0) return;
@@ -162,6 +194,8 @@ export function DocumentView({ documentId, focusExcerptId }: Props) {
       deleteExcerpt: () => {
         if (focusedId) deleteExcerpt.mutate({ id: focusedId, documentId });
       },
+      extendSelectionLeft: () => extendSelection("left"),
+      extendSelectionRight: () => extendSelection("right"),
       // Escape peels one layer at a time: selection, then focus. (An open
       // popover is closed by Radix before this runs.)
       escape: () => {
@@ -175,7 +209,7 @@ export function DocumentView({ documentId, focusExcerptId }: Props) {
       },
     });
     return unregister;
-  }, [moveFocus, focusedId, deleteExcerpt, documentId, openPopover]);
+  }, [moveFocus, focusedId, deleteExcerpt, documentId, openPopover, extendSelection]);
 
   const applyToSelection = useCallback(
     async (codeIds: string[]) => {

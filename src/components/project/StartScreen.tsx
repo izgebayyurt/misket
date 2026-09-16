@@ -11,6 +11,7 @@ import {
   useRemoveRecent,
 } from "@/queries/project";
 import { toast } from "@/state/toasts";
+import { isAppError } from "@/api/client";
 
 const FILTER = [{ name: "Misket project", extensions: ["misket"] }];
 
@@ -35,7 +36,12 @@ export function StartScreen() {
     try {
       await openProject.mutateAsync(path);
     } catch (e) {
-      toast.error(e);
+      if (isAppError(e, "NotFound")) {
+        removeRecent.mutate(path);
+        toast.info("That project file no longer exists; removed it from Recent.");
+      } else {
+        toast.error(e);
+      }
     }
   }
 

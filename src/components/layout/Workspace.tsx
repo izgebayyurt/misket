@@ -1,3 +1,5 @@
+import { useEffect } from "react";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { ProjectInfo } from "@/api/types";
 import { Sidebar } from "./Sidebar";
 import { StatusBar } from "./StatusBar";
@@ -12,6 +14,13 @@ import { ImportDropzone } from "@/components/documents/ImportDropzone";
 export function Workspace({ project }: { project: ProjectInfo }) {
   const view = useWorkspace((s) => s.view);
   useGlobalShortcuts();
+  useEffect(() => {
+    const win = getCurrentWindow();
+    win.setTitle(`${project.name} — Misket`).catch(() => {});
+    return () => {
+      win.setTitle("Misket").catch(() => {});
+    };
+  }, [project.name]);
   return (
     <div className="flex h-full flex-col">
       <div className="flex min-h-0 flex-1">

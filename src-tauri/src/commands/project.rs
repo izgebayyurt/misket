@@ -70,6 +70,16 @@ pub fn remove_recent_project(app: AppHandle, path: String) -> Result<()> {
     recent::remove(&app, &path)
 }
 
+/// The project path the OS asked us to open at launch, if any (consumed once).
+#[tauri::command]
+pub fn take_pending_open_path(state: State<'_, AppState>) -> Result<Option<String>> {
+    let mut pending = state
+        .pending_open
+        .lock()
+        .map_err(|_| AppError::Db("pending-open lock poisoned".into()))?;
+    Ok(pending.take())
+}
+
 /// Raw bytes of a file the user picked in a dialog; importers parse them in TS.
 #[tauri::command]
 pub fn read_source_file(path: String) -> Result<tauri::ipc::Response> {

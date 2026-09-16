@@ -64,6 +64,11 @@ export function DocumentList() {
                 >
                   <FileText className="size-4 shrink-0 text-fg-muted" />
                   <span className="truncate">{d.name}</span>
+                  {d.sourceFormat ? (
+                    <span className="shrink-0 rounded border border-border px-1 text-[10px] uppercase text-fg-muted">
+                      {d.sourceFormat}
+                    </span>
+                  ) : null}
                   <span className="ml-auto shrink-0 text-xs text-fg-muted">
                     {d.excerptCount || ""}
                   </span>

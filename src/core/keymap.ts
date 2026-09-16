@@ -25,6 +25,8 @@ export type Action =
   | "prevExcerpt"
   | "editExcerpt"
   | "deleteExcerpt"
+  | "extendSelectionLeft"
+  | "extendSelectionRight"
   | "escape";
 
 export interface Shortcut {
@@ -51,6 +53,8 @@ export const SHORTCUTS: Record<Action, Shortcut> = {
   prevExcerpt: { key: "Tab", shift: true },
   editExcerpt: { key: "Enter" },
   deleteExcerpt: { key: "Backspace" },
+  extendSelectionLeft: { key: "ArrowLeft", alt: true, shift: true },
+  extendSelectionRight: { key: "ArrowRight", alt: true, shift: true },
   escape: { key: "Escape", global: true },
 };
 
