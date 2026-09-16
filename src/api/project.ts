@@ -1,6 +1,6 @@
 import { invoke as tauriInvoke } from "@tauri-apps/api/core";
 import { invoke } from "./client";
-import type { ProjectInfo, RecentProject } from "./types";
+import type { ProjectInfo, ProjectStats, RecentProject } from "./types";
 
 export const createProject = (path: string, name: string) =>
   invoke<ProjectInfo>("create_project", { path, name });
@@ -10,6 +10,8 @@ export const createSampleProject = (dir?: string) =>
 export const openProject = (path: string) => invoke<ProjectInfo>("open_project", { path });
 export const closeProject = () => invoke<void>("close_project");
 export const getProjectInfo = () => invoke<ProjectInfo | null>("get_project_info");
+export const renameProject = (name: string) => invoke<ProjectInfo>("rename_project", { name });
+export const getProjectStats = () => invoke<ProjectStats>("get_project_stats");
 export const listRecentProjects = () => invoke<RecentProject[]>("list_recent_projects");
 export const removeRecentProject = (path: string) =>
   invoke<void>("remove_recent_project", { path });

@@ -12,6 +12,7 @@ pub mod export;
 pub mod memos;
 pub mod migrations;
 pub mod search;
+pub mod stats;
 pub mod text;
 pub mod util;
 
@@ -139,6 +140,20 @@ impl OpenProject {
             counts: counts(&self.conn)?,
         })
     }
+
+    /// Rename the project (`project_meta.name`). Trims the name and rejects
+    /// an empty one.
+    pub fn rename(&self, name: &str) -> Result<ProjectInfo> {
+        let name = name.trim();
+        if name.is_empty() {
+            return Err(AppError::Validation("project name is required".into()));
+        }
+        self.conn.execute(
+            "UPDATE project_meta SET value = ?1 WHERE key = 'name'",
+            [name],
+        )?;
+        self.info()
+    }
 }
 
 fn set_pragmas(conn: &Connection) -> Result<()> {
@@ -255,6 +270,18 @@ mod tests {
                  SELECT count(*) FROM media_blobs;",
             )
             .unwrap();
+    }
+
+    #[test]
+    fn rename_trims_and_rejects_empty() {
+        let p = OpenProject::in_memory("Old name").unwrap();
+        let info = p.rename("  New name  ").unwrap();
+        assert_eq!(info.name, "New name");
+        assert_eq!(p.info().unwrap().name, "New name");
+        assert!(matches!(p.rename(""), Err(AppError::Validation(_))));
+        assert!(matches!(p.rename("   "), Err(AppError::Validation(_))));
+        // A rejected rename does not touch the stored name.
+        assert_eq!(p.info().unwrap().name, "New name");
     }
 
     #[test]

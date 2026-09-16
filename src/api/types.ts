@@ -24,6 +24,27 @@ export interface RecentProject {
   lastOpenedAt: string;
 }
 
+/** Everything the overview screen shows. */
+export interface ProjectStats {
+  documents: number;
+  textDocuments: number;
+  imageDocuments: number;
+  codes: number;
+  excerpts: number;
+  /** Excerpts tagged with at least one code. */
+  codedExcerpts: number;
+  memos: number;
+  descriptorFields: number;
+  /** Code points, summed over text documents. */
+  totalTextLength: number;
+  /** Latest `updatedAt` across documents, codes, excerpts and memos. */
+  lastActivityAt: string | null;
+  /** `[date "YYYY-MM-DD", count]`, oldest first, one per of the last 30 days. */
+  excerptsPerDay: [string, number][];
+  /** `[codeId, count]`, direct tags only, highest first, top 8. */
+  topCodes: [string, number][];
+}
+
 // Mirrors AppSettings in src-tauri/src/settings.rs (app-level, not project data).
 export type Theme = "system" | "light" | "dark";
 

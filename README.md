@@ -79,6 +79,7 @@ keyboard-friendly interface without a subscription.
 | Merge the focused excerpt with its neighbour           | `Ctrl`/`⌘` + `Shift` + `M`                    |
 | Extend the selection by a word                         | `Alt` + `Shift` + `←` / `→`                   |
 | New memo on the current document, code or excerpt      | `Ctrl`/`⌘` + `M`                              |
+| Project overview                                       | `Shift` + `Ctrl`/`⌘` + `H`                    |
 | Excerpt browser                                        | `Ctrl`/`⌘` + `E`                              |
 | Analysis views                                         | `Shift` + `Ctrl`/`⌘` + `A`                    |
 | Find in the current document                           | `Ctrl`/`⌘` + `F`                              |

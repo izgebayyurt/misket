@@ -29,6 +29,30 @@ pub struct RecentProject {
     pub last_opened_at: String,
 }
 
+/// Everything the overview screen shows. See `db::stats::project_stats`.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectStats {
+    pub documents: i64,
+    pub text_documents: i64,
+    pub image_documents: i64,
+    pub codes: i64,
+    pub excerpts: i64,
+    /// Excerpts tagged with at least one code.
+    pub coded_excerpts: i64,
+    pub memos: i64,
+    pub descriptor_fields: i64,
+    /// Code points, summed over text documents.
+    pub total_text_length: i64,
+    /// Latest `updated_at` across documents, codes, excerpts and memos.
+    pub last_activity_at: Option<String>,
+    /// `(date "YYYY-MM-DD", count)`, one entry per of the last 30 days
+    /// (oldest first), zero-filled, based on `excerpts.created_at`.
+    pub excerpts_per_day: Vec<(String, i64)>,
+    /// `(codeId, count)`, direct tags only, highest first, top 8.
+    pub top_codes: Vec<(String, i64)>,
+}
+
 // ---------------------------------------------------------------- documents
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

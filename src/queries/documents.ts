@@ -32,6 +32,7 @@ function useInvalidateDocuments() {
     qc.invalidateQueries({ queryKey: keys.documents });
     qc.invalidateQueries({ queryKey: keys.analysis });
     qc.invalidateQueries({ queryKey: keys.project });
+    qc.invalidateQueries({ queryKey: keys.stats });
   };
 }
 
