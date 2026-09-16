@@ -12,6 +12,10 @@ keyboard-friendly interface without a subscription.
 ## What it does today (milestone 1)
 
 - **Import** plain text, Markdown, Word (`.docx`) and PDF (text only) documents.
+  If a file has blank-line gaps, trailing spaces or other likely-accidental
+  whitespace, Misket offers to tidy it up before import (document text is
+  immutable once imported). Check "Remember my choice" in that dialog to skip
+  it on future imports; its "Ask again on import" link resets that.
 - **Build a codebook**: nested codes with colors, descriptions, single-key
   hotkeys, drag-and-drop reordering, merge and delete with impact preview.
 - **Code excerpts**: select text, press `Ctrl`/`⌘`+`K` and pick a code (type
