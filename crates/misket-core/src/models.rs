@@ -1004,6 +1004,10 @@ pub struct HistoryNodeSummary {
     pub branch_name: Option<String>,
     pub undoable: bool,
     pub is_head: bool,
+    /// Which child redo would follow from here; the graph view uses it to
+    /// tell the branch a checkout is "on" from a side branch that merely
+    /// passes through the same node.
+    pub preferred_child: Option<i64>,
     /// Oldest first; more than one means the tree branches here.
     pub children: Vec<i64>,
 }
