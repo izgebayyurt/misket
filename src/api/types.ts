@@ -350,6 +350,27 @@ export interface RetagReport {
   alreadyHad: string[];
 }
 
+/** One range to auto-code (a search match, or one already expanded to its
+ * sentence/paragraph). */
+export interface AutoCodeHit {
+  documentId: string;
+  startPos: number;
+  endPos: number;
+}
+
+/**
+ * What `autoCode` did. Each hit either created a fresh excerpt
+ * (`createdExcerptIds`) or reused one that already covered that exact range,
+ * adding the code only if it was missing (`reusedExcerptIds`); a hit whose
+ * excerpt already carried the code only counts toward `alreadyCoded`. Undo
+ * deletes `createdExcerptIds` and removes the code from `reusedExcerptIds`.
+ */
+export interface AutoCodeReport {
+  createdExcerptIds: string[];
+  reusedExcerptIds: string[];
+  alreadyCoded: number;
+}
+
 export interface ExcerptRow extends ExcerptWithCodes {
   documentName: string;
   contextBefore: string;
@@ -425,8 +446,18 @@ export interface SearchHit {
   documentName: string;
   startPos: number;
   endPos: number;
+  /** The exact matched text (not the query/pattern). */
+  matchedText: string;
   contextBefore: string;
   contextAfter: string;
+}
+
+/** One speaker's turn detected in a document (see `detectSpeakerTurns`).
+ * Code points, end-exclusive; the label itself is excluded. */
+export interface SpeakerTurn {
+  speaker: string;
+  start: number;
+  end: number;
 }
 
 // ------------------------------------------------------------------ backups

@@ -9,5 +9,6 @@ pub mod error;
 pub mod models;
 pub mod sample;
 pub mod sync;
+pub mod text;
 
 pub use error::{AppError, Result};

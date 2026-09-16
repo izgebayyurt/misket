@@ -51,6 +51,17 @@ keyboard-friendly interface without a subscription.
   Tick the checkboxes (`Shift`+click for a range, or "Select all N loaded") to
   add a code to, remove a code from, or delete many excerpts at once; `Escape`
   clears the selection and undo reverses the whole batch.
+- **Auto-code by pattern**: in project search, toggle "Regex" to search with a
+  regular expression instead of plain text, then "Auto-code all N matches…" to
+  pick a code, choose what gets coded (just the match, its whole sentence, or
+  its whole paragraph) and apply it to every hit in one undoable step —
+  matches that share a sentence or paragraph share one excerpt.
+- **Auto-code by speaker turn**: transcripts with `Name:`, `[Name]` or
+  `Name (00:12):` lines get a "Speakers" menu in the document header listing
+  each detected speaker and their turn count; "Code all turns of _Speaker_
+  with…" codes every one of their turns (the spoken text, not the label) with
+  one chosen code. Detection is conservative — a label only counts once it
+  recurs at least twice in the document.
 - **Analyse**: a code frequency table (own counts and counts with sub-codes,
   per document), a code co-occurrence matrix showing which codes overlap on the
   same text, and a code-by-document heatmap. Every cell clicks through to the

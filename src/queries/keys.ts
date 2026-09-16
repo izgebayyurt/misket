@@ -32,4 +32,5 @@ export const keys = {
   savedFilters: ["savedFilters"] as const,
   search: (query: string) => ["search", query] as const,
   backups: ["backups"] as const,
+  speakerTurns: (documentId: string) => ["speakerTurns", documentId] as const,
 };
