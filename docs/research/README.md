@@ -16,15 +16,15 @@ Three surveys, run in September 2026, feed the roadmap:
 
 ## Coding practice Misket should support directly
 
-| Practice                                    | Support today                                                 | Gap                                                           |
-| ------------------------------------------- | ------------------------------------------------------------- | ------------------------------------------------------------- |
-| First-cycle: many fine codes, in vivo names | `>name` creates codes from the palette                        | In vivo (name from selection), quick-code the last code       |
-| Second-cycle: lump, split, reparent         | Merge with impact preview, move excerpts, drag reparent, undo | Roll several siblings into a parent in one step               |
-| Code to parent, push down later             | Filters and counts aggregate descendants                      | "Review this code" recode loop, push-down and pull-up actions |
-| Definitions with rules and examples         | Free-text description shown in the palette                    | Inclusion / exclusion fields, "use excerpt as example"        |
-| Memoing and constant comparison             | Project, document, code and excerpt memos                     | Memo linked to several excerpts                               |
-| Audit trail                                 | Undo stack, backups                                           | Activity log, codebook history                                |
-| Team coding                                 | Single coder                                                  | Coder identity, agreement, resolution                         |
+| Practice                                    | Support today                                                                                              | Gap                                                          |
+| ------------------------------------------- | ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| First-cycle: many fine codes, in vivo names | In vivo coding (`Ctrl`/`⌘`+`Shift`+`I`), quick-code the last code (`Ctrl`/`⌘`+`.`), `>name` in the palette | —                                                            |
+| Second-cycle: lump, split, reparent         | Merge with impact preview, move excerpts, drag reparent, undo, "Roll up children"                          | —                                                            |
+| Code to parent, push down later             | "Review excerpts…" opens a push-down loop over the parent's own excerpts                                   | Pull-up (promote an excerpt to the parent) from the same bar |
+| Definitions with rules and examples         | Description, inclusion and exclusion rules, an example excerpt                                             | —                                                            |
+| Memoing and constant comparison             | Project, document, code and excerpt memos                                                                  | Memo linked to several excerpts                              |
+| Audit trail                                 | Undo stack, backups                                                                                        | Activity log, codebook history                               |
+| Team coding                                 | Single coder                                                                                               | Coder identity, agreement, resolution                        |
 
 ## Ranked additions
 
@@ -32,7 +32,7 @@ Wave 5 (delegated now):
 
 | Item                                                                                                                               | Effort | Roadmap         |
 | ---------------------------------------------------------------------------------------------------------------------------------- | ------ | --------------- |
-| In vivo coding, quick-code last code, roll-up into parent, push-down review mode, structured code definitions with example excerpt | M      | 35              |
+| In vivo coding, quick-code last code, roll-up into parent, push-down review mode, structured code definitions with example excerpt | M      | 35 (done)       |
 | Code-by-descriptor cross-tab and a Boolean/proximity query builder with saved queries                                              | L      | 36, 37          |
 | Word frequency view, stemmed search, coding-over-time per code                                                                     | S      | 38              |
 | Framework matrix: documents by codes with editable summary cells                                                                   | L      | 39              |
