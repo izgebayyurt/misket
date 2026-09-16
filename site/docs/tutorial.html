@@ -185,7 +185,8 @@
       <ul>
         <li>
           a <strong>code frequency</strong> table (each code's own count and its count including
-          sub-codes, per document);
+          sub-codes, per document, plus a small sparkline of that code's coding activity over the
+          last 30 days);
         </li>
         <li>
           a <strong>co-occurrence matrix</strong> showing how often two codes overlap on the same
@@ -193,12 +194,27 @@
         </li>
         <li>
           a <strong>code-by-document heatmap</strong> showing which documents carry which codes and
-          how densely.
+          how densely;
+        </li>
+        <li>
+          a <strong>word frequency</strong> view: pick a document/set or a code (only the text under
+          that code is counted, not the whole document), turn stop words and stemming on or off, and
+          get a sortable table or a word cloud. Stemming groups word forms together ("code",
+          "coding", "coded") under whichever form occurs most; edit the project's own stop-word list
+          from the same view.
         </li>
       </ul>
       <p>
-        Every cell clicks through to the matching excerpts in the browser, and each view exports to
-        CSV.
+        Every cell or word clicks through — to the matching excerpts in the browser, or, for a word,
+        to a project search seeded with that term — and each view exports to CSV. The overview
+        screen's own 30-day sparkline can likewise be narrowed to one code with the picker above it.
+      </p>
+      <p>
+        Both <strong>find in document</strong> (<kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>F</kbd>) and
+        <strong>find in project</strong>
+        (<kbd>Shift</kbd>+<kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>F</kbd>) have a
+        <strong>Match word forms</strong> toggle: turn it on and a search for "code" also finds
+        "coding" and "coded", using the same stemming as the word frequency view.
       </p>
 
       <h2 id="export">Export and backups</h2>

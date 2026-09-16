@@ -52,9 +52,17 @@ keyboard-friendly interface without a subscription.
   add a code to, remove a code from, or delete many excerpts at once; `Escape`
   clears the selection and undo reverses the whole batch.
 - **Analyse**: a code frequency table (own counts and counts with sub-codes,
-  per document), a code co-occurrence matrix showing which codes overlap on the
-  same text, and a code-by-document heatmap. Every cell clicks through to the
-  matching excerpts, and each view exports to CSV.
+  per document, plus a 30-day coding-activity sparkline per code), a code
+  co-occurrence matrix showing which codes overlap on the same text, a
+  code-by-document heatmap, and a word frequency view (scoped to a
+  document/set or to the text under a code, with stop words and stemming as
+  toggles, a project-editable stop-word list, a sortable table and a word
+  cloud). Every cell or word clicks through to the matching excerpts or a
+  seeded project search, and each view exports to CSV. The overview screen's
+  30-day sparkline can be narrowed to a single code the same way.
+- **Search**: find-in-document and find-in-project both have a "Match word
+  forms" toggle that matches other forms of the same word by stem (e.g.
+  "code" also finds "coding" and "coded").
 - **Descriptors**: define document attributes (text, number, choice or date)
   such as site, interview wave or age group, set them per document or in a
   table of every document, and filter excerpts by them ("Age is more than 30",
