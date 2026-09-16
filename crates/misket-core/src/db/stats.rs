@@ -147,9 +147,10 @@ mod tests {
             &p.conn,
             ApplyCodesInput {
                 document_id: doc.clone(),
-                start_pos: 0,
-                end_pos: 5,
+                start_pos: Some(0),
+                end_pos: Some(5),
                 code_ids: vec![a.id.clone(), b.id.clone()],
+                ..Default::default()
             },
         )
         .unwrap();
@@ -157,9 +158,10 @@ mod tests {
             &p.conn,
             ApplyCodesInput {
                 document_id: doc.clone(),
-                start_pos: 6,
-                end_pos: 11,
+                start_pos: Some(6),
+                end_pos: Some(11),
                 code_ids: vec![a.id.clone()],
+                ..Default::default()
             },
         )
         .unwrap();
