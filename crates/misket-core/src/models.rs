@@ -481,6 +481,56 @@ pub struct CodeByDocument {
     pub cells: Vec<(String, String, i64)>,
 }
 
+/// What text to count words over: every document by default, narrowed by
+/// document/set (unioned, same as the other analysis views) and/or by code
+/// — when `code_ids` is set, only text inside excerpts carrying one of
+/// those codes (or a descendant) is counted, not whole documents.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct WordFrequencyScope {
+    pub document_ids: Option<Vec<String>>,
+    pub document_set_ids: Option<Vec<String>>,
+    pub code_ids: Option<Vec<String>>,
+}
+
+/// See `db::analysis::word_frequencies`.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct WordFrequencyOptions {
+    /// Words shorter than this many code points are dropped.
+    pub min_length: i64,
+    /// Drop the built-in English stop words plus the project's own list
+    /// (`db::analysis::stop_words`).
+    pub stop_words: bool,
+    /// Group word forms by stem (`text::stem`), reporting the most frequent
+    /// surface form as `term`.
+    pub stem: bool,
+    pub limit: usize,
+}
+
+impl Default for WordFrequencyOptions {
+    fn default() -> Self {
+        Self {
+            min_length: 3,
+            stop_words: true,
+            stem: false,
+            limit: 200,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct WordFrequency {
+    /// The word itself, or (when `stem` is on) the most frequent surface
+    /// form of the stem it represents.
+    pub term: String,
+    pub count: i64,
+    /// Distinct documents this term (or, stemmed, any of its surface forms)
+    /// appears in, within the scope.
+    pub documents: i64,
+}
+
 // -------------------------------------------------------------- descriptors
 
 /// A document attribute: "Age group", "Site", "Interview wave", "Gender".

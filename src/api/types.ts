@@ -417,6 +417,44 @@ export interface CodeByDocument {
   cells: MatrixCell[];
 }
 
+/** What text to count words over: see `WordFrequencyScope` in
+ * `crates/misket-core/src/models.rs`. */
+export interface WordFrequencyScope {
+  documentIds?: string[] | null;
+  /** Document sets; unioned into `documentIds`. */
+  documentSetIds?: string[] | null;
+  /** When set, only text inside excerpts carrying one of these codes (or a
+   * descendant) is counted, not whole documents. */
+  codeIds?: string[] | null;
+}
+
+export interface WordFrequencyOptions {
+  /** Words shorter than this many code points are dropped. Default 3. */
+  minLength: number;
+  /** Drop the built-in English stop words plus the project's own list. Default true. */
+  stopWords: boolean;
+  /** Group word forms by stem, reporting the most frequent surface form. Default false. */
+  stem: boolean;
+  limit: number;
+}
+
+export const DEFAULT_WORD_FREQUENCY_OPTIONS: WordFrequencyOptions = {
+  minLength: 3,
+  stopWords: true,
+  stem: false,
+  limit: 200,
+};
+
+export interface WordFrequency {
+  /** The word itself, or (when `stem` is on) the most frequent surface form. */
+  term: string;
+  count: number;
+  /** Distinct documents this term (or stem) appears in, within the scope. */
+  documents: number;
+}
+
+export type TimelineBucket = "day" | "week" | "month";
+
 export interface SearchHit {
   documentId: string;
   documentName: string;

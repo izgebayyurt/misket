@@ -1,4 +1,11 @@
-import type { ExcerptFilter, MemoTarget, SetKind } from "@/api/types";
+import type {
+  ExcerptFilter,
+  MemoTarget,
+  SetKind,
+  TimelineBucket,
+  WordFrequencyOptions,
+  WordFrequencyScope,
+} from "@/api/types";
 
 export const keys = {
   project: ["project"] as const,
@@ -23,6 +30,11 @@ export const keys = {
   coOccurrence: (documentIds: string[], documentSetIds: string[]) =>
     ["analysis", "cooccurrence", documentIds, documentSetIds] as const,
   codeByDocument: ["analysis", "codeByDocument"] as const,
+  wordFrequencies: (scope: WordFrequencyScope, options: WordFrequencyOptions) =>
+    ["analysis", "wordFrequencies", scope, options] as const,
+  stopWords: ["analysis", "stopWords"] as const,
+  codeTimeline: (codeId: string, includeDescendants: boolean, bucket: TimelineBucket) =>
+    ["analysis", "codeTimeline", codeId, includeDescendants, bucket] as const,
   memos: (target: MemoTarget) => ["memos", target] as const,
   allMemos: ["memos"] as const,
   sets: (kind: SetKind) => ["sets", kind] as const,

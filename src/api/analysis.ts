@@ -1,5 +1,13 @@
 import { invoke } from "./client";
-import type { CodeByDocument, CodeFrequency, CoOccurrence } from "./types";
+import type {
+  CodeByDocument,
+  CodeFrequency,
+  CoOccurrence,
+  TimelineBucket,
+  WordFrequency,
+  WordFrequencyOptions,
+  WordFrequencyScope,
+} from "./types";
 
 /**
  * `documentIds` null or empty means "every document". `documentSetIds` is
@@ -17,3 +25,16 @@ export const coOccurrence = (documentIds?: string[] | null, documentSetIds?: str
     documentSetIds: documentSetIds ?? null,
   });
 export const codeByDocument = () => invoke<CodeByDocument>("code_by_document");
+
+export const wordFrequencies = (scope: WordFrequencyScope, options: WordFrequencyOptions) =>
+  invoke<WordFrequency[]>("word_frequencies", { scope, options });
+
+export const getStopWords = () => invoke<string[]>("get_stop_words");
+export const setStopWords = (words: string[]) => invoke<void>("set_stop_words", { words });
+
+export const codeTimeline = (codeId: string, includeDescendants: boolean, bucket: TimelineBucket) =>
+  invoke<[string, number][]>("code_timeline", {
+    codeId,
+    includeDescendants,
+    bucket,
+  });

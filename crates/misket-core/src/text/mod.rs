@@ -6,6 +6,7 @@
 //! into words, not about offsets.
 
 pub mod stem;
+pub mod stopwords;
 
 /// Tokenize `text` into lowercase words: maximal runs of Unicode
 /// letters/marks/digits and apostrophes, with leading/trailing apostrophes
