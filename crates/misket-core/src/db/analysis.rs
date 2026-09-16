@@ -6,23 +6,35 @@ use std::collections::{HashMap, HashSet};
 
 use rusqlite::{types::Value, Connection};
 
-use super::{codes, documents};
+use super::{codes, documents, sets};
 use crate::error::Result;
 use crate::models::{CoOccurrence, CodeByDocument, CodeFrequency};
 
-/// `AND e.document_id IN (…)` for an optional document filter. An empty list
-/// means "no filter", like the excerpt browser treats it.
-fn document_clause(document_ids: Option<&[String]>) -> (String, Vec<Value>) {
-    match document_ids {
-        Some(ids) if !ids.is_empty() => {
-            let ph = ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
-            (
-                format!(" AND e.document_id IN ({ph})"),
-                ids.iter().cloned().map(Value::from).collect(),
-            )
-        }
-        _ => (String::new(), vec![]),
+/// `AND e.document_id IN (…)` for an optional document filter, expanding
+/// `document_set_ids` into `document_ids` exactly like `excerpts::query`
+/// does: explicit ids plus every id the picked sets expand to, unioned and
+/// de-duplicated. An empty `document_ids` with no sets picked means "no
+/// filter"; a set that is picked but expands to nothing (deleted, or every
+/// member already gone) matches no document rather than every document.
+fn document_clause(
+    conn: &Connection,
+    document_ids: Option<&[String]>,
+    document_set_ids: Option<&[String]>,
+) -> Result<(String, Vec<Value>)> {
+    let doc_sets = document_set_ids.unwrap_or_default();
+    let doc_ids = sets::union_with_sets(conn, document_ids, doc_sets)?;
+    if doc_ids.is_empty() {
+        return Ok(if doc_sets.is_empty() {
+            (String::new(), vec![])
+        } else {
+            (" AND 0 = 1".to_string(), vec![])
+        });
     }
+    let ph = doc_ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+    Ok((
+        format!(" AND e.document_id IN ({ph})"),
+        doc_ids.into_iter().map(Value::from).collect(),
+    ))
 }
 
 /// Position of every document in project order, for stable output.
@@ -45,10 +57,11 @@ fn document_order(conn: &Connection) -> Result<(Vec<String>, HashMap<String, usi
 pub fn code_frequencies(
     conn: &Connection,
     document_ids: Option<&[String]>,
+    document_set_ids: Option<&[String]>,
 ) -> Result<Vec<CodeFrequency>> {
     let all = codes::list(conn)?;
     let (_, doc_index) = document_order(conn)?;
-    let (doc_sql, args) = document_clause(document_ids);
+    let (doc_sql, args) = document_clause(conn, document_ids, document_set_ids)?;
     let mut stmt = conn.prepare(&format!(
         "SELECT ec.code_id, ec.excerpt_id, e.document_id
          FROM excerpt_codes ec JOIN excerpts e ON e.id = ec.excerpt_id
@@ -117,7 +130,11 @@ struct TextExcerpt {
 /// `a.start < b.end AND b.start < a.end`. The result is symmetric (each
 /// non-zero pair appears in both orientations) and the diagonal is the code's
 /// own frequency over text excerpts.
-pub fn co_occurrence(conn: &Connection, document_ids: Option<&[String]>) -> Result<CoOccurrence> {
+pub fn co_occurrence(
+    conn: &Connection,
+    document_ids: Option<&[String]>,
+    document_set_ids: Option<&[String]>,
+) -> Result<CoOccurrence> {
     let code_ids: Vec<String> = codes::list(conn)?.into_iter().map(|c| c.id).collect();
     let index: HashMap<&str, usize> = code_ids
         .iter()
@@ -125,7 +142,7 @@ pub fn co_occurrence(conn: &Connection, document_ids: Option<&[String]>) -> Resu
         .map(|(i, c)| (c.as_str(), i))
         .collect();
 
-    let (doc_sql, args) = document_clause(document_ids);
+    let (doc_sql, args) = document_clause(conn, document_ids, document_set_ids)?;
     let mut stmt = conn.prepare(&format!(
         "SELECT e.id, e.document_id, e.start_pos, e.end_pos FROM excerpts e
          WHERE e.kind = 'text' AND e.start_pos IS NOT NULL AND e.end_pos IS NOT NULL{doc_sql}
@@ -327,7 +344,7 @@ mod tests {
     #[test]
     fn frequencies_count_own_descendants_and_documents() {
         let f = fixture();
-        let rows = code_frequencies(&f.project.conn, None).unwrap();
+        let rows = code_frequencies(&f.project.conn, None, None).unwrap();
         assert_eq!(rows.len(), 4);
 
         let a = freq(&rows, &f.a);
@@ -351,21 +368,69 @@ mod tests {
     #[test]
     fn frequencies_honour_the_document_filter() {
         let f = fixture();
-        let rows = code_frequencies(&f.project.conn, Some(std::slice::from_ref(&f.doc2))).unwrap();
+        let rows =
+            code_frequencies(&f.project.conn, Some(std::slice::from_ref(&f.doc2)), None).unwrap();
         let a = freq(&rows, &f.a);
         assert_eq!((a.own, a.with_descendants, a.document_count), (0, 1, 1));
         assert_eq!(a.per_document, vec![(f.doc2.clone(), 1)]);
         assert_eq!(freq(&rows, &f.c).own, 0);
         assert!(freq(&rows, &f.c).per_document.is_empty());
         // An empty list is not a filter.
-        let all = code_frequencies(&f.project.conn, Some(&[])).unwrap();
+        let all = code_frequencies(&f.project.conn, Some(&[]), None).unwrap();
         assert_eq!(freq(&all, &f.a).with_descendants, 3);
+    }
+
+    #[test]
+    fn frequencies_expand_document_sets_like_the_excerpt_browser() {
+        let f = fixture();
+        let doc2_set = crate::db::sets::create_set(
+            &f.project.conn,
+            "document",
+            "Wave 2",
+            std::slice::from_ref(&f.doc2),
+            None,
+        )
+        .unwrap();
+
+        // The set alone stands for its member document.
+        let rows = code_frequencies(
+            &f.project.conn,
+            None,
+            Some(std::slice::from_ref(&doc2_set.id)),
+        )
+        .unwrap();
+        let a = freq(&rows, &f.a);
+        assert_eq!((a.own, a.with_descendants, a.document_count), (0, 1, 1));
+
+        // An explicit id and a set are unioned, not intersected.
+        let rows = code_frequencies(
+            &f.project.conn,
+            Some(std::slice::from_ref(&f.doc1)),
+            Some(std::slice::from_ref(&doc2_set.id)),
+        )
+        .unwrap();
+        let a = freq(&rows, &f.a);
+        assert_eq!((a.own, a.with_descendants, a.document_count), (1, 3, 2));
+
+        // A set that is picked but empty or unknown matches no document,
+        // rather than falling back to "no filter".
+        let empty_set =
+            crate::db::sets::create_set(&f.project.conn, "document", "Empty", &[], None).unwrap();
+        let rows = code_frequencies(
+            &f.project.conn,
+            None,
+            Some(std::slice::from_ref(&empty_set.id)),
+        )
+        .unwrap();
+        assert_eq!(freq(&rows, &f.a).with_descendants, 0);
+        let rows = code_frequencies(&f.project.conn, None, Some(&["nope".into()])).unwrap();
+        assert_eq!(freq(&rows, &f.a).with_descendants, 0);
     }
 
     #[test]
     fn co_occurrence_counts_overlapping_pairs_once() {
         let f = fixture();
-        let m = co_occurrence(&f.project.conn, None).unwrap();
+        let m = co_occurrence(&f.project.conn, None, None).unwrap();
         assert_eq!(m.code_ids.len(), 4);
         let cells = &m.cells;
 
@@ -386,12 +451,30 @@ mod tests {
 
         // Touching ranges do not overlap: [0,5) and [5,9) are disjoint.
         apply(&f.project.conn, &f.doc1, 5, 9, &[&f.c]);
-        let m = co_occurrence(&f.project.conn, None).unwrap();
+        let m = co_occurrence(&f.project.conn, None, None).unwrap();
         assert_eq!(cell(&m.cells, &f.a, &f.c), 0);
         assert_eq!(cell(&m.cells, &f.b, &f.c), 1); // [3,8) and [5,9) do overlap
 
         // Document filter.
-        let m = co_occurrence(&f.project.conn, Some(std::slice::from_ref(&f.doc2))).unwrap();
+        let m = co_occurrence(&f.project.conn, Some(std::slice::from_ref(&f.doc2)), None).unwrap();
+        assert_eq!(cell(&m.cells, &f.a, &f.b), 0);
+        assert_eq!(cell(&m.cells, &f.a1, &f.a1), 1);
+
+        // A document set does the same as the equivalent explicit id.
+        let doc2_set = crate::db::sets::create_set(
+            &f.project.conn,
+            "document",
+            "Wave 2",
+            std::slice::from_ref(&f.doc2),
+            None,
+        )
+        .unwrap();
+        let m = co_occurrence(
+            &f.project.conn,
+            None,
+            Some(std::slice::from_ref(&doc2_set.id)),
+        )
+        .unwrap();
         assert_eq!(cell(&m.cells, &f.a, &f.b), 0);
         assert_eq!(cell(&m.cells, &f.a1, &f.a1), 1);
     }
@@ -412,7 +495,7 @@ mod tests {
         .id;
         apply(&f.project.conn, &doc, 0, 10, &[&f.a, &f.b]);
         apply(&f.project.conn, &doc, 5, 15, &[&f.a, &f.b]);
-        let m = co_occurrence(&f.project.conn, Some(std::slice::from_ref(&doc))).unwrap();
+        let m = co_occurrence(&f.project.conn, Some(std::slice::from_ref(&doc)), None).unwrap();
         // Once per excerpt (both codes on one excerpt) + once for the pair.
         assert_eq!(cell(&m.cells, &f.a, &f.b), 3);
         assert_eq!(cell(&m.cells, &f.a, &f.a), 2);
@@ -438,8 +521,8 @@ mod tests {
     #[test]
     fn empty_project_is_empty_everywhere() {
         let p = OpenProject::in_memory("t").unwrap();
-        assert!(code_frequencies(&p.conn, None).unwrap().is_empty());
-        let m = co_occurrence(&p.conn, None).unwrap();
+        assert!(code_frequencies(&p.conn, None, None).unwrap().is_empty());
+        let m = co_occurrence(&p.conn, None, None).unwrap();
         assert!(m.code_ids.is_empty() && m.cells.is_empty());
         let m = code_by_document(&p.conn).unwrap();
         assert!(m.document_ids.is_empty() && m.cells.is_empty());

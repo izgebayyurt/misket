@@ -228,6 +228,25 @@ pub fn remove_from_set(conn: &Connection, set_id: &str, member_id: &str) -> Resu
     set_members(conn, set_id)
 }
 
+/// `picked` followed by the ids `set_ids` expand to, de-duplicated and
+/// keeping the order each id is first seen. Shared by anything that lets a
+/// set stand in for its members: the excerpt browser's filters
+/// (`excerpts::query`) and the analysis views (`analysis::code_frequencies`,
+/// `analysis::co_occurrence`).
+pub fn union_with_sets(
+    conn: &Connection,
+    picked: Option<&[String]>,
+    set_ids: &[String],
+) -> Result<Vec<String>> {
+    let mut out: Vec<String> = picked.unwrap_or_default().to_vec();
+    for id in union_members(conn, set_ids)? {
+        if !out.contains(&id) {
+            out.push(id);
+        }
+    }
+    Ok(out)
+}
+
 /// The union of several sets' members, de-duplicated and keeping the order
 /// they are first seen. Unknown set ids contribute nothing rather than
 /// failing, so a filter that mentions a set someone deleted still runs.

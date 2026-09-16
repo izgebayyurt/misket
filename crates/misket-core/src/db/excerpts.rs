@@ -723,18 +723,6 @@ fn descriptor_clause(
 }
 
 /// Query excerpts across the project with code/document filters and paging.
-/// The picked ids followed by the ids the picked sets expand to, without
-/// duplicates.
-fn union(picked: Option<&[String]>, from_sets: &[String]) -> Vec<String> {
-    let mut out: Vec<String> = picked.unwrap_or_default().to_vec();
-    for id in from_sets {
-        if !out.contains(id) {
-            out.push(id.clone());
-        }
-    }
-    out
-}
-
 pub fn query(conn: &Connection, filter: &ExcerptFilter) -> Result<ExcerptPage> {
     let mut where_clauses = vec!["1 = 1".to_string()];
     let mut args: Vec<rusqlite::types::Value> = vec![];
@@ -743,10 +731,7 @@ pub fn query(conn: &Connection, filter: &ExcerptFilter) -> Result<ExcerptPage> {
     // picked code ids before anything else looks at them; the same for
     // document sets and document ids.
     let code_sets = filter.code_set_ids.as_deref().unwrap_or_default();
-    let code_ids = union(
-        filter.code_ids.as_deref(),
-        &sets::union_members(conn, code_sets)?,
-    );
+    let code_ids = sets::union_with_sets(conn, filter.code_ids.as_deref(), code_sets)?;
     let wants_codes = !code_ids.is_empty() || !code_sets.is_empty();
     if wants_codes {
         if code_ids.is_empty() {
@@ -781,10 +766,7 @@ pub fn query(conn: &Connection, filter: &ExcerptFilter) -> Result<ExcerptPage> {
         }
     }
     let doc_sets = filter.document_set_ids.as_deref().unwrap_or_default();
-    let doc_ids = union(
-        filter.document_ids.as_deref(),
-        &sets::union_members(conn, doc_sets)?,
-    );
+    let doc_ids = sets::union_with_sets(conn, filter.document_ids.as_deref(), doc_sets)?;
     if !doc_ids.is_empty() || !doc_sets.is_empty() {
         if doc_ids.is_empty() {
             where_clauses.push("0 = 1".into());

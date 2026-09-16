@@ -4,6 +4,7 @@ import { useProjectInfo, useProjectStats, useRenameProject } from "@/queries/pro
 import { useDocuments } from "@/queries/documents";
 import { useCodes, useCodeTree } from "@/queries/codes";
 import { useCreateMemo, useMemos } from "@/queries/memos";
+import { useSets } from "@/queries/sets";
 import { pathOf } from "@/core/codeTree";
 import { sparklineAreaPath, sparklineLinePath } from "@/core/sparkline";
 import { Button } from "@/components/ui/button";
@@ -127,6 +128,14 @@ export function OverviewView() {
             topCodes={stats?.topCodes ?? []}
             tree={tree}
             onOpen={(id) => openExcerpts({ codeIds: [id], includeDescendants: false })}
+          />
+        </section>
+
+        <section>
+          <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-fg-muted">Sets</h2>
+          <SetsOverview
+            onOpenCodeSet={(id) => openExcerpts({ codeSetIds: [id] })}
+            onOpenDocumentSet={(id) => openExcerpts({ documentSetIds: [id] })}
           />
         </section>
       </div>
@@ -445,5 +454,70 @@ function TopCodes({
         </li>
       ))}
     </ul>
+  );
+}
+
+/**
+ * Code sets and document sets, compactly: a name and a member count, click
+ * to browse those members' excerpts. A one-line hint replaces the list when
+ * the project has no sets yet.
+ */
+function SetsOverview({
+  onOpenCodeSet,
+  onOpenDocumentSet,
+}: {
+  onOpenCodeSet: (id: string) => void;
+  onOpenDocumentSet: (id: string) => void;
+}) {
+  const { data: codeSets } = useSets("code");
+  const { data: docSets } = useSets("document");
+  const hasSets = (codeSets?.length ?? 0) > 0 || (docSets?.length ?? 0) > 0;
+
+  if (!hasSets) {
+    return (
+      <p className="text-sm text-fg-muted" data-testid="sets-overview-empty">
+        No sets yet. Group codes or documents from the sidebar to see them here.
+      </p>
+    );
+  }
+
+  return (
+    <div className="grid gap-3 sm:grid-cols-2" data-testid="sets-overview">
+      <SetGroupList title="Code sets" sets={codeSets ?? []} onOpen={onOpenCodeSet} />
+      <SetGroupList title="Document sets" sets={docSets ?? []} onOpen={onOpenDocumentSet} />
+    </div>
+  );
+}
+
+function SetGroupList({
+  title,
+  sets,
+  onOpen,
+}: {
+  title: string;
+  sets: { id: string; name: string; memberCount: number }[];
+  onOpen: (id: string) => void;
+}) {
+  if (sets.length === 0) return null;
+  return (
+    <div className="rounded-md border border-border bg-panel p-3">
+      <h3 className="mb-1.5 text-xs font-medium text-fg-muted">{title}</h3>
+      <ul className="space-y-0.5">
+        {sets.map((s) => (
+          <li key={s.id}>
+            <button
+              type="button"
+              onClick={() => onOpen(s.id)}
+              title={`Show excerpts in "${s.name}"`}
+              className="flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-sm hover:bg-muted"
+              data-testid="overview-set-row"
+            >
+              <span className="min-w-0 flex-1 truncate">{s.name}</span>
+              <span className="shrink-0 text-xs tabular-nums text-fg-muted">{s.memberCount}</span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }

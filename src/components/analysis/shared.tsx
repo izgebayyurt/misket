@@ -3,32 +3,60 @@ import { Download } from "lucide-react";
 import { writeTextFile } from "@/api/project";
 import { useDocuments } from "@/queries/documents";
 import { useProjectInfo } from "@/queries/project";
+import { useSets } from "@/queries/sets";
 import { FilterPicker } from "@/components/ui/filter-picker";
 import { Button } from "@/components/ui/button";
+import { SetsPickerGroup } from "@/components/sets/SetsPickerGroup";
 import { toast } from "@/state/toasts";
 
-/** A document multi-select shared by the analysis views. */
+/**
+ * A document multi-select shared by the analysis views, with the same
+ * "Sets" group the excerpt browser's document picker has: a document set
+ * stands for all of its members, unioned into `documentIds` on the Rust
+ * side.
+ */
 export function DocumentFilter({
   documentIds,
   onChange,
+  documentSetIds,
+  onSetIdsChange,
 }: {
   documentIds: string[];
   onChange: (ids: string[]) => void;
+  documentSetIds: string[];
+  onSetIdsChange: (ids: string[]) => void;
 }) {
   const { data: docs } = useDocuments();
+  const { data: docSets } = useSets("document");
+  const count = documentIds.length + documentSetIds.length;
   return (
     <FilterPicker
       label={
-        documentIds.length
-          ? `${documentIds.length} document${documentIds.length > 1 ? "s" : ""}`
+        count
+          ? `${count} document${count > 1 ? "s" : ""}${documentSetIds.length ? " / set" : ""}`
           : "All documents"
       }
-      active={documentIds.length > 0}
-      onClear={() => onChange([])}
+      active={count > 0}
+      onClear={() => {
+        onChange([]);
+        onSetIdsChange([]);
+      }}
       testId="analysis-filter-documents"
     >
       {(query) => (
         <>
+          <SetsPickerGroup
+            sets={docSets}
+            query={query}
+            picked={documentSetIds}
+            onToggle={(id) =>
+              onSetIdsChange(
+                documentSetIds.includes(id)
+                  ? documentSetIds.filter((x) => x !== id)
+                  : [...documentSetIds, id],
+              )
+            }
+          />
           {docs
             ?.filter((d) => d.name.toLowerCase().includes(query.toLowerCase()))
             .map((d) => (

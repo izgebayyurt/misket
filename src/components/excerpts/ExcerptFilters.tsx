@@ -5,8 +5,9 @@ import { flattenTree, pathOf } from "@/core/codeTree";
 import { ColorDot } from "@/components/codebook/ColorSwatch";
 import { FilterPicker } from "@/components/ui/filter-picker";
 import { DescriptorConditions } from "@/components/descriptors/DescriptorConditions";
+import { SetsPickerGroup } from "@/components/sets/SetsPickerGroup";
 import { SavedFilters } from "./SavedFilters";
-import type { DescriptorFilter, ExcerptFilter, SetInfo } from "@/api/types";
+import type { DescriptorFilter, ExcerptFilter } from "@/api/types";
 
 interface Props {
   codeIds: string[];
@@ -76,7 +77,7 @@ export function ExcerptFilters(p: Props) {
               />
               Match all selected codes
             </label>
-            <SetGroup
+            <SetsPickerGroup
               sets={codeSets}
               query={query}
               picked={p.codeSetIds}
@@ -119,7 +120,7 @@ export function ExcerptFilters(p: Props) {
       >
         {(query) => (
           <>
-            <SetGroup
+            <SetsPickerGroup
               sets={docSets}
               query={query}
               picked={p.documentSetIds}
@@ -162,40 +163,5 @@ export function ExcerptFilters(p: Props) {
         {p.total} excerpt{p.total === 1 ? "" : "s"}
       </span>
     </div>
-  );
-}
-
-/** The "Sets" group at the top of a picker: a set stands for all its members. */
-function SetGroup({
-  sets,
-  query,
-  picked,
-  onToggle,
-}: {
-  sets: SetInfo[] | undefined;
-  query: string;
-  picked: string[];
-  onToggle: (id: string) => void;
-}) {
-  const shown = (sets ?? []).filter((s) => s.name.toLowerCase().includes(query.toLowerCase()));
-  if (shown.length === 0) return null;
-  return (
-    <>
-      <p className="px-2 pt-1 text-[10px] font-medium uppercase tracking-wide text-fg-muted">
-        Sets
-      </p>
-      {shown.map((s) => (
-        <label
-          key={s.id}
-          className="flex cursor-default items-center gap-2 rounded px-2 py-1 hover:bg-muted"
-          data-testid="filter-set"
-        >
-          <input type="checkbox" checked={picked.includes(s.id)} onChange={() => onToggle(s.id)} />
-          <span className="min-w-0 flex-1 truncate">{s.name}</span>
-          <span className="text-xs tabular-nums text-fg-muted">{s.memberCount || ""}</span>
-        </label>
-      ))}
-      <div className="my-1 h-px bg-border" />
-    </>
   );
 }

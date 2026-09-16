@@ -6,10 +6,11 @@ use std::io::Write;
 use rusqlite::Connection;
 use serde::Serialize;
 
-use super::{codes, descriptors, documents, excerpts, memos};
+use super::{codes, descriptors, documents, excerpts, memos, sets};
 use crate::error::Result;
 use crate::models::{
-    Code, CodebookJsonCode, DescriptorField, DescriptorValue, ExcerptFilter, ExcerptWithCodes, Memo,
+    Code, CodebookJsonCode, DescriptorField, DescriptorValue, ExcerptFilter, ExcerptWithCodes,
+    Memo, SavedFilter, SetWithMembers,
 };
 
 /// Full code path ("Parent / Child") for every code.
@@ -191,6 +192,8 @@ struct ProjectJson {
     memos: Vec<Memo>,
     descriptor_fields: Vec<DescriptorField>,
     descriptor_values: Vec<DescriptorValue>,
+    sets: Vec<SetWithMembers>,
+    saved_filters: Vec<SavedFilter>,
 }
 
 pub fn project_json<W: Write>(conn: &Connection, w: W) -> Result<()> {
@@ -217,6 +220,15 @@ pub fn project_json<W: Write>(conn: &Connection, w: W) -> Result<()> {
     for d in &docs {
         all_descriptor_values.extend(descriptors::values_for_document(conn, &d.summary.id)?);
     }
+    // Sets and saved filters, so a project export is enough to rebuild
+    // everything the browser's filters can name.
+    let mut all_sets = vec![];
+    for kind in sets::KINDS {
+        for set in sets::list_sets(conn, kind)? {
+            let member_ids = sets::set_members(conn, &set.id)?;
+            all_sets.push(SetWithMembers { set, member_ids });
+        }
+    }
     let out = ProjectJson {
         format: "misket-project",
         format_version: 1,
@@ -227,6 +239,8 @@ pub fn project_json<W: Write>(conn: &Connection, w: W) -> Result<()> {
         memos: all_memos,
         descriptor_fields: descriptors::list_fields(conn)?,
         descriptor_values: all_descriptor_values,
+        sets: all_sets,
+        saved_filters: sets::list_saved_filters(conn)?,
     };
     serde_json::to_writer_pretty(w, &out)?;
     Ok(())
@@ -271,6 +285,23 @@ mod tests {
         let age = mk_field(&p.conn, "Age", "number", &[]);
         descriptors::set_value(&p.conn, &doc.summary.id, &site.id, Some("North")).unwrap();
         descriptors::set_value(&p.conn, &doc.summary.id, &age.id, Some("41")).unwrap();
+        sets::create_set(
+            &p.conn,
+            "code",
+            "Greetings",
+            std::slice::from_ref(&a.id),
+            None,
+        )
+        .unwrap();
+        sets::save_filter(
+            &p.conn,
+            "Formal only",
+            &ExcerptFilter {
+                code_ids: Some(vec![b.id.clone()]),
+                ..Default::default()
+            },
+        )
+        .unwrap();
         p
     }
 
@@ -357,6 +388,16 @@ mod tests {
         assert_eq!(values[0]["value"], "North");
         assert_eq!(values[0]["documentId"], v["documents"][0]["id"]);
         assert_eq!(values[1]["value"], "41");
+
+        let sets = v["sets"].as_array().unwrap();
+        assert_eq!(sets.len(), 1);
+        assert_eq!(sets[0]["set"]["name"], "Greetings");
+        assert_eq!(sets[0]["set"]["kind"], "code");
+        assert_eq!(sets[0]["memberIds"].as_array().unwrap().len(), 1);
+        let filters = v["savedFilters"].as_array().unwrap();
+        assert_eq!(filters.len(), 1);
+        assert_eq!(filters[0]["name"], "Formal only");
+        assert_eq!(filters[0]["filter"]["codeIds"].as_array().unwrap().len(), 1);
     }
 
     #[test]

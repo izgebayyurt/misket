@@ -55,9 +55,11 @@ keyboard-friendly interface without a subscription.
   table of every document, and filter excerpts by them ("Age is more than 30",
   "Site is any of North, South").
 - **Sets and saved filters**: group codes or documents under a name ("Barriers",
-  "Round 1 interviews") from the sidebar or a row's "Add to set" menu, click a
-  set to see its excerpts, use sets as one tick in the browser's code and
-  document pickers, and save a whole filter under a name to come back to it.
+  "Round 1 interviews") from the sidebar, the overview screen, or a row's "Add
+  to set" menu, click a set to see its excerpts, use sets as one tick in the
+  excerpt browser's and the analysis views' pickers, and save a whole filter
+  under a name to come back to it. Sets and saved filters are included in the
+  project JSON export.
 - **Memos** on documents, codes, excerpts and the project.
 - **Undo/redo** for every coding and codebook action.
 - **Export** the codebook as CSV or a reusable JSON file, excerpts as CSV, or

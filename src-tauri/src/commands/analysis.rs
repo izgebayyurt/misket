@@ -9,16 +9,30 @@ use crate::state::AppState;
 pub fn code_frequencies(
     state: State<'_, AppState>,
     document_ids: Option<Vec<String>>,
+    document_set_ids: Option<Vec<String>>,
 ) -> Result<Vec<CodeFrequency>> {
-    state.with_project(|p| analysis::code_frequencies(&p.conn, document_ids.as_deref()))
+    state.with_project(|p| {
+        analysis::code_frequencies(
+            &p.conn,
+            document_ids.as_deref(),
+            document_set_ids.as_deref(),
+        )
+    })
 }
 
 #[tauri::command]
 pub fn co_occurrence(
     state: State<'_, AppState>,
     document_ids: Option<Vec<String>>,
+    document_set_ids: Option<Vec<String>>,
 ) -> Result<CoOccurrence> {
-    state.with_project(|p| analysis::co_occurrence(&p.conn, document_ids.as_deref()))
+    state.with_project(|p| {
+        analysis::co_occurrence(
+            &p.conn,
+            document_ids.as_deref(),
+            document_set_ids.as_deref(),
+        )
+    })
 }
 
 #[tauri::command]
