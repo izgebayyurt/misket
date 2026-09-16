@@ -29,6 +29,7 @@ import { useShortcutActions } from "@/state/shortcutActions";
 import { useSettings } from "@/state/settings";
 import { SelectionToolbar } from "./SelectionToolbar";
 import { ExcerptPopover } from "./ExcerptPopover";
+import { DocumentTitle } from "./DocumentTitle";
 import { FindBar } from "./FindBar";
 import { GoToParagraphBar } from "./GoToParagraphBar";
 import { toast } from "@/state/toasts";
@@ -75,6 +76,7 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
   const [findIndex, setFindIndex] = useState(0);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [goToOpen, setGoToOpen] = useState(false);
+  const [renaming, setRenaming] = useState(false);
   const showParagraphNumbers = useSettings((s) => s.settings.showParagraphNumbers);
 
   const text = doc?.text ?? "";
@@ -831,7 +833,17 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
   if (!doc) return null;
 
   return (
-    <div className="flex h-full flex-col" data-testid="document-view">
+    <div
+      className="flex h-full flex-col"
+      data-testid="document-view"
+      // F2 renames the open document while focus is inside the viewer (the
+      // text root is focusable), the keyboard twin of double-clicking the title.
+      onKeyDown={(e) => {
+        if (e.key !== "F2" || isTextField(e.target)) return;
+        e.preventDefault();
+        setRenaming(true);
+      }}
+    >
       {findOpen ? (
         <FindBar
           query={findQuery}
@@ -854,7 +866,13 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
         <div
           className={cn("mx-auto max-w-3xl py-10 pr-10", showParagraphNumbers ? "pl-20" : "pl-10")}
         >
-          <h1 className="mb-6 font-serif text-2xl font-medium">{doc.name}</h1>
+          <DocumentTitle
+            documentId={documentId}
+            name={doc.name}
+            editing={renaming}
+            onEditingChange={setRenaming}
+            className="mb-6 block font-serif text-2xl font-medium"
+          />
           <div
             ref={rootRef}
             tabIndex={-1}
