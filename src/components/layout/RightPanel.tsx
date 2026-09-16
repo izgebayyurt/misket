@@ -3,6 +3,7 @@ import { useWorkspace } from "@/state/workspace";
 import { ExcerptInspector } from "@/components/excerpts/ExcerptInspector";
 import { MemoList } from "@/components/memos/MemoList";
 import { DocumentDescriptors } from "@/components/descriptors/DocumentDescriptors";
+import { CodeDefinition } from "@/components/codebook/CodeDefinition";
 import { useDocuments } from "@/queries/documents";
 import { useCodeTree } from "@/queries/codes";
 import { pathOf } from "@/core/codeTree";
@@ -87,6 +88,9 @@ export function RightPanel() {
           </div>
           {effectiveScope === "document" && documentId ? (
             <DocumentDescriptors documentId={documentId} />
+          ) : null}
+          {effectiveScope === "code" && selectedCodeId ? (
+            <CodeDefinition codeId={selectedCodeId} />
           ) : null}
           <MemoList
             target={target}

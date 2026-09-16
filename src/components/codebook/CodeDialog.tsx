@@ -27,6 +27,8 @@ export function CodeDialog(props: Props) {
   const [name, setName] = useState(editing?.name ?? "");
   const [color, setColor] = useState(editing?.color ?? nextColor(codes ?? []));
   const [description, setDescription] = useState(editing?.description ?? "");
+  const [inclusion, setInclusion] = useState(editing?.inclusion ?? "");
+  const [exclusion, setExclusion] = useState(editing?.exclusion ?? "");
   const [shortcut, setShortcut] = useState(editing?.shortcut ?? "");
 
   const parentPath =
@@ -41,6 +43,8 @@ export function CodeDialog(props: Props) {
           name,
           color,
           description,
+          inclusion,
+          exclusion,
           parentId: props.parentId,
           shortcut: shortcut || null,
         });
@@ -48,7 +52,7 @@ export function CodeDialog(props: Props) {
       } else {
         await update.mutateAsync({
           id: props.code.id,
-          patch: { name, color, description, shortcut: shortcut || null },
+          patch: { name, color, description, inclusion, exclusion, shortcut: shortcut || null },
         });
       }
       props.onClose();
@@ -82,9 +86,12 @@ export function CodeDialog(props: Props) {
               <ColorPicker value={color} onChange={setColor} />
             </div>
           </div>
+          {/* The three parts of a working code definition: what it means,
+              when it applies, and when it does not (see docs/research). Only
+              the description is shown in the palette while coding. */}
           <div>
             <label className="text-xs font-medium text-fg-muted" htmlFor="code-desc">
-              Description
+              Description — what it means
             </label>
             <Textarea
               id="code-desc"
@@ -92,7 +99,35 @@ export function CodeDialog(props: Props) {
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               className="mt-1"
-              placeholder="When to apply this code…"
+              placeholder="What this code stands for…"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-fg-muted" htmlFor="code-inclusion">
+              Include when
+            </label>
+            <Textarea
+              id="code-inclusion"
+              rows={2}
+              value={inclusion}
+              onChange={(e) => setInclusion(e.target.value)}
+              className="mt-1"
+              placeholder="Apply this code when…"
+              data-testid="code-inclusion"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-fg-muted" htmlFor="code-exclusion">
+              Exclude when
+            </label>
+            <Textarea
+              id="code-exclusion"
+              rows={2}
+              value={exclusion}
+              onChange={(e) => setExclusion(e.target.value)}
+              className="mt-1"
+              placeholder="Do not apply it when… (and what to use instead)"
+              data-testid="code-exclusion"
             />
           </div>
           <div>

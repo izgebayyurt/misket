@@ -91,6 +91,39 @@ export function useUpdateCode() {
   });
 }
 
+/**
+ * Point a code at one excerpt as its canonical example (or clear it, with
+ * `excerptId: null`). Its own mutation rather than a `useUpdateCode` call so
+ * the undo entry reads as what the user did, and so the inverse is exactly
+ * the previous example rather than a whole-code patch.
+ */
+export function useSetCodeExample() {
+  const invalidate = useInvalidateCodes();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ codeId, excerptId }: { codeId: string; excerptId: string | null }) => {
+      const before = qc
+        .getQueryData<Awaited<ReturnType<typeof api.listCodes>>>(keys.codes)
+        ?.find((c) => c.id === codeId);
+      const previous = before?.exampleExcerptId ?? null;
+      if (previous === excerptId) return;
+      await useUndoStore.getState().run({
+        label: excerptId
+          ? `Use excerpt as example for "${before?.name ?? "code"}"`
+          : `Clear example for "${before?.name ?? "code"}"`,
+        redo: async () => {
+          await api.updateCode(codeId, { exampleExcerptId: excerptId });
+          invalidate();
+        },
+        undo: async () => {
+          await api.updateCode(codeId, { exampleExcerptId: previous });
+          invalidate();
+        },
+      });
+    },
+  });
+}
+
 export function useMoveCode() {
   const invalidate = useInvalidateCodes();
   const qc = useQueryClient();

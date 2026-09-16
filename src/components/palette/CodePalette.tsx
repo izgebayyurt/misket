@@ -180,6 +180,9 @@ function PaletteBody({ close }: { close: () => void }) {
                         </span>
                       ) : null}
                     </span>
+                    {/* The description only, on one line: the inclusion and
+                        exclusion rules belong in the code dialog and the
+                        right-hand panel, not in a list you scan mid-coding. */}
                     {n.code.description ? (
                       <span className="block truncate text-xs text-fg-muted">
                         {n.code.description}

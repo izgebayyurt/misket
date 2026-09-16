@@ -21,12 +21,19 @@ keyboard-friendly interface without a subscription.
   whitespace, Misket offers to tidy it up before import (document text is
   immutable once imported). Check "Remember my choice" in that dialog to skip
   it on future imports; its "Ask again on import" link resets that.
-- **Build a codebook**: nested codes with colors, descriptions, single-key
-  hotkeys, drag-and-drop reordering, merge and delete with impact preview, and
+- **Build a codebook**: nested codes with colors, single-key hotkeys,
+  drag-and-drop reordering, merge and delete with impact preview, and
   "Move excerpts to…" to hand one code's excerpts to another without losing
   either code. Import a codebook (JSON or CSV) exported from another Misket
   project to reuse it: merge it into the current codebook by matching code
   names, or add it fresh under a chosen code.
+- **Define codes properly**: each code has a description (what it means), an
+  "Include when" and an "Exclude when" rule, and one excerpt pinned as its
+  canonical example — press the star next to a code in the excerpt popover or
+  inspector. The whole definition, example quote included, sits in the right
+  panel whenever the code is selected; the palette shows only the description,
+  so it stays scannable while you code. Definitions travel with the codebook
+  export and import.
 - **Code excerpts**: select text, press `Ctrl`/`⌘`+`K` and pick a code (type
   `>name` to create one on the spot), or press a code's hotkey. The picker
   shows each code's description and, for nested codes, its full path.
