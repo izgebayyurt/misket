@@ -25,8 +25,8 @@ use serde_json::{json, Value};
 use super::{codes, documents, excerpts, util};
 use crate::error::{AppError, Result};
 use crate::models::{
-    ChildrenStrategy, CodePatch, CodeTreeSnapshot, CompactReport, DocumentSnapshot,
-    ExcerptSnapshot, HistoryNode, HistoryNodeSummary, Memo, TagRow,
+    ChildrenStrategy, CodePatch, CodeTreeSnapshot, CompactReport, DescriptorField,
+    DocumentSnapshot, ExcerptSnapshot, HistoryNode, HistoryNodeSummary, Memo, TagRow,
 };
 
 // ------------------------------------------------------------- the head
@@ -591,6 +591,125 @@ impl DocumentOp {
     }
 }
 
+/// Descriptor writes. A field and the values documents have for it move
+/// together: deleting a field takes its values, and changing its kind drops
+/// the ones the new kind cannot hold — so both directions carry them.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "op", rename_all = "camelCase")]
+pub enum DescriptorOp {
+    /// Write the field row as given (id and timestamps included) and, when
+    /// `values` is present, replace every value stored for it.
+    Field {
+        field: Box<DescriptorField>,
+        /// `(documentId, value)`; absent means "leave the values alone".
+        #[serde(default)]
+        values: Option<Vec<(String, String)>>,
+        /// Every field id in order, because deleting one renumbers the rest.
+        #[serde(default)]
+        order: Vec<String>,
+    },
+    DropField {
+        field_id: String,
+        #[serde(default)]
+        order: Vec<String>,
+    },
+    ReorderFields {
+        ids: Vec<String>,
+    },
+    SetValue {
+        document_id: String,
+        field_id: String,
+        /// `None` clears it.
+        value: Option<String>,
+    },
+}
+
+impl DescriptorOp {
+    fn run(&self, conn: &Connection) -> Result<()> {
+        match self {
+            DescriptorOp::Field {
+                field,
+                values,
+                order,
+            } => {
+                let options_json = if field.kind == "choice" {
+                    Some(serde_json::to_string(&field.options)?)
+                } else {
+                    None
+                };
+                conn.execute(
+                    "INSERT INTO descriptor_fields
+                       (id, name, kind, options_json, sort_order, created_at, updated_at)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+                     ON CONFLICT(id) DO UPDATE SET
+                       name = excluded.name, kind = excluded.kind,
+                       options_json = excluded.options_json,
+                       sort_order = excluded.sort_order, updated_at = excluded.updated_at",
+                    params![
+                        field.id,
+                        field.name,
+                        field.kind,
+                        options_json,
+                        field.sort_order,
+                        field.created_at,
+                        field.updated_at
+                    ],
+                )?;
+                if let Some(values) = values {
+                    conn.execute(
+                        "DELETE FROM descriptor_values WHERE field_id = ?1",
+                        [&field.id],
+                    )?;
+                    for (document_id, value) in values {
+                        // A document deleted since simply keeps no value.
+                        conn.execute(
+                            "INSERT OR IGNORE INTO descriptor_values (document_id, field_id, value)
+                             SELECT id, ?2, ?3 FROM documents WHERE id = ?1",
+                            params![document_id, field.id, value],
+                        )?;
+                    }
+                }
+                place_fields(conn, order)
+            }
+            DescriptorOp::DropField { field_id, order } => {
+                conn.execute("DELETE FROM descriptor_fields WHERE id = ?1", [field_id])?;
+                place_fields(conn, order)
+            }
+            DescriptorOp::ReorderFields { ids } => place_fields(conn, ids),
+            DescriptorOp::SetValue {
+                document_id,
+                field_id,
+                value,
+            } => {
+                match value {
+                    Some(v) => conn.execute(
+                        "INSERT INTO descriptor_values (document_id, field_id, value)
+                         VALUES (?1, ?2, ?3)
+                         ON CONFLICT(document_id, field_id) DO UPDATE SET value = excluded.value",
+                        params![document_id, field_id, v],
+                    )?,
+                    None => conn.execute(
+                        "DELETE FROM descriptor_values WHERE document_id = ?1 AND field_id = ?2",
+                        params![document_id, field_id],
+                    )?,
+                };
+                Ok(())
+            }
+        }
+    }
+}
+
+/// Put the descriptor fields back in this order, by index.
+fn place_fields(conn: &Connection, ids: &[String]) -> Result<()> {
+    for (i, id) in ids.iter().enumerate() {
+        conn.execute(
+            "UPDATE descriptor_fields SET sort_order = ?2 WHERE id = ?1",
+            params![id, i as i64],
+        )?;
+    }
+    Ok(())
+}
+
 /// Memo writes: `restore` upserts a whole row, so it covers create, edit and
 /// undelete alike.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -800,6 +919,13 @@ fn apply(conn: &Connection, node_id: i64, kind: &str, payload: &Value) -> Result
         }
         "document.imported" | "document.deleted" | "document.renamed" | "document.reordered" => {
             serde_json::from_value::<DocumentOp>(payload.clone())?.run(conn, node_id)
+        }
+        "descriptor.field_created"
+        | "descriptor.field_updated"
+        | "descriptor.field_deleted"
+        | "descriptor.fields_reordered"
+        | "descriptor.value_set" => {
+            serde_json::from_value::<DescriptorOp>(payload.clone())?.run(conn)
         }
         other => Err(AppError::Validation(format!("not undoable yet: {other}"))),
     }
@@ -1873,6 +1999,102 @@ mod tests {
                 .get::<_, i64>(0))
                 .unwrap(),
             0
+        );
+    }
+
+    // ------------------------------------------------------- descriptors
+
+    #[test]
+    fn round_trips_every_descriptor_write() {
+        let f = Fixture::new();
+        let c = f.conn();
+        assert_round_trip(c, "create a field", |c| {
+            descriptors::tests::mk_field(c, "Site", "choice", &["North", "South"]);
+        });
+        let site = descriptors::list_fields(c).unwrap()[0].id.clone();
+        assert_round_trip(c, "set a value", |c| {
+            descriptors::set_value(c, &f.doc, &site, Some("north")).unwrap();
+        });
+        assert_round_trip(c, "change a value", |c| {
+            descriptors::set_value(c, &f.doc, &site, Some("South")).unwrap();
+        });
+        assert_round_trip(c, "clear a value", |c| {
+            descriptors::set_value(c, &f.doc, &site, None).unwrap();
+        });
+        descriptors::set_value(c, &f.doc, &site, Some("North")).unwrap();
+        assert_round_trip(c, "rename a field", |c| {
+            descriptors::update_field(
+                c,
+                &site,
+                crate::models::DescriptorFieldPatch {
+                    name: Some("Location".into()),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        });
+        descriptors::tests::mk_field(c, "Wave", "number", &[]);
+        assert_round_trip(c, "reorder the fields", |c| {
+            let ids: Vec<String> = descriptors::list_fields(c)
+                .unwrap()
+                .into_iter()
+                .rev()
+                .map(|x| x.id)
+                .collect();
+            descriptors::reorder_fields(c, &ids).unwrap();
+        });
+        assert_round_trip(c, "delete a field with its values", |c| {
+            descriptors::delete_field(c, &site).unwrap();
+        });
+    }
+
+    /// Changing a field's kind converts what it can and drops what it cannot;
+    /// undo has to put every value back as it was.
+    #[test]
+    fn round_trips_changing_a_descriptor_field_kind_over_its_values() {
+        let f = Fixture::new();
+        let c = f.conn();
+        let other = documents::create(c, documents::tests::new_doc("Another document."))
+            .unwrap()
+            .summary
+            .id;
+        let field = descriptors::tests::mk_field(c, "Note", "text", &[]).id;
+        descriptors::set_value(c, &f.doc, &field, Some("North")).unwrap();
+        descriptors::set_value(c, &other, &field, Some("07.50")).unwrap();
+
+        assert_round_trip(c, "text to number", |c| {
+            descriptors::update_field(
+                c,
+                &field,
+                crate::models::DescriptorFieldPatch {
+                    kind: Some("number".into()),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        });
+        // The redo left it a number: "North" is gone, "07.50" is canonical.
+        let values = descriptors::values_matrix(c).unwrap();
+        let of = |doc: &str| {
+            values
+                .rows
+                .iter()
+                .find(|r| r.document_id == doc)
+                .and_then(|r| r.values.get(&field).cloned())
+        };
+        assert_eq!(of(&f.doc), None);
+        assert_eq!(of(&other).as_deref(), Some("7.5"));
+        // And one undo takes both back.
+        undo(c).unwrap().unwrap();
+        assert_eq!(descriptors::get_field(c, &field).unwrap().kind, "text");
+        let values = descriptors::values_matrix(c).unwrap();
+        assert_eq!(
+            values
+                .rows
+                .iter()
+                .filter_map(|r| r.values.get(&field).cloned())
+                .count(),
+            2
         );
     }
 

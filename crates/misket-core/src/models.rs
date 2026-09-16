@@ -798,7 +798,8 @@ pub struct NewDescriptorField {
 pub struct DescriptorFieldPatch {
     #[serde(default)]
     pub name: Option<String>,
-    /// Only allowed while no document has a value for the field.
+    /// Changing it converts the values documents already have where the new
+    /// kind can hold them, and drops the rest. Undo restores them.
     #[serde(default)]
     pub kind: Option<String>,
     #[serde(default)]
