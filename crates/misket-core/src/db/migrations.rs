@@ -9,6 +9,7 @@ const MIGRATIONS: &[(i64, &str)] = &[
     (2, include_str!("migrations/0002_descriptors.sql")),
     (3, include_str!("migrations/0003_media_blobs.sql")),
     (4, include_str!("migrations/0004_sets.sql")),
+    (5, include_str!("migrations/0005_code_definitions.sql")),
 ];
 
 pub fn latest_version() -> i64 {
@@ -141,5 +142,42 @@ mod tests {
             )
             .unwrap();
         assert_eq!(triggers, 2);
+    }
+
+    #[test]
+    fn code_definition_columns_exist_and_example_clears_on_delete() {
+        let conn = Connection::open_in_memory().unwrap();
+        migrate(&conn).unwrap();
+        let cols: Vec<String> = conn
+            .prepare("SELECT name FROM pragma_table_info('codes')")
+            .unwrap()
+            .query_map([], |r| r.get(0))
+            .unwrap()
+            .collect::<rusqlite::Result<_>>()
+            .unwrap();
+        for wanted in ["inclusion", "exclusion", "example_excerpt_id"] {
+            assert!(cols.iter().any(|c| c == wanted), "missing column {wanted}");
+        }
+        conn.execute_batch(
+            "PRAGMA foreign_keys = ON;
+             INSERT INTO documents (id, kind, name, content_hash, text, text_length, created_at, updated_at)
+               VALUES ('d', 'text', 'Doc', 'h', 'hello there', 11, 't', 't');
+             INSERT INTO excerpts (id, document_id, kind, start_pos, end_pos, snapshot, created_at, updated_at)
+               VALUES ('e', 'd', 'text', 0, 5, 'hello', 't', 't');
+             INSERT INTO codes (id, name, color, example_excerpt_id, created_at, updated_at)
+               VALUES ('c', 'Greeting', '#D9534F', 'e', 't', 't');",
+        )
+        .unwrap();
+        conn.execute_batch("DELETE FROM excerpts WHERE id = 'e';")
+            .unwrap();
+        // The code survives; only the pointer is cleared.
+        let example: Option<String> = conn
+            .query_row(
+                "SELECT example_excerpt_id FROM codes WHERE id = 'c'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(example, None);
     }
 }

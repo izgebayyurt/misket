@@ -70,7 +70,10 @@ export function useUpdateCode() {
             name: before.name,
             color: before.color,
             description: before.description,
+            inclusion: before.inclusion,
+            exclusion: before.exclusion,
             shortcut: before.shortcut,
+            exampleExcerptId: before.exampleExcerptId ?? null,
           }
         : {};
       await useUndoStore.getState().run({

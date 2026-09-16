@@ -115,7 +115,15 @@ export interface Code {
   parentId: string | null;
   name: string;
   color: string;
+  /** What the code means. */
   description: string;
+  /** When to apply it. */
+  inclusion: string;
+  /** When not to apply it, and what to use instead. */
+  exclusion: string;
+  /** One already-coded excerpt held up as the canonical instance; cleared if
+   * that excerpt is deleted. */
+  exampleExcerptId: string | null;
   shortcut: string | null;
   sortOrder: number;
   excerptCount: number;
@@ -127,6 +135,8 @@ export interface NewCode {
   name: string;
   color?: string;
   description?: string;
+  inclusion?: string;
+  exclusion?: string;
   parentId?: string | null;
   shortcut?: string | null;
 }
@@ -135,8 +145,12 @@ export interface CodePatch {
   name?: string;
   color?: string;
   description?: string;
+  inclusion?: string;
+  exclusion?: string;
   /** `null` clears the shortcut; omit to leave unchanged. */
   shortcut?: string | null;
+  /** `null` clears the example excerpt; omit to leave unchanged. */
+  exampleExcerptId?: string | null;
 }
 
 export type ChildrenStrategy = "delete" | "promote";

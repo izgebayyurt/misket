@@ -252,6 +252,10 @@ mod tests {
                      DROP TABLE saved_filters;
                      DROP TABLE set_members;
                      DROP TABLE sets;
+                     DROP INDEX codes_example_excerpt_idx;
+                     ALTER TABLE codes DROP COLUMN example_excerpt_id;
+                     ALTER TABLE codes DROP COLUMN exclusion;
+                     ALTER TABLE codes DROP COLUMN inclusion;
                      PRAGMA user_version = 1;",
                 )
                 .unwrap();
@@ -274,7 +278,9 @@ mod tests {
             .execute_batch(
                 "SELECT count(*) FROM descriptor_fields;
                  SELECT count(*) FROM media_blobs;
-                 SELECT count(*) FROM sets;",
+                 SELECT count(*) FROM sets;
+                 SELECT count(*) FROM codes WHERE inclusion = '' AND exclusion = ''
+                   AND example_excerpt_id IS NULL;",
             )
             .unwrap();
     }
