@@ -461,6 +461,12 @@ pub struct ExcerptFilter {
     /// paging. Text excerpts only.
     #[serde(default)]
     pub query: Option<Query>,
+    /// Only excerpts spoken by one of these speakers. Like `query`, this is
+    /// not a SQL condition: it is answered from each document's transcript
+    /// format (`db::transcripts`) before paging. Text excerpts only; an empty
+    /// list is no filter at all.
+    #[serde(default)]
+    pub speakers: Option<Vec<String>>,
     #[serde(default = "default_limit")]
     pub limit: i64,
     #[serde(default)]
@@ -487,6 +493,7 @@ impl Default for ExcerptFilter {
             overlaps_code_id: None,
             descriptors: None,
             query: None,
+            speakers: None,
             limit: default_limit(),
             offset: 0,
         }
@@ -501,6 +508,10 @@ pub struct ExcerptRow {
     pub document_name: String,
     pub context_before: String,
     pub context_after: String,
+    /// Who was speaking where this excerpt starts, when the document is a
+    /// transcript (`db::transcripts`); `None` otherwise.
+    #[serde(default)]
+    pub speaker: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
