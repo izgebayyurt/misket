@@ -64,7 +64,8 @@ code-signed yet: macOS will ask you to allow the app under System Settings >
 Privacy & Security, and Windows SmartScreen will show a warning the first time.
 
 Your project is a `.misket` file (a SQLite database). Back it up like any other
-file.
+file. No project yet? Click "Try Misket with sample data" on the start screen
+for a ready-made study to explore.
 
 ## Development
 
