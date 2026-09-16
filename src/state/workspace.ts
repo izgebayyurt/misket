@@ -27,6 +27,8 @@ interface WorkspaceState {
   pendingSelection: PendingSelection | null;
   focusedExcerptId: string | null;
   paletteOpen: boolean;
+  settingsOpen: boolean;
+  shortcutsHelpOpen: boolean;
   setView: (view: View) => void;
   openDocument: (documentId: string, focusExcerptId?: string, scrollToOffset?: number) => void;
   /** Open the excerpt browser, optionally pre-filtered (analysis click-through). */
@@ -36,6 +38,8 @@ interface WorkspaceState {
   setPendingSelection: (sel: PendingSelection | null) => void;
   setFocusedExcerptId: (id: string | null) => void;
   setPaletteOpen: (open: boolean) => void;
+  setSettingsOpen: (open: boolean) => void;
+  setShortcutsHelpOpen: (open: boolean) => void;
   reset: () => void;
 }
 
@@ -46,6 +50,8 @@ const initial = {
   pendingSelection: null,
   focusedExcerptId: null,
   paletteOpen: false,
+  settingsOpen: false,
+  shortcutsHelpOpen: false,
 };
 
 export const useWorkspace = create<WorkspaceState>((set) => ({
@@ -70,5 +76,7 @@ export const useWorkspace = create<WorkspaceState>((set) => ({
   setFocusedExcerptId: (focusedExcerptId) =>
     set(focusedExcerptId ? { focusedExcerptId, pendingSelection: null } : { focusedExcerptId }),
   setPaletteOpen: (paletteOpen) => set({ paletteOpen }),
+  setSettingsOpen: (settingsOpen) => set({ settingsOpen }),
+  setShortcutsHelpOpen: (shortcutsHelpOpen) => set({ shortcutsHelpOpen }),
   reset: () => set({ ...initial }),
 }));

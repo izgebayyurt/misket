@@ -12,9 +12,15 @@ import { AnalysisView } from "@/components/analysis/AnalysisView";
 import { SearchView } from "@/components/search/SearchView";
 import { CodePalette } from "@/components/palette/CodePalette";
 import { ImportDropzone } from "@/components/documents/ImportDropzone";
+import { SettingsDialog } from "./SettingsDialog";
+import { ShortcutsDialog } from "./ShortcutsDialog";
 
 export function Workspace({ project }: { project: ProjectInfo }) {
   const view = useWorkspace((s) => s.view);
+  const settingsOpen = useWorkspace((s) => s.settingsOpen);
+  const setSettingsOpen = useWorkspace((s) => s.setSettingsOpen);
+  const shortcutsHelpOpen = useWorkspace((s) => s.shortcutsHelpOpen);
+  const setShortcutsHelpOpen = useWorkspace((s) => s.setShortcutsHelpOpen);
   useGlobalShortcuts();
   useEffect(() => {
     const win = getCurrentWindow();
@@ -52,6 +58,8 @@ export function Workspace({ project }: { project: ProjectInfo }) {
       </div>
       <StatusBar project={project} />
       <CodePalette />
+      {settingsOpen ? <SettingsDialog onClose={() => setSettingsOpen(false)} /> : null}
+      {shortcutsHelpOpen ? <ShortcutsDialog onClose={() => setShortcutsHelpOpen(false)} /> : null}
     </div>
   );
 }

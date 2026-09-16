@@ -3,7 +3,7 @@ import type { ExcerptWithCodes } from "@/api/types";
 import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { useCodeTree } from "@/queries/codes";
-import { useDeleteExcerpt, useRemoveExcerptCode } from "@/queries/excerpts";
+import { useRemoveExcerptCode } from "@/queries/excerpts";
 import { pathOf } from "@/core/codeTree";
 import { ColorDot } from "@/components/codebook/ColorSwatch";
 import { useWorkspace } from "@/state/workspace";
@@ -13,13 +13,14 @@ interface Props {
   excerpt: ExcerptWithCodes;
   anchor: HTMLElement;
   onClose: () => void;
+  /** Requests deletion of this excerpt; the caller decides whether to confirm first. */
+  onDelete: () => void;
 }
 
 /** Inline editor for a focused excerpt: its codes, and delete. */
-export function ExcerptPopover({ excerpt, anchor, onClose }: Props) {
+export function ExcerptPopover({ excerpt, anchor, onClose, onDelete }: Props) {
   const tree = useCodeTree();
   const removeCode = useRemoveExcerptCode();
-  const del = useDeleteExcerpt();
   const setPaletteOpen = useWorkspace((s) => s.setPaletteOpen);
 
   return (
@@ -77,17 +78,7 @@ export function ExcerptPopover({ excerpt, anchor, onClose }: Props) {
             <Plus /> Add code
           </Button>
           <span className="flex-1" />
-          <Button
-            size="sm"
-            variant="ghost"
-            className="text-danger"
-            onClick={() => {
-              onClose();
-              del
-                .mutateAsync({ id: excerpt.id, documentId: excerpt.documentId })
-                .catch(toast.error);
-            }}
-          >
+          <Button size="sm" variant="ghost" className="text-danger" onClick={onDelete}>
             <Trash2 /> Delete
           </Button>
         </div>

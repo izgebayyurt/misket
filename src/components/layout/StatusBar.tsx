@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { ProjectInfo } from "@/api/types";
 import { useCloseProject } from "@/queries/project";
 import { useUndoStore } from "@/state/undoStore";
+import { useWorkspace } from "@/state/workspace";
 import { ExportMenu } from "./ExportMenu";
 import { AboutDialog } from "./AboutDialog";
 
@@ -9,6 +10,8 @@ export function StatusBar({ project }: { project: ProjectInfo }) {
   const close = useCloseProject();
   const lastLabel = useUndoStore((s) => s.past[s.past.length - 1]?.label);
   const [about, setAbout] = useState(false);
+  const setSettingsOpen = useWorkspace((s) => s.setSettingsOpen);
+  const setShortcutsHelpOpen = useWorkspace((s) => s.setShortcutsHelpOpen);
   return (
     <footer className="flex h-7 items-center gap-4 border-t border-border bg-panel px-3 text-xs text-fg-muted">
       <span data-testid="status-counts">
@@ -18,6 +21,17 @@ export function StatusBar({ project }: { project: ProjectInfo }) {
       {lastLabel ? <span className="truncate">Last: {lastLabel}</span> : null}
       <span className="flex-1" />
       <ExportMenu project={project} />
+      <button
+        className="hover:text-fg"
+        aria-label="Keyboard shortcuts"
+        title="Keyboard shortcuts"
+        onClick={() => setShortcutsHelpOpen(true)}
+      >
+        ?
+      </button>
+      <button className="hover:text-fg" onClick={() => setSettingsOpen(true)}>
+        Settings
+      </button>
       <button className="hover:text-fg" onClick={() => setAbout(true)}>
         About
       </button>

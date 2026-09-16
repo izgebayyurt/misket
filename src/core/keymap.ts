@@ -22,6 +22,8 @@ export type Action =
   | "palette"
   | "find"
   | "findInProject"
+  | "settings"
+  | "shortcutsHelp"
   | "undo"
   | "redo"
   | "nextExcerpt"
@@ -53,6 +55,8 @@ export const SHORTCUTS: Record<Action, Shortcut> = {
   palette: { key: "k", mod: true, global: true },
   find: { key: "f", mod: true, global: true },
   findInProject: { key: "f", mod: true, shift: true, global: true },
+  settings: { key: ",", mod: true, global: true },
+  shortcutsHelp: { key: "/", mod: true, global: true },
   undo: { key: "z", mod: true },
   redo: { key: "z", mod: true, shift: true },
   nextExcerpt: { key: "Tab" },
@@ -93,4 +97,34 @@ export function describe(action: Action): string {
   if (s.alt) parts.push(isMac ? "⌥" : "Alt+");
   parts.push(s.key.length === 1 ? s.key.toUpperCase() : s.key);
   return parts.join("");
+}
+
+/** Human-readable name for each action, shown in the keyboard reference overlay. */
+export const LABELS: Record<Action, string> = {
+  openProject: "Open project",
+  newProject: "New project",
+  import: "Import documents",
+  excerptBrowser: "Excerpt browser",
+  analysis: "Analysis views",
+  find: "Find in document",
+  findInProject: "Find in project",
+  tabDocuments: "Switch to Documents tab",
+  tabCodes: "Switch to Codes tab",
+  newMemo: "New memo",
+  palette: "Open code palette",
+  settings: "Open settings",
+  shortcutsHelp: "Keyboard shortcuts",
+  undo: "Undo",
+  redo: "Redo",
+  nextExcerpt: "Next excerpt",
+  prevExcerpt: "Previous excerpt",
+  editExcerpt: "Edit focused excerpt",
+  deleteExcerpt: "Delete focused excerpt",
+  extendSelectionLeft: "Extend selection left",
+  extendSelectionRight: "Extend selection right",
+  escape: "Cancel / close",
+};
+
+export function label(action: Action): string {
+  return LABELS[action];
 }

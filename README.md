@@ -49,6 +49,8 @@ keyboard-friendly interface without a subscription.
 | Find in project (search every document)                | `Shift` + `Ctrl`/`⌘` + `F`                    |
 | Import documents                                       | `Ctrl`/`⌘` + `I`                              |
 | Undo / redo                                            | `Ctrl`/`⌘` + `Z` / `Shift` + `Ctrl`/`⌘` + `Z` |
+| Settings (theme, text size, confirm-delete)            | `Ctrl`/`⌘` + `,`                              |
+| Keyboard shortcuts reference                           | `Ctrl`/`⌘` + `/`                              |
 
 ## Install
 
