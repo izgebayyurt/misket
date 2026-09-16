@@ -55,6 +55,20 @@
         version control.
       </p>
 
+      <h2>The activity log</h2>
+      <p>
+        Every change you make — creating, renaming, moving or merging a code, coding or adjusting an
+        excerpt, writing a memo, setting a descriptor — is recorded inside the project file, with
+        the name of whoever made it and when. Because it is part of the file, the trail is copied,
+        backed up and restored with the data it describes, and it travels with the project when you
+        hand it to a colleague or a reviewer. The overview screen lists the latest entries, a code's
+        or an excerpt's inspector shows its own history as a timeline (including the values before
+        and after each change), and <strong>Export → Activity log (CSV)</strong>
+        writes the whole thing out. The name is yours to set in Settings; with none set, Misket uses
+        your computer's user name. There are no accounts and nothing is verified — this is a record
+        for your own transparency, not an authentication system.
+      </p>
+
       <h2>Export formats</h2>
       <ul>
         <li>
@@ -66,8 +80,12 @@
           text and descriptor values.
         </li>
         <li>
+          <strong>Activity log</strong> — CSV, one row per recorded change with its time, actor,
+          kind, target and a readable summary.
+        </li>
+        <li>
           <strong>Project</strong> — a full JSON export of the project's documents, codes, excerpts,
-          memos and descriptors.
+          memos, descriptors and activity log.
         </li>
       </ul>
 

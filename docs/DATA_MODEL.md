@@ -165,6 +165,73 @@ Because a merge re-points memos to the survivor rather than deleting them,
 `restore` upserts memos (`ON CONFLICT(id) DO UPDATE`) so undoing a merge moves
 them back instead of failing on the primary key.
 
+## The activity log
+
+`activity_log` (schema 6) records who changed what, and when. It is a table in
+the project file rather than a sidecar, so the trail is copied by
+`backup::save_copy`, written into every timestamped backup, and restored with
+the data it describes.
+
+Every write path in `db::` logs its own entry, inside the same transaction as
+the change:
+
+```rust
+activity::record(&tx, "code.moved", "code", Some(id), summary, detail)?;
+```
+
+so an entry can never outlive — or be lost by — what it describes. Nothing is
+logged at the Tauri layer except `undo`/`redo`, which the backend cannot infer
+because the undo stack lives in the frontend.
+
+**The actor.** Misket has no user accounts, so it is a plain string: the name
+set in Settings (`AppSettings.coderName`) or the OS user name
+(`USER`/`USERNAME`). Rather than grow an `actor` parameter on forty functions,
+the Tauri layer puts it on the connection once, at open, with
+`activity::set_actor`, which writes it to a `TEMP` table. SQLite keeps temp
+tables per connection and outside the database file, so two people opening the
+same project never see each other's name and the `.misket` is unchanged by it.
+A `&Connection` that was never told (every core test) logs an empty actor.
+
+**Kinds.** The verb is dotted, `noun.past_tense`:
+
+| Group        | Kinds                                                                                                                           |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------- |
+| `code`       | `created`, `updated`, `moved`, `deleted`, `merged_into` (the source), `merged_from` (the survivor)                              |
+| `excerpt`    | `created`, `codes_added`, `code_removed`, `range_updated`, `split`, `split_off`, `merged`, `merged_into`, `deleted`, `restored` |
+| `bulk`       | `excerpts_deleted`, `codes_added`, `codes_removed`, `retagged`                                                                  |
+| `memo`       | `created`, `updated`, `deleted`, `restored`                                                                                     |
+| `descriptor` | `field_created`, `field_updated`, `field_deleted`, `value_set`                                                                  |
+| `set`        | `created`, `renamed`, `members_changed`, `deleted`                                                                              |
+| `filter`     | `saved`, `deleted`                                                                                                              |
+| `document`   | `imported`, `renamed`, `deleted`                                                                                                |
+| `codebook`   | `imported`                                                                                                                      |
+| —            | `undo`, `redo`                                                                                                                  |
+
+`target_kind` is `code`, `excerpt`, `document`, `descriptor_field`, `set`,
+`saved_filter`, `codebook` or `project`. Three conventions make the per-target
+timelines readable:
+
+- A **merge** and a **split** write one entry per side (`code.merged_into` on
+  the source and `code.merged_from` on the survivor; `excerpt.split` and
+  `excerpt.split_off`), because both halves need the event in their own
+  history and one of them is about to disappear. Everything else writes one
+  entry, or none when nothing actually changed (saving a code dialog without
+  an edit, setting a descriptor to the value it already had).
+- A **memo** is logged against what it is attached to, not against itself, so
+  a code's history shows the note written while it was being renamed.
+- A **bulk** operation targets its kind with a null `target_id` (or, for
+  `retag_code`, the source code) and lists the ids it touched in
+  `detail_json`.
+
+`detail_json` holds a `{"from": …, "to": …}` object per field that moved, plus
+whatever context the summary leaves out. `activity::code_history` and
+`activity::excerpt_history` are `target_kind`/`target_id` lookups ordered by
+`id`; `activity::list` pages the whole log newest first and also returns every
+kind present, so the UI builds its filter from one call.
+
+Ordering is by `id`, never by `at`: `util::now()` formats RFC 3339 with
+trailing zeros trimmed, so `…:00Z` sorts _after_ `…:00.5Z` as a string.
+
 ## Queries worth knowing
 
 - Descendants of a code use a recursive CTE, not a materialized path:
@@ -194,10 +261,13 @@ them back instead of failing on the primary key.
   field, named after the field, holding the excerpt's document's value.
   `start`/`end` are empty for image excerpts and `geometry` is empty for text
   ones; `text` holds the snapshot either way
-- Project JSON: `{ format: "misket-project", formatVersion: 1, meta, documents, codes, excerpts, memos, descriptorFields, descriptorValues, sets, savedFilters }`.
+- Activity CSV: `at, actor, kind, target_kind, target_id, summary, detail_json`, oldest first
+- Project JSON: `{ format: "misket-project", formatVersion: 1, meta, documents, codes, excerpts, memos, descriptorFields, descriptorValues, sets, savedFilters, activity }`.
   `sets` is `[{ set: SetInfo, memberIds }]` for every code set and document
   set; `savedFilters` is the `SavedFilter` list with `filter` already parsed
-  back into an `ExcerptFilter` object, not left as a JSON string. Image bytes
+  back into an `ExcerptFilter` object, not left as a JSON string; `activity`
+  is the whole log, oldest first, with each entry's `detail` already parsed.
+  Image bytes
   are not included: the JSON stays a readable text export, and the `.misket`
   file remains the thing that holds the media.
 

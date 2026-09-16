@@ -19,7 +19,7 @@ function stem(project: ProjectInfo) {
 export function ExportMenu({ project }: { project: ProjectInfo }) {
   const saveCopy = useSaveProjectCopy();
 
-  async function run(kind: "codebook" | "codebookJson" | "excerpts" | "project") {
+  async function run(kind: "codebook" | "codebookJson" | "excerpts" | "project" | "activity") {
     const ext = kind === "codebookJson" || kind === "project" ? "json" : "csv";
     const suffix = kind === "codebookJson" ? "codebook" : kind;
     try {
@@ -31,6 +31,7 @@ export function ExportMenu({ project }: { project: ProjectInfo }) {
       if (kind === "codebook") await api.exportCodebookCsv(path);
       else if (kind === "codebookJson") await api.exportCodebookJson(path);
       else if (kind === "excerpts") await api.exportExcerptsCsv(path, {});
+      else if (kind === "activity") await api.exportActivityCsv(path);
       else await api.exportProjectJson(path);
       toast.info(`Exported ${suffix} to ${path.split(/[\\/]/).pop()}`);
     } catch (e) {
@@ -65,6 +66,7 @@ export function ExportMenu({ project }: { project: ProjectInfo }) {
           Codebook (JSON, reusable)
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => run("excerpts")}>All excerpts (CSV)</DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => run("activity")}>Activity log (CSV)</DropdownMenuItem>
         <DropdownMenuItem onSelect={() => run("project")}>Whole project (JSON)</DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={() => void runSaveCopy()}>Save a copy as…</DropdownMenuItem>

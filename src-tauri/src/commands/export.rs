@@ -29,6 +29,12 @@ pub fn export_project_json(state: State<'_, AppState>, path: String) -> Result<(
     state.with_project(|p| export::project_json(&p.conn, BufWriter::new(File::create(&path)?)))
 }
 
+/// The audit trail as CSV, for a reviewer or an appendix.
+#[tauri::command]
+pub fn export_activity_csv(state: State<'_, AppState>, path: String) -> Result<()> {
+    state.with_project(|p| export::activity_csv(&p.conn, BufWriter::new(File::create(&path)?)))
+}
+
 #[tauri::command]
 pub fn export_codebook_json(state: State<'_, AppState>, path: String) -> Result<()> {
     state.with_project(|p| export::codebook_json(&p.conn, BufWriter::new(File::create(&path)?)))

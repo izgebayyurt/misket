@@ -10,8 +10,9 @@
 //! so the excerpt browser can restore a question the researcher asks often.
 
 use rusqlite::{params, Connection, OptionalExtension, Row};
+use serde_json::json;
 
-use super::{codes, documents, util};
+use super::{activity, codes, documents, util};
 use crate::error::{AppError, Result};
 use crate::models::{ExcerptFilter, SavedFilter, SetInfo, SetWithMembers};
 
@@ -127,6 +128,14 @@ pub fn create_set(
             params![id, m],
         )?;
     }
+    activity::record(
+        &tx,
+        "set.created",
+        "set",
+        Some(&id),
+        format!("Created {kind} set \"{name}\""),
+        json!({ "kind": kind, "name": name, "memberIds": member_ids }),
+    )?;
     tx.commit()?;
     get_set(conn, &id)
 }
@@ -139,6 +148,22 @@ pub fn rename_set(conn: &Connection, id: &str, name: &str) -> Result<SetInfo> {
         params![id, name, util::now()],
     )
     .map_err(|e| map_unique(e, &current.kind, name))?;
+    if current.name != name {
+        activity::record(
+            conn,
+            "set.renamed",
+            "set",
+            Some(id),
+            format!(
+                "Renamed {} set \"{}\" to \"{name}\"",
+                current.kind, current.name
+            ),
+            json!({
+                "kind": current.kind,
+                "name": activity::change(current.name.clone(), name.to_string()),
+            }),
+        )?;
+    }
     get_set(conn, id)
 }
 
@@ -147,7 +172,17 @@ pub fn rename_set(conn: &Connection, id: &str, name: &str) -> Result<SetInfo> {
 pub fn delete_set(conn: &Connection, id: &str) -> Result<SetWithMembers> {
     let set = get_set(conn, id)?;
     let member_ids = set_members(conn, id)?;
-    conn.execute("DELETE FROM sets WHERE id = ?1", [id])?;
+    let tx = conn.unchecked_transaction()?;
+    tx.execute("DELETE FROM sets WHERE id = ?1", [id])?;
+    activity::record(
+        &tx,
+        "set.deleted",
+        "set",
+        Some(id),
+        format!("Deleted {} set \"{}\"", set.kind, set.name),
+        json!({ "kind": set.kind, "name": set.name, "memberIds": member_ids }),
+    )?;
+    tx.commit()?;
     Ok(SetWithMembers { set, member_ids })
 }
 
@@ -193,6 +228,19 @@ pub fn set_set_members(
         "UPDATE sets SET updated_at = ?2 WHERE id = ?1",
         params![set_id, util::now()],
     )?;
+    activity::record(
+        &tx,
+        "set.members_changed",
+        "set",
+        Some(set_id),
+        format!(
+            "Set \"{}\" now has {} member{}",
+            set.name,
+            member_ids.len(),
+            if member_ids.len() == 1 { "" } else { "s" }
+        ),
+        json!({ "kind": set.kind, "name": set.name, "memberIds": member_ids }),
+    )?;
     tx.commit()?;
     set_members(conn, set_id)
 }
@@ -209,13 +257,46 @@ pub fn add_to_set(conn: &Connection, set_id: &str, member_id: &str) -> Result<Ve
         "UPDATE sets SET updated_at = ?2 WHERE id = ?1",
         params![set_id, util::now()],
     )?;
+    log_membership(&tx, &set, "Added", member_id)?;
     tx.commit()?;
     set_members(conn, set_id)
 }
 
+/// One entry for a single member joining or leaving a set.
+fn log_membership(conn: &Connection, set: &SetInfo, verb: &str, member_id: &str) -> Result<()> {
+    let member_name = if set.kind == "code" {
+        activity::code_name(conn, member_id)
+    } else {
+        activity::document_name(conn, member_id)
+    };
+    let preposition = if verb == "Added" { "to" } else { "from" };
+    activity::record(
+        conn,
+        "set.members_changed",
+        "set",
+        Some(&set.id),
+        format!(
+            "{verb} \"{member_name}\" {preposition} {} set \"{}\"",
+            set.kind, set.name
+        ),
+        json!({
+            "kind": set.kind,
+            "name": set.name,
+            "memberId": member_id,
+            "memberName": member_name,
+            "change": verb.to_lowercase(),
+        }),
+    )
+}
+
 pub fn remove_from_set(conn: &Connection, set_id: &str, member_id: &str) -> Result<Vec<String>> {
-    get_set(conn, set_id)?;
+    let set = get_set(conn, set_id)?;
     let tx = conn.unchecked_transaction()?;
+    let member_name = if set.kind == "code" {
+        activity::code_name(&tx, member_id)
+    } else {
+        activity::document_name(&tx, member_id)
+    };
     tx.execute(
         "DELETE FROM set_members WHERE set_id = ?1 AND member_id = ?2",
         params![set_id, member_id],
@@ -223,6 +304,23 @@ pub fn remove_from_set(conn: &Connection, set_id: &str, member_id: &str) -> Resu
     tx.execute(
         "UPDATE sets SET updated_at = ?2 WHERE id = ?1",
         params![set_id, util::now()],
+    )?;
+    activity::record(
+        &tx,
+        "set.members_changed",
+        "set",
+        Some(set_id),
+        format!(
+            "Removed \"{member_name}\" from {} set \"{}\"",
+            set.kind, set.name
+        ),
+        json!({
+            "kind": set.kind,
+            "name": set.name,
+            "memberId": member_id,
+            "memberName": member_name,
+            "change": "removed",
+        }),
     )?;
     tx.commit()?;
     set_members(conn, set_id)
@@ -346,12 +444,30 @@ pub fn save_filter(conn: &Connection, name: &str, filter: &ExcerptFilter) -> Res
             id
         }
     };
+    activity::record(
+        conn,
+        "filter.saved",
+        "saved_filter",
+        Some(&id),
+        format!("Saved filter \"{name}\""),
+        json!({ "name": name, "filter": filter }),
+    )?;
     get_saved_filter(conn, &id)
 }
 
 pub fn delete_saved_filter(conn: &Connection, id: &str) -> Result<SavedFilter> {
     let saved = get_saved_filter(conn, id)?;
-    conn.execute("DELETE FROM saved_filters WHERE id = ?1", [id])?;
+    let tx = conn.unchecked_transaction()?;
+    tx.execute("DELETE FROM saved_filters WHERE id = ?1", [id])?;
+    activity::record(
+        &tx,
+        "filter.deleted",
+        "saved_filter",
+        Some(id),
+        format!("Deleted filter \"{}\"", saved.name),
+        json!({ "name": saved.name, "filter": saved.filter }),
+    )?;
+    tx.commit()?;
     Ok(saved)
 }
 

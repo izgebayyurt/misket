@@ -1,5 +1,6 @@
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { useSettings } from "@/state/settings";
 import type { Theme } from "@/api/types";
 
@@ -124,6 +125,26 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
               className="w-full"
               style={{ accentColor: "var(--accent)" }}
             />
+          </section>
+
+          <section>
+            <label
+              htmlFor="settings-coder-name"
+              className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-fg-muted"
+            >
+              Your name (for the activity log)
+            </label>
+            <Input
+              id="settings-coder-name"
+              value={settings.coderName ?? ""}
+              placeholder="Your computer's user name"
+              onChange={(e) => update({ coderName: e.target.value })}
+              data-testid="settings-coder-name"
+            />
+            <p className="mt-1 text-xs text-fg-muted">
+              Recorded next to every change you make in this project, so a shared file says who did
+              what. Leave it empty to use your computer's user name.
+            </p>
           </section>
         </div>
       </DialogContent>

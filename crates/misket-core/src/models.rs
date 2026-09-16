@@ -635,6 +635,78 @@ pub struct BackupInfo {
     pub size_bytes: u64,
 }
 
+// ------------------------------------------------------------- activity log
+
+/// One row of `activity_log`: something that happened to the project.
+///
+/// `detail` is `detail_json` parsed back into a JSON object (an empty object
+/// when the stored text cannot be parsed), so the frontend never has to
+/// double-decode a string.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ActivityEntry {
+    pub id: i64,
+    pub at: String,
+    pub actor: String,
+    /// A dotted verb: `code.created`, `excerpt.split`, `undo`, …
+    pub kind: String,
+    /// `code`, `excerpt`, `document`, `memo`, `descriptor_field`, `set`,
+    /// `saved_filter`, `codebook` or `project`.
+    pub target_kind: String,
+    pub target_id: Option<String>,
+    pub summary: String,
+    pub detail: serde_json::Value,
+}
+
+/// What `db::activity::list` should return. Every field narrows the result;
+/// `limit`/`offset` page through what is left, newest first.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ActivityFilter {
+    #[serde(default)]
+    pub target_kind: Option<String>,
+    #[serde(default)]
+    pub target_id: Option<String>,
+    /// Keep only these kinds (exact matches).
+    #[serde(default)]
+    pub kinds: Option<Vec<String>>,
+    /// Only entries at or after this timestamp (RFC 3339, as stored).
+    #[serde(default)]
+    pub since: Option<String>,
+    #[serde(default = "default_activity_limit")]
+    pub limit: i64,
+    #[serde(default)]
+    pub offset: i64,
+}
+
+fn default_activity_limit() -> i64 {
+    100
+}
+
+impl Default for ActivityFilter {
+    fn default() -> Self {
+        Self {
+            target_kind: None,
+            target_id: None,
+            kinds: None,
+            since: None,
+            limit: default_activity_limit(),
+            offset: 0,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ActivityPage {
+    pub entries: Vec<ActivityEntry>,
+    /// How many entries match the filter, ignoring `limit`/`offset`.
+    pub total: i64,
+    /// Every `kind` present in the log, sorted, so the UI can offer a filter
+    /// without a second round trip.
+    pub kinds: Vec<String>,
+}
+
 // ------------------------------------------------------------------- search
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
