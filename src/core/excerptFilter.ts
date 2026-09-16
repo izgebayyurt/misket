@@ -1,4 +1,4 @@
-import type { DescriptorFilter, ExcerptFilter } from "@/api/types";
+import type { DescriptorFilter, ExcerptFilter, Query } from "@/api/types";
 
 /**
  * The excerpt browser's filter state: every field an `ExcerptFilter` can set,
@@ -17,6 +17,8 @@ export interface FilterState {
    * click-through sets this; no filter control edits it directly). */
   overlapsCodeId: string | null;
   descriptors: DescriptorFilter[];
+  /** A Boolean/proximity expression over codes; `null` when none is set. */
+  query: Query | null;
 }
 
 export const emptyFilterState: FilterState = {
@@ -29,6 +31,7 @@ export const emptyFilterState: FilterState = {
   uncodedOnly: false,
   overlapsCodeId: null,
   descriptors: [],
+  query: null,
 };
 
 /** Read a filter (a saved one, or the analysis views' click-through). */
@@ -43,6 +46,7 @@ export function filterState(f: ExcerptFilter | undefined | null): FilterState {
     uncodedOnly: f?.uncodedOnly ?? false,
     overlapsCodeId: f?.overlapsCodeId ?? null,
     descriptors: f?.descriptors ?? [],
+    query: f?.query ?? null,
   };
 }
 
@@ -58,6 +62,7 @@ export function toFilter(state: FilterState, limit: number, offset = 0): Excerpt
     uncodedOnly: state.uncodedOnly,
     overlapsCodeId: state.overlapsCodeId,
     descriptors: state.descriptors.length ? state.descriptors : null,
+    query: state.query,
     limit,
     offset,
   };
@@ -79,6 +84,7 @@ export function isFiltered(state: FilterState): boolean {
     documentPickCount(state) > 0 ||
     state.descriptors.length > 0 ||
     state.uncodedOnly ||
-    state.overlapsCodeId !== null
+    state.overlapsCodeId !== null ||
+    state.query !== null
   );
 }

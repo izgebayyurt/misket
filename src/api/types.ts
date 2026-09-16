@@ -304,6 +304,32 @@ export interface MergeResult {
   addedCodeIds: string[];
 }
 
+/** One code in a `Query`, with the same "include sub-codes" choice. */
+export interface CodeRef {
+  codeId: string;
+  includeDescendants: boolean;
+}
+
+export type QueryOp = "and" | "or" | "not" | "near";
+
+/** How close `near` counts as near; the default is the same paragraph. */
+export type QueryWithin = { kind: "paragraph" } | { kind: "chars"; n: number };
+
+/** A `Query` operand: a code, or a nested query. */
+export type QueryTerm = CodeRef | Query;
+
+/**
+ * A Boolean/proximity expression over codes, applied in Rust to the excerpts
+ * the rest of the filter leaves. The semantics are "co-located": an excerpt
+ * satisfies a term when it carries the code itself or overlaps an excerpt
+ * that does. See `src/core/query.ts` and `docs/DATA_MODEL.md`.
+ */
+export interface Query {
+  op: QueryOp;
+  terms: QueryTerm[];
+  within?: QueryWithin | null;
+}
+
 export interface ExcerptFilter {
   codeIds?: string[] | null;
   /** Code sets; each stands for all of its members, as if every member were
@@ -322,6 +348,9 @@ export interface ExcerptFilter {
   overlapsCodeId?: string | null;
   /** Descriptor conditions, ANDed together. */
   descriptors?: DescriptorFilter[] | null;
+  /** A Boolean/proximity expression over codes ("A and B", "A not near B"),
+   * applied to text excerpts before paging. */
+  query?: Query | null;
   limit?: number;
   offset?: number;
 }
