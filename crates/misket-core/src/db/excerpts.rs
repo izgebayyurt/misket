@@ -4,11 +4,14 @@
 use rusqlite::{params, Connection, OptionalExtension, Row};
 use serde_json::json;
 
-use super::{activity, codes, descriptors, documents, memos, query_expr, sets, text, util};
+use super::history::{ExcerptChange, MemoMove, RangeRow, Touch};
+use super::{
+    activity, codes, descriptors, documents, history, memos, query_expr, sets, text, util,
+};
 use crate::error::{AppError, Result};
 use crate::models::{
     ApplyCodesInput, ApplyResult, DescriptorFilter, ExcerptDetail, ExcerptFilter, ExcerptPage,
-    ExcerptRow, ExcerptSnapshot, ExcerptWithCodes, MergeResult, Rect,
+    ExcerptRow, ExcerptSnapshot, ExcerptWithCodes, MergeResult, Rect, TagRow,
 };
 
 const CONTEXT_CHARS: i64 = 120;
@@ -298,6 +301,17 @@ pub fn apply_codes(conn: &Connection, input: ApplyCodesInput) -> Result<ApplyRes
             }
         }
     };
+    // Read before the tags go in: undoing has to put the row's own timestamp
+    // back, not only its codes.
+    let previous_updated_at: Option<String> = if created {
+        None
+    } else {
+        Some(tx.query_row(
+            "SELECT updated_at FROM excerpts WHERE id = ?1",
+            [&id],
+            |r| r.get(0),
+        )?)
+    };
     let mut added = vec![];
     for code_id in &input.code_ids {
         let n = tx.execute(
@@ -315,6 +329,46 @@ pub fn apply_codes(conn: &Connection, input: ApplyCodesInput) -> Result<ApplyRes
         )?;
     }
     if created || !added.is_empty() {
+        let tags: Vec<TagRow> = added
+            .iter()
+            .map(|code_id| TagRow {
+                excerpt_id: id.clone(),
+                code_id: code_id.clone(),
+                created_at: now.clone(),
+            })
+            .collect();
+        let (forward, inverse) = if created {
+            (
+                ExcerptChange {
+                    restore_excerpts: vec![snapshot(&tx, &id)?],
+                    ..Default::default()
+                },
+                ExcerptChange {
+                    delete_excerpts: vec![id.clone()],
+                    ..Default::default()
+                },
+            )
+        } else {
+            let was = previous_updated_at.clone().unwrap_or_else(|| now.clone());
+            (
+                ExcerptChange {
+                    add_tags: tags.clone(),
+                    touch: vec![Touch {
+                        excerpt_id: id.clone(),
+                        updated_at: now.clone(),
+                    }],
+                    ..Default::default()
+                },
+                ExcerptChange {
+                    remove_tags: tags,
+                    touch: vec![Touch {
+                        excerpt_id: id.clone(),
+                        updated_at: was,
+                    }],
+                    ..Default::default()
+                },
+            )
+        };
         let names = code_names(&tx, &added);
         let doc_name = activity::document_name(&tx, &input.document_id);
         let summary = if created {
@@ -344,8 +398,8 @@ pub fn apply_codes(conn: &Connection, input: ApplyCodesInput) -> Result<ApplyRes
                 "codeIds": added,
                 "codeNames": names,
             }),
-            None,
-            None,
+            Some(history::payload(&forward)),
+            Some(history::payload(&inverse)),
         )?;
     }
     tx.commit()?;
@@ -361,11 +415,21 @@ pub fn add_codes(conn: &Connection, id: &str, code_ids: &[String]) -> Result<Exc
     ensure_codes_exist(conn, code_ids)?;
     let now = util::now();
     let tx = util::tx(conn)?;
+    // Only the tags that were really missing: undo must not strip a code the
+    // excerpt already carried.
+    let mut tags = vec![];
     for code_id in code_ids {
-        tx.execute(
+        let inserted = tx.execute(
             "INSERT OR IGNORE INTO excerpt_codes (excerpt_id, code_id, created_at) VALUES (?1, ?2, ?3)",
             params![id, code_id, now],
         )?;
+        if inserted > 0 {
+            tags.push(TagRow {
+                excerpt_id: id.to_string(),
+                code_id: code_id.clone(),
+                created_at: now.clone(),
+            });
+        }
     }
     tx.execute(
         "UPDATE excerpts SET updated_at = ?2 WHERE id = ?1",
@@ -384,8 +448,22 @@ pub fn add_codes(conn: &Connection, id: &str, code_ids: &[String]) -> Result<Exc
             d["codeNames"] = json!(names);
             d
         },
-        None,
-        None,
+        Some(history::payload(&ExcerptChange {
+            add_tags: tags.clone(),
+            touch: vec![Touch {
+                excerpt_id: id.to_string(),
+                updated_at: now.clone(),
+            }],
+            ..Default::default()
+        })),
+        Some(history::payload(&ExcerptChange {
+            remove_tags: tags,
+            touch: vec![Touch {
+                excerpt_id: id.to_string(),
+                updated_at: before.updated_at.clone(),
+            }],
+            ..Default::default()
+        })),
     )?;
     tx.commit()?;
     get(conn, id)
@@ -394,14 +472,31 @@ pub fn add_codes(conn: &Connection, id: &str, code_ids: &[String]) -> Result<Exc
 pub fn remove_code(conn: &Connection, id: &str, code_id: &str) -> Result<ExcerptWithCodes> {
     let before = get(conn, id)?;
     let name = activity::code_name(conn, code_id);
+    let now = util::now();
     let tx = util::tx(conn)?;
+    // The tag's own `created_at`, so putting it back restores the row as it
+    // was rather than one that claims to have been made today.
+    let tags: Vec<TagRow> = tx
+        .query_row(
+            "SELECT created_at FROM excerpt_codes WHERE excerpt_id = ?1 AND code_id = ?2",
+            params![id, code_id],
+            |r| r.get::<_, String>(0),
+        )
+        .optional()?
+        .map(|created_at| TagRow {
+            excerpt_id: id.to_string(),
+            code_id: code_id.to_string(),
+            created_at,
+        })
+        .into_iter()
+        .collect();
     tx.execute(
         "DELETE FROM excerpt_codes WHERE excerpt_id = ?1 AND code_id = ?2",
         params![id, code_id],
     )?;
     tx.execute(
         "UPDATE excerpts SET updated_at = ?2 WHERE id = ?1",
-        params![id, util::now()],
+        params![id, now],
     )?;
     activity::record(
         &tx,
@@ -415,17 +510,56 @@ pub fn remove_code(conn: &Connection, id: &str, code_id: &str) -> Result<Excerpt
             d["codeNames"] = json!([name]);
             d
         },
-        None,
-        None,
+        Some(history::payload(&ExcerptChange {
+            remove_tags: tags.clone(),
+            touch: vec![Touch {
+                excerpt_id: id.to_string(),
+                updated_at: now.clone(),
+            }],
+            ..Default::default()
+        })),
+        Some(history::payload(&ExcerptChange {
+            add_tags: tags,
+            touch: vec![Touch {
+                excerpt_id: id.to_string(),
+                updated_at: before.updated_at.clone(),
+            }],
+            ..Default::default()
+        })),
     )?;
     tx.commit()?;
     get(conn, id)
 }
 
+/// Everything needed to put one excerpt back exactly as it stands: the row,
+/// its memos, and its tags with their own timestamps.
+pub fn snapshot(conn: &Connection, id: &str) -> Result<ExcerptSnapshot> {
+    let excerpt = get(conn, id)?;
+    let mut stmt = conn.prepare(
+        "SELECT excerpt_id, code_id, created_at FROM excerpt_codes
+          WHERE excerpt_id = ?1 ORDER BY code_id",
+    )?;
+    let tags: Vec<TagRow> = stmt
+        .query_map([id], |r| {
+            Ok(TagRow {
+                excerpt_id: r.get(0)?,
+                code_id: r.get(1)?,
+                created_at: r.get(2)?,
+            })
+        })?
+        .collect::<rusqlite::Result<_>>()?;
+    Ok(ExcerptSnapshot {
+        excerpt,
+        memos: memos::list_for_excerpt(conn, id)?,
+        tags,
+    })
+}
+
 /// Delete an excerpt and return everything needed to restore it.
 pub fn delete(conn: &Connection, id: &str) -> Result<ExcerptSnapshot> {
-    let excerpt = get(conn, id)?;
-    let memos = memos::list_for_excerpt(conn, id)?;
+    let taken = snapshot(conn, id)?;
+    let excerpt = taken.excerpt.clone();
+    let memos = taken.memos.clone();
     let tx = util::tx(conn)?;
     tx.execute("DELETE FROM excerpts WHERE id = ?1", [id])?;
     activity::record(
@@ -440,11 +574,21 @@ pub fn delete(conn: &Connection, id: &str) -> Result<ExcerptSnapshot> {
             d["codeNames"] = json!(code_names(&tx, &excerpt.code_ids));
             d
         },
-        None,
-        None,
+        Some(history::payload(&ExcerptChange {
+            delete_excerpts: vec![id.to_string()],
+            ..Default::default()
+        })),
+        Some(history::payload(&ExcerptChange {
+            restore_excerpts: vec![taken.clone()],
+            ..Default::default()
+        })),
     )?;
     tx.commit()?;
-    Ok(ExcerptSnapshot { excerpt, memos })
+    Ok(ExcerptSnapshot {
+        excerpt,
+        memos,
+        tags: taken.tags,
+    })
 }
 
 /// Reinsert a deleted excerpt with its original ids (for undo). Memos that
@@ -479,12 +623,23 @@ pub fn restore(conn: &Connection, snapshot: &ExcerptSnapshot) -> Result<ExcerptW
             AppError::from(err)
         }
     })?;
-    for code_id in &e.code_ids {
+    // A snapshot taken since schema 8 carries each tag's own timestamp;
+    // an older one only has the code ids, so they all get the excerpt's.
+    let tags: Vec<(&String, &String)> = if snapshot.tags.is_empty() {
+        e.code_ids.iter().map(|c| (c, &e.updated_at)).collect()
+    } else {
+        snapshot
+            .tags
+            .iter()
+            .map(|t| (&t.code_id, &t.created_at))
+            .collect()
+    };
+    for (code_id, created_at) in tags {
         // Codes deleted in the meantime are silently dropped.
         tx.execute(
             "INSERT OR IGNORE INTO excerpt_codes (excerpt_id, code_id, created_at)
              SELECT ?1, id, ?3 FROM codes WHERE id = ?2",
-            params![e.id, code_id, e.updated_at],
+            params![e.id, code_id, created_at],
         )?;
     }
     for m in &snapshot.memos {
@@ -511,8 +666,14 @@ pub fn restore(conn: &Connection, snapshot: &ExcerptSnapshot) -> Result<ExcerptW
             d["codeNames"] = json!(code_names(&tx, &e.code_ids));
             d
         },
-        None,
-        None,
+        Some(history::payload(&ExcerptChange {
+            restore_excerpts: vec![snapshot.clone()],
+            ..Default::default()
+        })),
+        Some(history::payload(&ExcerptChange {
+            delete_excerpts: vec![e.id.clone()],
+            ..Default::default()
+        })),
     )?;
     tx.commit()?;
     get(conn, &e.id)
@@ -587,6 +748,7 @@ pub fn update_range(
             "another excerpt already covers exactly this range".into(),
         ));
     }
+    let now = util::now();
     let tx = util::tx(conn)?;
     tx.execute(
         "UPDATE excerpts SET start_pos = ?2, end_pos = ?3, snapshot = ?4, updated_at = ?5
@@ -596,7 +758,7 @@ pub fn update_range(
             start_pos,
             end_pos,
             snapshot_of(&doc_text, start_pos, end_pos)?,
-            util::now()
+            now
         ],
     )?;
     let after = get(&tx, id)?;
@@ -613,11 +775,28 @@ pub fn update_range(
             d["snapshot"] = activity::change(excerpt.snapshot.clone(), after.snapshot.clone());
             d
         },
-        None,
-        None,
+        Some(history::payload(&ExcerptChange {
+            ranges: vec![range_row(&after)],
+            ..Default::default()
+        })),
+        Some(history::payload(&ExcerptChange {
+            ranges: vec![range_row(&excerpt)],
+            ..Default::default()
+        })),
     )?;
     tx.commit()?;
     get(conn, id)
+}
+
+/// A text excerpt's boundaries, quoted text and timestamp, as a replayable row.
+fn range_row(e: &ExcerptWithCodes) -> RangeRow {
+    RangeRow {
+        excerpt_id: e.id.clone(),
+        start_pos: e.start_pos.unwrap_or_default(),
+        end_pos: e.end_pos.unwrap_or_default(),
+        snapshot: e.snapshot.clone(),
+        updated_at: e.updated_at.clone(),
+    }
 }
 
 /// Split a text excerpt at code point `at` into `[start, at)` and `[at, end)`.
@@ -678,6 +857,19 @@ pub fn split(conn: &Connection, id: &str, at: i64) -> Result<(ExcerptWithCodes, 
         "codeNames": code_names(&tx, &excerpt.code_ids),
     });
     let summary = format!("Split excerpt {} at {at}", quoted(&excerpt));
+    let forward = ExcerptChange {
+        ranges: vec![range_row(&get(&tx, id)?)],
+        restore_excerpts: vec![snapshot(&tx, &right_id)?],
+        ..Default::default()
+    };
+    let inverse = ExcerptChange {
+        delete_excerpts: vec![right_id.clone()],
+        ranges: vec![range_row(&excerpt)],
+        ..Default::default()
+    };
+    // Two entries, one operation: the left half's is glued to the right
+    // half's, which carries the payloads, so one undo puts the excerpt back
+    // in one piece.
     activity::record(
         &tx,
         "excerpt.split",
@@ -685,8 +877,8 @@ pub fn split(conn: &Connection, id: &str, at: i64) -> Result<(ExcerptWithCodes, 
         Some(id),
         &summary,
         detail.clone(),
-        None,
-        None,
+        Some(history::linked()),
+        Some(history::linked()),
     )?;
     activity::record(
         &tx,
@@ -695,8 +887,8 @@ pub fn split(conn: &Connection, id: &str, at: i64) -> Result<(ExcerptWithCodes, 
         Some(&right_id),
         &summary,
         detail,
-        None,
-        None,
+        Some(history::payload(&forward)),
+        Some(history::payload(&inverse)),
     )?;
     tx.commit()?;
     Ok((get(conn, id)?, get(conn, &right_id)?))
@@ -734,10 +926,8 @@ pub fn merge_adjacent(conn: &Connection, left_id: &str, right_id: &str) -> Resul
             "another excerpt already covers exactly the merged range".into(),
         ));
     }
-    let removed = ExcerptSnapshot {
-        excerpt: right.clone(),
-        memos: memos::list_for_excerpt(conn, right_id)?,
-    };
+    let removed = snapshot(conn, right_id)?;
+    let moved_memo_ids: Vec<String> = removed.memos.iter().map(|m| m.id.clone()).collect();
     let added: Vec<String> = right
         .code_ids
         .iter()
@@ -786,7 +976,40 @@ pub fn merge_adjacent(conn: &Connection, left_id: &str, right_id: &str) -> Resul
         quoted(&right),
         quoted(&survivor)
     );
-    // Both the survivor and the excerpt that disappeared get an entry.
+    let added_tags: Vec<TagRow> = added
+        .iter()
+        .map(|code_id| TagRow {
+            excerpt_id: left_id.to_string(),
+            code_id: code_id.clone(),
+            created_at: now.clone(),
+        })
+        .collect();
+    let forward = ExcerptChange {
+        // The memos leave the right-hand row before it goes, exactly as the
+        // merge itself does, so nothing cascades away.
+        move_memos: moved_memo_ids
+            .iter()
+            .map(|memo_id| MemoMove {
+                memo_id: memo_id.clone(),
+                excerpt_id: left_id.to_string(),
+                updated_at: now.clone(),
+            })
+            .collect(),
+        delete_excerpts: vec![right_id.to_string()],
+        ranges: vec![range_row(&survivor)],
+        add_tags: added_tags.clone(),
+        ..Default::default()
+    };
+    let inverse = ExcerptChange {
+        // The survivor gives the range back first, then the removed excerpt
+        // comes home with its own codes and memos.
+        ranges: vec![range_row(&left)],
+        restore_excerpts: vec![removed.clone()],
+        remove_tags: added_tags,
+        ..Default::default()
+    };
+    // Both the survivor and the excerpt that disappeared get an entry; the
+    // second carries the payloads for the pair.
     activity::record(
         &tx,
         "excerpt.merged",
@@ -794,8 +1017,8 @@ pub fn merge_adjacent(conn: &Connection, left_id: &str, right_id: &str) -> Resul
         Some(left_id),
         &summary,
         detail.clone(),
-        None,
-        None,
+        Some(history::linked()),
+        Some(history::linked()),
     )?;
     activity::record(
         &tx,
@@ -804,8 +1027,8 @@ pub fn merge_adjacent(conn: &Connection, left_id: &str, right_id: &str) -> Resul
         Some(right_id),
         &summary,
         detail,
-        None,
-        None,
+        Some(history::payload(&forward)),
+        Some(history::payload(&inverse)),
     )?;
     tx.commit()?;
     Ok(MergeResult {

@@ -346,6 +346,11 @@ pub struct ExcerptDetail {
 pub struct ExcerptSnapshot {
     pub excerpt: ExcerptWithCodes,
     pub memos: Vec<Memo>,
+    /// The `excerpt_codes` rows with their own timestamps. Empty in a
+    /// snapshot written before those were kept, in which case a restore falls
+    /// back to `excerpt.code_ids`.
+    #[serde(default)]
+    pub tags: Vec<TagRow>,
 }
 
 /// The two halves left by [`crate::db::excerpts::split`]; `left` keeps the original id.

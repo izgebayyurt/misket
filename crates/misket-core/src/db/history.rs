@@ -320,6 +320,10 @@ pub enum CodeOp {
     Delete {
         code_id: String,
         strategy: ChildrenStrategy,
+        /// Where `promote` leaves the children, with the timestamps the
+        /// original run gave them.
+        #[serde(default)]
+        reparent: Vec<Reparent>,
     },
     Update {
         code_id: String,
@@ -335,6 +339,12 @@ pub enum CodeOp {
     Merge {
         source_id: String,
         target_id: String,
+        /// Where the source's children land under the target.
+        #[serde(default)]
+        reparent: Vec<Reparent>,
+        /// The memos the merge re-pointed, as they stand afterwards.
+        #[serde(default)]
+        memos: Vec<Memo>,
     },
 }
 
@@ -402,13 +412,7 @@ impl CodeOp {
                 remove_tags,
             } => {
                 codes::restore_subtree(conn, snapshot)?;
-                for r in reparent {
-                    conn.execute(
-                        "UPDATE codes SET parent_id = ?2, sort_order = ?3, updated_at = ?4
-                         WHERE id = ?1",
-                        params![r.code_id, r.parent_id, r.sort_order, r.updated_at],
-                    )?;
-                }
+                place(conn, reparent)?;
                 for t in remove_tags {
                     conn.execute(
                         "DELETE FROM excerpt_codes WHERE excerpt_id = ?1 AND code_id = ?2",
@@ -420,8 +424,13 @@ impl CodeOp {
                 codes::apply_sibling_order(conn, &snapshot.sibling_order)
             }
             CodeOp::Drop { code_ids } => codes::delete_codes(conn, code_ids),
-            CodeOp::Delete { code_id, strategy } => {
-                codes::delete(conn, code_id, *strategy).map(|_| ())
+            CodeOp::Delete {
+                code_id,
+                strategy,
+                reparent,
+            } => {
+                codes::delete(conn, code_id, *strategy)?;
+                place(conn, reparent)
             }
             CodeOp::Update {
                 code_id,
@@ -443,9 +452,31 @@ impl CodeOp {
             CodeOp::Merge {
                 source_id,
                 target_id,
-            } => codes::merge(conn, source_id, target_id).map(|_| ()),
+                reparent,
+                memos,
+            } => {
+                codes::merge(conn, source_id, target_id)?;
+                place(conn, reparent)?;
+                MemoChange {
+                    delete: vec![],
+                    restore: memos.clone(),
+                }
+                .run(conn)
+            }
         }
     }
+}
+
+/// Put codes back under a given parent, at a given place, with the timestamp
+/// the run being replayed gave them.
+fn place(conn: &Connection, moves: &[Reparent]) -> Result<()> {
+    for r in moves {
+        conn.execute(
+            "UPDATE codes SET parent_id = ?2, sort_order = ?3, updated_at = ?4 WHERE id = ?1",
+            params![r.code_id, r.parent_id, r.sort_order, r.updated_at],
+        )?;
+    }
+    Ok(())
 }
 
 /// Replaying restores the state, which includes when each row last changed.
@@ -851,4 +882,907 @@ fn descendants(conn: &Connection, id: i64) -> Result<HashSet<i64>> {
     )?;
     let ids = stmt.query_map([id], |r| r.get(0))?;
     Ok(ids.collect::<rusqlite::Result<_>>()?)
+}
+
+/// A payload as it is stored: JSON, never a closure.
+pub fn payload<T: Serialize>(value: &T) -> Value {
+    serde_json::to_value(value).unwrap_or_else(|_| json!({}))
+}
+
+/// Put these memo rows back (or write them for the first time).
+pub fn memos_restored(rows: &[Memo]) -> Value {
+    payload(&MemoChange {
+        delete: vec![],
+        restore: rows.to_vec(),
+    })
+}
+
+/// Take these memos away again.
+pub fn memos_deleted(ids: &[String]) -> Value {
+    payload(&MemoChange {
+        delete: ids.to_vec(),
+        restore: vec![],
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db::{bulk, codes, documents, excerpts, memos, sets, OpenProject};
+    use crate::models::{
+        ActivityFilter, ApplyCodesInput, AutoCodeHit, ChildrenStrategy, CodePatch, MemoTarget,
+        NewCode,
+    };
+    use std::collections::BTreeMap;
+
+    // ------------------------------------------------- the generic harness
+
+    /// Every user table the project holds, row by row as text.
+    ///
+    /// The history itself is left out (it grows with every operation, which
+    /// is the point), and so is the head pointer inside `project_meta`. What
+    /// is left is the state an undo has to restore *exactly*: ids, order,
+    /// timestamps and all.
+    fn dump_state(conn: &Connection) -> BTreeMap<String, Vec<String>> {
+        let mut names: Vec<String> = conn
+            .prepare(
+                "SELECT name FROM sqlite_master WHERE type = 'table'
+                   AND name NOT LIKE 'sqlite_%'
+                   AND name NOT IN ('history', 'history_blobs')
+                 ORDER BY name",
+            )
+            .unwrap()
+            .query_map([], |r| r.get(0))
+            .unwrap()
+            .collect::<rusqlite::Result<_>>()
+            .unwrap();
+        names.sort();
+
+        let mut out = BTreeMap::new();
+        for table in names {
+            let columns: Vec<String> = conn
+                .prepare(&format!("SELECT name FROM pragma_table_info('{table}')"))
+                .unwrap()
+                .query_map([], |r| r.get(0))
+                .unwrap()
+                .collect::<rusqlite::Result<_>>()
+                .unwrap();
+            // The head moves on every undo by design; everything else in
+            // `project_meta` has to stay put.
+            let filter = if table == "project_meta" {
+                " WHERE key NOT IN ('history_head', 'history_root_child')"
+            } else {
+                ""
+            };
+            let order = (1..=columns.len())
+                .map(|i| i.to_string())
+                .collect::<Vec<_>>()
+                .join(",");
+            let mut stmt = conn
+                .prepare(&format!("SELECT * FROM {table}{filter} ORDER BY {order}"))
+                .unwrap();
+            let rows: Vec<String> = stmt
+                .query_map([], |r| {
+                    Ok(columns
+                        .iter()
+                        .enumerate()
+                        .map(|(i, c)| format!("{c}={}", cell(r.get_ref(i).unwrap())))
+                        .collect::<Vec<_>>()
+                        .join(" "))
+                })
+                .unwrap()
+                .collect::<rusqlite::Result<_>>()
+                .unwrap();
+            out.insert(table, rows);
+        }
+        out
+    }
+
+    /// One column value, readable enough to tell two dumps apart at a glance.
+    fn cell(v: rusqlite::types::ValueRef<'_>) -> String {
+        use rusqlite::types::ValueRef;
+        match v {
+            ValueRef::Null => "-".into(),
+            ValueRef::Integer(i) => i.to_string(),
+            ValueRef::Real(f) => f.to_string(),
+            ValueRef::Text(t) => format!("{:?}", String::from_utf8_lossy(t)),
+            ValueRef::Blob(b) => format!("<{} bytes>", b.len()),
+        }
+    }
+
+    /// Assert two dumps match, naming the table and the rows that differ
+    /// rather than printing the whole project twice.
+    fn assert_same(
+        left: &BTreeMap<String, Vec<String>>,
+        right: &BTreeMap<String, Vec<String>>,
+        what: &str,
+    ) {
+        for (table, rows) in left {
+            let other = right.get(table).cloned().unwrap_or_default();
+            if *rows != other {
+                let only_left: Vec<&String> = rows.iter().filter(|r| !other.contains(r)).collect();
+                let only_right: Vec<&String> = other.iter().filter(|r| !rows.contains(r)).collect();
+                panic!(
+                    "{what}: {table} differs\n  expected only: {only_left:#?}\n  actual only: {only_right:#?}"
+                );
+            }
+        }
+        assert_eq!(
+            left.keys().collect::<Vec<_>>(),
+            right.keys().collect::<Vec<_>>()
+        );
+    }
+
+    /// Run `op`, undo it and assert the project is byte-for-byte what it was,
+    /// then redo it and assert it is byte-for-byte what `op` left behind.
+    fn assert_round_trip(conn: &Connection, label: &str, op: impl FnOnce(&Connection)) {
+        let before = dump_state(conn);
+        op(conn);
+        let after = dump_state(conn);
+        assert_ne!(before, after, "{label}: the operation changed nothing");
+
+        let undone = undo(conn)
+            .unwrap_or_else(|e| panic!("{label}: undo failed: {e}"))
+            .unwrap_or_else(|| panic!("{label}: nothing to undo"));
+        assert_same(&before, &dump_state(conn), &format!("{label}: undo"));
+
+        let redone = redo(conn, None)
+            .unwrap_or_else(|e| panic!("{label}: redo failed: {e}"))
+            .unwrap_or_else(|| panic!("{label}: nothing to redo"));
+        assert_same(&after, &dump_state(conn), &format!("{label}: redo"));
+        assert_eq!(undone.id, redone.id, "{label}: undo and redo disagree");
+    }
+
+    struct Fixture {
+        p: OpenProject,
+        doc: String,
+    }
+
+    impl Fixture {
+        fn new() -> Self {
+            let p = OpenProject::in_memory("t").unwrap();
+            crate::db::activity::set_actor(&p.conn, "Ada").unwrap();
+            let doc = documents::create(
+                &p.conn,
+                documents::tests::new_doc("Alpha beta gamma delta epsilon zeta eta theta."),
+            )
+            .unwrap()
+            .summary
+            .id;
+            Self { p, doc }
+        }
+        fn conn(&self) -> &Connection {
+            &self.p.conn
+        }
+        fn code(&self, name: &str, parent: Option<&str>) -> String {
+            codes::tests::mk(self.conn(), name, parent).id
+        }
+        fn excerpt(&self, start: i64, end: i64, code_ids: &[String]) -> String {
+            excerpts::apply_codes(
+                self.conn(),
+                ApplyCodesInput {
+                    document_id: self.doc.clone(),
+                    start_pos: Some(start),
+                    end_pos: Some(end),
+                    code_ids: code_ids.to_vec(),
+                    ..Default::default()
+                },
+            )
+            .unwrap()
+            .excerpt
+            .id
+        }
+    }
+
+    // ------------------------------------------------------------- codes
+
+    #[test]
+    fn round_trips_creating_editing_and_moving_a_code() {
+        let f = Fixture::new();
+        let c = f.conn();
+        let parent = f.code("Themes", None);
+        assert_round_trip(c, "create", |c| {
+            codes::create(
+                c,
+                NewCode {
+                    name: "Trust".into(),
+                    description: Some("About trust".into()),
+                    shortcut: Some("t".into()),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        });
+        let trust = codes::list(c)
+            .unwrap()
+            .into_iter()
+            .find(|x| x.name == "Trust")
+            .unwrap()
+            .id;
+        assert_round_trip(c, "update", |c| {
+            codes::update(
+                c,
+                &trust,
+                CodePatch {
+                    name: Some("Trust in staff".into()),
+                    description: Some("When a participant speaks about staff".into()),
+                    shortcut: Some(None),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        });
+        // Give it siblings, so the move has an order to put back.
+        f.code("Access", None);
+        f.code("Cost", None);
+        assert_round_trip(c, "move", |c| {
+            codes::move_code(c, &trust, Some(&parent), 0).unwrap();
+        });
+        assert_round_trip(c, "move back to the top level", |c| {
+            codes::move_code(c, &trust, None, 1).unwrap();
+        });
+    }
+
+    /// Deleting a code with `promote` keeps its children, one level up. Undo
+    /// has to put the code back *and* tuck the children under it again, in
+    /// the order they were in.
+    #[test]
+    fn round_trips_deleting_a_code_with_promote_and_with_delete() {
+        for strategy in [ChildrenStrategy::Promote, ChildrenStrategy::Delete] {
+            let f = Fixture::new();
+            let c = f.conn();
+            let parent = f.code("Themes", None);
+            let doomed = f.code("Trust", Some(&parent));
+            let kid_a = f.code("Staff", Some(&doomed));
+            let kid_b = f.code("Systems", Some(&doomed));
+            f.code("Access", Some(&parent));
+            let grandchild = f.code("Nurses", Some(&kid_a));
+            f.excerpt(0, 5, &[doomed.clone(), kid_b.clone()]);
+            f.excerpt(6, 10, std::slice::from_ref(&grandchild));
+            memos::create(
+                c,
+                MemoTarget {
+                    code_id: Some(doomed.clone()),
+                    ..Default::default()
+                },
+                "Why",
+                "Because",
+            )
+            .unwrap();
+            sets::create_set(c, "code", "Round 1", &[doomed.clone(), kid_b.clone()], None).unwrap();
+            c.execute_batch(&format!(
+                "INSERT INTO framework_matrices (id, name, row_kind, created_at, updated_at)
+                   VALUES ('m', 'Wave 1', 'document', 't', 't');
+                 INSERT INTO framework_cells (matrix_id, row_key, code_id, summary, updated_at)
+                   VALUES ('m', '{}', '{doomed}', 'Said little.', 't');",
+                f.doc
+            ))
+            .unwrap();
+
+            assert_round_trip(c, &format!("delete {strategy:?}"), |c| {
+                codes::delete(c, &doomed, strategy).unwrap();
+            });
+        }
+    }
+
+    /// Merging folds one code into another: its excerpts, children and memos
+    /// all move. Undo has to unpick every part of that — and leave alone the
+    /// target tag on excerpts that already carried it.
+    #[test]
+    fn round_trips_merging_codes_with_shared_excerpts_and_memos() {
+        let f = Fixture::new();
+        let c = f.conn();
+        let source = f.code("Trust", None);
+        let target = f.code("Relationships", None);
+        let kid = f.code("Staff", Some(&source));
+        f.code("Rapport", Some(&target));
+        // One excerpt has only the source, one already has both.
+        f.excerpt(0, 5, std::slice::from_ref(&source));
+        f.excerpt(6, 10, &[source.clone(), target.clone()]);
+        f.excerpt(11, 16, std::slice::from_ref(&kid));
+        for (code, title) in [(&source, "Source note"), (&target, "Target note")] {
+            memos::create(
+                c,
+                MemoTarget {
+                    code_id: Some(code.clone()),
+                    ..Default::default()
+                },
+                title,
+                "body",
+            )
+            .unwrap();
+        }
+        sets::create_set(c, "code", "Round 1", std::slice::from_ref(&source), None).unwrap();
+
+        let before_merge = head(c).unwrap();
+        assert_round_trip(c, "merge", |c| {
+            codes::merge(c, &source, &target).unwrap();
+        });
+        // A merge writes an entry per side, but it is one step: a single undo
+        // after the redo brings the source back whole.
+        assert!(codes::get(c, &source).is_err(), "the redo merged it away");
+        let undone = undo(c).unwrap().unwrap();
+        assert_eq!(undone.kind, "code.merged_from");
+        assert!(codes::get(c, &source).is_ok());
+        assert_eq!(head(c).unwrap(), before_merge, "both entries came off");
+    }
+
+    // ---------------------------------------------------------- excerpts
+
+    #[test]
+    fn round_trips_the_whole_life_of_an_excerpt() {
+        let f = Fixture::new();
+        let c = f.conn();
+        let a = f.code("Alpha", None);
+        let b = f.code("Beta", None);
+
+        assert_round_trip(c, "apply_codes creates", |c| {
+            excerpts::apply_codes(
+                c,
+                ApplyCodesInput {
+                    document_id: f.doc.clone(),
+                    start_pos: Some(0),
+                    end_pos: Some(10),
+                    code_ids: vec![a.clone()],
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        });
+        let e = excerpts::list_for_document(c, &f.doc).unwrap()[0]
+            .id
+            .clone();
+        assert_round_trip(c, "apply_codes adds", |c| {
+            excerpts::apply_codes(
+                c,
+                ApplyCodesInput {
+                    document_id: f.doc.clone(),
+                    start_pos: Some(0),
+                    end_pos: Some(10),
+                    code_ids: vec![b.clone()],
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        });
+        assert_round_trip(c, "remove_code", |c| {
+            excerpts::remove_code(c, &e, &b).unwrap();
+        });
+        assert_round_trip(c, "add_codes", |c| {
+            excerpts::add_codes(c, &e, std::slice::from_ref(&b)).unwrap();
+        });
+        memos::create(
+            c,
+            MemoTarget {
+                excerpt_id: Some(e.clone()),
+                ..Default::default()
+            },
+            "Note",
+            "on the excerpt",
+        )
+        .unwrap();
+        assert_round_trip(c, "update_range", |c| {
+            excerpts::update_range(c, &e, 0, 14).unwrap();
+        });
+        let snapshot = excerpts::snapshot(c, &e).unwrap();
+        assert_round_trip(c, "delete", |c| {
+            excerpts::delete(c, &e).unwrap();
+        });
+        // The redo left it deleted, so restoring is the next thing to try.
+        assert_round_trip(c, "restore", |c| {
+            excerpts::restore(c, &snapshot).unwrap();
+        });
+    }
+
+    /// Offsets are code points, so a split has to land on a character
+    /// boundary even when the text is emoji and combining marks.
+    #[test]
+    fn round_trips_splitting_and_merging_excerpts_over_emoji() {
+        let p = OpenProject::in_memory("t").unwrap();
+        let c = &p.conn;
+        let doc = documents::create(
+            c,
+            documents::tests::new_doc("çay 🌍 içmek 👩‍🔬 güzeldir é herkes için."),
+        )
+        .unwrap()
+        .summary
+        .id;
+        let code = codes::tests::mk(c, "Alpha", None).id;
+        let e = excerpts::apply_codes(
+            c,
+            ApplyCodesInput {
+                document_id: doc.clone(),
+                start_pos: Some(0),
+                end_pos: Some(20),
+                code_ids: vec![code],
+                ..Default::default()
+            },
+        )
+        .unwrap()
+        .excerpt
+        .id;
+        memos::create(
+            c,
+            MemoTarget {
+                excerpt_id: Some(e.clone()),
+                ..Default::default()
+            },
+            "Note",
+            "🌍",
+        )
+        .unwrap();
+
+        assert_round_trip(c, "split", |c| {
+            excerpts::split(c, &e, 6).unwrap();
+        });
+        let right = excerpts::list_for_document(c, &doc)
+            .unwrap()
+            .into_iter()
+            .find(|x| x.id != e)
+            .unwrap()
+            .id;
+        // A memo on the half that disappears has to come back with it.
+        memos::create(
+            c,
+            MemoTarget {
+                excerpt_id: Some(right.clone()),
+                ..Default::default()
+            },
+            "Right",
+            "👩‍🔬",
+        )
+        .unwrap();
+        assert_round_trip(c, "merge_adjacent", |c| {
+            excerpts::merge_adjacent(c, &e, &right).unwrap();
+        });
+    }
+
+    // -------------------------------------------------------------- bulk
+
+    #[test]
+    fn round_trips_the_bulk_operations() {
+        let f = Fixture::new();
+        let c = f.conn();
+        let a = f.code("Alpha", None);
+        let b = f.code("Beta", None);
+        let e1 = f.excerpt(0, 5, std::slice::from_ref(&a));
+        let e2 = f.excerpt(6, 10, &[a.clone(), b.clone()]);
+        let both = vec![e1.clone(), e2.clone()];
+
+        assert_round_trip(c, "add_codes_many", |c| {
+            bulk::add_codes_many(c, &both, std::slice::from_ref(&b)).unwrap();
+        });
+        assert_round_trip(c, "remove_codes_many", |c| {
+            bulk::remove_codes_many(c, &both, std::slice::from_ref(&a)).unwrap();
+        });
+        assert_round_trip(c, "retag_code", |c| {
+            bulk::retag_code(c, &b, &a).unwrap();
+        });
+        assert_round_trip(c, "auto_code", |c| {
+            bulk::auto_code(
+                c,
+                &[
+                    AutoCodeHit {
+                        document_id: f.doc.clone(),
+                        start_pos: 0,
+                        end_pos: 5,
+                    },
+                    AutoCodeHit {
+                        document_id: f.doc.clone(),
+                        start_pos: 20,
+                        end_pos: 26,
+                    },
+                ],
+                &b,
+            )
+            .unwrap();
+        });
+        assert_round_trip(c, "delete_many", |c| {
+            bulk::delete_many(c, &both).unwrap();
+        });
+    }
+
+    // ------------------------------------------------------------- memos
+
+    #[test]
+    fn round_trips_memo_writes_on_every_target() {
+        let f = Fixture::new();
+        let c = f.conn();
+        let code = f.code("Alpha", None);
+        let excerpt = f.excerpt(0, 5, std::slice::from_ref(&code));
+        for target in [
+            MemoTarget::default(),
+            MemoTarget {
+                code_id: Some(code.clone()),
+                ..Default::default()
+            },
+            MemoTarget {
+                excerpt_id: Some(excerpt.clone()),
+                ..Default::default()
+            },
+            MemoTarget {
+                document_id: Some(f.doc.clone()),
+                ..Default::default()
+            },
+        ] {
+            assert_round_trip(c, "memo create", |c| {
+                memos::create(c, target.clone(), "Title", "Body").unwrap();
+            });
+        }
+        let memo = memos::list(c, &MemoTarget::default()).unwrap()[0].clone();
+        assert_round_trip(c, "memo update", |c| {
+            memos::update(c, &memo.id, "Edited", "New body").unwrap();
+        });
+        let edited = memos::get(c, &memo.id).unwrap();
+        assert_round_trip(c, "memo delete", |c| {
+            memos::delete(c, &memo.id).unwrap();
+        });
+        // The redo left it deleted, so restoring is the next thing to try.
+        assert_round_trip(c, "memo restore", |c| {
+            memos::restore(c, &edited).unwrap();
+        });
+    }
+
+    // ------------------------------------------------------- the tree
+
+    #[test]
+    fn an_edit_after_an_undo_branches_instead_of_discarding_the_redo() {
+        let f = Fixture::new();
+        let c = f.conn();
+        let a = f.code("Alpha", None);
+        let first = head(c).unwrap().unwrap();
+        codes::update(
+            c,
+            &a,
+            CodePatch {
+                name: Some("Alpha one".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let left = head(c).unwrap().unwrap();
+
+        undo(c).unwrap().unwrap();
+        assert_eq!(head(c).unwrap(), Some(first));
+        codes::update(
+            c,
+            &a,
+            CodePatch {
+                name: Some("Alpha two".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let right = head(c).unwrap().unwrap();
+
+        // The path we left is still there, and still reachable.
+        assert!(get(c, left).is_ok());
+        assert_eq!(children_of(c, Some(first)).unwrap(), vec![left, right]);
+        assert_eq!(codes::get(c, &a).unwrap().name, "Alpha two");
+
+        // Redo follows the branch that was taken last.
+        undo(c).unwrap().unwrap();
+        let redone = redo(c, None).unwrap().unwrap();
+        assert_eq!(redone.id, right);
+        assert_eq!(codes::get(c, &a).unwrap().name, "Alpha two");
+
+        // Naming the other branch and checking it out walks down to the
+        // common ancestor and back up the other side.
+        checkout(c, left).unwrap();
+        assert_eq!(codes::get(c, &a).unwrap().name, "Alpha one");
+        assert_eq!(head(c).unwrap(), Some(left));
+        checkout(c, right).unwrap();
+        assert_eq!(codes::get(c, &a).unwrap().name, "Alpha two");
+    }
+
+    #[test]
+    fn checkout_across_a_common_ancestor_restores_the_exact_state() {
+        let f = Fixture::new();
+        let c = f.conn();
+        let a = f.code("Alpha", None);
+        f.excerpt(0, 5, std::slice::from_ref(&a));
+        let fork = head(c).unwrap().unwrap();
+        let at_fork = dump_state(c);
+
+        // One branch: rename twice.
+        for name in ["One", "Two"] {
+            codes::update(
+                c,
+                &a,
+                CodePatch {
+                    name: Some(name.into()),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        }
+        let tip_left = head(c).unwrap().unwrap();
+        let at_left = dump_state(c);
+
+        // Back to the fork, then a different branch: a second code and a memo.
+        checkout(c, fork).unwrap();
+        assert_same(&at_fork, &dump_state(c), "back to the fork");
+        let b = f.code("Beta", None);
+        memos::create(
+            c,
+            MemoTarget {
+                code_id: Some(b.clone()),
+                ..Default::default()
+            },
+            "Note",
+            "Body",
+        )
+        .unwrap();
+        let tip_right = head(c).unwrap().unwrap();
+        let at_right = dump_state(c);
+
+        checkout(c, tip_left).unwrap();
+        assert_same(&at_left, &dump_state(c), "the left branch");
+        checkout(c, tip_right).unwrap();
+        assert_same(&at_right, &dump_state(c), "the right branch");
+        assert_eq!(head(c).unwrap(), Some(tip_right));
+    }
+
+    #[test]
+    fn fork_here_names_a_node_and_the_tree_reports_the_shape() {
+        let f = Fixture::new();
+        let c = f.conn();
+        let a = f.code("Alpha", None);
+        let fork = fork_here(c, "  before the rename  ").unwrap();
+        assert_eq!(fork.branch_name.as_deref(), Some("before the rename"));
+        codes::update(
+            c,
+            &a,
+            CodePatch {
+                name: Some("One".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        undo(c).unwrap();
+        codes::update(
+            c,
+            &a,
+            CodePatch {
+                name: Some("Two".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        let tree = tree(c).unwrap();
+        let root = tree.iter().find(|n| n.id == fork.id).unwrap();
+        assert_eq!(root.children.len(), 2, "the tree branches at the fork");
+        assert_eq!(root.branch_name.as_deref(), Some("before the rename"));
+        assert!(root.undoable);
+        assert!(tree.iter().filter(|n| n.is_head).count() == 1);
+        assert!(tree.last().unwrap().is_head);
+
+        rename_branch(c, fork.id, None).unwrap();
+        assert_eq!(get(c, fork.id).unwrap().branch_name, None);
+    }
+
+    #[test]
+    fn compact_before_drops_what_came_first_and_the_side_branches() {
+        let f = Fixture::new();
+        let c = f.conn();
+        let a = f.code("Alpha", None);
+        codes::update(
+            c,
+            &a,
+            CodePatch {
+                name: Some("One".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let keep = head(c).unwrap().unwrap();
+        undo(c).unwrap();
+        codes::update(
+            c,
+            &a,
+            CodePatch {
+                name: Some("Side".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        fork_here(c, "the road not taken").unwrap();
+        checkout(c, keep).unwrap();
+        codes::update(
+            c,
+            &a,
+            CodePatch {
+                name: Some("Later".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let state = dump_state(c);
+
+        let report = compact_before(c, keep).unwrap();
+        assert_eq!(report.dropped_nodes, 3, "two before it and one side branch");
+        assert_eq!(report.dropped_branches, vec!["the road not taken"]);
+        assert_same(&state, &dump_state(c), "compacting");
+        assert_eq!(get(c, keep).unwrap().parent_id, None);
+        // The kept node is a root now, so there is nothing to undo past it.
+        undo(c).unwrap().unwrap();
+        assert_eq!(codes::get(c, &a).unwrap().name, "One");
+        assert!(matches!(undo(c), Err(AppError::Validation(_))));
+    }
+
+    #[test]
+    fn compact_refuses_while_the_project_is_somewhere_else_in_the_tree() {
+        let f = Fixture::new();
+        let c = f.conn();
+        let a = f.code("Alpha", None);
+        let first = head(c).unwrap().unwrap();
+        codes::update(
+            c,
+            &a,
+            CodePatch {
+                name: Some("One".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let later = head(c).unwrap().unwrap();
+        checkout(c, first).unwrap();
+        assert!(matches!(
+            compact_before(c, later),
+            Err(AppError::Validation(_))
+        ));
+    }
+
+    #[test]
+    fn replaying_records_nothing() {
+        let f = Fixture::new();
+        let c = f.conn();
+        let count = |c: &Connection| -> i64 {
+            c.query_row("SELECT count(*) FROM history", [], |r| r.get(0))
+                .unwrap()
+        };
+        let a = f.code("Alpha", None);
+        let before = count(c);
+        undo(c).unwrap().unwrap();
+        redo(c, None).unwrap().unwrap();
+        assert_eq!(count(c), before, "undo and redo are not new operations");
+        assert!(codes::get(c, &a).is_ok());
+        assert!(!replaying(c), "the flag is always put back");
+
+        // The flag survives an error inside the replay.
+        let err = with_replay(c, |_| -> Result<()> {
+            Err(AppError::Validation("boom".into()))
+        });
+        assert!(err.is_err());
+        assert!(!replaying(c));
+    }
+
+    #[test]
+    fn undo_over_an_entry_from_before_history_fails_cleanly() {
+        let f = Fixture::new();
+        let c = f.conn();
+        f.code("Alpha", None);
+        // What the migration leaves behind: readable, no payloads.
+        c.execute(
+            "UPDATE history SET forward_json = NULL, inverse_json = NULL",
+            [],
+        )
+        .unwrap();
+        let state = dump_state(c);
+        assert!(matches!(undo(c), Err(AppError::Validation(_))));
+        assert_eq!(dump_state(c), state, "a refused undo changes nothing");
+        assert!(
+            head(c).unwrap().is_some(),
+            "and leaves the head where it was"
+        );
+        let entries = crate::db::activity::list(c, &ActivityFilter::default()).unwrap();
+        assert!(entries.entries.iter().all(|e| !e.undoable));
+    }
+
+    #[test]
+    fn checkout_refuses_a_path_through_a_step_that_cannot_be_replayed() {
+        let f = Fixture::new();
+        let c = f.conn();
+        let a = f.code("Alpha", None);
+        let first = head(c).unwrap().unwrap();
+        codes::update(
+            c,
+            &a,
+            CodePatch {
+                name: Some("One".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let second = head(c).unwrap().unwrap();
+        c.execute(
+            "UPDATE history SET forward_json = NULL, inverse_json = NULL WHERE id = ?1",
+            [second],
+        )
+        .unwrap();
+        let state = dump_state(c);
+        checkout(c, first).unwrap_err();
+        assert_eq!(dump_state(c), state);
+        assert_eq!(head(c).unwrap(), Some(second));
+    }
+
+    #[test]
+    fn undo_at_the_root_and_redo_at_a_leaf_do_nothing() {
+        let p = OpenProject::in_memory("t").unwrap();
+        let c = &p.conn;
+        assert!(undo(c).unwrap().is_none());
+        assert!(redo(c, None).unwrap().is_none());
+        codes::tests::mk(c, "Alpha", None);
+        assert!(redo(c, None).unwrap().is_none());
+        undo(c).unwrap().unwrap();
+        assert!(undo(c).unwrap().is_none());
+    }
+
+    #[test]
+    fn the_head_and_the_tree_survive_closing_the_project() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("h.misket");
+        let code_id;
+        let head_id;
+        {
+            let p = OpenProject::create(&path, "H", "test").unwrap();
+            let a = codes::tests::mk(&p.conn, "Alpha", None);
+            code_id = a.id.clone();
+            codes::update(
+                &p.conn,
+                &a.id,
+                CodePatch {
+                    name: Some("Renamed".into()),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+            head_id = head(&p.conn).unwrap().unwrap();
+        }
+        let p = OpenProject::open(&path).unwrap();
+        assert_eq!(head(&p.conn).unwrap(), Some(head_id));
+        // The inverse is data in the file, so it still works a session later.
+        undo(&p.conn).unwrap().unwrap();
+        assert_eq!(codes::get(&p.conn, &code_id).unwrap().name, "Alpha");
+        assert_eq!(tree(&p.conn).unwrap().len(), 2);
+    }
+
+    #[test]
+    fn redo_can_be_pointed_at_a_particular_branch() {
+        let f = Fixture::new();
+        let c = f.conn();
+        let a = f.code("Alpha", None);
+        let fork = head(c).unwrap().unwrap();
+        codes::update(
+            c,
+            &a,
+            CodePatch {
+                name: Some("One".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let left = head(c).unwrap().unwrap();
+        undo(c).unwrap();
+        codes::update(
+            c,
+            &a,
+            CodePatch {
+                name: Some("Two".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        undo(c).unwrap();
+        assert_eq!(head(c).unwrap(), Some(fork));
+
+        redo(c, Some(left)).unwrap().unwrap();
+        assert_eq!(codes::get(c, &a).unwrap().name, "One");
+        // And it becomes the branch a plain redo follows from now on.
+        undo(c).unwrap();
+        assert_eq!(redo(c, None).unwrap().unwrap().id, left);
+        // A node that is not a child of the head is refused.
+        assert!(matches!(redo(c, Some(fork)), Err(AppError::Validation(_))));
+    }
 }
