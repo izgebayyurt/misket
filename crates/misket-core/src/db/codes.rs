@@ -270,11 +270,35 @@ fn log_update(conn: &Connection, before: &Code, after: &Code) -> Result<()> {
             activity::change(before.color.clone(), after.color.clone()),
         );
     }
+    if before.inclusion != after.inclusion {
+        fields.push("inclusion");
+        detail.insert(
+            "inclusion".into(),
+            activity::change(before.inclusion.clone(), after.inclusion.clone()),
+        );
+    }
+    if before.exclusion != after.exclusion {
+        fields.push("exclusion");
+        detail.insert(
+            "exclusion".into(),
+            activity::change(before.exclusion.clone(), after.exclusion.clone()),
+        );
+    }
     if before.shortcut != after.shortcut {
         fields.push("shortcut");
         detail.insert(
             "shortcut".into(),
             activity::change(before.shortcut.clone(), after.shortcut.clone()),
+        );
+    }
+    if before.example_excerpt_id != after.example_excerpt_id {
+        fields.push("example");
+        detail.insert(
+            "example".into(),
+            activity::change(
+                before.example_excerpt_id.clone(),
+                after.example_excerpt_id.clone(),
+            ),
         );
     }
     if fields.is_empty() {
