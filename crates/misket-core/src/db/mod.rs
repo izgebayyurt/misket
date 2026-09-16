@@ -226,6 +226,8 @@ mod tests {
                 .execute_batch(
                     "DROP TABLE descriptor_values;
                      DROP TABLE descriptor_fields;
+                     DROP TABLE media_blobs;
+                     DROP INDEX excerpts_image_region_uq;
                      PRAGMA user_version = 1;",
                 )
                 .unwrap();
@@ -243,9 +245,12 @@ mod tests {
             .query_row("PRAGMA user_version", [], |r| r.get(0))
             .unwrap();
         assert_eq!(backup_version, 1);
-        // The descriptor tables the migration added are usable.
+        // The tables the migrations added are usable again.
         p.conn
-            .execute_batch("SELECT count(*) FROM descriptor_fields;")
+            .execute_batch(
+                "SELECT count(*) FROM descriptor_fields;
+                 SELECT count(*) FROM media_blobs;",
+            )
             .unwrap();
     }
 
