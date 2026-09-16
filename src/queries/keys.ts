@@ -10,6 +10,10 @@ export const keys = {
   excerpt: (id: string) => ["excerpt", id] as const,
   excerptQuery: (filter: ExcerptFilter) => ["excerptQuery", filter] as const,
   excerptQueries: ["excerptQuery"] as const,
+  analysis: ["analysis"] as const,
+  codeFrequencies: (documentIds: string[]) => ["analysis", "frequencies", documentIds] as const,
+  coOccurrence: (documentIds: string[]) => ["analysis", "cooccurrence", documentIds] as const,
+  codeByDocument: ["analysis", "codeByDocument"] as const,
   memos: (target: MemoTarget) => ["memos", target] as const,
   allMemos: ["memos"] as const,
 };

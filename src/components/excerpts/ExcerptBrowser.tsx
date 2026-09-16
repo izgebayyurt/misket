@@ -9,10 +9,17 @@ import { Button } from "@/components/ui/button";
 const PAGE = 200;
 
 export function ExcerptBrowser() {
-  const [codeIds, setCodeIds] = useState<string[]>([]);
-  const [includeDescendants, setIncludeDescendants] = useState(true);
-  const [documentIds, setDocumentIds] = useState<string[]>([]);
-  const [uncodedOnly, setUncodedOnly] = useState(false);
+  // The analysis views open the browser with a filter already set; it is read
+  // once, on mount (Workspace remounts this component when it changes).
+  const [initial] = useState<ExcerptFilter>(() => {
+    const view = useWorkspace.getState().view;
+    return (view.kind === "excerpts" && view.initialFilter) || {};
+  });
+  const [codeIds, setCodeIds] = useState<string[]>(initial.codeIds ?? []);
+  const [includeDescendants, setIncludeDescendants] = useState(initial.includeDescendants ?? true);
+  const [requireAllCodes, setRequireAllCodes] = useState(initial.requireAllCodes ?? false);
+  const [documentIds, setDocumentIds] = useState<string[]>(initial.documentIds ?? []);
+  const [uncodedOnly, setUncodedOnly] = useState(initial.uncodedOnly ?? false);
   const [pages, setPages] = useState(1);
   const openDocument = useWorkspace((s) => s.openDocument);
 
@@ -20,12 +27,13 @@ export function ExcerptBrowser() {
     () => ({
       codeIds: codeIds.length ? codeIds : null,
       includeDescendants,
+      requireAllCodes,
       documentIds: documentIds.length ? documentIds : null,
       uncodedOnly,
       limit: PAGE * pages,
       offset: 0,
     }),
-    [codeIds, includeDescendants, documentIds, uncodedOnly, pages],
+    [codeIds, includeDescendants, requireAllCodes, documentIds, uncodedOnly, pages],
   );
   const { data, isFetching } = useExcerptQuery(filter);
 
@@ -39,6 +47,8 @@ export function ExcerptBrowser() {
         }}
         includeDescendants={includeDescendants}
         onIncludeDescendants={setIncludeDescendants}
+        requireAllCodes={requireAllCodes}
+        onRequireAllCodes={setRequireAllCodes}
         documentIds={documentIds}
         onDocumentIds={(v) => {
           setDocumentIds(v);

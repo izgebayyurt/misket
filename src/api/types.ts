@@ -153,6 +153,8 @@ export interface ExcerptSnapshot {
 export interface ExcerptFilter {
   codeIds?: string[] | null;
   includeDescendants?: boolean;
+  /** All listed codes must be present (default: any of them). */
+  requireAllCodes?: boolean;
   documentIds?: string[] | null;
   uncodedOnly?: boolean;
   limit?: number;
@@ -168,4 +170,34 @@ export interface ExcerptRow extends ExcerptWithCodes {
 export interface ExcerptPage {
   rows: ExcerptRow[];
   total: number;
+}
+
+// ----------------------------------------------------------------- analysis
+
+export interface CodeFrequency {
+  codeId: string;
+  /** Excerpts tagged with this code itself. */
+  own: number;
+  /** Distinct excerpts tagged with this code or any descendant. */
+  withDescendants: number;
+  /** Documents holding at least one descendant-inclusive excerpt. */
+  documentCount: number;
+  /** `[documentId, count]`, descendant-inclusive, in project document order. */
+  perDocument: [string, number][];
+}
+
+/** `[rowCodeId, columnCodeId, count]`. */
+export type MatrixCell = [string, string, number];
+
+export interface CoOccurrence {
+  codeIds: string[];
+  /** Sparse and symmetric: every non-zero pair appears in both orientations. */
+  cells: MatrixCell[];
+}
+
+export interface CodeByDocument {
+  documentIds: string[];
+  codeIds: string[];
+  /** Sparse `[documentId, codeId, count]`, direct tags only. */
+  cells: MatrixCell[];
 }

@@ -20,6 +20,7 @@ function useInvalidateDocuments() {
   const qc = useQueryClient();
   return () => {
     qc.invalidateQueries({ queryKey: keys.documents });
+    qc.invalidateQueries({ queryKey: keys.analysis });
     qc.invalidateQueries({ queryKey: keys.project });
   };
 }

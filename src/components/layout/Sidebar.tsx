@@ -5,7 +5,7 @@ import { useWorkspace } from "@/state/workspace";
 import { DocumentList } from "@/components/documents/DocumentList";
 import { CodeTree } from "@/components/codebook/CodeTree";
 import { Button } from "@/components/ui/button";
-import { List } from "lucide-react";
+import { BarChart3, List } from "lucide-react";
 
 export function Sidebar({ project }: { project: ProjectInfo }) {
   const tab = useWorkspace((s) => s.sidebarTab);
@@ -37,7 +37,7 @@ export function Sidebar({ project }: { project: ProjectInfo }) {
       <div className="min-h-0 flex-1 overflow-y-auto">
         {tab === "documents" ? <DocumentList /> : <CodeTree />}
       </div>
-      <div className="border-t border-border p-2">
+      <div className="space-y-1 border-t border-border p-2">
         <Button
           variant={view.kind === "excerpts" ? "secondary" : "ghost"}
           className="w-full justify-start"
@@ -46,6 +46,15 @@ export function Sidebar({ project }: { project: ProjectInfo }) {
         >
           <List /> Excerpts
           <span className="ml-auto text-xs text-fg-muted">{describe("excerptBrowser")}</span>
+        </Button>
+        <Button
+          variant={view.kind === "analysis" ? "secondary" : "ghost"}
+          className="w-full justify-start"
+          onClick={() => setView({ kind: "analysis", tab: "frequencies" })}
+          data-testid="open-analysis"
+        >
+          <BarChart3 /> Analysis
+          <span className="ml-auto text-xs text-fg-muted">{describe("analysis")}</span>
         </Button>
       </div>
     </aside>

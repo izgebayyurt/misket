@@ -1,8 +1,13 @@
 import { create } from "zustand";
+import type { ExcerptFilter } from "@/api/types";
+
+export type AnalysisTab = "frequencies" | "cooccurrence" | "matrix";
 
 export type View =
   | { kind: "document"; documentId: string; focusExcerptId?: string }
-  | { kind: "excerpts" }
+  /** `initialFilter` seeds the browser's filters when it mounts. */
+  | { kind: "excerpts"; initialFilter?: ExcerptFilter }
+  | { kind: "analysis"; tab: AnalysisTab }
   | { kind: "empty" };
 
 export type SidebarTab = "documents" | "codes";
@@ -23,6 +28,8 @@ interface WorkspaceState {
   paletteOpen: boolean;
   setView: (view: View) => void;
   openDocument: (documentId: string, focusExcerptId?: string) => void;
+  /** Open the excerpt browser, optionally pre-filtered (analysis click-through). */
+  openExcerpts: (initialFilter?: ExcerptFilter) => void;
   setSidebarTab: (tab: SidebarTab) => void;
   setSelectedCodeId: (id: string | null) => void;
   setPendingSelection: (sel: PendingSelection | null) => void;
@@ -48,6 +55,12 @@ export const useWorkspace = create<WorkspaceState>((set) => ({
       view: { kind: "document", documentId, focusExcerptId },
       pendingSelection: null,
       focusedExcerptId: focusExcerptId ?? null,
+    }),
+  openExcerpts: (initialFilter) =>
+    set({
+      view: { kind: "excerpts", initialFilter },
+      pendingSelection: null,
+      focusedExcerptId: null,
     }),
   setSidebarTab: (sidebarTab) => set({ sidebarTab }),
   setSelectedCodeId: (selectedCodeId) => set({ selectedCodeId }),
