@@ -9,6 +9,7 @@ pub mod descriptors;
 pub mod documents;
 pub mod excerpts;
 pub mod export;
+pub mod framework;
 pub mod memos;
 pub mod migrations;
 pub mod search;
@@ -243,7 +244,10 @@ mod tests {
             let p = OpenProject::create(&path, "Old", "0.1.0").unwrap();
             p.conn
                 .execute_batch(
-                    "DROP TABLE descriptor_values;
+                    "DROP TRIGGER framework_cells_code_deleted;
+                     DROP TABLE framework_cells;
+                     DROP TABLE framework_matrices;
+                     DROP TABLE descriptor_values;
                      DROP TABLE descriptor_fields;
                      DROP TABLE media_blobs;
                      DROP INDEX excerpts_image_region_uq;
@@ -274,7 +278,8 @@ mod tests {
             .execute_batch(
                 "SELECT count(*) FROM descriptor_fields;
                  SELECT count(*) FROM media_blobs;
-                 SELECT count(*) FROM sets;",
+                 SELECT count(*) FROM sets;
+                 SELECT count(*) FROM framework_matrices;",
             )
             .unwrap();
     }

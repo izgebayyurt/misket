@@ -9,6 +9,9 @@ const MIGRATIONS: &[(i64, &str)] = &[
     (2, include_str!("migrations/0002_descriptors.sql")),
     (3, include_str!("migrations/0003_media_blobs.sql")),
     (4, include_str!("migrations/0004_sets.sql")),
+    // 5 and 6 are reserved for the descriptor-crosstab and word-frequency
+    // branches; a gap is fine, `migrate` only needs the list to be ordered.
+    (7, include_str!("migrations/0007_framework.sql")),
 ];
 
 pub fn latest_version() -> i64 {
@@ -63,8 +66,8 @@ mod tests {
     #[test]
     fn migrations_are_ordered_and_start_at_one() {
         assert_eq!(MIGRATIONS.first().unwrap().0, 1);
-        assert!(MIGRATIONS.windows(2).all(|w| w[0].0 + 1 == w[1].0));
-        assert_eq!(latest_version(), MIGRATIONS.len() as i64);
+        assert!(MIGRATIONS.windows(2).all(|w| w[0].0 < w[1].0));
+        assert_eq!(latest_version(), MIGRATIONS.last().unwrap().0);
     }
 
     #[test]
@@ -117,6 +120,48 @@ mod tests {
             )
             .unwrap();
         assert_eq!(n, 2);
+    }
+
+    #[test]
+    fn framework_tables_exist_at_the_latest_version() {
+        let conn = Connection::open_in_memory().unwrap();
+        migrate(&conn).unwrap();
+        let n: i64 = conn
+            .query_row(
+                "SELECT count(*) FROM sqlite_master WHERE type = 'table'
+                 AND name IN ('framework_matrices','framework_cells')",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(n, 2);
+        // Deleting a code takes its cells with it.
+        conn.execute_batch(
+            "INSERT INTO codes (id, name, color, sort_order, created_at, updated_at)
+               VALUES ('c', 'Access', '#112233', 0, 't', 't');
+             INSERT INTO framework_matrices (id, name, row_kind, created_at, updated_at)
+               VALUES ('m', 'Wave 1', 'document', 't', 't');
+             INSERT INTO framework_cells (matrix_id, row_key, code_id, summary, updated_at)
+               VALUES ('m', 'd', 'c', 'Said little about it.', 't');
+             DELETE FROM codes WHERE id = 'c';",
+        )
+        .unwrap();
+        let left: i64 = conn
+            .query_row("SELECT count(*) FROM framework_cells", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(left, 0);
+        // Deleting the matrix cascades to whatever cells are left.
+        conn.execute_batch(
+            "PRAGMA foreign_keys = ON;
+             INSERT INTO framework_cells (matrix_id, row_key, code_id, summary, updated_at)
+               VALUES ('m', 'd', 'gone', 'x', 't');
+             DELETE FROM framework_matrices WHERE id = 'm';",
+        )
+        .unwrap();
+        let left: i64 = conn
+            .query_row("SELECT count(*) FROM framework_cells", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(left, 0);
     }
 
     #[test]

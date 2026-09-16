@@ -649,6 +649,94 @@ pub struct SearchHit {
     pub context_after: String,
 }
 
+// ---------------------------------------------------------------- framework
+
+/// A saved framework matrix (Ritchie & Spencer): cases down the side, themes
+/// across the top, a written summary in every cell.
+///
+/// Only the configuration is stored. The rows are recomputed on every read
+/// from `row_kind` (one row per document, or one per distinct value of a
+/// descriptor field) so importing a document or filling in a descriptor
+/// changes the grid without touching this row.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct FrameworkMatrix {
+    pub id: String,
+    pub name: String,
+    /// `document` | `descriptor_value`
+    pub row_kind: String,
+    /// The descriptor field the rows group by, when `row_kind` is
+    /// `descriptor_value`.
+    pub row_field_id: Option<String>,
+    /// Restrict the rows to this document set's members; `None` means every
+    /// document.
+    pub row_set_id: Option<String>,
+    /// Take the columns from this code set; `None` means use `code_ids`.
+    pub code_set_id: Option<String>,
+    /// The columns, in column order, when `code_set_id` is `None`.
+    pub code_ids: Vec<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+/// What `create_matrix` and `update_matrix` take: a whole configuration, so
+/// undo is "apply the previous one".
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct FrameworkMatrixInput {
+    pub name: String,
+    /// `document` | `descriptor_value`
+    pub row_kind: String,
+    pub row_field_id: Option<String>,
+    pub row_set_id: Option<String>,
+    pub code_set_id: Option<String>,
+    pub code_ids: Vec<String>,
+}
+
+/// One computed row of a matrix: the key its summaries are stored under, what
+/// to show in the row header, and the documents it stands for.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct FrameworkRow {
+    /// The document id, or the descriptor value (empty for "no value").
+    pub row_key: String,
+    pub label: String,
+    pub document_ids: Vec<String>,
+}
+
+/// One cell: the written summary plus how much evidence sits behind it.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct FrameworkCell {
+    pub row_key: String,
+    pub code_id: String,
+    pub summary: String,
+    /// Distinct excerpts in the row's documents carrying this code or any of
+    /// its descendants.
+    pub excerpt_count: i64,
+}
+
+/// A matrix ready to render: the configuration, the computed rows, the
+/// resolved columns and one cell per (row, column) pair.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct FrameworkMatrixView {
+    pub matrix: FrameworkMatrix,
+    pub rows: Vec<FrameworkRow>,
+    /// Code ids, in column order.
+    pub columns: Vec<String>,
+    pub cells: Vec<FrameworkCell>,
+}
+
+/// A deleted matrix with every summary it held, so undo can put it back.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct FrameworkMatrixWithCells {
+    pub matrix: FrameworkMatrix,
+    /// `(rowKey, codeId, summary)`.
+    pub cells: Vec<(String, String, String)>,
+}
+
 /// serde helper: distinguishes "absent" from "present but null".
 mod double_option {
     use serde::{Deserialize, Deserializer, Serialize, Serializer};
