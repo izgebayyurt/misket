@@ -37,6 +37,11 @@ keyboard-friendly interface without a subscription.
   `Tab` cycles them, and the excerpt browser shows a thumbnail of each one.
   The image is copied into the project file, so a `.misket` stays
   self-contained.
+- **Find your place in a long transcript**: paragraph numbers in the gutter
+  (optional), `Ctrl`/`⌘`+`G` to go to one, `Ctrl`/`⌘`+`Home`/`End` to jump to
+  the top or bottom, and a reading position remembered per document so
+  reopening one lands where you left off. Rename the open document by
+  double-clicking its title or pressing `F2`.
 - **Adjust what is coded**: move a text excerpt's start or end by a word or a
   character from the keyboard, drag the grips at either end, split an excerpt
   at the cursor, or merge it with a touching neighbour (codes and memos are
@@ -75,6 +80,9 @@ keyboard-friendly interface without a subscription.
 | Apply a code directly                                  | its hotkey (set in the code's settings)       |
 | Fit / zoom an image                                    | `0` / `+` / `-`                               |
 | Next / previous excerpt                                | `Tab` / `Shift`+`Tab`                         |
+| Jump to the top / bottom of the document               | `Ctrl`/`⌘` + `Home` / `End`                   |
+| Go to paragraph                                        | `Ctrl`/`⌘` + `G`                              |
+| Rename the open document                               | `F2` or double-click its title                |
 | Edit the focused excerpt                               | `Enter`                                       |
 | Delete the focused excerpt                             | `Backspace`                                   |
 | Move the excerpt's **end** by a word                   | `Alt` + `←` / `→`                             |
@@ -92,7 +100,7 @@ keyboard-friendly interface without a subscription.
 | Find in project (search every document)                | `Shift` + `Ctrl`/`⌘` + `F`                    |
 | Import documents                                       | `Ctrl`/`⌘` + `I`                              |
 | Undo / redo                                            | `Ctrl`/`⌘` + `Z` / `Shift` + `Ctrl`/`⌘` + `Z` |
-| Settings (theme, text size, confirm-delete)            | `Ctrl`/`⌘` + `,`                              |
+| Settings (theme, text size, paragraph numbers)         | `Ctrl`/`⌘` + `,`                              |
 | Keyboard shortcuts reference                           | `Ctrl`/`⌘` + `/`                              |
 
 `Alt` + arrows move the focused excerpt's **end** edge; adding `Ctrl`/`⌘`

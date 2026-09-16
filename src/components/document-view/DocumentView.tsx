@@ -22,12 +22,16 @@ import { offsetsToRange, pointToOffset, rangeToOffsets } from "@/core/selection"
 import { nextBoundary, type Direction, type Granularity } from "@/core/wordBounds";
 import { isTextField, mod, type Action } from "@/core/keymap";
 import { findMatches } from "@/core/find";
+import { useProjectInfo } from "@/queries/project";
 import { useWorkspace } from "@/state/workspace";
+import { useReadingPositions } from "@/state/readingPositions";
 import { useShortcutActions } from "@/state/shortcutActions";
 import { useSettings } from "@/state/settings";
 import { SelectionToolbar } from "./SelectionToolbar";
 import { ExcerptPopover } from "./ExcerptPopover";
+import { DocumentTitle } from "./DocumentTitle";
 import { FindBar } from "./FindBar";
+import { GoToParagraphBar } from "./GoToParagraphBar";
 import { toast } from "@/state/toasts";
 import { cn } from "@/lib/utils";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -43,6 +47,7 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
   const { data: doc, error } = useDocument(documentId);
   const { data: excerpts } = useDocumentExcerpts(documentId);
   const { data: codes } = useCodes();
+  const { data: projectInfo } = useProjectInfo();
   const rootRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const pending = useWorkspace((s) => s.pendingSelection);
@@ -70,10 +75,22 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
   const [findQuery, setFindQuery] = useState("");
   const [findIndex, setFindIndex] = useState(0);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [goToOpen, setGoToOpen] = useState(false);
+  const [renaming, setRenaming] = useState(false);
+  const showParagraphNumbers = useSettings((s) => s.settings.showParagraphNumbers);
 
   const text = doc?.text ?? "";
   const offsetMap = useMemo(() => buildOffsetMap(text), [text]);
   const paragraphs = useMemo(() => splitParagraphs(text), [text]);
+  /**
+   * UTF-16 starts of the paragraphs that carry a number in the gutter, in
+   * order: blank lines are skipped, exactly as the CSS counter skips them, so
+   * `numberedStarts[n - 1]` is the paragraph the reader sees as "n".
+   */
+  const numberedStarts = useMemo(
+    () => paragraphs.filter((p) => p.text.length > 0).map((p) => p.start),
+    [paragraphs],
+  );
   const colorById = useMemo(() => new Map((codes ?? []).map((c) => [c.id, c.color])), [codes]);
   const shortcutToCode = useMemo(
     () => new Map((codes ?? []).filter((c) => c.shortcut).map((c) => [c.shortcut!, c.id])),
@@ -238,6 +255,117 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
     // Re-run only when the target offset (or the document) changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scrollToOffset, text]);
+
+  // --- jumping around the document -----------------------------------------
+  const jumpTo = useCallback((where: "top" | "bottom") => {
+    const container = scrollRef.current;
+    if (!container) return;
+    container.scrollTo({
+      top: where === "top" ? 0 : container.scrollHeight,
+      behavior: "smooth",
+    });
+  }, []);
+
+  /** Scroll to the paragraph the gutter numbers `n` and flash it. */
+  const jumpToParagraph = useCallback(
+    (n: number) => {
+      const root = rootRef.current;
+      if (!root || numberedStarts.length === 0) return;
+      const i = Math.min(Math.max(Math.trunc(n), 1), numberedStarts.length) - 1;
+      const el = root.querySelector<HTMLElement>(`p[data-p="${numberedStarts[i]}"]`);
+      if (!el) return;
+      el.scrollIntoView({ block: "center", behavior: "smooth" });
+      const span = el.querySelector<HTMLElement>("span[data-s]");
+      if (!span) return;
+      span.classList.add("flash");
+      setTimeout(() => span.classList.remove("flash"), 1300);
+    },
+    [numberedStarts],
+  );
+
+  const closeGoTo = useCallback(() => {
+    setGoToOpen(false);
+    // `preventScroll`: focusing the text root would otherwise scroll it back
+    // to its own top and undo the jump we just started.
+    rootRef.current?.focus({ preventScroll: true });
+  }, []);
+
+  // --- reading position ------------------------------------------------------
+  // Remembered as the code point offset of the first visible paragraph rather
+  // than a pixel scroll position, so it survives a change of text size, line
+  // height or window width.
+  const projectPath = projectInfo?.path ?? "";
+
+  /** The first paragraph still visible in the scroller, in code points. */
+  const firstVisibleOffset = useCallback((): number | null => {
+    const root = rootRef.current;
+    const container = scrollRef.current;
+    if (!root || !container) return null;
+    const ps = root.querySelectorAll<HTMLElement>("p[data-p]");
+    if (ps.length === 0) return null;
+    // `offsetTop` is monotonic down the document, so the last paragraph that
+    // starts at or above the viewport top is the one the reader is looking at.
+    const y = container.scrollTop;
+    let lo = 0;
+    let hi = ps.length - 1;
+    let best = 0;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      if (ps[mid]!.offsetTop <= y + 1) {
+        best = mid;
+        lo = mid + 1;
+      } else {
+        hi = mid - 1;
+      }
+    }
+    const u16 = Number(ps[best]!.dataset.p);
+    if (!Number.isFinite(u16)) return null;
+    return utf16ToCp(offsetMap, Math.max(0, Math.min(u16, text.length)));
+  }, [offsetMap, text.length]);
+
+  useEffect(() => {
+    const container = scrollRef.current;
+    if (!container || !text || !projectPath) return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const onScroll = () => {
+      if (timer) clearTimeout(timer);
+      // Debounced: scrolling past a passage on the way somewhere else should
+      // not be what gets remembered.
+      timer = setTimeout(() => {
+        const cp = firstVisibleOffset();
+        if (cp !== null) {
+          useReadingPositions.getState().remember(projectPath, documentId, cp);
+        }
+      }, 250);
+    };
+    container.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      if (timer) clearTimeout(timer);
+      container.removeEventListener("scroll", onScroll);
+    };
+  }, [documentId, firstVisibleOffset, projectPath, text]);
+
+  /** Which document the position has already been restored for. */
+  const restoredFor = useRef<string | null>(null);
+
+  useLayoutEffect(() => {
+    if (restoredFor.current === documentId) return;
+    if (!text || !projectPath) return;
+    const root = rootRef.current;
+    const container = scrollRef.current;
+    if (!root || !container) return;
+    restoredFor.current = documentId;
+    // An explicit target (an excerpt or a search hit) wins over the
+    // remembered position; those effects do their own scrolling.
+    if (focusExcerptId !== undefined || scrollToOffset !== undefined) return;
+    const cp = useReadingPositions.getState().recall(projectPath, documentId);
+    if (cp === null || cp <= 0) return;
+    const u16 = cpToUtf16(offsetMap, Math.min(cp, codePointCount(offsetMap)));
+    const el = root.querySelector<HTMLElement>(`p[data-p="${u16}"]`);
+    if (!el) return;
+    container.scrollTop +=
+      el.getBoundingClientRect().top - container.getBoundingClientRect().top - 12;
+  }, [documentId, focusExcerptId, offsetMap, projectPath, scrollToOffset, text]);
 
   // --- selection -> pendingSelection ---------------------------------------
   const readSelection = useCallback(() => {
@@ -578,10 +706,18 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
       extendSelectionLeft: () => extendSelection("left"),
       extendSelectionRight: () => extendSelection("right"),
       find: () => setFindOpen(true),
-      // Escape peels one layer at a time: find bar, then selection, then
-      // focus. (An open popover is closed by Radix before this runs, and the
-      // find bar's own input handles Escape locally while it has focus.)
+      jumpTop: () => jumpTo("top"),
+      jumpBottom: () => jumpTo("bottom"),
+      goToParagraph: () => setGoToOpen(true),
+      // Escape peels one layer at a time: the go-to bar, the find bar, then
+      // the selection, then the focus. (An open popover is closed by Radix
+      // before this runs, and each bar's own input handles Escape locally
+      // while it has focus.)
       escape: () => {
+        if (goToOpen) {
+          closeGoTo();
+          return;
+        }
         if (findOpen) {
           closeFind();
           return;
@@ -623,6 +759,9 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
     extendSelection,
     findOpen,
     closeFind,
+    goToOpen,
+    closeGoTo,
+    jumpTo,
     nudgeBoundary,
     splitFocused,
     mergeWith,
@@ -696,7 +835,17 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
   if (!doc) return null;
 
   return (
-    <div className="flex h-full flex-col" data-testid="document-view">
+    <div
+      className="flex h-full flex-col"
+      data-testid="document-view"
+      // F2 renames the open document while focus is inside the viewer (the
+      // text root is focusable), the keyboard twin of double-clicking the title.
+      onKeyDown={(e) => {
+        if (e.key !== "F2" || isTextField(e.target)) return;
+        e.preventDefault();
+        setRenaming(true);
+      }}
+    >
       {findOpen ? (
         <FindBar
           query={findQuery}
@@ -708,10 +857,30 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
           onClose={closeFind}
         />
       ) : null}
+      {goToOpen ? (
+        <GoToParagraphBar
+          total={numberedStarts.length}
+          onGo={jumpToParagraph}
+          onClose={closeGoTo}
+        />
+      ) : null}
       <div ref={scrollRef} className="relative min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-3xl px-10 py-10">
-          <h1 className="mb-6 font-serif text-2xl font-medium">{doc.name}</h1>
-          <div ref={rootRef} tabIndex={-1} className="doc-text" data-testid="doc-text">
+        <div
+          className={cn("mx-auto max-w-3xl py-10 pr-10", showParagraphNumbers ? "pl-20" : "pl-10")}
+        >
+          <DocumentTitle
+            documentId={documentId}
+            name={doc.name}
+            editing={renaming}
+            onEditingChange={setRenaming}
+            className="mb-6 block font-serif text-2xl font-medium"
+          />
+          <div
+            ref={rootRef}
+            tabIndex={-1}
+            className={cn("doc-text", showParagraphNumbers && "with-para-numbers")}
+            data-testid="doc-text"
+          >
             {paragraphs.map((p) => (
               <Paragraph
                 key={p.start}
@@ -864,8 +1033,10 @@ const Paragraph = memo(function Paragraph(p: ParagraphProps) {
     [p.start, p.end, p.excerpts],
   );
   if (p.text.length === 0) {
+    // Blank lines carry no paragraph number, so the gutter counts paragraphs
+    // rather than lines (see `.doc-text.with-para-numbers` in globals.css).
     return (
-      <p data-p={p.start}>
+      <p data-p={p.start} className="blank">
         <br />
       </p>
     );

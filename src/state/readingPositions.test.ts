@@ -1,0 +1,67 @@
+import { beforeEach, describe, expect, it } from "vitest";
+import {
+  loadPositions,
+  MAX_ENTRIES,
+  prune,
+  useReadingPositions,
+  type ReadingPositions,
+} from "./readingPositions";
+
+const PROJECT = "/tmp/study.misket";
+const OTHER = "/tmp/other.misket";
+
+beforeEach(() => {
+  localStorage.clear();
+  useReadingPositions.getState().clear();
+});
+
+describe("readingPositions", () => {
+  it("remembers and recalls a position per project and document", () => {
+    const { remember, recall } = useReadingPositions.getState();
+    expect(recall(PROJECT, "doc-1")).toBeNull();
+    remember(PROJECT, "doc-1", 1200);
+    remember(OTHER, "doc-1", 7);
+    expect(useReadingPositions.getState().recall(PROJECT, "doc-1")).toBe(1200);
+    expect(useReadingPositions.getState().recall(OTHER, "doc-1")).toBe(7);
+    expect(useReadingPositions.getState().recall(PROJECT, "doc-2")).toBeNull();
+  });
+
+  it("forgets one document without touching the others", () => {
+    const s = useReadingPositions.getState();
+    s.remember(PROJECT, "doc-1", 10);
+    s.remember(PROJECT, "doc-2", 20);
+    useReadingPositions.getState().forget(PROJECT, "doc-1");
+    expect(useReadingPositions.getState().recall(PROJECT, "doc-1")).toBeNull();
+    expect(useReadingPositions.getState().recall(PROJECT, "doc-2")).toBe(20);
+  });
+
+  it("ignores nonsense offsets", () => {
+    const s = useReadingPositions.getState();
+    s.remember(PROJECT, "doc-1", -1);
+    s.remember(PROJECT, "doc-2", Number.NaN);
+    expect(useReadingPositions.getState().recall(PROJECT, "doc-1")).toBeNull();
+    expect(useReadingPositions.getState().recall(PROJECT, "doc-2")).toBeNull();
+  });
+
+  it("caps the map at MAX_ENTRIES, dropping the least recently written", () => {
+    const positions: ReadingPositions = {};
+    for (let i = 0; i < MAX_ENTRIES + 10; i++) {
+      positions[`k${i}`] = { offset: i, at: i };
+    }
+    const capped = prune(positions);
+    expect(Object.keys(capped)).toHaveLength(MAX_ENTRIES);
+    expect(capped.k0).toBeUndefined(); // oldest `at` went first
+    expect(capped[`k${MAX_ENTRIES + 9}`]).toBeDefined();
+  });
+
+  it("round-trips through localStorage and survives a corrupt value", () => {
+    useReadingPositions.getState().remember(PROJECT, "doc-1", 42);
+    expect(loadPositions()[`${PROJECT}\u0000doc-1`]?.offset).toBe(42);
+
+    localStorage.setItem("misket:readingPositions", "{ not json");
+    expect(loadPositions()).toEqual({});
+
+    localStorage.setItem("misket:readingPositions", JSON.stringify({ a: { offset: "x", at: 1 } }));
+    expect(loadPositions()).toEqual({});
+  });
+});

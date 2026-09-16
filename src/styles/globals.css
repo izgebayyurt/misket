@@ -101,6 +101,39 @@ textarea {
   word-break: break-word;
 }
 
+/* Paragraph numbers in the left gutter. The number is a ::before pseudo-element
+   and a CSS counter, so it is not a DOM text node: `.doc-text`'s textContent is
+   still exactly the document text, and selection mapping (span[data-s]) never
+   sees it. Blank lines are skipped so the numbers count paragraphs, not lines. */
+.doc-text.with-para-numbers {
+  counter-reset: misket-para;
+}
+
+.doc-text.with-para-numbers p {
+  position: relative;
+}
+
+.doc-text.with-para-numbers p:not(.blank) {
+  counter-increment: misket-para;
+}
+
+.doc-text.with-para-numbers p:not(.blank)::before {
+  content: counter(misket-para);
+  position: absolute;
+  right: 100%;
+  top: 0;
+  margin-right: 0.8em;
+  font-family: var(--font-sans);
+  font-size: 0.68em;
+  line-height: inherit;
+  color: var(--fg-muted);
+  opacity: 0.75;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  user-select: none;
+  pointer-events: none;
+}
+
 /* A segment covered by one excerpt: tint + one underline lane.
    Covered by several: neutral tint, one lane per code (max 4). */
 .seg {

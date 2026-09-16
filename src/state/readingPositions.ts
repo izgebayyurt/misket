@@ -1,0 +1,121 @@
+import { create } from "zustand";
+
+/**
+ * Where the reader had got to in each document, so reopening one lands back
+ * on the same passage.
+ *
+ * The position is the **code point offset of the first visible paragraph**,
+ * not a pixel scroll position, so it survives a change of font size, line
+ * height or window width. Entries are scoped by project path so two projects
+ * that happen to share document ids cannot collide, and the whole map is
+ * mirrored into `localStorage` (best effort: blocked or full storage just
+ * means the app forgets, never that it breaks).
+ */
+
+const STORAGE_KEY = "misket:readingPositions";
+
+/** How many documents to remember before the least recently used are dropped. */
+export const MAX_ENTRIES = 500;
+
+interface Entry {
+  /** Code point offset of the first visible paragraph. */
+  offset: number;
+  /** When it was last written; used to prune the oldest entries. */
+  at: number;
+}
+
+export type ReadingPositions = Record<string, Entry>;
+
+/** Key a document by the project it lives in; "\u0000" cannot occur in a path. */
+function positionKey(projectPath: string, documentId: string): string {
+  return `${projectPath}\u0000${documentId}`;
+}
+
+function isEntry(value: unknown): value is Entry {
+  if (typeof value !== "object" || value === null) return false;
+  const e = value as Partial<Entry>;
+  return (
+    typeof e.offset === "number" &&
+    Number.isFinite(e.offset) &&
+    e.offset >= 0 &&
+    typeof e.at === "number" &&
+    Number.isFinite(e.at)
+  );
+}
+
+export function loadPositions(): ReadingPositions {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return {};
+    const parsed: unknown = JSON.parse(raw);
+    if (typeof parsed !== "object" || parsed === null) return {};
+    const out: ReadingPositions = {};
+    for (const [k, v] of Object.entries(parsed as Record<string, unknown>)) {
+      if (isEntry(v)) out[k] = v;
+    }
+    return prune(out);
+  } catch {
+    // Private browsing, blocked or corrupt storage: start from nothing.
+    return {};
+  }
+}
+
+function savePositions(positions: ReadingPositions): void {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(positions));
+  } catch {
+    // Storage full or blocked: the position is still live in memory.
+  }
+}
+
+/** Keep the newest `MAX_ENTRIES` entries, dropping the least recently written. */
+export function prune(positions: ReadingPositions): ReadingPositions {
+  const keys = Object.keys(positions);
+  if (keys.length <= MAX_ENTRIES) return positions;
+  keys.sort((a, b) => positions[b]!.at - positions[a]!.at);
+  const out: ReadingPositions = {};
+  for (const k of keys.slice(0, MAX_ENTRIES)) out[k] = positions[k]!;
+  return out;
+}
+
+interface ReadingPositionsState {
+  positions: ReadingPositions;
+  /** Remember where a document was scrolled to, in code points. */
+  remember: (projectPath: string, documentId: string, offset: number) => void;
+  /** The remembered offset for a document, or null if there isn't one. */
+  recall: (projectPath: string, documentId: string) => number | null;
+  /** Drop one document's position (e.g. after it is deleted). */
+  forget: (projectPath: string, documentId: string) => void;
+  /** Forget every remembered position. */
+  clear: () => void;
+}
+
+export const useReadingPositions = create<ReadingPositionsState>((set, get) => ({
+  positions: loadPositions(),
+  remember: (projectPath, documentId, offset) => {
+    if (!Number.isFinite(offset) || offset < 0) return;
+    const key = positionKey(projectPath, documentId);
+    const current = get().positions[key];
+    if (current && current.offset === offset) return;
+    const positions = prune({
+      ...get().positions,
+      [key]: { offset: Math.trunc(offset), at: Date.now() },
+    });
+    set({ positions });
+    savePositions(positions);
+  },
+  recall: (projectPath, documentId) =>
+    get().positions[positionKey(projectPath, documentId)]?.offset ?? null,
+  forget: (projectPath, documentId) => {
+    const key = positionKey(projectPath, documentId);
+    if (!(key in get().positions)) return;
+    const positions = { ...get().positions };
+    delete positions[key];
+    set({ positions });
+    savePositions(positions);
+  },
+  clear: () => {
+    set({ positions: {} });
+    savePositions({});
+  },
+}));

@@ -11,6 +11,7 @@ import { useShortcutActions } from "@/state/shortcutActions";
 import { useSettings } from "@/state/settings";
 import { toast } from "@/state/toasts";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { DocumentTitle } from "./DocumentTitle";
 import { ExcerptPopover } from "./ExcerptPopover";
 import { SelectionToolbar } from "./SelectionToolbar";
 
@@ -69,6 +70,7 @@ export function ImageView({ documentId, focusExcerptId }: Props) {
   const [popover, setPopover] = useState<{ id: string; anchor: Element } | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [flashId, setFlashId] = useState<string | null>(null);
+  const [renaming, setRenaming] = useState(false);
 
   const natural = doc?.media ?? null;
   const colorById = useMemo(() => new Map((codes ?? []).map((c) => [c.id, c.color])), [codes]);
@@ -468,9 +470,24 @@ export function ImageView({ documentId, focusExcerptId }: Props) {
   const preview = draft ?? active?.geometry ?? null;
 
   return (
-    <div className="flex h-full flex-col" data-testid="image-view">
+    <div
+      className="flex h-full flex-col"
+      data-testid="image-view"
+      // F2 renames the open document, as in the text viewer.
+      onKeyDown={(e) => {
+        if (e.key !== "F2" || isTextField(e.target)) return;
+        e.preventDefault();
+        setRenaming(true);
+      }}
+    >
       <div className="flex items-center gap-3 border-b border-border px-4 py-2">
-        <h1 className="min-w-0 truncate font-serif text-lg font-medium">{doc.name}</h1>
+        <DocumentTitle
+          documentId={documentId}
+          name={doc.name}
+          editing={renaming}
+          onEditingChange={setRenaming}
+          className="min-w-0 max-w-80 truncate font-serif text-lg font-medium"
+        />
         {natural ? (
           <span className="shrink-0 text-xs text-fg-muted">
             {natural.width}×{natural.height}

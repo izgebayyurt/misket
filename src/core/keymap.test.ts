@@ -94,6 +94,20 @@ describe("keymap", () => {
     expect(matchAction(ev({ key: "m", ctrlKey: true, shiftKey: true }, input))).toBeNull();
   });
 
+  it("binds the document orientation shortcuts (non-mac)", () => {
+    expect(matchAction(ev({ key: "Home", ctrlKey: true }))).toBe("jumpTop");
+    expect(matchAction(ev({ key: "End", ctrlKey: true }))).toBe("jumpBottom");
+    expect(matchAction(ev({ key: "g", ctrlKey: true }))).toBe("goToParagraph");
+    // Plain Home/End keep their normal meaning.
+    expect(matchAction(ev({ key: "Home" }))).toBeNull();
+    expect(matchAction(ev({ key: "End" }))).toBeNull();
+    // And none of them fire while typing in a text field.
+    const input = document.createElement("input");
+    expect(matchAction(ev({ key: "Home", ctrlKey: true }, input))).toBeNull();
+    expect(matchAction(ev({ key: "End", ctrlKey: true }, input))).toBeNull();
+    expect(matchAction(ev({ key: "g", ctrlKey: true }, input))).toBeNull();
+  });
+
   it("never binds the same chord to two actions", () => {
     const seen = new Map<string, Action>();
     for (const [action, s] of Object.entries(SHORTCUTS) as [Action, (typeof SHORTCUTS)[Action]][]) {

@@ -9,6 +9,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   editorLineHeight: 1.7,
   confirmDeleteExcerpt: false,
   keepBackups: 20,
+  showParagraphNumbers: true,
 };
 
 const SAVE_DEBOUNCE_MS = 400;
