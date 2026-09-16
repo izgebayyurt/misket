@@ -104,6 +104,8 @@ fn log_import(conn: &Connection, doc: &DocumentSummary) -> Result<()> {
             "sourcePath": doc.source_path,
             "textLength": doc.text_length,
         }),
+        None,
+        None,
     )
 }
 
@@ -173,7 +175,7 @@ pub fn create_image(conn: &Connection, input: NewImageDocument) -> Result<Docume
         [],
         |r| r.get(0),
     )?;
-    let tx = conn.unchecked_transaction()?;
+    let tx = util::tx(conn)?;
     tx.execute(
         "INSERT INTO documents (id, kind, name, source_path, source_format, content_hash, media_json, sort_order, created_at, updated_at)
          VALUES (?1, 'image', ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8)",
@@ -266,6 +268,8 @@ pub fn rename(conn: &Connection, id: &str, name: &str) -> Result<DocumentSummary
             Some(id),
             format!("Renamed document \"{}\" to \"{name}\"", before.name),
             json!({ "name": activity::change(before.name.clone(), name.to_string()) }),
+            None,
+            None,
         )?;
     }
     get_summary(conn, id)
@@ -273,7 +277,7 @@ pub fn rename(conn: &Connection, id: &str, name: &str) -> Result<DocumentSummary
 
 /// Reorder documents; ids not mentioned keep their relative order after the listed ones.
 pub fn reorder(conn: &Connection, ids: &[String]) -> Result<()> {
-    let tx = conn.unchecked_transaction()?;
+    let tx = util::tx(conn)?;
     let existing = list(&tx)?;
     let mut order: Vec<String> = ids.to_vec();
     for d in existing {
@@ -293,7 +297,7 @@ pub fn reorder(conn: &Connection, ids: &[String]) -> Result<()> {
 
 pub fn delete(conn: &Connection, id: &str) -> Result<()> {
     let doc = get_summary(conn, id)?;
-    let tx = conn.unchecked_transaction()?;
+    let tx = util::tx(conn)?;
     let n = tx.execute("DELETE FROM documents WHERE id = ?1", [id])?;
     if n == 0 {
         return Err(AppError::NotFound(format!("document {id} not found")));
@@ -309,6 +313,8 @@ pub fn delete(conn: &Connection, id: &str) -> Result<()> {
             "documentKind": doc.kind,
             "excerptCount": doc.excerpt_count,
         }),
+        None,
+        None,
     )?;
     tx.commit()?;
     Ok(())

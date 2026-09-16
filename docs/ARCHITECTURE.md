@@ -25,17 +25,16 @@ against it.
 - **`crates/misket-core`** owns the schema, migrations and all domain logic as
   plain functions over a `rusqlite::Connection`. It has no UI or Tauri
   dependency, so every rule (range validation, cycle guards, cascades,
-  snapshots for undo) is unit-tested against an in-memory database.
+  the inverse of every write) is unit-tested against an in-memory database.
 - **`src-tauri`** exposes those functions as Tauri commands. `AppState` holds
   the open project behind a mutex; each command locks it for a few
   milliseconds. Errors serialize as `{ code, message }` so the frontend can
   branch on the code.
 - **`src/core`** is pure TypeScript with no React or Tauri imports (enforced by
   ESLint): offset conversion, paragraph segmentation, DOM selection mapping,
-  the code tree, the undo stack, the keymap and the importers. Most frontend
-  tests live here.
-- **`src/queries`** wraps commands in TanStack Query hooks and registers undo
-  commands for mutations. **`src/state`** holds ephemeral UI state (current
+  the code tree, the keymap and the importers. Most frontend tests live here.
+- **`src/queries`** wraps commands in TanStack Query hooks.
+  **`src/state`** holds ephemeral UI state (current
   view, pending selection, focused excerpt, palette, toasts).
 
 ## Text and offsets
@@ -59,11 +58,26 @@ stacked underline lanes (one per code, up to four) over a neutral tint.
 
 ## Undo
 
-Undo is an inverse-command stack on the frontend (`src/core/undo.ts`). Each
-mutation registers a command with `redo()`/`undo()` that call backend commands;
-deletes return snapshots that `restore_*` reinserts with the original ids.
-Operations that cannot be inverted cheaply (deleting a document or code,
-merging codes, importing) confirm first and clear the stack.
+Undo is a tree in the project file (`crates/misket-core/src/db/history.rs`,
+and "History" in `docs/DATA_MODEL.md`). Every domain write appends a node
+carrying the operation and its exact inverse as JSON, inside the same
+transaction as the change, so the inverse is data rather than a closure: it
+survives a restart, a backup and a project file handed to someone else.
+
+Undo walks toward the root and redo toward a leaf; an edit made after an undo
+starts a branch instead of discarding the redo path, and `checkout` moves to
+any node by walking down to the lowest common ancestor and back up the other
+side in one transaction. Replaying calls the ordinary domain functions with a
+per-connection flag raised that keeps them from recording the replay, which is
+why every write path opens `util::tx` — a `SAVEPOINT` that nests where `BEGIN`
+cannot.
+
+`src/state/undoStore.ts` is a thin caller: it invokes `history_undo` or
+`history_redo`, invalidates the whole query cache, and toasts the summary the
+backend wrote. Documents, descriptors, sets, framework matrices, project
+rename and the imports are recorded but not yet invertible; they confirm
+first, and their frontend mutations still hold closures until phase 2 moves
+them across.
 
 ## Images
 
@@ -80,8 +94,8 @@ any zoom level. `ImageView` lays the image out with plain `left/top/width/
 height` rather than a CSS transform and draws the regions in an SVG overlay
 with `viewBox="0 0 1 1"`, which keeps hit-testing and stroke widths honest.
 A drawn rectangle becomes the workspace's pending selection, which is a union
-of a text range and an image region, so the palette, the code hotkeys and the
-undo stack are the same code for both.
+of a text range and an image region, so the palette, the code hotkeys and
+undo are the same code for both.
 
 ## Backups
 

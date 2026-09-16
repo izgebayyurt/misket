@@ -3,9 +3,13 @@
 use rusqlite::{params, Connection, OptionalExtension, Row};
 use serde_json::{json, Value};
 
-use super::{activity, util};
+use super::history::{CodeOp, Reparent};
+use super::{activity, history, util};
 use crate::error::{AppError, Result};
-use crate::models::{ChildrenStrategy, Code, CodeImpact, CodePatch, DeleteCodeReport, NewCode};
+use crate::models::{
+    ChildrenStrategy, Code, CodeImpact, CodePatch, CodeRow, CodeTreeSnapshot, DeleteCodeReport,
+    FrameworkCellRow, NewCode, SiblingGroup, TagRow,
+};
 
 /// Twelve distinguishable highlight colors; new codes cycle through them.
 pub const PALETTE: [&str; 12] = [
@@ -179,6 +183,9 @@ pub fn create(conn: &Connection, input: NewCode) -> Result<Code> {
     )
     .map_err(|e| map_unique(e, name, shortcut.as_deref()))?;
     let code = get(conn, &id)?;
+    // Redoing a create puts the very same row back, id and all, rather than
+    // making a second code that only looks the same.
+    let snapshot = snapshot_codes(conn, std::slice::from_ref(&id))?;
     activity::record(
         conn,
         "code.created",
@@ -193,6 +200,14 @@ pub fn create(conn: &Connection, input: NewCode) -> Result<Code> {
             "description": code.description,
             "shortcut": code.shortcut,
         }),
+        Some(history::payload(&CodeOp::Restore {
+            snapshot,
+            reparent: vec![],
+            remove_tags: vec![],
+        })),
+        Some(history::payload(&CodeOp::Drop {
+            code_ids: vec![code.id.clone()],
+        })),
     )?;
     Ok(code)
 }
@@ -317,7 +332,27 @@ fn log_update(conn: &Connection, before: &Code, after: &Code) -> Result<()> {
         Some(&after.id),
         summary,
         Value::Object(detail),
+        Some(history::payload(&update_op(after))),
+        Some(history::payload(&update_op(before))),
     )
+}
+
+/// Every editable field of a code as a patch, so replaying in either
+/// direction sets the whole row rather than layering one change on another.
+fn update_op(code: &Code) -> CodeOp {
+    CodeOp::Update {
+        code_id: code.id.clone(),
+        patch: Box::new(CodePatch {
+            name: Some(code.name.clone()),
+            color: Some(code.color.clone()),
+            description: Some(code.description.clone()),
+            inclusion: Some(code.inclusion.clone()),
+            exclusion: Some(code.exclusion.clone()),
+            shortcut: Some(code.shortcut.clone()),
+            example_excerpt_id: Some(code.example_excerpt_id.clone()),
+        }),
+        updated_at: code.updated_at.clone(),
+    }
 }
 
 /// All ids in the subtrees rooted at `roots` (roots included), via a recursive CTE.
@@ -370,11 +405,12 @@ pub fn move_code(
             ));
         }
     }
-    let tx = conn.unchecked_transaction()?;
+    let now = util::now();
+    let tx = util::tx(conn)?;
     // Take it out of the old sibling group, then compact that group.
     tx.execute(
         "UPDATE codes SET parent_id = ?2, sort_order = -1, updated_at = ?3 WHERE id = ?1",
-        params![id, new_parent_id, util::now()],
+        params![id, new_parent_id, now],
     )
     .map_err(|e| map_unique(e, &current.name, None))?;
     if current.parent_id.as_deref() != new_parent_id {
@@ -415,9 +451,380 @@ pub fn move_code(
             ),
             "index": activity::change(current.sort_order, index as i64),
         }),
+        Some(history::payload(&CodeOp::Move {
+            code_id: id.to_string(),
+            parent_id: new_parent_id.map(String::from),
+            index: index as i64,
+            updated_at: now.clone(),
+        })),
+        Some(history::payload(&CodeOp::Move {
+            code_id: id.to_string(),
+            parent_id: current.parent_id.clone(),
+            index: current.sort_order,
+            updated_at: current.updated_at.clone(),
+        })),
     )?;
     tx.commit()?;
     get(conn, id)
+}
+
+/// Read one group of siblings in order. Restoring a code has to put it back
+/// between the same two neighbours; a renumber alone would only guess.
+fn sibling_group(conn: &Connection, parent_id: Option<&str>) -> Result<SiblingGroup> {
+    let mut stmt =
+        conn.prepare("SELECT id FROM codes WHERE parent_id IS ?1 ORDER BY sort_order, created_at")?;
+    let ids: Vec<String> = stmt
+        .query_map([parent_id], |r| r.get(0))?
+        .collect::<rusqlite::Result<_>>()?;
+    Ok(SiblingGroup {
+        parent_id: parent_id.map(String::from),
+        ids,
+    })
+}
+
+/// Put the given sibling groups back in the recorded order. Ids that are gone
+/// are skipped, and anything that appeared since is appended after them.
+pub fn apply_sibling_order(conn: &Connection, groups: &[SiblingGroup]) -> Result<()> {
+    for group in groups {
+        let current = sibling_group(conn, group.parent_id.as_deref())?;
+        let mut order: Vec<&String> = group
+            .ids
+            .iter()
+            .filter(|id| current.ids.contains(id))
+            .collect();
+        order.extend(current.ids.iter().filter(|id| !group.ids.contains(id)));
+        for (i, id) in order.iter().enumerate() {
+            conn.execute(
+                "UPDATE codes SET sort_order = ?2 WHERE id = ?1",
+                params![id, i as i64],
+            )?;
+        }
+    }
+    Ok(())
+}
+
+/// Order `ids` parents-before-children, so reinserting them never trips the
+/// `parent_id` foreign key. Codes whose parent is outside the set come first.
+fn parents_first(rows: Vec<CodeRow>) -> Vec<CodeRow> {
+    let inside: std::collections::HashSet<&str> = rows.iter().map(|r| r.id.as_str()).collect();
+    let mut placed: std::collections::HashSet<String> = rows
+        .iter()
+        .filter(|r| !r.parent_id.as_deref().is_some_and(|p| inside.contains(p)))
+        .map(|r| r.id.clone())
+        .collect();
+    let mut out: Vec<CodeRow> = rows
+        .iter()
+        .filter(|r| placed.contains(&r.id))
+        .cloned()
+        .collect();
+    let mut rest: Vec<CodeRow> = rows
+        .into_iter()
+        .filter(|r| !placed.contains(&r.id))
+        .collect();
+    while !rest.is_empty() {
+        let (ready, waiting): (Vec<CodeRow>, Vec<CodeRow>) = rest
+            .into_iter()
+            .partition(|r| r.parent_id.as_deref().is_some_and(|p| placed.contains(p)));
+        if ready.is_empty() {
+            // A cycle cannot happen (the table forbids it), but never loop.
+            out.extend(waiting);
+            return out;
+        }
+        for r in &ready {
+            placed.insert(r.id.clone());
+        }
+        out.extend(ready);
+        rest = waiting;
+    }
+    out
+}
+
+fn in_list(n: usize) -> String {
+    std::iter::repeat_n("?", n).collect::<Vec<_>>().join(",")
+}
+
+/// Everything that would be lost if exactly these codes were deleted.
+pub fn snapshot_codes(conn: &Connection, ids: &[String]) -> Result<CodeTreeSnapshot> {
+    let mut snap = CodeTreeSnapshot::default();
+    if ids.is_empty() {
+        return Ok(snap);
+    }
+    let list = in_list(ids.len());
+    let args = || rusqlite::params_from_iter(ids.iter());
+
+    let mut stmt = conn.prepare(&format!(
+        "SELECT id, parent_id, name, color, description, inclusion, exclusion,
+                shortcut, sort_order, created_at, updated_at
+         FROM codes WHERE id IN ({list}) ORDER BY sort_order, created_at"
+    ))?;
+    let rows: Vec<CodeRow> = stmt
+        .query_map(args(), |r| {
+            Ok(CodeRow {
+                id: r.get(0)?,
+                parent_id: r.get(1)?,
+                name: r.get(2)?,
+                color: r.get(3)?,
+                description: r.get(4)?,
+                inclusion: r.get(5)?,
+                exclusion: r.get(6)?,
+                shortcut: r.get(7)?,
+                sort_order: r.get(8)?,
+                created_at: r.get(9)?,
+                updated_at: r.get(10)?,
+            })
+        })?
+        .collect::<rusqlite::Result<_>>()?;
+    drop(stmt);
+    snap.codes = parents_first(rows);
+
+    // The group each snapshotted code sits in, plus the group underneath it,
+    // so both its own place and its children's order survive.
+    let mut groups: Vec<Option<String>> = vec![];
+    for row in &snap.codes {
+        for parent in [row.parent_id.clone(), Some(row.id.clone())] {
+            if !groups.contains(&parent) {
+                groups.push(parent);
+            }
+        }
+    }
+    for parent in groups {
+        snap.sibling_order
+            .push(sibling_group(conn, parent.as_deref())?);
+    }
+
+    let mut stmt = conn.prepare(&format!(
+        "SELECT excerpt_id, code_id, created_at FROM excerpt_codes
+          WHERE code_id IN ({list}) ORDER BY excerpt_id, code_id"
+    ))?;
+    snap.excerpt_codes = stmt
+        .query_map(args(), |r| {
+            Ok(TagRow {
+                excerpt_id: r.get(0)?,
+                code_id: r.get(1)?,
+                created_at: r.get(2)?,
+            })
+        })?
+        .collect::<rusqlite::Result<_>>()?;
+    drop(stmt);
+
+    let mut stmt = conn.prepare(&format!(
+        "SELECT id, document_id, code_id, excerpt_id, title, body, created_at, updated_at
+         FROM memos WHERE code_id IN ({list}) ORDER BY id"
+    ))?;
+    snap.memos = stmt
+        .query_map(args(), super::memos::from_row)?
+        .collect::<rusqlite::Result<_>>()?;
+    drop(stmt);
+
+    let mut stmt = conn.prepare(&format!(
+        "SELECT sm.set_id, sm.member_id FROM set_members sm
+           JOIN sets s ON s.id = sm.set_id
+          WHERE s.kind = 'code' AND sm.member_id IN ({list})
+          ORDER BY sm.set_id, sm.member_id"
+    ))?;
+    snap.set_members = stmt
+        .query_map(args(), |r| Ok((r.get(0)?, r.get(1)?)))?
+        .collect::<rusqlite::Result<_>>()?;
+    drop(stmt);
+
+    let mut stmt = conn.prepare(&format!(
+        "SELECT matrix_id, row_key, code_id, summary, updated_at FROM framework_cells
+          WHERE code_id IN ({list}) ORDER BY matrix_id, row_key, code_id"
+    ))?;
+    snap.framework_cells = stmt
+        .query_map(args(), |r| {
+            Ok(FrameworkCellRow {
+                matrix_id: r.get(0)?,
+                row_key: r.get(1)?,
+                code_id: r.get(2)?,
+                summary: r.get(3)?,
+                updated_at: r.get(4)?,
+            })
+        })?
+        .collect::<rusqlite::Result<_>>()?;
+    drop(stmt);
+
+    let mut stmt = conn.prepare(&format!(
+        "SELECT id, example_excerpt_id FROM codes
+          WHERE id IN ({list}) AND example_excerpt_id IS NOT NULL ORDER BY id"
+    ))?;
+    snap.example_refs = stmt
+        .query_map(args(), |r| Ok((r.get(0)?, r.get(1)?)))?
+        .collect::<rusqlite::Result<_>>()?;
+    Ok(snap)
+}
+
+/// [`snapshot_codes`] for a whole branch: `id` and everything under it.
+pub fn snapshot_subtree(conn: &Connection, id: &str) -> Result<CodeTreeSnapshot> {
+    let ids = descendant_ids(conn, &[id.to_string()])?;
+    snapshot_codes(conn, &ids)
+}
+
+/// Put a snapshot back, ids and all.
+///
+/// Rows that point at something deleted in the meantime are skipped rather
+/// than failing the restore: a code can come back even if the excerpt someone
+/// held up as its example, or the set it belonged to, has gone since.
+pub fn restore_subtree(conn: &Connection, snap: &CodeTreeSnapshot) -> Result<()> {
+    let tx = util::tx(conn)?;
+    for c in &snap.codes {
+        tx.execute(
+            "INSERT INTO codes (id, parent_id, name, color, description, inclusion, exclusion,
+                                shortcut, sort_order, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+            params![
+                c.id,
+                c.parent_id,
+                c.name,
+                c.color,
+                c.description,
+                c.inclusion,
+                c.exclusion,
+                c.shortcut,
+                c.sort_order,
+                c.created_at,
+                c.updated_at
+            ],
+        )
+        .map_err(|e| map_unique(e, &c.name, c.shortcut.as_deref()))?;
+    }
+    for (code_id, excerpt_id) in &snap.example_refs {
+        tx.execute(
+            "UPDATE codes SET example_excerpt_id = ?2 WHERE id = ?1
+               AND EXISTS (SELECT 1 FROM excerpts WHERE id = ?2)",
+            params![code_id, excerpt_id],
+        )?;
+    }
+    for t in &snap.excerpt_codes {
+        tx.execute(
+            "INSERT OR IGNORE INTO excerpt_codes (excerpt_id, code_id, created_at)
+             SELECT ?1, ?2, ?3 WHERE EXISTS (SELECT 1 FROM excerpts WHERE id = ?1)",
+            params![t.excerpt_id, t.code_id, t.created_at],
+        )?;
+    }
+    for m in &snap.memos {
+        tx.execute(
+            "INSERT INTO memos (id, document_id, code_id, excerpt_id, title, body,
+                                created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+             ON CONFLICT(id) DO UPDATE SET
+               document_id = excluded.document_id, code_id = excluded.code_id,
+               excerpt_id = excluded.excerpt_id, title = excluded.title,
+               body = excluded.body, updated_at = excluded.updated_at",
+            params![
+                m.id,
+                m.document_id,
+                m.code_id,
+                m.excerpt_id,
+                m.title,
+                m.body,
+                m.created_at,
+                m.updated_at
+            ],
+        )?;
+    }
+    for (set_id, member_id) in &snap.set_members {
+        tx.execute(
+            "INSERT OR IGNORE INTO set_members (set_id, member_id)
+             SELECT ?1, ?2 WHERE EXISTS (SELECT 1 FROM sets WHERE id = ?1)",
+            params![set_id, member_id],
+        )?;
+    }
+    for cell in &snap.framework_cells {
+        tx.execute(
+            "INSERT OR REPLACE INTO framework_cells (matrix_id, row_key, code_id, summary, updated_at)
+             SELECT ?1, ?2, ?3, ?4, ?5 WHERE EXISTS (SELECT 1 FROM framework_matrices WHERE id = ?1)",
+            params![cell.matrix_id, cell.row_key, cell.code_id, cell.summary, cell.updated_at],
+        )?;
+    }
+    apply_sibling_order(&tx, &snap.sibling_order)?;
+    tx.commit()
+}
+
+/// Delete codes outright, with no strategy and no log entry: the inverse of
+/// having created them. Their subtrees, tags and memos cascade.
+pub fn delete_codes(conn: &Connection, ids: &[String]) -> Result<()> {
+    let tx = util::tx(conn)?;
+    let mut parents: Vec<Option<String>> = vec![];
+    for id in ids {
+        let parent: Option<Option<String>> = tx
+            .query_row("SELECT parent_id FROM codes WHERE id = ?1", [id], |r| {
+                r.get(0)
+            })
+            .optional()?;
+        if let Some(parent) = parent {
+            if !parents.contains(&parent) {
+                parents.push(parent);
+            }
+        }
+        tx.execute("DELETE FROM codes WHERE id = ?1", [id])?;
+    }
+    for parent in parents {
+        renumber(&tx, parent.as_deref())?;
+    }
+    tx.commit()
+}
+
+/// Where each of `id`'s children sits right now, so an undo can put them back
+/// under it after a `promote` delete or a merge moved them elsewhere.
+fn child_places(conn: &Connection, id: &str) -> Result<Vec<Reparent>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, sort_order, updated_at FROM codes WHERE parent_id = ?1 ORDER BY sort_order",
+    )?;
+    let rows = stmt.query_map([id], |r| {
+        Ok(Reparent {
+            code_id: r.get(0)?,
+            parent_id: Some(id.to_string()),
+            sort_order: r.get(1)?,
+            updated_at: r.get(2)?,
+        })
+    })?;
+    Ok(rows.collect::<rusqlite::Result<_>>()?)
+}
+
+/// Where these codes sit right now, for a redo to put them back after the
+/// operation's own renumbering has run.
+fn places_of(conn: &Connection, ids: &[String]) -> Result<Vec<Reparent>> {
+    let mut out = vec![];
+    for id in ids {
+        if let Some(r) = conn
+            .query_row(
+                "SELECT parent_id, sort_order, updated_at FROM codes WHERE id = ?1",
+                [id],
+                |r| {
+                    Ok(Reparent {
+                        code_id: id.clone(),
+                        parent_id: r.get(0)?,
+                        sort_order: r.get(1)?,
+                        updated_at: r.get(2)?,
+                    })
+                },
+            )
+            .optional()?
+        {
+            out.push(r);
+        }
+    }
+    Ok(out)
+}
+
+/// The tags `target` is about to gain from `source`: the excerpts carrying
+/// the one and not the other. Undoing a merge takes exactly these back and
+/// leaves alone the excerpts that already had the target.
+fn tags_gained(conn: &Connection, source_id: &str, target_id: &str) -> Result<Vec<TagRow>> {
+    let mut stmt = conn.prepare(
+        "SELECT excerpt_id FROM excerpt_codes WHERE code_id = ?1
+           AND excerpt_id NOT IN (SELECT excerpt_id FROM excerpt_codes WHERE code_id = ?2)
+         ORDER BY excerpt_id",
+    )?;
+    let rows = stmt.query_map(params![source_id, target_id], |r| {
+        Ok(TagRow {
+            excerpt_id: r.get(0)?,
+            code_id: target_id.to_string(),
+            created_at: String::new(),
+        })
+    })?;
+    Ok(rows.collect::<rusqlite::Result<_>>()?)
 }
 
 pub fn impact(conn: &Connection, id: &str) -> Result<CodeImpact> {
@@ -440,7 +847,22 @@ pub fn impact(conn: &Connection, id: &str) -> Result<CodeImpact> {
 /// Delete a code. Children are either deleted with it or promoted to its parent.
 pub fn delete(conn: &Connection, id: &str, children: ChildrenStrategy) -> Result<DeleteCodeReport> {
     let code = get(conn, id)?;
-    let tx = conn.unchecked_transaction()?;
+    let tx = util::tx(conn)?;
+    // Captured before anything moves: with `delete` the whole branch has to
+    // come back, with `promote` only this code, because its children survive
+    // one level up and are put back underneath it by `reparent`.
+    let snapshot = match children {
+        ChildrenStrategy::Delete => snapshot_subtree(&tx, id)?,
+        ChildrenStrategy::Promote => snapshot_codes(&tx, &[id.to_string()])?,
+    };
+    let reparent = match children {
+        ChildrenStrategy::Delete => vec![],
+        ChildrenStrategy::Promote => child_places(&tx, id)?,
+    };
+    // Which children a `promote` moves up, so redoing lands them in the same
+    // place with the same timestamps rather than today's.
+    let now = util::now();
+    let mut promoted: Vec<String> = vec![];
     let (deleted_ids, affected) = match children {
         ChildrenStrategy::Delete => {
             let subtree = descendant_ids(&tx, &[id.to_string()])?;
@@ -463,15 +885,18 @@ pub fn delete(conn: &Connection, id: &str, children: ChildrenStrategy) -> Result
             for (i, kid) in kids.iter().enumerate() {
                 tx.execute(
                     "UPDATE codes SET parent_id = ?2, sort_order = ?3, updated_at = ?4 WHERE id = ?1",
-                    params![kid, code.parent_id, base + i as i64, util::now()],
+                    params![kid, code.parent_id, base + i as i64, now],
                 )
                 .map_err(|e| map_unique(e, "child", None))?;
+                promoted.push(kid.clone());
             }
             (vec![id.to_string()], affected)
         }
     };
     tx.execute("DELETE FROM codes WHERE id = ?1", [id])?;
     renumber(&tx, code.parent_id.as_deref())?;
+    // Read after the renumber: that is where the children actually ended up.
+    let promoted = places_of(&tx, &promoted)?;
     activity::record(
         &tx,
         "code.deleted",
@@ -490,6 +915,16 @@ pub fn delete(conn: &Connection, id: &str, children: ChildrenStrategy) -> Result
             "deletedCodeIds": deleted_ids,
             "affectedExcerptCount": affected,
         }),
+        Some(history::payload(&CodeOp::Delete {
+            code_id: id.to_string(),
+            strategy: children,
+            reparent: promoted,
+        })),
+        Some(history::payload(&CodeOp::Restore {
+            snapshot,
+            reparent,
+            remove_tags: vec![],
+        })),
     )?;
     tx.commit()?;
     Ok(DeleteCodeReport {
@@ -513,7 +948,14 @@ pub fn merge(conn: &Connection, source_id: &str, target_id: &str) -> Result<Code
             "cannot merge a code into one of its own descendants".into(),
         ));
     }
-    let tx = conn.unchecked_transaction()?;
+    let now = util::now();
+    let tx = util::tx(conn)?;
+    // Everything the merge is about to take from the source, read while it is
+    // still there. Its children are not in the snapshot: they survive under
+    // the target and `reparent` walks them back.
+    let snapshot = snapshot_codes(&tx, &[source_id.to_string()])?;
+    let reparent = child_places(&tx, source_id)?;
+    let gained = tags_gained(&tx, source_id, target_id)?;
     let moved_excerpts = tx.execute(
         "INSERT OR IGNORE INTO excerpt_codes (excerpt_id, code_id, created_at)
          SELECT excerpt_id, ?2, created_at FROM excerpt_codes WHERE code_id = ?1",
@@ -525,20 +967,30 @@ pub fn merge(conn: &Connection, source_id: &str, target_id: &str) -> Result<Code
         .query_map([source_id], |r| r.get(0))?
         .collect::<rusqlite::Result<_>>()?;
     drop(stmt);
+    let mut moved_children: Vec<String> = vec![];
     for (i, kid) in kids.iter().enumerate() {
         tx.execute(
             "UPDATE codes SET parent_id = ?2, sort_order = ?3, updated_at = ?4 WHERE id = ?1",
-            params![kid, target_id, base + i as i64, util::now()],
+            params![kid, target_id, base + i as i64, now],
         )
         .map_err(|e| map_unique(e, "child", None))?;
+        moved_children.push(kid.clone());
     }
     tx.execute(
         "UPDATE memos SET code_id = ?2, updated_at = ?3 WHERE code_id = ?1",
-        params![source_id, target_id, util::now()],
+        params![source_id, target_id, now],
     )?;
     let target_name = activity::code_name(&tx, target_id);
     tx.execute("DELETE FROM codes WHERE id = ?1", [source_id])?;
     renumber(&tx, source.parent_id.as_deref())?;
+    let moved_children = places_of(&tx, &moved_children)?;
+    let moved_memos = super::memos::list(
+        &tx,
+        &crate::models::MemoTarget {
+            code_id: Some(target_id.to_string()),
+            ..Default::default()
+        },
+    )?;
     // Two entries, one per side: a merge is the one operation both codes'
     // histories have to show, and the source's row is about to disappear.
     activity::record(
@@ -553,6 +1005,10 @@ pub fn merge(conn: &Connection, source_id: &str, target_id: &str) -> Result<Code
             "targetName": target_name,
             "movedExcerptCount": moved_excerpts,
         }),
+        // Two entries, one operation: the first is glued to the second, which
+        // carries the payloads, so one undo takes the whole merge back.
+        Some(history::linked()),
+        Some(history::linked()),
     )?;
     activity::record(
         &tx,
@@ -566,6 +1022,17 @@ pub fn merge(conn: &Connection, source_id: &str, target_id: &str) -> Result<Code
             "sourceName": source.name,
             "movedExcerptCount": moved_excerpts,
         }),
+        Some(history::payload(&CodeOp::Merge {
+            source_id: source_id.to_string(),
+            target_id: target_id.to_string(),
+            reparent: moved_children,
+            memos: moved_memos,
+        })),
+        Some(history::payload(&CodeOp::Restore {
+            snapshot,
+            reparent,
+            remove_tags: gained,
+        })),
     )?;
     tx.commit()?;
     get(conn, target_id)

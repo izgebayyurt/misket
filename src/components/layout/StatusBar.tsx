@@ -11,7 +11,7 @@ import { BackupsDialog } from "./BackupsDialog";
 
 export function StatusBar({ project }: { project: ProjectInfo }) {
   const close = useCloseProject();
-  const lastLabel = useUndoStore((s) => s.past[s.past.length - 1]?.label);
+  const lastLabel = useUndoStore((s) => s.lastLabel);
   const [about, setAbout] = useState(false);
   const [backups, setBackups] = useState(false);
   const setSettingsOpen = useWorkspace((s) => s.setSettingsOpen);

@@ -1,71 +1,88 @@
 import { create } from "zustand";
-import {
-  emptyUndo,
-  popRedo,
-  popUndo,
-  pushCommand,
-  type Command,
-  type UndoState,
-} from "@/core/undo";
-import { logUndo } from "@/api/activity";
+import { historyRedo, historyUndo } from "@/api/history";
+import { queryClient } from "@/queries/client";
 import { toast } from "./toasts";
 
-interface UndoStore extends UndoState {
+/**
+ * Undo and redo, over the history tree in the project file.
+ *
+ * There is no stack here any more: the project knows which step it is on, so
+ * this store only has to call the command, refresh everything and say what
+ * happened. That is what makes undo survive closing the window — and what
+ * makes deleting or merging a code undoable like any other edit.
+ */
+interface UndoStore {
   busy: boolean;
-  /** Execute a command and record it. */
-  run: (cmd: Command) => Promise<void>;
+  /** The summary of the last step taken back or reapplied. */
+  lastLabel: string | null;
   undo: () => Promise<void>;
   redo: () => Promise<void>;
+  /**
+   * Run a command and remember its label. Kept for the mutations whose undo
+   * has not moved into the backend yet — descriptors, sets, framework
+   * matrices, documents, the project itself, backups and codebook import —
+   * which still hand in an inverse this no longer uses. Phase 2 removes it
+   * along with those closures.
+   */
+  run: (cmd: {
+    label: string;
+    redo: () => Promise<void>;
+    undo?: () => Promise<void>;
+  }) => Promise<void>;
+  /** A no-op, for the same callers. Nothing needs clearing any more. */
   clear: () => void;
 }
 
+/** An undo can move any part of the project, so nothing is still known fresh. */
+const refresh = () => queryClient.invalidateQueries();
+
 export const useUndoStore = create<UndoStore>((set, get) => ({
-  ...emptyUndo(),
   busy: false,
-  run: async (cmd) => {
-    set({ busy: true });
-    try {
-      await cmd.redo();
-      set((s) => pushCommand(s, cmd));
-    } finally {
-      set({ busy: false });
-    }
-  },
+  lastLabel: null,
   undo: async () => {
-    const r = popUndo(get());
-    if (!r || get().busy) return;
+    if (get().busy) return;
     set({ busy: true });
     try {
-      await r.cmd.undo();
-      set(r.next);
-      toast.info(`Undid: ${r.cmd.label}`);
-      void logUndo(false, r.cmd.label).catch(() => {
-        // Best-effort: the change itself is already logged by the backend.
-      });
+      const node = await historyUndo();
+      await refresh();
+      if (node) {
+        set({ lastLabel: node.summary });
+        toast.info(`Undid: ${node.summary}`);
+      } else {
+        toast.info("Nothing left to undo");
+      }
     } catch (e) {
       toast.error(e);
-      set(emptyUndo());
     } finally {
       set({ busy: false });
     }
   },
   redo: async () => {
-    const r = popRedo(get());
-    if (!r || get().busy) return;
+    if (get().busy) return;
     set({ busy: true });
     try {
-      await r.cmd.redo();
-      set(r.next);
-      toast.info(`Redid: ${r.cmd.label}`);
-      void logUndo(true, r.cmd.label).catch(() => {
-        // Best-effort: the change itself is already logged by the backend.
-      });
+      const node = await historyRedo();
+      await refresh();
+      if (node) {
+        set({ lastLabel: node.summary });
+        toast.info(`Redid: ${node.summary}`);
+      } else {
+        toast.info("Nothing to redo");
+      }
     } catch (e) {
       toast.error(e);
-      set(emptyUndo());
     } finally {
       set({ busy: false });
     }
   },
-  clear: () => set(emptyUndo()),
+  run: async (cmd) => {
+    set({ busy: true });
+    try {
+      await cmd.redo();
+      set({ lastLabel: cmd.label });
+    } finally {
+      set({ busy: false });
+    }
+  },
+  clear: () => {},
 }));

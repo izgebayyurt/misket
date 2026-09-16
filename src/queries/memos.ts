@@ -2,7 +2,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as api from "@/api/memos";
 import type { Memo, MemoTarget } from "@/api/types";
 import { keys } from "./keys";
-import { useUndoStore } from "@/state/undoStore";
 
 /** Id of the memo the editor should focus when it mounts (set on create). */
 export const pendingMemoFocus: { id: string | null } = { id: null };
@@ -50,26 +49,15 @@ export function useCreateMemo() {
       title?: string;
       body?: string;
     }) => {
-      const t = normalizeTarget(target);
-      let memo: Memo | null = null;
-      await useUndoStore.getState().run({
-        label: "Create memo",
-        redo: async () => {
-          memo = memo ? await api.restoreMemo(memo) : await api.createMemo(t, title, body);
-          pendingMemoFocus.id = memo.id;
-          invalidate(t);
-        },
-        undo: async () => {
-          if (memo) memo = await api.deleteMemo(memo.id);
-          invalidate(t);
-        },
-      });
-      return memo as unknown as Memo;
+      const memo = await api.createMemo(normalizeTarget(target), title, body);
+      pendingMemoFocus.id = memo.id;
+      return memo;
     },
+    onSuccess: (_m, { target }) => invalidate(normalizeTarget(target)),
   });
 }
 
-/** Debounced saves from the editor; not recorded in the undo stack. */
+/** Debounced saves from the editor; every save is its own history entry. */
 export function useUpdateMemo() {
   const invalidate = useInvalidateMemos();
   return useMutation({
@@ -90,24 +78,12 @@ export function useUpdateMemo() {
 export function useDeleteMemo() {
   const invalidate = useInvalidateMemos();
   return useMutation({
-    mutationFn: async ({ memo }: { memo: Memo }) => {
-      const t: MemoTarget = {
+    mutationFn: ({ memo }: { memo: Memo }) => api.deleteMemo(memo.id),
+    onSuccess: (_m, { memo }) =>
+      invalidate({
         documentId: memo.documentId,
         codeId: memo.codeId,
         excerptId: memo.excerptId,
-      };
-      let deleted: Memo = memo;
-      await useUndoStore.getState().run({
-        label: "Delete memo",
-        redo: async () => {
-          deleted = await api.deleteMemo(memo.id);
-          invalidate(t);
-        },
-        undo: async () => {
-          await api.restoreMemo(deleted);
-          invalidate(t);
-        },
-      });
-    },
+      }),
   });
 }
