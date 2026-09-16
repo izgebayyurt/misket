@@ -34,7 +34,21 @@ export, open-by-double-click, dark mode, cross-platform CI and release builds.
 | 34  | [#15](https://github.com/izgebayyurt/misket/issues/15) **Tidy whitespace on import**: when a file has runs of blank lines, trailing spaces, or hard-wrapped lines, offer to normalise them (with a before/after preview) before the text is stored, since text is immutable after import | Pasted transcripts arrive with stray blank lines            | done   |
 | 15  | [#16](https://github.com/izgebayyurt/misket/issues/16) **Speaker-aware transcripts**: detect "Name:" turns, filter by speaker, code a whole turn with one key                                                                                                                            | Interview transcripts are the bread and butter              | later  |
 
-## v0.3 Media coding (milestone 2)
+## v0.3 Coding and analysis depth (from [docs/research](docs/research/README.md))
+
+| #   | Feature                                                                                                                                                                                                          | Why it matters                                         | Status |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ | ------ |
+| 35  | ISSUE35 **Coding workflow tools**: in vivo coding, quick-code the last code, roll sibling codes up into a parent, "review this code" push-down mode, structured code definitions (inclusion, exclusion, example) | How coders actually work: lump, split, define, revisit | now    |
+| 36  | ISSUE36 **Code-by-descriptor cross-tab**: codes against descriptor values with counts and click-through, CSV export                                                                                              | The core mixed-methods comparison                      | now    |
+| 37  | ISSUE37 **Query builder**: Boolean and proximity retrieval (A and B, A not B, A near B within a paragraph or N characters), saved queries                                                                        | Retrieval logic every incumbent offers                 | now    |
+| 38  | ISSUE38 **Word frequency view**, stemmed search, coding-over-time chart per code                                                                                                                                 | Cheap, widely used first looks at the data             | now    |
+| 39  | ISSUE39 **Framework matrix**: documents by codes with editable summary cells, exportable                                                                                                                         | The standard reporting device for applied research     | now    |
+| 40  | ISSUE40 **Coding activity log and codebook history**: who changed what and when, per code and per excerpt                                                                                                        | The audit trail reviewers ask for                      | now    |
+| 41  | ISSUE41 **Cloud-synced folder warning** and **auto-code** by regex or speaker turn                                                                                                                               | A documented corruption path; bulk first-cycle coding  | now    |
+| 42  | ISSUE42 **Hierarchy treemap and code clustering** from co-occurrence                                                                                                                                             | Seeing the shape of the codebook                       | next   |
+| 43  | ISSUE43 **OCR fallback for scanned PDFs**, or a clear message when a PDF has no text                                                                                                                             | Users hit format limits mid-import                     | next   |
+
+## v0.4 Media coding (milestone 2)
 
 | #   | Feature                                                                                                                                                                                                                                                 | Status |
 | --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
@@ -43,7 +57,7 @@ export, open-by-double-click, dark mode, cross-platform CI and release builds.
 | 18  | [#19](https://github.com/izgebayyurt/misket/issues/19) **Transcript alignment**: import SRT/VTT/timestamped transcripts as text documents linked to media; clicking a transcript excerpt seeks the media; coding a time range highlights the transcript | later  |
 | 19  | [#20](https://github.com/izgebayyurt/misket/issues/20) **Media by reference**: relink moved media files, optional copy-into-project, missing-media warnings                                                                                             | later  |
 
-## v0.4 Teams and rigour
+## v0.5 Teams and rigour
 
 | #   | Feature                                                                                                                                                                                            | Status |
 | --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
@@ -53,7 +67,7 @@ export, open-by-double-click, dark mode, cross-platform CI and release builds.
 | 23  | [#24](https://github.com/izgebayyurt/misket/issues/24) **REFI-QDA (.qdpx) import and export** for interoperability with NVivo, ATLAS.ti and MAXQDA                                                 | later  |
 | 24  | [#25](https://github.com/izgebayyurt/misket/issues/25) **Change log**: who did what and when, per project                                                                                          | later  |
 
-## v0.5 Assistance (all opt-in, never on by default)
+## v0.6 Assistance (all opt-in, never on by default)
 
 | #   | Feature                                                                                                                                                                                                                       | Status |
 | --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
