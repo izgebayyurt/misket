@@ -1,8 +1,9 @@
 import { create } from "zustand";
 
 export type View =
-  | { kind: "document"; documentId: string; focusExcerptId?: string }
+  | { kind: "document"; documentId: string; focusExcerptId?: string; scrollToOffset?: number }
   | { kind: "excerpts" }
+  | { kind: "search" }
   | { kind: "empty" };
 
 export type SidebarTab = "documents" | "codes";
@@ -22,7 +23,7 @@ interface WorkspaceState {
   focusedExcerptId: string | null;
   paletteOpen: boolean;
   setView: (view: View) => void;
-  openDocument: (documentId: string, focusExcerptId?: string) => void;
+  openDocument: (documentId: string, focusExcerptId?: string, scrollToOffset?: number) => void;
   setSidebarTab: (tab: SidebarTab) => void;
   setSelectedCodeId: (id: string | null) => void;
   setPendingSelection: (sel: PendingSelection | null) => void;
@@ -43,9 +44,9 @@ const initial = {
 export const useWorkspace = create<WorkspaceState>((set) => ({
   ...initial,
   setView: (view) => set({ view, pendingSelection: null, focusedExcerptId: null }),
-  openDocument: (documentId, focusExcerptId) =>
+  openDocument: (documentId, focusExcerptId, scrollToOffset) =>
     set({
-      view: { kind: "document", documentId, focusExcerptId },
+      view: { kind: "document", documentId, focusExcerptId, scrollToOffset },
       pendingSelection: null,
       focusedExcerptId: focusExcerptId ?? null,
     }),

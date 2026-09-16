@@ -5,7 +5,7 @@ import { useWorkspace } from "@/state/workspace";
 import { DocumentList } from "@/components/documents/DocumentList";
 import { CodeTree } from "@/components/codebook/CodeTree";
 import { Button } from "@/components/ui/button";
-import { List } from "lucide-react";
+import { List, Search } from "lucide-react";
 
 export function Sidebar({ project }: { project: ProjectInfo }) {
   const tab = useWorkspace((s) => s.sidebarTab);
@@ -46,6 +46,15 @@ export function Sidebar({ project }: { project: ProjectInfo }) {
         >
           <List /> Excerpts
           <span className="ml-auto text-xs text-fg-muted">{describe("excerptBrowser")}</span>
+        </Button>
+        <Button
+          variant={view.kind === "search" ? "secondary" : "ghost"}
+          className="mt-1 w-full justify-start"
+          onClick={() => setView({ kind: "search" })}
+          data-testid="open-search"
+        >
+          <Search /> Search
+          <span className="ml-auto text-xs text-fg-muted">{describe("findInProject")}</span>
         </Button>
       </div>
     </aside>

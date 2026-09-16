@@ -8,6 +8,7 @@ import { DocumentView } from "@/components/document-view/DocumentView";
 import { useWorkspace } from "@/state/workspace";
 import { useGlobalShortcuts } from "@/hooks/useGlobalShortcuts";
 import { ExcerptBrowser } from "@/components/excerpts/ExcerptBrowser";
+import { SearchView } from "@/components/search/SearchView";
 import { CodePalette } from "@/components/palette/CodePalette";
 import { ImportDropzone } from "@/components/documents/ImportDropzone";
 
@@ -31,9 +32,12 @@ export function Workspace({ project }: { project: ProjectInfo }) {
               key={view.documentId}
               documentId={view.documentId}
               focusExcerptId={view.focusExcerptId}
+              scrollToOffset={view.scrollToOffset}
             />
           ) : view.kind === "excerpts" ? (
             <ExcerptBrowser />
+          ) : view.kind === "search" ? (
+            <SearchView />
           ) : (
             <EmptyState />
           )}

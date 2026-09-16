@@ -69,6 +69,7 @@ pub fn run() {
             commands::excerpts::delete_excerpt,
             commands::excerpts::restore_excerpt,
             commands::excerpts::query_excerpts,
+            commands::search::search_project,
             commands::memos::list_memos,
             commands::memos::create_memo,
             commands::memos::update_memo,

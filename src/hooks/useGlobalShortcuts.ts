@@ -24,6 +24,10 @@ export function useGlobalShortcuts() {
           e.preventDefault();
           ws.setView({ kind: "excerpts" });
           return;
+        case "findInProject":
+          e.preventDefault();
+          ws.setView({ kind: "search" });
+          return;
         case "tabDocuments":
           e.preventDefault();
           ws.setSidebarTab("documents");

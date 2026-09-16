@@ -12,19 +12,23 @@ import {
 } from "@/core/segmentation";
 import { offsetsToRange, rangeToOffsets } from "@/core/selection";
 import { isTextField, mod } from "@/core/keymap";
+import { findMatches } from "@/core/find";
 import { useWorkspace } from "@/state/workspace";
 import { useShortcutActions } from "@/state/shortcutActions";
 import { SelectionToolbar } from "./SelectionToolbar";
 import { ExcerptPopover } from "./ExcerptPopover";
+import { FindBar } from "./FindBar";
 import { toast } from "@/state/toasts";
 import { cn } from "@/lib/utils";
 
 interface Props {
   documentId: string;
   focusExcerptId?: string;
+  /** Code point offset to scroll to once the text has rendered (e.g. from a project search hit). */
+  scrollToOffset?: number;
 }
 
-export function DocumentView({ documentId, focusExcerptId }: Props) {
+export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Props) {
   const { data: doc, error } = useDocument(documentId);
   const { data: excerpts } = useDocumentExcerpts(documentId);
   const { data: codes } = useCodes();
@@ -40,6 +44,9 @@ export function DocumentView({ documentId, focusExcerptId }: Props) {
   const [flashId, setFlashId] = useState<string | null>(null);
   const [toolbarPos, setToolbarPos] = useState<{ top: number; left: number } | null>(null);
   const [popover, setPopover] = useState<{ id: string; anchor: HTMLElement } | null>(null);
+  const [findOpen, setFindOpen] = useState(false);
+  const [findQuery, setFindQuery] = useState("");
+  const [findIndex, setFindIndex] = useState(0);
 
   const text = doc?.text ?? "";
   const offsetMap = useMemo(() => buildOffsetMap(text), [text]);
@@ -65,6 +72,88 @@ export function DocumentView({ documentId, focusExcerptId }: Props) {
   }, [excerpts, offsetMap, text]);
 
   const excerptById = useMemo(() => new Map((excerpts ?? []).map((e) => [e.id, e])), [excerpts]);
+
+  // --- find in document -----------------------------------------------------
+  const findResults = useMemo(
+    () => (findOpen ? findMatches(text, findQuery) : []),
+    [findOpen, findQuery, text],
+  );
+
+  // Jump back to the first match whenever the bar (re)opens or the query
+  // changes. Adjusted during render (React's recommended pattern for
+  // resetting state in response to a prop/derived-value change) rather than
+  // in an effect, which would cause an extra commit after the fact.
+  const findResetKey = `${findOpen ? "1" : "0"}:${findQuery}`;
+  const [prevFindResetKey, setPrevFindResetKey] = useState(findResetKey);
+  if (prevFindResetKey !== findResetKey) {
+    setPrevFindResetKey(findResetKey);
+    if (findIndex !== 0) setFindIndex(0);
+  }
+
+  const findNext = useCallback(() => {
+    setFindIndex((i) => (findResults.length ? (i + 1) % findResults.length : 0));
+  }, [findResults.length]);
+  const findPrev = useCallback(() => {
+    setFindIndex((i) =>
+      findResults.length ? (i - 1 + findResults.length) % findResults.length : 0,
+    );
+  }, [findResults.length]);
+  const closeFind = useCallback(() => {
+    setFindOpen(false);
+    rootRef.current?.focus();
+  }, []);
+
+  // Scroll the current match into view.
+  useEffect(() => {
+    const root = rootRef.current;
+    const m = findResults[findIndex];
+    if (!root || !m) return;
+    const range = offsetsToRange(root, m.start, m.end);
+    const el = range?.startContainer.parentElement;
+    el?.scrollIntoView({ block: "center", behavior: "smooth" });
+  }, [findResults, findIndex]);
+
+  // Render match highlights without touching the DOM (CSS Custom Highlight API).
+  useEffect(() => {
+    if (typeof CSS === "undefined" || !("highlights" in CSS)) return;
+    const root = rootRef.current;
+    if (!root || findResults.length === 0) {
+      CSS.highlights.delete("find");
+      CSS.highlights.delete("find-current");
+      return;
+    }
+    const others: Range[] = [];
+    let current: Range | null = null;
+    findResults.forEach((m, i) => {
+      const r = offsetsToRange(root, m.start, m.end);
+      if (!r) return;
+      if (i === findIndex) current = r;
+      else others.push(r);
+    });
+    CSS.highlights.set("find", new Highlight(...others));
+    if (current) CSS.highlights.set("find-current", new Highlight(current));
+    else CSS.highlights.delete("find-current");
+    return () => {
+      CSS.highlights.delete("find");
+      CSS.highlights.delete("find-current");
+    };
+  }, [findResults, findIndex]);
+
+  // Scroll to a code point offset from outside the view (e.g. a project search hit).
+  useEffect(() => {
+    if (scrollToOffset === undefined || !text) return;
+    const root = rootRef.current;
+    if (!root) return;
+    const u16 = cpToUtf16(offsetMap, scrollToOffset);
+    const point = offsetsToRange(root, u16, u16)?.startContainer.parentElement;
+    if (!point) return;
+    point.scrollIntoView({ block: "center", behavior: "smooth" });
+    point.classList.add("flash");
+    const t = setTimeout(() => point.classList.remove("flash"), 1300);
+    return () => clearTimeout(t);
+    // Re-run only when the target offset (or the document) changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scrollToOffset, text]);
 
   // --- selection -> pendingSelection ---------------------------------------
   const readSelection = useCallback(() => {
@@ -196,9 +285,15 @@ export function DocumentView({ documentId, focusExcerptId }: Props) {
       },
       extendSelectionLeft: () => extendSelection("left"),
       extendSelectionRight: () => extendSelection("right"),
-      // Escape peels one layer at a time: selection, then focus. (An open
-      // popover is closed by Radix before this runs.)
+      find: () => setFindOpen(true),
+      // Escape peels one layer at a time: find bar, then selection, then
+      // focus. (An open popover is closed by Radix before this runs, and the
+      // find bar's own input handles Escape locally while it has focus.)
       escape: () => {
+        if (findOpen) {
+          closeFind();
+          return;
+        }
         const ws = useWorkspace.getState();
         if (ws.pendingSelection) {
           ws.setPendingSelection(null);
@@ -209,7 +304,16 @@ export function DocumentView({ documentId, focusExcerptId }: Props) {
       },
     });
     return unregister;
-  }, [moveFocus, focusedId, deleteExcerpt, documentId, openPopover, extendSelection]);
+  }, [
+    moveFocus,
+    focusedId,
+    deleteExcerpt,
+    documentId,
+    openPopover,
+    extendSelection,
+    findOpen,
+    closeFind,
+  ]);
 
   const applyToSelection = useCallback(
     async (codeIds: string[]) => {
@@ -276,35 +380,48 @@ export function DocumentView({ documentId, focusExcerptId }: Props) {
   if (!doc) return null;
 
   return (
-    <div ref={scrollRef} className="h-full overflow-y-auto" data-testid="document-view">
-      <div className="mx-auto max-w-3xl px-10 py-10">
-        <h1 className="mb-6 font-serif text-2xl font-medium">{doc.name}</h1>
-        <div ref={rootRef} className="doc-text" data-testid="doc-text">
-          {paragraphs.map((p) => (
-            <Paragraph
-              key={p.start}
-              start={p.start}
-              end={p.end}
-              text={p.text}
-              excerpts={renderable}
-              colorById={colorById}
-              focusedId={focusedId}
-              flashId={flashId}
-              onSegmentClick={onSegmentClick}
-            />
-          ))}
-        </div>
-      </div>
-      {toolbarPos && pending ? (
-        <SelectionToolbar pos={toolbarPos} onCode={() => setPaletteOpen(true)} />
-      ) : null}
-      {popover && excerptById.get(popover.id) ? (
-        <ExcerptPopover
-          excerpt={excerptById.get(popover.id)!}
-          anchor={popover.anchor}
-          onClose={() => setPopover(null)}
+    <div className="flex h-full flex-col" data-testid="document-view">
+      {findOpen ? (
+        <FindBar
+          query={findQuery}
+          onQueryChange={setFindQuery}
+          currentIndex={findIndex}
+          total={findResults.length}
+          onNext={findNext}
+          onPrev={findPrev}
+          onClose={closeFind}
         />
       ) : null}
+      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto">
+        <div className="mx-auto max-w-3xl px-10 py-10">
+          <h1 className="mb-6 font-serif text-2xl font-medium">{doc.name}</h1>
+          <div ref={rootRef} tabIndex={-1} className="doc-text" data-testid="doc-text">
+            {paragraphs.map((p) => (
+              <Paragraph
+                key={p.start}
+                start={p.start}
+                end={p.end}
+                text={p.text}
+                excerpts={renderable}
+                colorById={colorById}
+                focusedId={focusedId}
+                flashId={flashId}
+                onSegmentClick={onSegmentClick}
+              />
+            ))}
+          </div>
+        </div>
+        {toolbarPos && pending ? (
+          <SelectionToolbar pos={toolbarPos} onCode={() => setPaletteOpen(true)} />
+        ) : null}
+        {popover && excerptById.get(popover.id) ? (
+          <ExcerptPopover
+            excerpt={excerptById.get(popover.id)!}
+            anchor={popover.anchor}
+            onClose={() => setPopover(null)}
+          />
+        ) : null}
+      </div>
     </div>
   );
 }

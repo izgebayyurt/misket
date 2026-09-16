@@ -267,6 +267,20 @@ pub struct Memo {
     pub updated_at: String,
 }
 
+// ------------------------------------------------------------------- search
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct SearchHit {
+    pub document_id: String,
+    pub document_name: String,
+    /// Code points, end-exclusive.
+    pub start_pos: i64,
+    pub end_pos: i64,
+    pub context_before: String,
+    pub context_after: String,
+}
+
 /// serde helper: distinguishes "absent" from "present but null".
 mod double_option {
     use serde::{Deserialize, Deserializer, Serialize, Serializer};

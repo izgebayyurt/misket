@@ -36,6 +36,8 @@ keyboard-friendly interface without a subscription.
 | Delete the focused excerpt                             | `Backspace`                                   |
 | New memo on the current document, code or excerpt      | `Ctrl`/`⌘` + `M`                              |
 | Excerpt browser                                        | `Ctrl`/`⌘` + `E`                              |
+| Find in the current document                           | `Ctrl`/`⌘` + `F`                              |
+| Find in project (search every document)                | `Shift` + `Ctrl`/`⌘` + `F`                    |
 | Import documents                                       | `Ctrl`/`⌘` + `I`                              |
 | Undo / redo                                            | `Ctrl`/`⌘` + `Z` / `Shift` + `Ctrl`/`⌘` + `Z` |
 

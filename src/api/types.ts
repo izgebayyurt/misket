@@ -169,3 +169,12 @@ export interface ExcerptPage {
   rows: ExcerptRow[];
   total: number;
 }
+
+export interface SearchHit {
+  documentId: string;
+  documentName: string;
+  startPos: number;
+  endPos: number;
+  contextBefore: string;
+  contextAfter: string;
+}

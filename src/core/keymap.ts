@@ -19,6 +19,8 @@ export type Action =
   | "tabCodes"
   | "newMemo"
   | "palette"
+  | "find"
+  | "findInProject"
   | "undo"
   | "redo"
   | "nextExcerpt"
@@ -47,6 +49,8 @@ export const SHORTCUTS: Record<Action, Shortcut> = {
   tabCodes: { key: "2", mod: true, global: true },
   newMemo: { key: "m", mod: true, global: true },
   palette: { key: "k", mod: true, global: true },
+  find: { key: "f", mod: true, global: true },
+  findInProject: { key: "f", mod: true, shift: true, global: true },
   undo: { key: "z", mod: true },
   redo: { key: "z", mod: true, shift: true },
   nextExcerpt: { key: "Tab" },
