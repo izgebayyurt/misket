@@ -56,6 +56,7 @@ export function CodeTree() {
   const move = useMoveCode();
   const selectedId = useWorkspace((s) => s.selectedCodeId);
   const setSelectedId = useWorkspace((s) => s.setSelectedCodeId);
+  const openExcerpts = useWorkspace((s) => s.openExcerpts);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [query, setQuery] = useState("");
   const [dialog, setDialog] = useState<DialogState>(null);
@@ -271,6 +272,13 @@ export function CodeTree() {
                     parent: node.code,
                     children: node.children.map((c) => c.code),
                   });
+                } else if (kind === "review") {
+                  // The parent's OWN excerpts: the ones still waiting to be
+                  // filed under a sub-code.
+                  openExcerpts(
+                    { codeIds: [node.code.id], includeDescendants: false, limit: 200 },
+                    { parentCodeId: node.code.id },
+                  );
                 } else setDialog({ kind, code: node.code });
               }}
               onDragStart={() => setDragId(node.code.id)}
@@ -345,6 +353,7 @@ interface RowProps {
       | "moveExcerpts"
       | "rollUpInto"
       | "rollUpChildren"
+      | "review"
       | "delete",
   ) => void;
   onDragStart: () => void;
@@ -508,6 +517,11 @@ function CodeRowMenuItems({
       ) : null}
       {childCount > 0 ? (
         <Item onSelect={() => onAction("rollUpChildren")}>Roll up children…</Item>
+      ) : null}
+      {childCount > 0 ? (
+        <Item onSelect={() => onAction("review")} disabled={code.excerptCount === 0}>
+          Review excerpts…
+        </Item>
       ) : null}
       <AddToSetMenu kind="code" memberId={code.id} memberLabel={code.name} menu={menu} />
       <Separator />

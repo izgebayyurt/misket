@@ -5,8 +5,12 @@ export type AnalysisTab = "frequencies" | "cooccurrence" | "matrix";
 
 export type View =
   | { kind: "document"; documentId: string; focusExcerptId?: string; scrollToOffset?: number }
-  /** `initialFilter` seeds the browser's filters when it mounts. */
-  | { kind: "excerpts"; initialFilter?: ExcerptFilter }
+  /**
+   * `initialFilter` seeds the browser's filters when it mounts. `review` puts
+   * it in push-down mode for one parent code: the review bar at the top
+   * re-files the parent's own excerpts under its children.
+   */
+  | { kind: "excerpts"; initialFilter?: ExcerptFilter; review?: { parentCodeId: string } }
   | { kind: "analysis"; tab: AnalysisTab }
   | { kind: "search" }
   | { kind: "descriptorTable" }
@@ -56,8 +60,9 @@ interface WorkspaceState {
   shortcutsHelpOpen: boolean;
   setView: (view: View) => void;
   openDocument: (documentId: string, focusExcerptId?: string, scrollToOffset?: number) => void;
-  /** Open the excerpt browser, optionally pre-filtered (analysis click-through). */
-  openExcerpts: (initialFilter?: ExcerptFilter) => void;
+  /** Open the excerpt browser, optionally pre-filtered (analysis click-through)
+   * and optionally in push-down review mode for one parent code. */
+  openExcerpts: (initialFilter?: ExcerptFilter, review?: { parentCodeId: string }) => void;
   setSidebarTab: (tab: SidebarTab) => void;
   setSelectedCodeId: (id: string | null) => void;
   setPendingSelection: (sel: PendingSelection | null) => void;
@@ -93,9 +98,9 @@ export const useWorkspace = create<WorkspaceState>((set) => ({
       pendingSelection: null,
       focusedExcerptId: focusExcerptId ?? null,
     }),
-  openExcerpts: (initialFilter) =>
+  openExcerpts: (initialFilter, review) =>
     set({
-      view: { kind: "excerpts", initialFilter },
+      view: { kind: "excerpts", initialFilter, review },
       pendingSelection: null,
       focusedExcerptId: null,
     }),

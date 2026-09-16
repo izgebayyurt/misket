@@ -489,6 +489,48 @@ export function useRemoveCodesFromExcerpts() {
 }
 
 /**
+ * Push one excerpt down from a parent code to one of its children: it loses
+ * the parent and gains the child, as a single undoable step. This is the
+ * "code to the parent now, refine later" loop, so it has to be cheap to do
+ * and cheap to take back.
+ */
+export function usePushDownExcerpt() {
+  const invalidate = useInvalidateExcerpts();
+  return useMutation({
+    mutationFn: async ({
+      excerptId,
+      fromCodeId,
+      toCodeId,
+      label,
+    }: {
+      excerptId: string;
+      fromCodeId: string;
+      toCodeId: string;
+      label: string;
+    }) => {
+      let removed: ExcerptCodePair[] = [];
+      let added: ExcerptCodePair[] = [];
+      await useUndoStore.getState().run({
+        label,
+        redo: async () => {
+          removed = (await api.removeCodesFromExcerpts([excerptId], [fromCodeId])).pairs;
+          added = (await api.addCodesToExcerpts([excerptId], [toCodeId])).pairs;
+          rememberApplied([toCodeId]);
+          invalidate(undefined, excerptId);
+        },
+        undo: async () => {
+          // Only undo what actually changed: an excerpt that already carried
+          // the child must not lose it here.
+          if (added.length) await api.removeCodesFromExcerpts([excerptId], [toCodeId]);
+          if (removed.length) await api.addCodesToExcerpts([excerptId], [fromCodeId]);
+          invalidate(undefined, excerptId);
+        },
+      });
+    },
+  });
+}
+
+/**
  * Roll sub-codes up into their parent: every excerpt tagged with a child gets
  * the parent instead, optionally followed by deleting the emptied children.
  *

@@ -60,6 +60,12 @@ keyboard-friendly interface without a subscription.
   character from the keyboard, drag the grips at either end, split an excerpt
   at the cursor, or merge it with a touching neighbour (codes and memos are
   combined). All of it is undoable.
+- **Push down later**: code to the parent while reading, then pick "Review
+  excerpts…" on that code to work through its _own_ excerpts (not its
+  sub-codes') with a review bar pinned above the list. Click a row, press a
+  sub-code button or its number key, and the excerpt moves from the parent to
+  that sub-code and the focus advances — one undoable step each, with a
+  "New child…" button for the sub-code you did not know you needed yet.
 - **Browse excerpts** across the project, filtered by code (with sub-codes),
   document, or uncoded only, and jump back to any of them in context.
   Tick the checkboxes (`Shift`+click for a range, or "Select all N loaded") to
