@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useWorkspace } from "@/state/workspace";
 import { ExcerptInspector } from "@/components/excerpts/ExcerptInspector";
 import { MemoList } from "@/components/memos/MemoList";
+import { DocumentDescriptors } from "@/components/descriptors/DocumentDescriptors";
 import { useDocuments } from "@/queries/documents";
 import { useCodeTree } from "@/queries/codes";
 import { pathOf } from "@/core/codeTree";
@@ -84,6 +85,9 @@ export function RightPanel() {
               </button>
             ))}
           </div>
+          {effectiveScope === "document" && documentId ? (
+            <DocumentDescriptors documentId={documentId} />
+          ) : null}
           <MemoList
             target={target}
             heading={

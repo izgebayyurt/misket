@@ -10,6 +10,7 @@ import { useGlobalShortcuts } from "@/hooks/useGlobalShortcuts";
 import { ExcerptBrowser } from "@/components/excerpts/ExcerptBrowser";
 import { AnalysisView } from "@/components/analysis/AnalysisView";
 import { SearchView } from "@/components/search/SearchView";
+import { DescriptorTable } from "@/components/descriptors/DescriptorTable";
 import { CodePalette } from "@/components/palette/CodePalette";
 import { ImportDropzone } from "@/components/documents/ImportDropzone";
 import { SettingsDialog } from "./SettingsDialog";
@@ -49,6 +50,8 @@ export function Workspace({ project }: { project: ProjectInfo }) {
             <AnalysisView tab={view.tab} />
           ) : view.kind === "search" ? (
             <SearchView />
+          ) : view.kind === "descriptorTable" ? (
+            <DescriptorTable />
           ) : (
             <EmptyState />
           )}

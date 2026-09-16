@@ -27,6 +27,10 @@ keyboard-friendly interface without a subscription.
   per document), a code co-occurrence matrix showing which codes overlap on the
   same text, and a code-by-document heatmap. Every cell clicks through to the
   matching excerpts, and each view exports to CSV.
+- **Descriptors**: define document attributes (text, number, choice or date)
+  such as site, interview wave or age group, set them per document or in a
+  table of every document, and filter excerpts by them ("Age is more than 30",
+  "Site is any of North, South").
 - **Memos** on documents, codes, excerpts and the project.
 - **Undo/redo** for every coding and codebook action.
 - **Export** the codebook and excerpts as CSV, or the whole project as JSON.
@@ -104,8 +108,8 @@ together, [docs/DATA_MODEL.md](docs/DATA_MODEL.md) for the schema, and
 
 - **Milestone 2**: coding image regions and video time ranges (the data model
   already supports both).
-- Descriptors for mixed-methods work, inter-rater reliability, full-text
-  search, REFI-QDA import/export, project sharing.
+- Inter-rater reliability, full-text search, REFI-QDA import/export, project
+  sharing.
 
 ## License
 

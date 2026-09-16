@@ -2,6 +2,7 @@
 
 pub mod analysis;
 pub mod codes;
+pub mod descriptors;
 pub mod documents;
 pub mod excerpts;
 pub mod export;
@@ -212,6 +213,40 @@ mod tests {
             migrations::latest_version()
         );
         assert!(!path.with_file_name("demo.misket.bak-v1").exists());
+    }
+
+    #[test]
+    fn opening_an_older_file_backs_it_up_then_migrates() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("old.misket");
+        {
+            // Pretend this file was written by a build that only knew schema 1.
+            let p = OpenProject::create(&path, "Old", "0.1.0").unwrap();
+            p.conn
+                .execute_batch(
+                    "DROP TABLE descriptor_values;
+                     DROP TABLE descriptor_fields;
+                     PRAGMA user_version = 1;",
+                )
+                .unwrap();
+        }
+        let backup = path.with_file_name("old.misket.bak-v1");
+        assert!(!backup.exists());
+        let p = OpenProject::open(&path).unwrap();
+        assert_eq!(
+            p.info().unwrap().schema_version,
+            migrations::latest_version()
+        );
+        assert!(backup.exists(), "the v1 file is kept next to the project");
+        let backup_version: i64 = Connection::open(&backup)
+            .unwrap()
+            .query_row("PRAGMA user_version", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(backup_version, 1);
+        // The descriptor tables the migration added are usable.
+        p.conn
+            .execute_batch("SELECT count(*) FROM descriptor_fields;")
+            .unwrap();
     }
 
     #[test]

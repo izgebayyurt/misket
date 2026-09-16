@@ -3,11 +3,11 @@
 
 use rusqlite::{params, Connection, OptionalExtension, Row};
 
-use super::{codes, documents, memos, text, util};
+use super::{codes, descriptors, documents, memos, text, util};
 use crate::error::{AppError, Result};
 use crate::models::{
-    ApplyCodesInput, ApplyResult, ExcerptDetail, ExcerptFilter, ExcerptPage, ExcerptRow,
-    ExcerptSnapshot, ExcerptWithCodes,
+    ApplyCodesInput, ApplyResult, DescriptorFilter, ExcerptDetail, ExcerptFilter, ExcerptPage,
+    ExcerptRow, ExcerptSnapshot, ExcerptWithCodes,
 };
 
 const CONTEXT_CHARS: i64 = 120;
@@ -265,6 +265,103 @@ pub fn detail(conn: &Connection, id: &str) -> Result<ExcerptDetail> {
     })
 }
 
+/// Turn one descriptor condition into an EXISTS / NOT EXISTS subquery over
+/// `descriptor_values`, joined to the excerpt through its document.
+///
+/// Number fields are compared with `CAST(value AS REAL)`; every other kind
+/// compares as text (choice and date values are stored canonically, so plain
+/// string comparison is the right order for dates too).
+fn descriptor_clause(
+    conn: &Connection,
+    cond: &DescriptorFilter,
+) -> Result<(String, Vec<rusqlite::types::Value>)> {
+    use rusqlite::types::Value;
+
+    let field = descriptors::get_field(conn, &cond.field_id)?;
+    let numeric = field.kind == "number";
+    let lhs = if numeric {
+        "CAST(dv.value AS REAL)"
+    } else {
+        "dv.value COLLATE NOCASE"
+    };
+    let operand = |raw: &str| -> Result<Value> {
+        let canonical = descriptors::canonical_value(&field, raw)?;
+        Ok(if numeric {
+            Value::Real(canonical.parse::<f64>().unwrap_or_default())
+        } else {
+            Value::from(canonical)
+        })
+    };
+    let need = |n: usize| -> Result<()> {
+        if cond.values.len() < n {
+            return Err(AppError::Validation(format!(
+                "the {:?} filter on {:?} needs {n} value{}",
+                cond.op,
+                field.name,
+                if n == 1 { "" } else { "s" }
+            )));
+        }
+        Ok(())
+    };
+
+    let mut args = vec![Value::from(field.id.clone())];
+    let (negate, predicate) = match cond.op.as_str() {
+        "empty" => (true, String::new()),
+        "notEmpty" => (false, String::new()),
+        "eq" | "neq" => {
+            need(1)?;
+            args.push(operand(&cond.values[0])?);
+            (cond.op == "neq", format!(" AND {lhs} = ?"))
+        }
+        "contains" => {
+            need(1)?;
+            args.push(Value::from(cond.values[0].trim().to_string()));
+            (
+                false,
+                " AND instr(lower(dv.value), lower(?)) > 0".to_string(),
+            )
+        }
+        "gt" | "lt" => {
+            need(1)?;
+            args.push(operand(&cond.values[0])?);
+            let op = if cond.op == "gt" { ">" } else { "<" };
+            (false, format!(" AND {lhs} {op} ?"))
+        }
+        "between" => {
+            need(2)?;
+            args.push(operand(&cond.values[0])?);
+            args.push(operand(&cond.values[1])?);
+            (false, format!(" AND {lhs} BETWEEN ? AND ?"))
+        }
+        "in" => {
+            need(1)?;
+            for v in &cond.values {
+                args.push(operand(v)?);
+            }
+            let ph = cond
+                .values
+                .iter()
+                .map(|_| "?")
+                .collect::<Vec<_>>()
+                .join(",");
+            (false, format!(" AND {lhs} IN ({ph})"))
+        }
+        other => {
+            return Err(AppError::Validation(format!(
+                "unknown descriptor operator {other:?}"
+            )))
+        }
+    };
+    let exists = if negate { "NOT EXISTS" } else { "EXISTS" };
+    Ok((
+        format!(
+            "{exists} (SELECT 1 FROM descriptor_values dv
+                WHERE dv.document_id = e.document_id AND dv.field_id = ?{predicate})"
+        ),
+        args,
+    ))
+}
+
 /// Query excerpts across the project with code/document filters and paging.
 pub fn query(conn: &Connection, filter: &ExcerptFilter) -> Result<ExcerptPage> {
     let mut where_clauses = vec!["1 = 1".to_string()];
@@ -309,6 +406,11 @@ pub fn query(conn: &Connection, filter: &ExcerptFilter) -> Result<ExcerptPage> {
     if filter.uncoded_only {
         where_clauses
             .push("NOT EXISTS (SELECT 1 FROM excerpt_codes ec WHERE ec.excerpt_id = e.id)".into());
+    }
+    for cond in filter.descriptors.iter().flatten() {
+        let (sql, cond_args) = descriptor_clause(conn, cond)?;
+        where_clauses.push(sql);
+        args.extend(cond_args);
     }
     let where_sql = where_clauses.join(" AND ");
 
@@ -357,6 +459,7 @@ pub fn query(conn: &Connection, filter: &ExcerptFilter) -> Result<ExcerptPage> {
 mod tests {
     use super::*;
     use crate::db::codes::tests::mk as mk_code;
+    use crate::db::descriptors::tests::mk_field;
     use crate::db::documents::tests::new_doc;
     use crate::db::OpenProject;
     use crate::models::MemoTarget;
@@ -588,5 +691,148 @@ mod tests {
         assert_eq!(page.total, 3);
         assert_eq!(page.rows.len(), 1);
         assert_eq!(page.rows[0].excerpt.id, e2);
+    }
+
+    #[test]
+    fn descriptor_conditions_filter_by_document_attributes() {
+        let p = OpenProject::in_memory("t").unwrap();
+        let mut north = new_doc("north transcript");
+        north.name = "North".into();
+        let mut south = new_doc("south transcript");
+        south.name = "South".into();
+        let mut plain = new_doc("no descriptors here");
+        plain.name = "Plain".into();
+        let north = documents::create(&p.conn, north).unwrap().summary.id;
+        let south = documents::create(&p.conn, south).unwrap().summary.id;
+        let plain = documents::create(&p.conn, plain).unwrap().summary.id;
+        let a = mk_code(&p.conn, "A", None).id;
+
+        let site = mk_field(&p.conn, "Site", "choice", &["North", "South"]);
+        let age = mk_field(&p.conn, "Age", "number", &[]);
+        let seen = mk_field(&p.conn, "Interviewed", "date", &[]);
+        let note = mk_field(&p.conn, "Note", "text", &[]);
+        let set = |doc: &str, field: &str, v: &str| {
+            descriptors::set_value(&p.conn, doc, field, Some(v)).unwrap();
+        };
+        set(&north, &site.id, "North");
+        set(&north, &age.id, "34");
+        set(&north, &seen.id, "2024-03-01");
+        set(&north, &note.id, "Rural clinic");
+        set(&south, &site.id, "South");
+        set(&south, &age.id, "9");
+        set(&south, &seen.id, "2024-09-15");
+        set(&south, &note.id, "Urban CLINIC annex");
+
+        let e_north = apply(&p.conn, &north, 0, 5, &[&a]).excerpt.id;
+        let e_south = apply(&p.conn, &south, 0, 5, &[&a]).excerpt.id;
+        let e_plain = apply(&p.conn, &plain, 0, 2, &[&a]).excerpt.id;
+
+        let ids = |conds: Vec<DescriptorFilter>| -> Vec<String> {
+            let page = query(
+                &p.conn,
+                &ExcerptFilter {
+                    descriptors: Some(conds),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+            page.rows.into_iter().map(|r| r.excerpt.id).collect()
+        };
+        let cond = |field: &str, op: &str, values: &[&str]| DescriptorFilter {
+            field_id: field.to_string(),
+            op: op.to_string(),
+            values: values.iter().map(|v| v.to_string()).collect(),
+        };
+
+        assert_eq!(
+            ids(vec![cond(&site.id, "eq", &["north"])]),
+            vec![e_north.clone()]
+        );
+        // "not equal" also matches documents with no value for the field.
+        assert_eq!(
+            ids(vec![cond(&site.id, "neq", &["North"])]),
+            vec![e_south.clone(), e_plain.clone()]
+        );
+        assert_eq!(
+            ids(vec![cond(&site.id, "in", &["North", "South"])]),
+            vec![e_north.clone(), e_south.clone()]
+        );
+        assert_eq!(
+            ids(vec![cond(&site.id, "empty", &[])]),
+            vec![e_plain.clone()]
+        );
+        assert_eq!(
+            ids(vec![cond(&site.id, "notEmpty", &[])]),
+            vec![e_north.clone(), e_south.clone()]
+        );
+        // Numbers compare numerically, not as strings ("9" > "34" as text).
+        assert_eq!(
+            ids(vec![cond(&age.id, "gt", &["10"])]),
+            vec![e_north.clone()]
+        );
+        assert_eq!(
+            ids(vec![cond(&age.id, "lt", &["10"])]),
+            vec![e_south.clone()]
+        );
+        assert_eq!(
+            ids(vec![cond(&age.id, "between", &["5", "40"])]),
+            vec![e_north.clone(), e_south.clone()]
+        );
+        assert_eq!(
+            ids(vec![cond(
+                &seen.id,
+                "between",
+                &["2024-01-01", "2024-06-30"]
+            )]),
+            vec![e_north.clone()]
+        );
+        assert_eq!(
+            ids(vec![cond(&note.id, "contains", &["clinic"])]),
+            vec![e_north.clone(), e_south.clone()]
+        );
+        // Several conditions are ANDed.
+        assert_eq!(
+            ids(vec![
+                cond(&site.id, "notEmpty", &[]),
+                cond(&age.id, "gt", &["20"]),
+            ]),
+            vec![e_north.clone()]
+        );
+        assert!(ids(vec![
+            cond(&site.id, "eq", &["North"]),
+            cond(&site.id, "eq", &["South"]),
+        ])
+        .is_empty());
+        // Descriptor conditions combine with the other filters.
+        let page = query(
+            &p.conn,
+            &ExcerptFilter {
+                document_ids: Some(vec![south.clone()]),
+                descriptors: Some(vec![cond(&site.id, "notEmpty", &[])]),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(page.total, 1);
+        assert_eq!(page.rows[0].excerpt.id, e_south);
+
+        // Bad conditions are rejected rather than silently ignored.
+        for bad in [
+            cond(&site.id, "eq", &["East"]),
+            cond(&age.id, "eq", &["old"]),
+            cond(&seen.id, "eq", &["2024-13-01"]),
+            cond(&age.id, "between", &["1"]),
+            cond(&age.id, "startsWith", &["1"]),
+            cond("nope", "eq", &["1"]),
+        ] {
+            let r = query(
+                &p.conn,
+                &ExcerptFilter {
+                    descriptors: Some(vec![bad.clone()]),
+                    ..Default::default()
+                },
+            );
+            assert!(r.is_err(), "{bad:?}");
+        }
     }
 }

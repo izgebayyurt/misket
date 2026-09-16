@@ -1,5 +1,6 @@
 pub mod analysis;
 pub mod codes;
+pub mod descriptors;
 pub mod documents;
 pub mod e2e;
 pub mod excerpts;

@@ -6,9 +6,11 @@ use std::io::Write;
 use rusqlite::Connection;
 use serde::Serialize;
 
-use super::{codes, documents, excerpts, memos};
+use super::{codes, descriptors, documents, excerpts, memos};
 use crate::error::Result;
-use crate::models::{Code, ExcerptFilter, ExcerptWithCodes, Memo};
+use crate::models::{
+    Code, DescriptorField, DescriptorValue, ExcerptFilter, ExcerptWithCodes, Memo,
+};
 
 /// Full code path ("Parent / Child") for every code.
 fn code_paths(all: &[Code]) -> HashMap<String, String> {
@@ -81,17 +83,35 @@ pub fn excerpts_csv<W: Write>(conn: &Connection, filter: &ExcerptFilter, w: W) -
             ..filter.clone()
         },
     )?;
+    // One extra column per descriptor, holding the excerpt's document's value.
+    let fields = descriptors::list_fields(conn)?;
+    let mut values: HashMap<(String, String), String> = HashMap::new();
+    let mut stmt = conn.prepare("SELECT document_id, field_id, value FROM descriptor_values")?;
+    for row in stmt.query_map([], |r| {
+        Ok((
+            r.get::<_, String>(0)?,
+            r.get::<_, String>(1)?,
+            r.get::<_, String>(2)?,
+        ))
+    })? {
+        let (doc, field, value) = row?;
+        values.insert((doc, field), value);
+    }
+    drop(stmt);
+
     let mut wtr = csv::Writer::from_writer(w);
-    wtr.write_record([
-        "excerpt_id",
-        "document",
-        "start",
-        "end",
-        "text",
-        "codes",
-        "memo_count",
-        "created_at",
-    ])?;
+    let mut header = vec![
+        "excerpt_id".to_string(),
+        "document".into(),
+        "start".into(),
+        "end".into(),
+        "text".into(),
+        "codes".into(),
+        "memo_count".into(),
+        "created_at".into(),
+    ];
+    header.extend(fields.iter().map(|f| f.name.clone()));
+    wtr.write_record(&header)?;
     for row in page.rows {
         let e = row.excerpt;
         let code_list = e
@@ -100,16 +120,23 @@ pub fn excerpts_csv<W: Write>(conn: &Connection, filter: &ExcerptFilter, w: W) -
             .map(|id| paths.get(id).cloned().unwrap_or_else(|| id.clone()))
             .collect::<Vec<_>>()
             .join("; ");
-        wtr.write_record([
-            e.id.as_str(),
-            row.document_name.as_str(),
-            &e.start_pos.map(|v| v.to_string()).unwrap_or_default(),
-            &e.end_pos.map(|v| v.to_string()).unwrap_or_default(),
-            e.snapshot.as_deref().unwrap_or(""),
-            code_list.as_str(),
-            &e.memo_count.to_string(),
-            e.created_at.as_str(),
-        ])?;
+        let mut record = vec![
+            e.id.clone(),
+            row.document_name.clone(),
+            e.start_pos.map(|v| v.to_string()).unwrap_or_default(),
+            e.end_pos.map(|v| v.to_string()).unwrap_or_default(),
+            e.snapshot.clone().unwrap_or_default(),
+            code_list,
+            e.memo_count.to_string(),
+            e.created_at.clone(),
+        ];
+        record.extend(fields.iter().map(|f| {
+            values
+                .get(&(e.document_id.clone(), f.id.clone()))
+                .cloned()
+                .unwrap_or_default()
+        }));
+        wtr.write_record(&record)?;
     }
     wtr.flush()?;
     Ok(())
@@ -125,6 +152,8 @@ struct ProjectJson {
     codes: Vec<Code>,
     excerpts: Vec<ExcerptWithCodes>,
     memos: Vec<Memo>,
+    descriptor_fields: Vec<DescriptorField>,
+    descriptor_values: Vec<DescriptorValue>,
 }
 
 pub fn project_json<W: Write>(conn: &Connection, w: W) -> Result<()> {
@@ -147,6 +176,10 @@ pub fn project_json<W: Write>(conn: &Connection, w: W) -> Result<()> {
     for id in stmt.query_map([], |r| r.get::<_, String>(0))? {
         all_memos.push(memos::get(conn, &id?)?);
     }
+    let mut all_descriptor_values = vec![];
+    for d in &docs {
+        all_descriptor_values.extend(descriptors::values_for_document(conn, &d.summary.id)?);
+    }
     let out = ProjectJson {
         format: "misket-project",
         format_version: 1,
@@ -155,6 +188,8 @@ pub fn project_json<W: Write>(conn: &Connection, w: W) -> Result<()> {
         codes: codes::list(conn)?,
         excerpts: all_excerpts,
         memos: all_memos,
+        descriptor_fields: descriptors::list_fields(conn)?,
+        descriptor_values: all_descriptor_values,
     };
     serde_json::to_writer_pretty(w, &out)?;
     Ok(())
@@ -164,6 +199,7 @@ pub fn project_json<W: Write>(conn: &Connection, w: W) -> Result<()> {
 mod tests {
     use super::*;
     use crate::db::codes::tests::mk as mk_code;
+    use crate::db::descriptors::tests::mk_field;
     use crate::db::documents::tests::new_doc;
     use crate::db::OpenProject;
     use crate::models::{ApplyCodesInput, MemoTarget};
@@ -193,6 +229,10 @@ mod tests {
             "note",
         )
         .unwrap();
+        let site = mk_field(&p.conn, "Site", "choice", &["North", "South"]);
+        let age = mk_field(&p.conn, "Age", "number", &[]);
+        descriptors::set_value(&p.conn, &doc.summary.id, &site.id, Some("North")).unwrap();
+        descriptors::set_value(&p.conn, &doc.summary.id, &age.id, Some("41")).unwrap();
         p
     }
 
@@ -218,7 +258,15 @@ mod tests {
         let mut buf = vec![];
         excerpts_csv(&p.conn, &ExcerptFilter::default(), &mut buf).unwrap();
         let s = String::from_utf8(buf).unwrap();
-        assert!(s.starts_with("excerpt_id,document,start,end,text,codes,memo_count,created_at\n"));
+        // One column per descriptor field, after the fixed columns.
+        assert!(
+            s.starts_with(
+                "excerpt_id,document,start,end,text,codes,memo_count,created_at,Site,Age\n"
+            ),
+            "{s}"
+        );
+        // The excerpt's document has both values, in field order.
+        assert!(s.trim_end().ends_with(",North,41"), "{s}");
         // The snapshot spans a newline and contains quotes: CSV doubles the quotes.
         assert!(s.contains("\"He said \"\"hi\"\",\nthen\""), "{s}");
         // Both code paths, semicolon-separated, then the memo count.
@@ -241,5 +289,17 @@ mod tests {
         assert_eq!(v["codes"].as_array().unwrap().len(), 2);
         assert_eq!(v["excerpts"][0]["codeIds"].as_array().unwrap().len(), 2);
         assert_eq!(v["memos"][0]["body"], "note");
+        let fields = v["descriptorFields"].as_array().unwrap();
+        assert_eq!(fields.len(), 2);
+        assert_eq!(fields[0]["name"], "Site");
+        assert_eq!(fields[0]["kind"], "choice");
+        assert_eq!(fields[0]["options"][1], "South");
+        assert_eq!(fields[0]["valueCount"], 1);
+        let values = v["descriptorValues"].as_array().unwrap();
+        assert_eq!(values.len(), 2);
+        assert_eq!(values[0]["fieldId"], fields[0]["id"]);
+        assert_eq!(values[0]["value"], "North");
+        assert_eq!(values[0]["documentId"], v["documents"][0]["id"]);
+        assert_eq!(values[1]["value"], "41");
     }
 }

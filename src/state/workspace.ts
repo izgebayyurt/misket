@@ -9,6 +9,7 @@ export type View =
   | { kind: "excerpts"; initialFilter?: ExcerptFilter }
   | { kind: "analysis"; tab: AnalysisTab }
   | { kind: "search" }
+  | { kind: "descriptorTable" }
   | { kind: "empty" };
 
 export type SidebarTab = "documents" | "codes";

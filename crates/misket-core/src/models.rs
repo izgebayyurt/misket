@@ -201,6 +201,9 @@ pub struct ExcerptFilter {
     pub document_ids: Option<Vec<String>>,
     #[serde(default)]
     pub uncoded_only: bool,
+    /// Descriptor conditions, ANDed together.
+    #[serde(default)]
+    pub descriptors: Option<Vec<DescriptorFilter>>,
     #[serde(default = "default_limit")]
     pub limit: i64,
     #[serde(default)]
@@ -222,6 +225,7 @@ impl Default for ExcerptFilter {
             require_all_codes: false,
             document_ids: None,
             uncoded_only: false,
+            descriptors: None,
             limit: default_limit(),
             offset: 0,
         }
@@ -279,6 +283,85 @@ pub struct CodeByDocument {
     pub document_ids: Vec<String>,
     pub code_ids: Vec<String>,
     pub cells: Vec<(String, String, i64)>,
+}
+
+// -------------------------------------------------------------- descriptors
+
+/// A document attribute: "Age group", "Site", "Interview wave", "Gender".
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct DescriptorField {
+    pub id: String,
+    pub name: String,
+    /// `text` | `number` | `choice` | `date`
+    pub kind: String,
+    /// The allowed values of a `choice` field; empty for every other kind.
+    pub options: Vec<String>,
+    pub sort_order: i64,
+    /// How many documents have a value for this field.
+    pub value_count: i64,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct NewDescriptorField {
+    pub name: String,
+    pub kind: String,
+    #[serde(default)]
+    pub options: Option<Vec<String>>,
+}
+
+/// Partial update; absent fields are left alone.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct DescriptorFieldPatch {
+    #[serde(default)]
+    pub name: Option<String>,
+    /// Only allowed while no document has a value for the field.
+    #[serde(default)]
+    pub kind: Option<String>,
+    #[serde(default)]
+    pub options: Option<Vec<String>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct DescriptorValue {
+    pub document_id: String,
+    pub field_id: String,
+    pub value: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct DescriptorMatrixRow {
+    pub document_id: String,
+    pub document_name: String,
+    /// field id -> value, only for fields this document has a value for.
+    pub values: std::collections::BTreeMap<String, String>,
+}
+
+/// All documents x all fields, for a table view.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct DescriptorMatrix {
+    pub fields: Vec<DescriptorField>,
+    pub rows: Vec<DescriptorMatrixRow>,
+}
+
+/// One condition on a document attribute in the excerpt browser.
+///
+/// `op` is `eq`, `neq`, `contains`, `gt`, `lt`, `between`, `in`, `empty` or
+/// `notEmpty`; `values` holds as many operands as the operator needs.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct DescriptorFilter {
+    pub field_id: String,
+    pub op: String,
+    #[serde(default)]
+    pub values: Vec<String>,
 }
 
 // -------------------------------------------------------------------- memos

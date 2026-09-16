@@ -3,6 +3,8 @@ import { useDocuments } from "@/queries/documents";
 import { flattenTree, pathOf } from "@/core/codeTree";
 import { ColorDot } from "@/components/codebook/ColorSwatch";
 import { FilterPicker } from "@/components/ui/filter-picker";
+import { DescriptorConditions } from "@/components/descriptors/DescriptorConditions";
+import type { DescriptorFilter } from "@/api/types";
 
 interface Props {
   codeIds: string[];
@@ -15,6 +17,8 @@ interface Props {
   onDocumentIds: (v: string[]) => void;
   uncodedOnly: boolean;
   onUncodedOnly: (v: boolean) => void;
+  descriptors: DescriptorFilter[];
+  onDescriptors: (v: DescriptorFilter[]) => void;
   total: number;
 }
 
@@ -111,6 +115,7 @@ export function ExcerptFilters(p: Props) {
           {p.requireAllCodes ? "all of" : "any of"}
         </span>
       ) : null}
+      <DescriptorConditions conditions={p.descriptors} onChange={p.onDescriptors} />
       <label className="flex items-center gap-1.5 text-xs">
         <input
           type="checkbox"
