@@ -37,7 +37,9 @@ keyboard-friendly interface without a subscription.
 - **Code excerpts**: select text, press `Ctrl`/`⌘`+`K` and pick a code (type
   `>name` to create one on the spot), or press a code's hotkey. The picker
   shows each code's description and, for nested codes, its full path.
-  Overlapping excerpts are drawn as stacked colored lanes.
+  `Ctrl`/`⌘`+`.` repeats whichever code you applied last — the status bar
+  names it, so the key is never a guess. Overlapping excerpts are drawn as
+  stacked colored lanes.
 - **Code image regions**: an image opens in a pan-and-zoom viewer (scroll to
   zoom, `Alt`-drag to pan, `0` to fit). Drag a rectangle over it and code it
   with the same palette and hotkeys; regions are drawn in their code's colour,
@@ -85,6 +87,7 @@ keyboard-friendly interface without a subscription.
 | ------------------------------------------------------ | --------------------------------------------- |
 | Code the selection / add a code to the focused excerpt | `Ctrl`/`⌘` + `K`                              |
 | Apply a code directly                                  | its hotkey (set in the code's settings)       |
+| Apply the last code used again (quick code)            | `Ctrl`/`⌘` + `.`                              |
 | Fit / zoom an image                                    | `0` / `+` / `-`                               |
 | Next / previous excerpt                                | `Tab` / `Shift`+`Tab`                         |
 | Jump to the top / bottom of the document               | `Ctrl`/`⌘` + `Home` / `End`                   |

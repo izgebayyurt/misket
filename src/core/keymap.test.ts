@@ -114,6 +114,14 @@ describe("keymap", () => {
     expect(matchAction(ev({ key: "ArrowRight", shiftKey: true }))).toBeNull();
   });
 
+  it("binds quick-code to the full stop, but not while typing", () => {
+    expect(matchAction(ev({ key: ".", ctrlKey: true }))).toBe("quickCode");
+    // A bare full stop is just a full stop, and so is one typed in a field.
+    expect(matchAction(ev({ key: "." }))).toBeNull();
+    const input = document.createElement("input");
+    expect(matchAction(ev({ key: ".", ctrlKey: true }, input))).toBeNull();
+  });
+
   it("keeps split and merge clear of the memo shortcut", () => {
     expect(matchAction(ev({ key: "s", ctrlKey: true, shiftKey: true }))).toBe("splitExcerpt");
     expect(matchAction(ev({ key: "m", ctrlKey: true, shiftKey: true }))).toBe("mergeExcerpt");

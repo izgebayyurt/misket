@@ -21,6 +21,7 @@ export type Action =
   | "tabCodes"
   | "newMemo"
   | "palette"
+  | "quickCode"
   | "find"
   | "findInProject"
   | "settings"
@@ -68,6 +69,9 @@ export const SHORTCUTS: Record<Action, Shortcut> = {
   tabCodes: { key: "2", mod: true, global: true },
   newMemo: { key: "m", mod: true, global: true },
   palette: { key: "k", mod: true, global: true },
+  // Repeat the last code applied. Not `global`: a full stop belongs to the
+  // text field the user is typing in.
+  quickCode: { key: ".", mod: true },
   find: { key: "f", mod: true, global: true },
   findInProject: { key: "f", mod: true, shift: true, global: true },
   settings: { key: ",", mod: true, global: true },
@@ -163,6 +167,7 @@ export const LABELS: Record<Action, string> = {
   tabCodes: "Switch to Codes tab",
   newMemo: "New memo",
   palette: "Open code palette",
+  quickCode: "Apply the last code used again",
   settings: "Open settings",
   shortcutsHelp: "Keyboard shortcuts",
   undo: "Undo",

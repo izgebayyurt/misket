@@ -45,6 +45,13 @@ interface WorkspaceState {
   focusedExcerptId: string | null;
   paletteOpen: boolean;
   paletteTarget: PaletteTarget | null;
+  /**
+   * The code most recently applied to something, by any path: the palette,
+   * a code hotkey, in vivo coding, a bulk "Add code…". It is what the
+   * quick-code shortcut applies, and what the status bar advertises, so the
+   * user can see what the key will do before pressing it.
+   */
+  lastAppliedCodeId: string | null;
   settingsOpen: boolean;
   shortcutsHelpOpen: boolean;
   setView: (view: View) => void;
@@ -58,6 +65,7 @@ interface WorkspaceState {
   setPaletteOpen: (open: boolean) => void;
   /** Open the palette as a code picker rather than as a coding action. */
   openCodePicker: (target: PaletteTarget) => void;
+  setLastAppliedCodeId: (id: string | null) => void;
   setSettingsOpen: (open: boolean) => void;
   setShortcutsHelpOpen: (open: boolean) => void;
   reset: () => void;
@@ -71,6 +79,7 @@ const initial = {
   focusedExcerptId: null,
   paletteOpen: false,
   paletteTarget: null as PaletteTarget | null,
+  lastAppliedCodeId: null as string | null,
   settingsOpen: false,
   shortcutsHelpOpen: false,
 };
@@ -99,6 +108,7 @@ export const useWorkspace = create<WorkspaceState>((set) => ({
   setPaletteOpen: (paletteOpen) =>
     set(paletteOpen ? { paletteOpen } : { paletteOpen, paletteTarget: null }),
   openCodePicker: (paletteTarget) => set({ paletteTarget, paletteOpen: true }),
+  setLastAppliedCodeId: (lastAppliedCodeId) => set({ lastAppliedCodeId }),
   setSettingsOpen: (settingsOpen) => set({ settingsOpen }),
   setShortcutsHelpOpen: (shortcutsHelpOpen) => set({ shortcutsHelpOpen }),
   reset: () => set({ ...initial }),

@@ -789,19 +789,19 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
     [applyCodes, documentId, setPending, setFocusedId],
   );
 
-  // --- code hotkeys: a single key applies a code to the selection/focus ---
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (isTextField(e.target) || mod(e) || e.altKey || e.key.length !== 1) return;
-      if (useWorkspace.getState().paletteOpen) return;
-      const codeId = shortcutToCode.get(e.key.toLowerCase());
-      if (!codeId) return;
+  /**
+   * Apply one code to whatever is currently the target — the pending text
+   * selection, else the focused excerpt. Shared by the code hotkeys and by
+   * quick-code; returns whether there was anything to code at all.
+   */
+  const applyCodeToTarget = useCallback(
+    (codeId: string): boolean => {
       const ws = useWorkspace.getState();
       if (ws.pendingSelection?.kind === "text" && ws.pendingSelection.documentId === documentId) {
-        e.preventDefault();
         void applyToSelection([codeId]);
-      } else if (ws.focusedExcerptId) {
-        e.preventDefault();
+        return true;
+      }
+      if (ws.focusedExcerptId) {
         const ex = excerptById.get(ws.focusedExcerptId);
         if (ex && ex.startPos !== null && ex.endPos !== null) {
           applyCodes.mutate({
@@ -810,12 +810,42 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
             endPos: ex.endPos,
             codeIds: [codeId],
           });
+          return true;
         }
       }
+      return false;
+    },
+    [applyCodes, applyToSelection, documentId, excerptById],
+  );
+
+  // --- code hotkeys: a single key applies a code to the selection/focus ---
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (isTextField(e.target) || mod(e) || e.altKey || e.key.length !== 1) return;
+      if (useWorkspace.getState().paletteOpen) return;
+      const codeId = shortcutToCode.get(e.key.toLowerCase());
+      if (!codeId) return;
+      if (applyCodeToTarget(codeId)) e.preventDefault();
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [shortcutToCode, documentId, excerptById, applyToSelection, applyCodes]);
+  }, [shortcutToCode, applyCodeToTarget]);
+
+  // Quick-code: repeat whatever code was applied last, from anywhere in the
+  // document. The status bar names it, so this is never a guess.
+  useEffect(() => {
+    return useShortcutActions.getState().register({
+      quickCode: () => {
+        const codeId = useWorkspace.getState().lastAppliedCodeId;
+        if (!codeId) {
+          toast.info("No code has been applied yet — pick one from the palette first.");
+          return;
+        }
+        if (!applyCodeToTarget(codeId))
+          toast.info("Select some text or focus an excerpt to code first.");
+      },
+    });
+  }, [applyCodeToTarget]);
 
   function onSegmentClick(e: React.MouseEvent, seg: Segment) {
     if (seg.excerptIds.length === 0) return;

@@ -404,6 +404,35 @@ export function ImageView({ documentId, focusExcerptId }: Props) {
     [applyCodes, documentId, setFocusedId, setPending],
   );
 
+  /**
+   * Apply one code to whatever is the current target — a freshly drawn
+   * rectangle, else the focused region. Shared by the code hotkeys and by
+   * quick-code; returns whether there was anything to code.
+   */
+  const applyCodeToTarget = useCallback(
+    (codeId: string): boolean => {
+      const ws = useWorkspace.getState();
+      if (ws.pendingSelection?.kind === "image" && ws.pendingSelection.documentId === documentId) {
+        void applyToPending([codeId]);
+        return true;
+      }
+      if (ws.focusedExcerptId) {
+        const ex = excerptById.get(ws.focusedExcerptId);
+        const rect = ex ? parseGeometry(ex.geometry) : null;
+        if (!rect) return false;
+        applyCodes.mutate({
+          documentId,
+          kind: "image_region",
+          geometry: rect,
+          codeIds: [codeId],
+        });
+        return true;
+      }
+      return false;
+    },
+    [applyCodes, applyToPending, documentId, excerptById],
+  );
+
   const shortcutToCode = useMemo(
     () => new Map((codes ?? []).filter((c) => c.shortcut).map((c) => [c.shortcut!, c.id])),
     [codes],
@@ -431,26 +460,25 @@ export function ImageView({ documentId, focusExcerptId }: Props) {
       if (e.key.length !== 1) return;
       const codeId = shortcutToCode.get(e.key.toLowerCase());
       if (!codeId) return;
-      const ws = useWorkspace.getState();
-      if (ws.pendingSelection?.kind === "image" && ws.pendingSelection.documentId === documentId) {
-        e.preventDefault();
-        void applyToPending([codeId]);
-      } else if (ws.focusedExcerptId) {
-        const ex = excerptById.get(ws.focusedExcerptId);
-        const rect = ex ? parseGeometry(ex.geometry) : null;
-        if (!rect) return;
-        e.preventDefault();
-        applyCodes.mutate({
-          documentId,
-          kind: "image_region",
-          geometry: rect,
-          codeIds: [codeId],
-        });
-      }
+      if (applyCodeToTarget(codeId)) e.preventDefault();
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [applyCodes, applyToPending, documentId, excerptById, fit, shortcutToCode, zoomCentre]);
+  }, [applyCodeToTarget, fit, shortcutToCode, zoomCentre]);
+
+  // Quick-code works over a drawn rectangle or a focused region too.
+  useEffect(() => {
+    return useShortcutActions.getState().register({
+      quickCode: () => {
+        const codeId = useWorkspace.getState().lastAppliedCodeId;
+        if (!codeId) {
+          toast.info("No code has been applied yet — pick one from the palette first.");
+          return;
+        }
+        if (!applyCodeToTarget(codeId)) toast.info("Draw a region or focus one to code it first.");
+      },
+    });
+  }, [applyCodeToTarget]);
 
   // --- the floating "Code" button for a freshly drawn rectangle -------------
   const toolbarPos = useMemo(() => {

@@ -51,12 +51,24 @@ export function useInvalidateExcerpts() {
   };
 }
 
+/**
+ * Remember what was just coded, so the quick-code shortcut and the status bar
+ * always mean the last code the user actually applied — whichever path they
+ * used. Every apply funnels through one of the mutations below, so this is the
+ * one place that has to know.
+ */
+function rememberApplied(codeIds: string[]) {
+  const last = codeIds[codeIds.length - 1];
+  if (last) useWorkspace.getState().setLastAppliedCodeId(last);
+}
+
 /** Apply codes to a range (creating the excerpt if needed). Undo removes what was added. */
 export function useApplyCodes() {
   const invalidate = useInvalidateExcerpts();
   return useMutation({
     mutationFn: async (input: ApplyCodesInput) => {
       const first = await api.applyCodes(input);
+      rememberApplied(input.codeIds);
       let excerptId = first.excerpt.id;
       let created = first.created;
       let added = first.addedCodeIds;
@@ -111,6 +123,7 @@ export function useAddExcerptCodes() {
       const before = await api.getExcerpt(id);
       const added = codeIds.filter((c) => !before.codeIds.includes(c));
       if (added.length === 0) return;
+      rememberApplied(added);
       await useUndoStore.getState().run({
         label: "Add code to excerpt",
         redo: async () => {
@@ -275,6 +288,7 @@ export function useAddCodesToExcerpts() {
     }) => {
       let pairs: ExcerptCodePair[] = [];
       let affected = 0;
+      rememberApplied(codeIds);
       await useUndoStore.getState().run({
         label: label ?? `Add ${plural(codeIds.length, "code")} to ${plural(ids.length, "excerpt")}`,
         redo: async () => {
