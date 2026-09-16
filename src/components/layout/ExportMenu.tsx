@@ -15,18 +15,20 @@ function stem(project: ProjectInfo) {
 }
 
 export function ExportMenu({ project }: { project: ProjectInfo }) {
-  async function run(kind: "codebook" | "excerpts" | "project") {
-    const ext = kind === "project" ? "json" : "csv";
+  async function run(kind: "codebook" | "codebookJson" | "excerpts" | "project") {
+    const ext = kind === "codebookJson" || kind === "project" ? "json" : "csv";
+    const suffix = kind === "codebookJson" ? "codebook" : kind;
     try {
       const path = await save({
-        defaultPath: `${stem(project)}-${kind}.${ext}`,
+        defaultPath: `${stem(project)}-${suffix}.${ext}`,
         filters: [{ name: ext.toUpperCase(), extensions: [ext] }],
       });
       if (!path) return;
       if (kind === "codebook") await api.exportCodebookCsv(path);
+      else if (kind === "codebookJson") await api.exportCodebookJson(path);
       else if (kind === "excerpts") await api.exportExcerptsCsv(path, {});
       else await api.exportProjectJson(path);
-      toast.info(`Exported ${kind} to ${path.split(/[\\/]/).pop()}`);
+      toast.info(`Exported ${suffix} to ${path.split(/[\\/]/).pop()}`);
     } catch (e) {
       toast.error(e);
     }
@@ -40,6 +42,9 @@ export function ExportMenu({ project }: { project: ProjectInfo }) {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" side="top">
         <DropdownMenuItem onSelect={() => run("codebook")}>Codebook (CSV)</DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => run("codebookJson")}>
+          Codebook (JSON, reusable)
+        </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => run("excerpts")}>All excerpts (CSV)</DropdownMenuItem>
         <DropdownMenuItem onSelect={() => run("project")}>Whole project (JSON)</DropdownMenuItem>
       </DropdownMenuContent>

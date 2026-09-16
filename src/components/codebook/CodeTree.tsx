@@ -1,7 +1,10 @@
 import { describe } from "@/core/keymap";
 import { useMemo, useRef, useState } from "react";
-import { ChevronDown, ChevronRight, MoreHorizontal, Plus } from "lucide-react";
+import { open, save } from "@tauri-apps/plugin-dialog";
+import { ChevronDown, ChevronRight, FileDown, MoreHorizontal, Plus } from "lucide-react";
 import type { Code } from "@/api/types";
+import * as exportApi from "@/api/export";
+import { readSourceFile } from "@/api/project";
 import { useCodes, useCodeTree, useMoveCode, useUpdateCode } from "@/queries/codes";
 import { flattenTree, matchesQuery, type CodeNode } from "@/core/codeTree";
 import { useWorkspace } from "@/state/workspace";
@@ -18,6 +21,8 @@ import { ColorDot } from "./ColorSwatch";
 import { CodeDialog } from "./CodeDialog";
 import { DeleteCodeDialog } from "./DeleteCodeDialog";
 import { MergeCodeDialog } from "./MergeCodeDialog";
+import { ImportCodebookDialog } from "./ImportCodebookDialog";
+import { useProjectInfo } from "@/queries/project";
 import { cn } from "@/lib/utils";
 import { toast } from "@/state/toasts";
 
@@ -47,6 +52,38 @@ export function CodeTree() {
   const [dragId, setDragId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<DropTarget | null>(null);
   const listRef = useRef<HTMLUListElement>(null);
+  const [importFile, setImportFile] = useState<{ path: string; text: string } | null>(null);
+  const { data: project } = useProjectInfo();
+
+  async function pickCodebookFile() {
+    try {
+      const picked = await open({
+        multiple: false,
+        filters: [{ name: "Codebook", extensions: ["json", "csv"] }],
+      });
+      if (!picked) return;
+      const path = Array.isArray(picked) ? picked[0]! : picked;
+      const bytes = await readSourceFile(path);
+      setImportFile({ path, text: new TextDecoder("utf-8").decode(bytes) });
+    } catch (e) {
+      toast.error(e);
+    }
+  }
+
+  async function exportCodebook() {
+    try {
+      const stem = (project?.name ?? "codebook").replace(/[^\w.-]+/g, "_") || "codebook";
+      const path = await save({
+        defaultPath: `${stem}-codebook.json`,
+        filters: [{ name: "JSON", extensions: ["json"] }],
+      });
+      if (!path) return;
+      await exportApi.exportCodebookJson(path);
+      toast.info(`Exported codebook to ${path.split(/[\\/]/).pop()}`);
+    } catch (e) {
+      toast.error(e);
+    }
+  }
 
   const rows = useMemo(() => {
     const all = flattenTree(tree, query ? undefined : collapsed);
@@ -162,6 +199,19 @@ export function CodeTree() {
         >
           <Plus />
         </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button size="sm" variant="outline" title="Import or export the codebook">
+              <FileDown />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onSelect={() => pickCodebookFile()}>
+              Import codebook…
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => exportCodebook()}>Export codebook…</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
       {codes && codes.length === 0 ? (
         <p className="px-3 py-1 text-xs text-fg-muted">
@@ -226,6 +276,13 @@ export function CodeTree() {
         <DeleteCodeDialog code={dialog.code} onClose={() => setDialog(null)} />
       ) : dialog?.kind === "merge" ? (
         <MergeCodeDialog code={dialog.code} onClose={() => setDialog(null)} />
+      ) : null}
+      {importFile ? (
+        <ImportCodebookDialog
+          path={importFile.path}
+          text={importFile.text}
+          onClose={() => setImportFile(null)}
+        />
       ) : null}
     </div>
   );

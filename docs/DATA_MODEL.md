@@ -76,7 +76,30 @@ them.
 ## Exports
 
 - Codebook CSV: `id, path, name, parent_id, color, description, shortcut, excerpt_count`
+- Codebook JSON: `{ format: "misket-codebook", version: 1, codes: [{ id, parentId, name, color, description, shortcut, sortOrder }] }`,
+  codes listed parents-before-children (depth-first in path order, like the CSV)
 - Excerpts CSV: `excerpt_id, document, start, end, text, codes, memo_count, created_at`
   (codes are full paths separated by `; `), then one column per descriptor
   field, named after the field, holding the excerpt's document's value
 - Project JSON: `{ format: "misket-project", formatVersion: 1, meta, documents, codes, excerpts, memos, descriptorFields, descriptorValues }`
+
+## Codebook import
+
+`db::codebook_import::import_codebook` (`crates/misket-core/src/db/codebook_import.rs`)
+reads either a codebook JSON export or CSV with header
+`name, parent, color, description, shortcut` (`parent` is a full path with
+`/` separators, matching the CSV export above), reducing both to a flat
+list of full name paths. One transaction:
+
+- `merge` matches existing codes by full path, case-insensitively. A matched
+  code only gets its `description`/`color`/`shortcut` filled in where they
+  are empty — never overwritten. Codes with no match are created under the
+  matched parent (or at the root).
+- `add-under` grafts every imported code fresh under a given parent (or the
+  root), without matching against the existing codebook at all.
+
+A color is imported only if it is a valid `#rrggbb` string; otherwise the
+code gets the same next-in-palette default as a code created with no color.
+A shortcut is imported only if it is free; if it is already taken (or
+otherwise invalid), it is dropped and the code's path is added to the
+report's `skippedShortcuts` instead of failing the import.

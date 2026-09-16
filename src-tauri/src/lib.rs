@@ -91,6 +91,8 @@ pub fn run() {
             commands::export::export_codebook_csv,
             commands::export::export_excerpts_csv,
             commands::export::export_project_json,
+            commands::export::export_codebook_json,
+            commands::codebook::import_codebook,
             commands::e2e::get_e2e_config,
             commands::settings::get_settings,
             commands::settings::set_settings,

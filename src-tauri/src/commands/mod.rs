@@ -1,4 +1,5 @@
 pub mod analysis;
+pub mod codebook;
 pub mod codes;
 pub mod descriptors;
 pub mod documents;

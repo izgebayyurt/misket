@@ -133,6 +133,60 @@ pub struct CodeImpact {
     pub excerpt_count: i64,
 }
 
+// ------------------------------------------------------------ codebook i/o
+
+/// One code in a `misket-codebook` JSON export (see `db::export::codebook_json`).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct CodebookJsonCode {
+    pub id: String,
+    pub parent_id: Option<String>,
+    pub name: String,
+    pub color: String,
+    #[serde(default)]
+    pub description: String,
+    #[serde(default)]
+    pub shortcut: Option<String>,
+    #[serde(default)]
+    pub sort_order: i64,
+}
+
+/// What `db::codebook_import::import_codebook` should read: either the
+/// parsed contents of a `misket-codebook` JSON file, or raw CSV text with
+/// header `name,parent,color,description,shortcut` (`parent` is a full path
+/// with ` / ` separators, the same convention as the codebook CSV export).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum CodebookImport {
+    #[serde(rename = "json")]
+    Json { codes: Vec<CodebookJsonCode> },
+    #[serde(rename = "csv")]
+    Csv { text: String },
+}
+
+/// `Merge` matches existing codes by full name path (case-insensitively) and
+/// only fills empty fields; `AddUnder` creates everything fresh under
+/// `parent_id` (root-level if `None`), without matching.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum ImportMode {
+    #[serde(rename = "merge")]
+    Merge,
+    #[serde(rename = "add-under")]
+    AddUnder {
+        #[serde(default)]
+        parent_id: Option<String>,
+    },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ImportReport {
+    pub created: i64,
+    pub matched: i64,
+    pub skipped_shortcuts: Vec<String>,
+}
+
 // ----------------------------------------------------------------- excerpts
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

@@ -1,6 +1,7 @@
 //! Project database: one SQLite file per project.
 
 pub mod analysis;
+pub mod codebook_import;
 pub mod codes;
 pub mod descriptors;
 pub mod documents;

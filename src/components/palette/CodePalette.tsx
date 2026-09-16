@@ -153,11 +153,18 @@ function PaletteBody({ close }: { close: () => void }) {
                   data-testid="palette-item"
                 >
                   <ColorDot color={n.code.color} />
-                  <span className="min-w-0 flex-1 truncate" style={{ paddingLeft: n.depth * 10 }}>
-                    {n.code.name}
-                    {n.code.parentId ? (
-                      <span className="ml-2 text-xs text-fg-muted">
-                        {pathOf(tree, n.code.parentId)}
+                  <span className="min-w-0 flex-1" style={{ paddingLeft: n.depth * 10 }}>
+                    <span className="flex items-baseline gap-2">
+                      <span className="truncate">{n.code.name}</span>
+                      {n.code.parentId ? (
+                        <span className="truncate text-xs text-fg-muted">
+                          {pathOf(tree, n.code.parentId)}
+                        </span>
+                      ) : null}
+                    </span>
+                    {n.code.description ? (
+                      <span className="block truncate text-xs text-fg-muted">
+                        {n.code.description}
                       </span>
                     ) : null}
                   </span>
