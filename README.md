@@ -37,6 +37,11 @@ keyboard-friendly interface without a subscription.
   `Tab` cycles them, and the excerpt browser shows a thumbnail of each one.
   The image is copied into the project file, so a `.misket` stays
   self-contained.
+- **Find your place in a long transcript**: paragraph numbers in the gutter
+  (optional), `Ctrl`/`⌘`+`G` to go to one, `Ctrl`/`⌘`+`Home`/`End` to jump to
+  the top or bottom, and a reading position remembered per document so
+  reopening one lands where you left off. Rename the open document by
+  double-clicking its title or pressing `F2`.
 - **Adjust what is coded**: move a text excerpt's start or end by a word or a
   character from the keyboard, drag the grips at either end, split an excerpt
   at the cursor, or merge it with a touching neighbour (codes and memos are
