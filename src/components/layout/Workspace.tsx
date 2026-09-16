@@ -16,6 +16,7 @@ import { CodePalette } from "@/components/palette/CodePalette";
 import { ImportDropzone } from "@/components/documents/ImportDropzone";
 import { SettingsDialog } from "./SettingsDialog";
 import { ShortcutsDialog } from "./ShortcutsDialog";
+import { SyncWarningBanner } from "./SyncWarningBanner";
 
 export function Workspace({ project }: { project: ProjectInfo }) {
   const view = useWorkspace((s) => s.view);
@@ -33,6 +34,7 @@ export function Workspace({ project }: { project: ProjectInfo }) {
   }, [project.name]);
   return (
     <div className="flex h-full flex-col">
+      <SyncWarningBanner project={project} />
       <div className="flex min-h-0 flex-1">
         <Sidebar project={project} />
         <main className="relative flex min-w-0 flex-1 flex-col bg-bg">

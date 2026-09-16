@@ -10,6 +10,11 @@ pub struct ProjectInfo {
     pub project_id: String,
     pub schema_version: i64,
     pub counts: ProjectCounts,
+    /// Set when the project file lives inside a folder a cloud sync client
+    /// manages (Dropbox, OneDrive, iCloud Drive, ...); see `crate::sync`.
+    /// The message is ready to show as-is.
+    #[serde(default)]
+    pub sync_warning: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
@@ -445,6 +450,34 @@ pub struct RetagReport {
     pub already_had: Vec<String>,
 }
 
+/// One text range to auto-code: a search match, or a match already expanded
+/// to its enclosing sentence or paragraph by the caller. Code points,
+/// end-exclusive, same convention as everywhere else.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct AutoCodeHit {
+    pub document_id: String,
+    pub start_pos: i64,
+    pub end_pos: i64,
+}
+
+/// What `db::bulk::auto_code` actually did, with everything undo needs.
+///
+/// Each hit's `[start, end)` either creates a fresh excerpt (`created_excerpt_ids`)
+/// or reuses an excerpt that already covered that exact range: if that
+/// excerpt did not yet carry `code_id`, the id goes into `reused_excerpt_ids`
+/// (undo removes just the code); if it already did, nothing changes and the
+/// hit only counts toward `already_coded`. Undo therefore deletes exactly
+/// `created_excerpt_ids` and removes `code_id` from exactly
+/// `reused_excerpt_ids`, leaving everything else untouched.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct AutoCodeReport {
+    pub created_excerpt_ids: Vec<String>,
+    pub reused_excerpt_ids: Vec<String>,
+    pub already_coded: i64,
+}
+
 // ----------------------------------------------------------------- analysis
 
 /// One row of the code frequency table. `own` counts excerpts tagged with the
@@ -717,6 +750,9 @@ pub struct SearchHit {
     /// Code points, end-exclusive.
     pub start_pos: i64,
     pub end_pos: i64,
+    /// The exact matched text (not the query/pattern), so regex hits display
+    /// what actually matched rather than the pattern itself.
+    pub matched_text: String,
     pub context_before: String,
     pub context_after: String,
 }

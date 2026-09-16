@@ -6,14 +6,14 @@
 //! tag moved — so the frontend can register a precise inverse on the undo
 //! stack instead of guessing.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, OptionalExtension};
 use serde_json::json;
 
-use super::{activity, codes, excerpts, memos, util};
+use super::{activity, codes, documents, excerpts, memos, text, util};
 use crate::error::{AppError, Result};
-use crate::models::{BulkCodeReport, ExcerptSnapshot, RetagReport};
+use crate::models::{AutoCodeHit, AutoCodeReport, BulkCodeReport, ExcerptSnapshot, RetagReport};
 
 /// De-duplicate while keeping the caller's order.
 fn unique(ids: &[String]) -> Vec<String> {
@@ -270,13 +270,111 @@ pub fn retag_code(conn: &Connection, from_code_id: &str, to_code_id: &str) -> Re
     Ok(report)
 }
 
+/// Auto-code every hit with `code_id`, in one transaction: a hit whose exact
+/// `[start, end)` range already has an excerpt reuses it (adding the code
+/// only if it is missing); otherwise a new text excerpt is created. See
+/// [`AutoCodeReport`] for exactly what undo needs to invert this.
+pub fn auto_code(conn: &Connection, hits: &[AutoCodeHit], code_id: &str) -> Result<AutoCodeReport> {
+    codes::get(conn, code_id)?;
+    let now = util::now();
+    let tx = conn.unchecked_transaction()?;
+    let mut report = AutoCodeReport::default();
+    // A bulk call is usually every match in one or a handful of documents,
+    // so cache each document's text instead of re-reading it per hit.
+    let mut doc_cache: HashMap<String, (String, i64)> = HashMap::new();
+    for hit in hits {
+        if !doc_cache.contains_key(&hit.document_id) {
+            let text = documents::get_text(&tx, &hit.document_id)?;
+            doc_cache.insert(hit.document_id.clone(), text);
+        }
+        let (doc_text, len) = doc_cache.get(&hit.document_id).expect("just inserted");
+        if hit.start_pos < 0 || hit.end_pos <= hit.start_pos || hit.end_pos > *len {
+            return Err(AppError::Validation(format!(
+                "range {}..{} is outside document {} (length {len})",
+                hit.start_pos, hit.end_pos, hit.document_id
+            )));
+        }
+        let existing: Option<String> = tx
+            .query_row(
+                "SELECT id FROM excerpts
+                 WHERE document_id = ?1 AND kind = 'text' AND start_pos = ?2 AND end_pos = ?3",
+                params![hit.document_id, hit.start_pos, hit.end_pos],
+                |r| r.get(0),
+            )
+            .optional()?;
+        match existing {
+            None => {
+                let snapshot = text::cp_slice(doc_text, hit.start_pos, hit.end_pos)
+                    .ok_or_else(|| {
+                        AppError::Validation(format!(
+                            "range {}..{} is not sliceable",
+                            hit.start_pos, hit.end_pos
+                        ))
+                    })?
+                    .to_string();
+                let id = util::new_id();
+                tx.execute(
+                    "INSERT INTO excerpts (id, document_id, kind, start_pos, end_pos, snapshot, created_at, updated_at)
+                     VALUES (?1, ?2, 'text', ?3, ?4, ?5, ?6, ?6)",
+                    params![id, hit.document_id, hit.start_pos, hit.end_pos, snapshot, now],
+                )?;
+                tx.execute(
+                    "INSERT INTO excerpt_codes (excerpt_id, code_id, created_at) VALUES (?1, ?2, ?3)",
+                    params![id, code_id, now],
+                )?;
+                report.created_excerpt_ids.push(id);
+            }
+            Some(id) => {
+                let already_coded: bool = tx.query_row(
+                    "SELECT EXISTS (SELECT 1 FROM excerpt_codes WHERE excerpt_id = ?1 AND code_id = ?2)",
+                    params![id, code_id],
+                    |r| r.get(0),
+                )?;
+                if already_coded {
+                    report.already_coded += 1;
+                } else {
+                    tx.execute(
+                        "INSERT INTO excerpt_codes (excerpt_id, code_id, created_at) VALUES (?1, ?2, ?3)",
+                        params![id, code_id, now],
+                    )?;
+                    tx.execute(
+                        "UPDATE excerpts SET updated_at = ?2 WHERE id = ?1",
+                        params![id, now],
+                    )?;
+                    report.reused_excerpt_ids.push(id);
+                }
+            }
+        }
+    }
+    let code_name = codes::get(&tx, code_id).map(|c| c.name).unwrap_or_default();
+    activity::record(
+        &tx,
+        "bulk.auto_coded",
+        "code",
+        Some(code_id),
+        format!(
+            "Auto-coded {} matches with {code_name} ({} new excerpts)",
+            hits.len(),
+            report.created_excerpt_ids.len()
+        ),
+        json!({
+            "codeId": code_id,
+            "created": report.created_excerpt_ids,
+            "reused": report.reused_excerpt_ids,
+            "alreadyCoded": report.already_coded,
+        }),
+    )?;
+    tx.commit()?;
+    Ok(report)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::db::codes::tests::mk as mk_code;
     use crate::db::documents::tests::{new_doc, new_image};
-    use crate::db::{documents, OpenProject};
-    use crate::models::{ApplyCodesInput, MemoTarget, Rect};
+    use crate::db::OpenProject;
+    use crate::models::{ApplyCodesInput, AutoCodeHit, MemoTarget, Rect};
 
     struct Fixture {
         p: OpenProject,
@@ -563,5 +661,88 @@ mod tests {
         assert_eq!(restored.geometry, snapshots[0].excerpt.geometry);
         assert_eq!(restored.start_pos, None);
         assert_eq!(codes_of(&f, &region).len(), 2);
+    }
+
+    fn hit(doc: &str, s: i64, e: i64) -> AutoCodeHit {
+        AutoCodeHit {
+            document_id: doc.into(),
+            start_pos: s,
+            end_pos: e,
+        }
+    }
+
+    #[test]
+    fn auto_code_creates_new_excerpts_and_reuses_existing_ranges() {
+        let f = setup();
+        // An excerpt already sits at the second hit's range, coded with B.
+        let existing = apply(&f, 4, 7, &[&f.b]);
+        let hits = [hit(&f.doc, 0, 3), hit(&f.doc, 4, 7)];
+        let report = auto_code(&f.p.conn, &hits, &f.a).unwrap();
+        assert_eq!(report.created_excerpt_ids.len(), 1);
+        assert_eq!(report.reused_excerpt_ids, vec![existing.clone()]);
+        assert_eq!(report.already_coded, 0);
+        assert_eq!(
+            codes_of(&f, &report.created_excerpt_ids[0]),
+            vec![f.a.clone()]
+        );
+        assert_eq!(codes_of(&f, &existing), vec![f.a.clone(), f.b.clone()]);
+        assert_eq!(count(&f), 2);
+    }
+
+    #[test]
+    fn auto_code_counts_hits_already_carrying_the_code_without_duplicating() {
+        let f = setup();
+        let e1 = apply(&f, 0, 3, &[&f.a]);
+        // The same range hit twice, plus a genuinely new one.
+        let hits = [hit(&f.doc, 0, 3), hit(&f.doc, 0, 3), hit(&f.doc, 8, 13)];
+        let report = auto_code(&f.p.conn, &hits, &f.a).unwrap();
+        assert_eq!(report.created_excerpt_ids.len(), 1);
+        assert!(report.reused_excerpt_ids.is_empty());
+        assert_eq!(report.already_coded, 2);
+        assert_eq!(codes_of(&f, &e1), vec![f.a.clone()]);
+        assert_eq!(count(&f), 2);
+    }
+
+    #[test]
+    fn auto_code_validates_and_is_atomic() {
+        let f = setup();
+        assert!(matches!(
+            auto_code(&f.p.conn, &[], "nope"),
+            Err(AppError::NotFound(_))
+        ));
+        // The first hit is valid, the second is out of range: nothing from
+        // either should be left behind.
+        let hits = [hit(&f.doc, 0, 3), hit(&f.doc, 0, 99)];
+        assert!(matches!(
+            auto_code(&f.p.conn, &hits, &f.a),
+            Err(AppError::Validation(_))
+        ));
+        assert_eq!(count(&f), 0);
+        assert!(matches!(
+            auto_code(&f.p.conn, &[hit("nope", 0, 1)], &f.a),
+            Err(AppError::NotFound(_))
+        ));
+    }
+
+    #[test]
+    fn auto_code_report_supports_undo() {
+        let f = setup();
+        let existing = apply(&f, 4, 7, &[&f.b]);
+        let hits = [hit(&f.doc, 0, 3), hit(&f.doc, 4, 7)];
+        let report = auto_code(&f.p.conn, &hits, &f.a).unwrap();
+        assert_eq!(count(&f), 2);
+
+        // Undo: delete exactly what was created, and remove the code from
+        // exactly what was reused — the pre-existing excerpt survives with
+        // its original code intact.
+        delete_many(&f.p.conn, &report.created_excerpt_ids).unwrap();
+        remove_codes_many(
+            &f.p.conn,
+            &report.reused_excerpt_ids,
+            std::slice::from_ref(&f.a),
+        )
+        .unwrap();
+        assert_eq!(count(&f), 1);
+        assert_eq!(codes_of(&f, &existing), vec![f.b.clone()]);
     }
 }

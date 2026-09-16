@@ -40,4 +40,5 @@ export const keys = {
   activityList: (filter: ActivityFilter) => ["activity", "list", filter] as const,
   codeHistory: (id: string) => ["activity", "code", id] as const,
   excerptHistory: (id: string) => ["activity", "excerpt", id] as const,
+  speakerTurns: (documentId: string) => ["speakerTurns", documentId] as const,
 };

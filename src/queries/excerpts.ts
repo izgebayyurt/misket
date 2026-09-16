@@ -2,6 +2,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as api from "@/api/excerpts";
 import type {
   ApplyCodesInput,
+  AutoCodeHit,
+  AutoCodeReport,
   ExcerptCodePair,
   ExcerptFilter,
   ExcerptSnapshot,
@@ -358,6 +360,48 @@ export function useMergeExcerpts() {
           invalidate(documentId, rightId);
         },
       });
+    },
+  });
+}
+
+/**
+ * Auto-code every hit (a search match, or one already expanded to its
+ * sentence/paragraph) with one code, in one server-side transaction. Undo
+ * deletes exactly the excerpts this call created and removes the code from
+ * exactly the ones it reused, leaving anything already coded untouched.
+ */
+export function useAutoCode() {
+  const invalidate = useInvalidateExcerpts();
+  return useMutation({
+    mutationFn: async ({
+      hits,
+      codeId,
+      label,
+    }: {
+      hits: AutoCodeHit[];
+      codeId: string;
+      /** e.g. `Auto-code 12 matches with Theme A`. */
+      label: string;
+    }) => {
+      let report: AutoCodeReport = {
+        createdExcerptIds: [],
+        reusedExcerptIds: [],
+        alreadyCoded: 0,
+      };
+      await useUndoStore.getState().run({
+        label,
+        redo: async () => {
+          report = await api.autoCode(hits, codeId);
+          invalidate();
+        },
+        undo: async () => {
+          if (report.createdExcerptIds.length) await api.deleteExcerpts(report.createdExcerptIds);
+          if (report.reusedExcerptIds.length)
+            await api.removeCodesFromExcerpts(report.reusedExcerptIds, [codeId]);
+          invalidate();
+        },
+      });
+      return report;
     },
   });
 }
