@@ -52,19 +52,24 @@ export function useSetDescriptorValue() {
       documentId,
       fieldId,
       value,
+      previous,
       fieldName,
     }: {
       documentId: string;
       fieldId: string;
       value: string | null;
+      /** What is stored now, so undo can put it back. Read from the cache when omitted. */
+      previous?: string | null;
       fieldName?: string;
     }) => {
       const before =
+        previous ??
         qc
           .getQueryData<Awaited<ReturnType<typeof api.listDocumentDescriptorValues>>>(
             keys.descriptorValues(documentId),
           )
-          ?.find((v) => v.fieldId === fieldId)?.value ?? null;
+          ?.find((v) => v.fieldId === fieldId)?.value ??
+        null;
       if ((before ?? "") === (value ?? "")) return;
       await useUndoStore.getState().run({
         label: `Set ${fieldName ?? "descriptor"}`,

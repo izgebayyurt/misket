@@ -3,6 +3,7 @@ import { create } from "zustand";
 export type View =
   | { kind: "document"; documentId: string; focusExcerptId?: string }
   | { kind: "excerpts" }
+  | { kind: "descriptorTable" }
   | { kind: "empty" };
 
 export type SidebarTab = "documents" | "codes";

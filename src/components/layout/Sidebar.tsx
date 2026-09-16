@@ -7,7 +7,7 @@ import { DocumentList } from "@/components/documents/DocumentList";
 import { CodeTree } from "@/components/codebook/CodeTree";
 import { Button } from "@/components/ui/button";
 import { DescriptorsDialog } from "@/components/descriptors/DescriptorsDialog";
-import { List, Tags } from "lucide-react";
+import { List, Settings2, Tags } from "lucide-react";
 
 export function Sidebar({ project }: { project: ProjectInfo }) {
   const tab = useWorkspace((s) => s.sidebarTab);
@@ -42,14 +42,26 @@ export function Sidebar({ project }: { project: ProjectInfo }) {
       </div>
       <div className="space-y-1 border-t border-border p-2">
         {tab === "documents" ? (
-          <Button
-            variant="ghost"
-            className="w-full justify-start"
-            onClick={() => setDescriptors(true)}
-            data-testid="open-descriptors"
-          >
-            <Tags /> Descriptors…
-          </Button>
+          <div className="flex gap-1">
+            <Button
+              variant={view.kind === "descriptorTable" ? "secondary" : "ghost"}
+              className="min-w-0 flex-1 justify-start"
+              onClick={() => setView({ kind: "descriptorTable" })}
+              data-testid="open-descriptor-table"
+            >
+              <Tags /> Descriptors
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setDescriptors(true)}
+              title="Manage descriptors"
+              aria-label="Manage descriptors"
+              data-testid="open-descriptors"
+            >
+              <Settings2 />
+            </Button>
+          </div>
         ) : null}
         <Button
           variant={view.kind === "excerpts" ? "secondary" : "ghost"}

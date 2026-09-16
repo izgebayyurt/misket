@@ -20,8 +20,9 @@ keyboard-friendly interface without a subscription.
 - **Browse excerpts** across the project, filtered by code (with sub-codes),
   document, or uncoded only, and jump back to any of them in context.
 - **Descriptors**: define document attributes (text, number, choice or date)
-  such as site, interview wave or age group, set them per document, and filter
-  excerpts by them ("Age is more than 30", "Site is any of North, South").
+  such as site, interview wave or age group, set them per document or in a
+  table of every document, and filter excerpts by them ("Age is more than 30",
+  "Site is any of North, South").
 - **Memos** on documents, codes, excerpts and the project.
 - **Undo/redo** for every coding and codebook action.
 - **Export** the codebook and excerpts as CSV, or the whole project as JSON.

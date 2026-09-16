@@ -8,6 +8,7 @@ import { DocumentView } from "@/components/document-view/DocumentView";
 import { useWorkspace } from "@/state/workspace";
 import { useGlobalShortcuts } from "@/hooks/useGlobalShortcuts";
 import { ExcerptBrowser } from "@/components/excerpts/ExcerptBrowser";
+import { DescriptorTable } from "@/components/descriptors/DescriptorTable";
 import { CodePalette } from "@/components/palette/CodePalette";
 import { ImportDropzone } from "@/components/documents/ImportDropzone";
 
@@ -34,6 +35,8 @@ export function Workspace({ project }: { project: ProjectInfo }) {
             />
           ) : view.kind === "excerpts" ? (
             <ExcerptBrowser />
+          ) : view.kind === "descriptorTable" ? (
+            <DescriptorTable />
           ) : (
             <EmptyState />
           )}
