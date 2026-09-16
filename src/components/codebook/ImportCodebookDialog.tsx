@@ -12,9 +12,8 @@ import { ColorDot } from "./ColorSwatch";
 
 /**
  * Confirms and previews a codebook import already picked and read by the
- * caller (see `pickCodebookFile` in `CodeTree.tsx`). Import is not
- * undoable, so this dialog doubles as the confirmation and clears the undo
- * stack on success.
+ * caller (see `pickCodebookFile` in `CodeTree.tsx`). Import is not undoable
+ * yet, so this dialog doubles as the confirmation.
  */
 export function ImportCodebookDialog({
   path,
@@ -69,7 +68,7 @@ export function ImportCodebookDialog({
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent
         title="Import codebook"
-        description={`This is not undoable and clears the undo history. Importing ${fileName ?? path}.`}
+        description={`This cannot be undone yet. Importing ${fileName ?? path}.`}
       >
         <div className="space-y-4">
           {preview.ok ? (

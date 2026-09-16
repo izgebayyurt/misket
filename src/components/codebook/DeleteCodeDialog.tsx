@@ -18,7 +18,7 @@ export function DeleteCodeDialog({ code, onClose }: { code: Code; onClose: () =>
   const hasChildren = (impact?.descendantCount ?? 0) > 0;
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent title={`Delete "${code.name}"?`} description="This cannot be undone.">
+      <DialogContent title={`Delete "${code.name}"?`} description="You can undo this.">
         {impact ? (
           <div className="space-y-3 text-sm">
             <p>

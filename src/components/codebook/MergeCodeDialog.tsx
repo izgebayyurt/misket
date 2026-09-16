@@ -22,7 +22,7 @@ export function MergeCodeDialog({ code, onClose }: { code: Code; onClose: () => 
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent
         title={`Merge "${code.name}" into…`}
-        description="Its excerpts, sub-codes and memos move to the target code. This cannot be undone."
+        description="Its excerpts, sub-codes and memos move to the target code. You can undo this."
       >
         <Input
           autoFocus
