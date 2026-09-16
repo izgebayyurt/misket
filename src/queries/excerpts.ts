@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as api from "@/api/excerpts";
+import * as codesApi from "@/api/codes";
 import type {
   ApplyCodesInput,
   ExcerptCodePair,
@@ -9,6 +10,7 @@ import type {
   RetagReport,
 } from "@/api/types";
 import { keys } from "./keys";
+import { useInvalidateCodes } from "./codes";
 import { useUndoStore } from "@/state/undoStore";
 import { useWorkspace } from "@/state/workspace";
 
@@ -104,6 +106,81 @@ export function useApplyCodes() {
       // `run` executed redo() once already; the first call must be a no-op for
       // the created case, which it is (snapshot null, added re-added idempotently).
       return first;
+    },
+  });
+}
+
+/**
+ * In vivo coding: create a code named after the selected text and apply it to
+ * that selection, as one entry on the undo stack. Two commands would let a
+ * single undo leave a stray empty code behind, which is exactly the mess this
+ * shortcut exists to avoid.
+ *
+ * A redo after an undo creates the code again, so it gets a fresh id — the
+ * same trade-off `useCreateCode` already makes.
+ */
+export function useInVivoCode() {
+  const invalidate = useInvalidateExcerpts();
+  const invalidateCodes = useInvalidateCodes();
+  return useMutation({
+    mutationFn: async ({
+      documentId,
+      startPos,
+      endPos,
+      name,
+      parentId,
+    }: {
+      documentId: string;
+      startPos: number;
+      endPos: number;
+      /** Already collapsed, capped and made unique among its siblings. */
+      name: string;
+      parentId: string | null;
+    }) => {
+      let codeId = "";
+      let excerptId = "";
+      let createdExcerpt = false;
+      let added: string[] = [];
+      await useUndoStore.getState().run({
+        label: `In vivo code "${name}"`,
+        redo: async () => {
+          const code = await codesApi.createCode({ name, parentId });
+          codeId = code.id;
+          const r = await api.applyCodes({
+            documentId,
+            startPos,
+            endPos,
+            codeIds: [codeId],
+          });
+          excerptId = r.excerpt.id;
+          createdExcerpt = r.created;
+          added = r.addedCodeIds;
+          rememberApplied([codeId]);
+          invalidate(documentId, excerptId);
+          invalidateCodes();
+        },
+        undo: async () => {
+          if (createdExcerpt) {
+            // The excerpt was created by this command, so it can carry no
+            // memos of its own; a redo re-applies and recreates it.
+            await api.deleteExcerpt(excerptId);
+            const ws = useWorkspace.getState();
+            if (ws.focusedExcerptId === excerptId) ws.setFocusedExcerptId(null);
+          } else {
+            for (const c of added) await api.removeExcerptCode(excerptId, c);
+          }
+          // Safe to delete outright: the code was created a moment ago and
+          // has just lost its only excerpt.
+          await codesApi.deleteCode(codeId, "delete");
+          const ws = useWorkspace.getState();
+          if (ws.lastAppliedCodeId === codeId) ws.setLastAppliedCodeId(null);
+          if (ws.selectedCodeId === codeId) ws.setSelectedCodeId(null);
+          codeId = "";
+          invalidate(documentId, excerptId);
+          invalidateCodes();
+        },
+      });
+      return { codeId, excerptId };
     },
   });
 }

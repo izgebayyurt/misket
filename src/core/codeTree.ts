@@ -111,3 +111,40 @@ export function matchesQuery(tree: CodeTree, id: string, query: string): boolean
   if (!q) return true;
   return pathOf(tree, id).toLowerCase().includes(q);
 }
+
+/** How long an in vivo code name may get before it is cut short. */
+export const IN_VIVO_NAME_MAX = 60;
+
+/**
+ * Turn a text selection into a code name: collapse every run of whitespace
+ * (a quote spanning a line break should not carry the break into the
+ * codebook), trim, and cut at {@link IN_VIVO_NAME_MAX} characters without
+ * leaving a trailing space. Returns "" if there is nothing usable.
+ */
+export function inVivoName(selection: string): string {
+  const collapsed = selection.replace(/\s+/g, " ").trim();
+  return collapsed.length <= IN_VIVO_NAME_MAX
+    ? collapsed
+    : collapsed.slice(0, IN_VIVO_NAME_MAX).trimEnd();
+}
+
+/**
+ * Make `name` unique among `siblings`, the way the database's
+ * case-insensitive sibling-name index requires: "Trust", then "Trust (2)",
+ * "Trust (3)"… Coding the same phrase twice should add a second code rather
+ * than fail with a conflict.
+ */
+export function uniqueSiblingName(name: string, siblings: string[]): string {
+  const taken = new Set(siblings.map((s) => s.trim().toLowerCase()));
+  if (!taken.has(name.trim().toLowerCase())) return name;
+  for (let n = 2; ; n++) {
+    const candidate = `${name} (${n})`;
+    if (!taken.has(candidate.toLowerCase())) return candidate;
+  }
+}
+
+/** The names of a parent's direct children (or of the root codes). */
+export function siblingNames(tree: CodeTree, parentId: string | null): string[] {
+  const nodes = parentId ? (tree.byId.get(parentId)?.children ?? []) : tree.roots;
+  return nodes.map((n) => n.code.name);
+}
