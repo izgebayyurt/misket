@@ -4,6 +4,9 @@ import type {
   ExcerptFilter,
   MemoTarget,
   SetKind,
+  TimelineBucket,
+  WordFrequencyOptions,
+  WordFrequencyScope,
 } from "@/api/types";
 
 export const keys = {
@@ -29,6 +32,11 @@ export const keys = {
   coOccurrence: (documentIds: string[], documentSetIds: string[]) =>
     ["analysis", "cooccurrence", documentIds, documentSetIds] as const,
   codeByDocument: ["analysis", "codeByDocument"] as const,
+  wordFrequencies: (scope: WordFrequencyScope, options: WordFrequencyOptions) =>
+    ["analysis", "wordFrequencies", scope, options] as const,
+  stopWords: ["analysis", "stopWords"] as const,
+  codeTimeline: (codeId: string, includeDescendants: boolean, bucket: TimelineBucket) =>
+    ["analysis", "codeTimeline", codeId, includeDescendants, bucket] as const,
   /** The saved matrix configurations. */
   frameworkMatrices: ["framework", "matrices"] as const,
   /** One rendered grid. Under "analysis" so a coding change refetches it. */
@@ -42,7 +50,7 @@ export const keys = {
   setMembers: (setId: string) => ["setMembers", setId] as const,
   allSetMembers: ["setMembers"] as const,
   savedFilters: ["savedFilters"] as const,
-  search: (query: string) => ["search", query] as const,
+  search: (query: string, regex: boolean, stem: boolean) => ["search", query, regex, stem] as const,
   backups: ["backups"] as const,
   activity: ["activity"] as const,
   activityList: (filter: ActivityFilter) => ["activity", "list", filter] as const,

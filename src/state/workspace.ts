@@ -1,7 +1,8 @@
 import { create } from "zustand";
 import type { ExcerptFilter, Rect } from "@/api/types";
 
-export type AnalysisTab = "frequencies" | "cooccurrence" | "matrix" | "descriptor" | "framework";
+export type AnalysisTab =
+  "frequencies" | "cooccurrence" | "matrix" | "descriptor" | "framework" | "words";
 
 export type View =
   | { kind: "document"; documentId: string; focusExcerptId?: string; scrollToOffset?: number }
@@ -12,7 +13,9 @@ export type View =
    */
   | { kind: "excerpts"; initialFilter?: ExcerptFilter; review?: { parentCodeId: string } }
   | { kind: "analysis"; tab: AnalysisTab }
-  | { kind: "search" }
+  /** `query` seeds the search box when it mounts (e.g. clicking a term in
+   * the word-frequency view). */
+  | { kind: "search"; query?: string }
   | { kind: "descriptorTable" }
   /** The project's home screen; the default view when a project opens. */
   | { kind: "overview" }

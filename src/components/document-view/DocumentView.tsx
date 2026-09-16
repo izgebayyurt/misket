@@ -78,6 +78,7 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
   const [handles, setHandles] = useState<HandleBoxes | null>(null);
   const [findOpen, setFindOpen] = useState(false);
   const [findQuery, setFindQuery] = useState("");
+  const [findStem, setFindStem] = useState(false);
   const [findIndex, setFindIndex] = useState(0);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [goToOpen, setGoToOpen] = useState(false);
@@ -181,15 +182,16 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
 
   // --- find in document -----------------------------------------------------
   const findResults = useMemo(
-    () => (findOpen ? findMatches(text, findQuery) : []),
-    [findOpen, findQuery, text],
+    () => (findOpen ? findMatches(text, findQuery, { stem: findStem }) : []),
+    [findOpen, findQuery, findStem, text],
   );
 
-  // Jump back to the first match whenever the bar (re)opens or the query
-  // changes. Adjusted during render (React's recommended pattern for
-  // resetting state in response to a prop/derived-value change) rather than
-  // in an effect, which would cause an extra commit after the fact.
-  const findResetKey = `${findOpen ? "1" : "0"}:${findQuery}`;
+  // Jump back to the first match whenever the bar (re)opens, the query
+  // changes, or "match word forms" is toggled. Adjusted during render
+  // (React's recommended pattern for resetting state in response to a
+  // prop/derived-value change) rather than in an effect, which would cause
+  // an extra commit after the fact.
+  const findResetKey = `${findOpen ? "1" : "0"}:${findStem ? "1" : "0"}:${findQuery}`;
   const [prevFindResetKey, setPrevFindResetKey] = useState(findResetKey);
   if (prevFindResetKey !== findResetKey) {
     setPrevFindResetKey(findResetKey);
@@ -933,6 +935,8 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
           onNext={findNext}
           onPrev={findPrev}
           onClose={closeFind}
+          matchWordForms={findStem}
+          onMatchWordFormsChange={setFindStem}
         />
       ) : null}
       {goToOpen ? (

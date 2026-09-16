@@ -88,18 +88,27 @@ keyboard-friendly interface without a subscription.
   them with the rest of the filter. Codes count as together when their
   excerpts overlap, not only when one excerpt carries both.
 - **Analyse**: a code frequency table (own counts and counts with sub-codes,
-  per document), a code co-occurrence matrix showing which codes overlap on the
-  same text, a code-by-document heatmap, and a code-by-descriptor cross-tab
-  putting codes against the values of any document attribute — sites, waves,
-  age bands binned automatically, dates by month — counting excerpts or
-  documents. Every cell clicks through to the matching excerpts, and each view
-  exports to CSV.
+  per document, plus a 30-day coding-activity sparkline per code), a code
+  co-occurrence matrix showing which codes overlap on the same text, a
+  code-by-document heatmap, a code-by-descriptor cross-tab putting codes
+  against the values of any document attribute — sites, waves, age bands
+  binned automatically, dates by month — counting excerpts or documents, and
+  a word frequency view (scoped to a document/set or to the text under a
+  code, with stop words and stemming as toggles, a project-editable
+  stop-word list, a sortable table and a word cloud). Every cell or word
+  clicks through to the matching excerpts or a seeded project search, and
+  each view exports to CSV. The overview screen's 30-day sparkline can be
+  narrowed to a single code the same way.
 - **Framework matrices**: a grid of cases by themes — a row per document, per
   document in a set, or per value of a descriptor ("Site", "Wave"), and a
   column per code or per code in a set — where you write a short summary in
   every cell. The badge on a cell counts the excerpts behind it and opens them
   in a drawer beside the grid, so the summary is written while reading the
   evidence. Exports as CSV or as a Markdown table.
+- **Stemmed search**: find-in-document and find-in-project both have a "Match
+  word forms" toggle that matches other forms of the same word by stem (e.g.
+  "code" also finds "coding" and "coded"); turned off automatically while the
+  project search's regex toggle is on, since a pattern matches raw text.
 - **Descriptors**: define document attributes (text, number, choice or date)
   such as site, interview wave or age group, set them per document or in a
   table of every document, and filter excerpts by them ("Age is more than 30",

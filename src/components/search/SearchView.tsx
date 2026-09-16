@@ -32,9 +32,10 @@ function groupByDocument(hits: SearchHit[]): DocumentGroup[] {
 }
 
 /** Project-wide "find in project": debounced search across every document. */
-export function SearchView() {
-  const [input, setInput] = useState("");
-  const [debounced, setDebounced] = useState("");
+export function SearchView({ initialQuery }: { initialQuery?: string } = {}) {
+  const [input, setInput] = useState(initialQuery ?? "");
+  const [debounced, setDebounced] = useState(initialQuery ?? "");
+  const [stem, setStem] = useState(false);
   const [regexMode, setRegexMode] = useState(false);
   const [autoCoding, setAutoCoding] = useState(false);
   const openDocument = useWorkspace((s) => s.openDocument);
@@ -44,7 +45,7 @@ export function SearchView() {
     return () => window.clearTimeout(t);
   }, [input]);
 
-  const { data: hits, isFetching, error } = useProjectSearch(debounced, regexMode);
+  const { data: hits, isFetching, error } = useProjectSearch(debounced, regexMode, stem);
   const groups = useMemo(() => groupByDocument(hits ?? []), [hits]);
   const hasQuery = debounced.trim().length > 0;
   const invalidRegex = isAppError(error, "Validation") ? error.message : null;
@@ -69,13 +70,37 @@ export function SearchView() {
         <Button
           size="sm"
           variant={regexMode ? "default" : "outline"}
-          onClick={() => setRegexMode((v) => !v)}
+          onClick={() =>
+            setRegexMode((v) => {
+              // Regex matches raw text, so "Match word forms" wouldn't mean
+              // anything while it's on; keep the two mutually exclusive.
+              if (!v) setStem(false);
+              return !v;
+            })
+          }
           aria-pressed={regexMode}
           title="Treat the query as a regular expression"
           data-testid="regex-toggle"
         >
           .*
         </Button>
+        <label
+          className="flex shrink-0 items-center gap-1.5 text-xs text-fg-muted"
+          title={
+            regexMode
+              ? "Not available with a regular expression"
+              : "Also match other forms of the same word (e.g. “code” finds “coding”)"
+          }
+        >
+          <input
+            type="checkbox"
+            checked={stem}
+            disabled={regexMode}
+            onChange={(e) => setStem(e.target.checked)}
+            data-testid="search-match-word-forms"
+          />
+          Match word forms
+        </label>
         {hasQuery && !invalidRegex ? (
           <span className="ml-auto text-xs text-fg-muted" data-testid="search-total">
             {hits?.length ?? 0} match{hits?.length === 1 ? "" : "es"}

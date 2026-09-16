@@ -1,13 +1,17 @@
 import { save } from "@tauri-apps/plugin-dialog";
 import { Download } from "lucide-react";
 import { writeTextFile } from "@/api/project";
+import { flattenTree, pathOf } from "@/core/codeTree";
+import { useCodeTree } from "@/queries/codes";
 import { useDocuments } from "@/queries/documents";
 import { useProjectInfo } from "@/queries/project";
 import { useSets } from "@/queries/sets";
 import { FilterPicker } from "@/components/ui/filter-picker";
 import { Button } from "@/components/ui/button";
+import { ColorDot } from "@/components/codebook/ColorSwatch";
 import { SetsPickerGroup } from "@/components/sets/SetsPickerGroup";
 import { toast } from "@/state/toasts";
+import { cn } from "@/lib/utils";
 
 /**
  * A document multi-select shared by the analysis views, with the same
@@ -78,6 +82,114 @@ export function DocumentFilter({
                 <span className="truncate">{d.name}</span>
               </label>
             ))}
+        </>
+      )}
+    </FilterPicker>
+  );
+}
+
+/** A code multi-select, shaped like `DocumentFilter`: pick any number of
+ * codes, each standing for itself plus (per `includeDescendants` in the
+ * caller) its sub-codes. Used to scope the word-frequency view to text
+ * that's been coded a particular way. */
+export function CodeFilter({
+  codeIds,
+  onChange,
+}: {
+  codeIds: string[];
+  onChange: (ids: string[]) => void;
+}) {
+  const tree = useCodeTree();
+  const nodes = flattenTree(tree);
+  const count = codeIds.length;
+  return (
+    <FilterPicker
+      label={count ? `${count} code${count > 1 ? "s" : ""}` : "Any code"}
+      active={count > 0}
+      onClear={() => onChange([])}
+      testId="analysis-filter-codes"
+    >
+      {(query) =>
+        nodes
+          .filter((n) => pathOf(tree, n.code.id).toLowerCase().includes(query.toLowerCase()))
+          .map((n) => (
+            <label
+              key={n.code.id}
+              className="flex cursor-default items-center gap-2 rounded px-2 py-1 hover:bg-muted"
+              style={{ paddingLeft: 8 + n.depth * 12 }}
+            >
+              <input
+                type="checkbox"
+                checked={codeIds.includes(n.code.id)}
+                onChange={() =>
+                  onChange(
+                    codeIds.includes(n.code.id)
+                      ? codeIds.filter((x) => x !== n.code.id)
+                      : [...codeIds, n.code.id],
+                  )
+                }
+              />
+              <ColorDot color={n.code.color} />
+              <span className="truncate">{n.code.name}</span>
+            </label>
+          ))
+      }
+    </FilterPicker>
+  );
+}
+
+/** A single-code picker ("All codes" plus every code, tree order), for
+ * narrowing a chart or table to one code at a time. */
+export function CodePicker({
+  value,
+  onChange,
+  allLabel = "All codes",
+  testId = "code-picker",
+}: {
+  value: string | null;
+  onChange: (codeId: string | null) => void;
+  allLabel?: string;
+  testId?: string;
+}) {
+  const tree = useCodeTree();
+  const nodes = flattenTree(tree);
+  const selected = value ? tree.byId.get(value) : undefined;
+  const row = (label: string, active: boolean, onClick: () => void, depth = 0, color?: string) => (
+    <button
+      key={label + depth}
+      type="button"
+      className={cn(
+        "flex w-full cursor-default items-center gap-2 rounded px-2 py-1 text-left hover:bg-muted",
+        active && "bg-accent/10 font-medium text-fg",
+      )}
+      style={{ paddingLeft: 8 + depth * 12 }}
+      onClick={onClick}
+    >
+      {color ? <ColorDot color={color} /> : null}
+      <span className="truncate">{label}</span>
+    </button>
+  );
+  return (
+    <FilterPicker
+      label={selected ? selected.code.name : allLabel}
+      active={!!value}
+      onClear={() => onChange(null)}
+      testId={testId}
+    >
+      {(query) => (
+        <>
+          {!query ? row(allLabel, !value, () => onChange(null)) : null}
+          {nodes
+            .filter((n) => pathOf(tree, n.code.id).toLowerCase().includes(query.toLowerCase()))
+            .map((n) =>
+              row(
+                n.code.name,
+                value === n.code.id,
+                () => onChange(n.code.id),
+                n.depth,
+                n.code.color,
+              ),
+            )}
         </>
       )}
     </FilterPicker>

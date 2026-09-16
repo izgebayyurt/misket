@@ -1,6 +1,11 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as api from "@/api/analysis";
-import type { CrosstabRequest } from "@/api/types";
+import type {
+  CrosstabRequest,
+  TimelineBucket,
+  WordFrequencyOptions,
+  WordFrequencyScope,
+} from "@/api/types";
 import { keys } from "./keys";
 
 /**
@@ -30,6 +35,47 @@ export function useCoOccurrence(documentIds: string[], documentSetIds: string[] 
 /** Excerpt counts per document and code (direct tags only). */
 export function useCodeByDocument() {
   return useQuery({ queryKey: keys.codeByDocument, queryFn: api.codeByDocument });
+}
+
+/** Word frequency table over a document/set/code scope. */
+export function useWordFrequencies(scope: WordFrequencyScope, options: WordFrequencyOptions) {
+  return useQuery({
+    queryKey: keys.wordFrequencies(scope, options),
+    queryFn: () => api.wordFrequencies(scope, options),
+    placeholderData: (prev) => prev,
+  });
+}
+
+/** The project's custom word-frequency stop words. */
+export function useStopWords() {
+  return useQuery({ queryKey: keys.stopWords, queryFn: api.getStopWords, staleTime: 60_000 });
+}
+
+/** Replace the project's custom stop-word list. Not undoable — it's a
+ * display setting for the word-frequency view, not a coding action. */
+export function useSetStopWords() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (words: string[]) => api.setStopWords(words),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: keys.stopWords });
+      qc.invalidateQueries({ queryKey: ["analysis", "wordFrequencies"] });
+    },
+  });
+}
+
+/** Coding-over-time for one code, bucketed by day/week/month. */
+export function useCodeTimeline(
+  codeId: string | null,
+  includeDescendants: boolean,
+  bucket: TimelineBucket,
+) {
+  return useQuery({
+    queryKey: keys.codeTimeline(codeId ?? "", includeDescendants, bucket),
+    queryFn: () => api.codeTimeline(codeId!, includeDescendants, bucket),
+    enabled: codeId !== null,
+    placeholderData: (prev) => prev,
+  });
 }
 
 /**

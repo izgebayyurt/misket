@@ -1,17 +1,20 @@
 //! Analysis views: code frequencies, code co-occurrence, the code-by-document
-//! matrix and the code-by-descriptor cross-tab. Everything here is read-only
-//! and returns plain DTOs; the frontend does the layout, shading and CSV.
+//! matrix, the code-by-descriptor cross-tab, word frequencies and per-code
+//! coding-over-time. Everything here is read-only and returns plain DTOs;
+//! the frontend does the layout, shading and CSV.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 
 use rusqlite::{types::Value, Connection};
 
+use super::meta;
 use super::{codes, descriptors, documents, sets};
 use crate::error::{AppError, Result};
 use crate::models::{
     CoOccurrence, CodeByDescriptor, CodeByDocument, CodeFrequency, CrosstabColumn, CrosstabRequest,
-    CrosstabRow,
+    CrosstabRow, WordFrequency, WordFrequencyOptions, WordFrequencyScope,
 };
+use crate::text::{self, stem};
 
 /// `AND e.document_id IN (…)` for an optional document filter, expanding
 /// `document_set_ids` into `document_ids` exactly like `excerpts::query`
@@ -253,6 +256,230 @@ pub fn code_by_document(conn: &Connection) -> Result<CodeByDocument> {
         code_ids,
         cells,
     })
+}
+
+/// Resolve a document/set filter to `None` ("no filter — every document")
+/// or `Some(ids)`, where an empty `Some(vec![])` means a set was picked but
+/// expands to nothing (matches no document, same convention as
+/// `document_clause`). Unlike `document_clause` this doesn't hard-code a
+/// table alias, so callers can use it against either `excerpts` or
+/// `documents` directly.
+fn resolve_document_ids(
+    conn: &Connection,
+    document_ids: Option<&[String]>,
+    document_set_ids: Option<&[String]>,
+) -> Result<Option<Vec<String>>> {
+    let doc_sets = document_set_ids.unwrap_or_default();
+    let ids = sets::union_with_sets(conn, document_ids, doc_sets)?;
+    if ids.is_empty() {
+        return Ok(if doc_sets.is_empty() {
+            None
+        } else {
+            Some(vec![])
+        });
+    }
+    Ok(Some(ids))
+}
+
+/// The project's custom word-frequency stop words (`project_meta.stop_words`,
+/// a JSON array), on top of the built-in English list. Lowercased and
+/// deduplicated by `set_stop_words`; empty if never set.
+pub fn stop_words(conn: &Connection) -> Result<Vec<String>> {
+    match meta(conn, "stop_words")? {
+        Some(json) => Ok(serde_json::from_str(&json).unwrap_or_default()),
+        None => Ok(vec![]),
+    }
+}
+
+/// Replace the project's custom stop-word list. Entries are trimmed,
+/// lowercased and deduplicated (order doesn't matter, so the stored list is
+/// sorted for a stable diff).
+pub fn set_stop_words(conn: &Connection, words: &[String]) -> Result<()> {
+    let cleaned: BTreeSet<String> = words
+        .iter()
+        .map(|w| w.trim().to_lowercase())
+        .filter(|w| !w.is_empty())
+        .collect();
+    let json = serde_json::to_string(&cleaned.into_iter().collect::<Vec<_>>())?;
+    conn.execute(
+        "INSERT INTO project_meta(key, value) VALUES ('stop_words', ?1)
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        [json],
+    )?;
+    Ok(())
+}
+
+/// Word frequencies over `scope`, most frequent first (ties broken
+/// alphabetically), capped at `options.limit`.
+///
+/// With `scope.code_ids` set, only text inside excerpts carrying one of
+/// those codes or a descendant is counted (using the excerpt's stored
+/// `snapshot`, so it's exactly the coded text); otherwise every scoped
+/// document's full text is counted. See `WordFrequencyOptions` for the
+/// length/stop-word/stemming knobs.
+pub fn word_frequencies(
+    conn: &Connection,
+    scope: &WordFrequencyScope,
+    options: &WordFrequencyOptions,
+) -> Result<Vec<WordFrequency>> {
+    let code_ids = scope.code_ids.as_deref().unwrap_or(&[]);
+    let doc_filter = resolve_document_ids(
+        conn,
+        scope.document_ids.as_deref(),
+        scope.document_set_ids.as_deref(),
+    )?;
+    if matches!(&doc_filter, Some(ids) if ids.is_empty()) {
+        return Ok(vec![]);
+    }
+
+    // (document_id, text) pairs to tokenize: either the coded snapshots of
+    // excerpts under the picked codes, or whole documents.
+    let texts: Vec<(String, String)> = if !code_ids.is_empty() {
+        let subtree = codes::descendant_ids(conn, code_ids)?;
+        if subtree.is_empty() {
+            return Ok(vec![]);
+        }
+        let ph = subtree.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+        let mut sql = format!(
+            "SELECT DISTINCT e.id, e.document_id, e.snapshot
+             FROM excerpts e JOIN excerpt_codes ec ON ec.excerpt_id = e.id
+             WHERE e.kind = 'text' AND ec.code_id IN ({ph})"
+        );
+        let mut params: Vec<Value> = subtree.into_iter().map(Value::from).collect();
+        if let Some(ids) = &doc_filter {
+            let dph = ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+            sql.push_str(&format!(" AND e.document_id IN ({dph})"));
+            params.extend(ids.iter().cloned().map(Value::from));
+        }
+        let mut stmt = conn.prepare(&sql)?;
+        let rows: Vec<(String, Option<String>)> = stmt
+            .query_map(rusqlite::params_from_iter(params.iter()), |r| {
+                Ok((r.get::<_, String>(1)?, r.get::<_, Option<String>>(2)?))
+            })?
+            .collect::<rusqlite::Result<_>>()?;
+        rows.into_iter()
+            .filter_map(|(document_id, snapshot)| snapshot.map(|s| (document_id, s)))
+            .collect()
+    } else {
+        let mut sql =
+            "SELECT id, text FROM documents WHERE kind = 'text' AND text IS NOT NULL".to_string();
+        let mut params: Vec<Value> = vec![];
+        if let Some(ids) = &doc_filter {
+            let dph = ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+            sql.push_str(&format!(" AND id IN ({dph})"));
+            params.extend(ids.iter().cloned().map(Value::from));
+        }
+        let mut stmt = conn.prepare(&sql)?;
+        let rows: Vec<(String, String)> = stmt
+            .query_map(rusqlite::params_from_iter(params.iter()), |r| {
+                Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
+            })?
+            .collect::<rusqlite::Result<_>>()?;
+        rows
+    };
+
+    let stop: HashSet<String> = if options.stop_words {
+        let mut s: HashSet<String> = text::stopwords::ENGLISH_STOP_WORDS
+            .iter()
+            .map(|w| w.to_string())
+            .collect();
+        s.extend(stop_words(conn)?);
+        s
+    } else {
+        HashSet::new()
+    };
+
+    struct Group {
+        count: i64,
+        docs: HashSet<String>,
+        /// Surface form -> how many times it occurred, so a stemmed group
+        /// can report its most frequent spelling as `term`.
+        surface: HashMap<String, i64>,
+    }
+    let mut groups: HashMap<String, Group> = HashMap::new();
+
+    for (document_id, text) in &texts {
+        for token in text::tokenize(text) {
+            if (token.chars().count() as i64) < options.min_length {
+                continue;
+            }
+            if stop.contains(&token) {
+                continue;
+            }
+            let key = if options.stem {
+                stem::stem(&token)
+            } else {
+                token.clone()
+            };
+            let group = groups.entry(key).or_insert_with(|| Group {
+                count: 0,
+                docs: HashSet::new(),
+                surface: HashMap::new(),
+            });
+            group.count += 1;
+            group.docs.insert(document_id.clone());
+            *group.surface.entry(token).or_default() += 1;
+        }
+    }
+
+    let mut out: Vec<WordFrequency> = groups
+        .into_iter()
+        .map(|(key, group)| {
+            let mut surface_forms: Vec<(String, i64)> = group.surface.into_iter().collect();
+            // Most frequent surface form wins; ties break alphabetically so
+            // the choice is deterministic regardless of hashing order.
+            surface_forms.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+            let term = surface_forms.into_iter().next().map_or(key, |(s, _)| s);
+            WordFrequency {
+                term,
+                count: group.count,
+                documents: group.docs.len() as i64,
+            }
+        })
+        .collect();
+    out.sort_by(|a, b| b.count.cmp(&a.count).then_with(|| a.term.cmp(&b.term)));
+    out.truncate(options.limit);
+    Ok(out)
+}
+
+/// How coding activity for a code (its own excerpts, plus descendants when
+/// `include_descendants`) is spread over time, by `excerpts.created_at`,
+/// bucketed by day/week/month. Sparse: only buckets with at least one
+/// excerpt are returned, oldest first. Counts distinct excerpts, so an
+/// excerpt tagged with both the code and a descendant isn't counted twice.
+pub fn code_timeline(
+    conn: &Connection,
+    code_id: &str,
+    include_descendants: bool,
+    bucket: &str,
+) -> Result<Vec<(String, i64)>> {
+    let bucket_expr = match bucket {
+        "day" => "substr(e.created_at, 1, 10)",
+        "week" => "strftime('%Y-W%W', e.created_at)",
+        "month" => "substr(e.created_at, 1, 7)",
+        other => return Err(AppError::Validation(format!("unknown bucket '{other}'"))),
+    };
+    let ids = if include_descendants {
+        codes::descendant_ids(conn, std::slice::from_ref(&code_id.to_string()))?
+    } else {
+        vec![code_id.to_string()]
+    };
+    if ids.is_empty() {
+        return Ok(vec![]);
+    }
+    let ph = ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+    let sql = format!(
+        "SELECT {bucket_expr} AS bucket, count(DISTINCT e.id) AS c
+         FROM excerpts e JOIN excerpt_codes ec ON ec.excerpt_id = e.id
+         WHERE ec.code_id IN ({ph})
+         GROUP BY bucket
+         ORDER BY bucket"
+    );
+    let mut stmt = conn.prepare(&sql)?;
+    let rows = stmt.query_map(rusqlite::params_from_iter(ids.iter()), |r| {
+        Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?))
+    })?;
+    Ok(rows.collect::<rusqlite::Result<_>>()?)
 }
 
 // ------------------------------------------------- code × descriptor cross-tab
@@ -1127,5 +1354,294 @@ mod tests {
         assert!(m.code_ids.is_empty() && m.cells.is_empty());
         let m = code_by_document(&p.conn).unwrap();
         assert!(m.document_ids.is_empty() && m.cells.is_empty());
+        assert!(word_frequencies(
+            &p.conn,
+            &WordFrequencyScope::default(),
+            &WordFrequencyOptions::default()
+        )
+        .unwrap()
+        .is_empty());
+        assert!(code_timeline(&p.conn, "nope", true, "day")
+            .unwrap()
+            .is_empty());
+    }
+
+    fn wf<'a>(rows: &'a [WordFrequency], term: &str) -> Option<&'a WordFrequency> {
+        rows.iter().find(|r| r.term == term)
+    }
+
+    mod word_frequencies_tests {
+        use super::*;
+
+        #[test]
+        fn tokenizes_lowercases_and_applies_min_length_and_stop_words() {
+            let p = OpenProject::in_memory("t").unwrap();
+            documents::create(
+                &p.conn,
+                new_doc("Coding is coding. The CODING never stops! 😀 漢字学 a an ok it's"),
+            )
+            .unwrap();
+            let rows = word_frequencies(
+                &p.conn,
+                &WordFrequencyScope::default(),
+                &WordFrequencyOptions::default(),
+            )
+            .unwrap();
+            // "coding" appears 3 times regardless of case.
+            assert_eq!(wf(&rows, "coding").unwrap().count, 3);
+            // Built-in stop words ("is", "the", "a", "an", "it's") are dropped…
+            for stop in ["is", "the", "a", "an", "it's"] {
+                assert!(wf(&rows, stop).is_none(), "{stop} should be filtered out");
+            }
+            // …and so is "ok", which is too short (2 code points) even
+            // though it isn't a stop word.
+            assert!(wf(&rows, "ok").is_none());
+            // "never", "stops" and the (3 code point) CJK run all clear both
+            // bars and are kept, lowercased.
+            assert!(wf(&rows, "never").is_some());
+            assert!(wf(&rows, "stops").is_some());
+            assert!(wf(&rows, "漢字学").is_some());
+        }
+
+        #[test]
+        fn min_length_option_is_honoured() {
+            let p = OpenProject::in_memory("t").unwrap();
+            documents::create(&p.conn, new_doc("ox ax coding")).unwrap();
+            let options = WordFrequencyOptions {
+                min_length: 1,
+                stop_words: false,
+                ..WordFrequencyOptions::default()
+            };
+            let rows = word_frequencies(&p.conn, &WordFrequencyScope::default(), &options).unwrap();
+            assert!(wf(&rows, "ox").is_some());
+            assert!(wf(&rows, "ax").is_some());
+        }
+
+        #[test]
+        fn stop_words_option_off_keeps_everything() {
+            let p = OpenProject::in_memory("t").unwrap();
+            documents::create(&p.conn, new_doc("the cat and the hat")).unwrap();
+            let options = WordFrequencyOptions {
+                stop_words: false,
+                ..WordFrequencyOptions::default()
+            };
+            let rows = word_frequencies(&p.conn, &WordFrequencyScope::default(), &options).unwrap();
+            assert_eq!(wf(&rows, "the").unwrap().count, 2);
+            assert!(wf(&rows, "and").is_some());
+        }
+
+        #[test]
+        fn a_custom_stop_word_is_dropped_alongside_the_built_in_list() {
+            let p = OpenProject::in_memory("t").unwrap();
+            documents::create(&p.conn, new_doc("misket misket transcript")).unwrap();
+            assert!(word_frequencies(
+                &p.conn,
+                &WordFrequencyScope::default(),
+                &WordFrequencyOptions::default()
+            )
+            .unwrap()
+            .iter()
+            .any(|r| r.term == "misket"));
+            set_stop_words(&p.conn, &["Misket".into(), " transcript ".into()]).unwrap();
+            assert_eq!(stop_words(&p.conn).unwrap(), vec!["misket", "transcript"]);
+            let rows = word_frequencies(
+                &p.conn,
+                &WordFrequencyScope::default(),
+                &WordFrequencyOptions::default(),
+            )
+            .unwrap();
+            assert!(wf(&rows, "misket").is_none());
+            assert!(wf(&rows, "transcript").is_none());
+        }
+
+        #[test]
+        fn documents_field_counts_distinct_documents() {
+            let p = OpenProject::in_memory("t").unwrap();
+            documents::create(&p.conn, new_doc("shared word only")).unwrap();
+            documents::create(
+                &p.conn,
+                NewDocument {
+                    name: "Doc 2".into(),
+                    ..new_doc("shared word repeats repeats here")
+                },
+            )
+            .unwrap();
+            let rows = word_frequencies(
+                &p.conn,
+                &WordFrequencyScope::default(),
+                &WordFrequencyOptions::default(),
+            )
+            .unwrap();
+            assert_eq!(wf(&rows, "shared").unwrap().documents, 2);
+            assert_eq!(wf(&rows, "shared").unwrap().count, 2);
+            assert_eq!(wf(&rows, "repeats").unwrap().documents, 1);
+            assert_eq!(wf(&rows, "repeats").unwrap().count, 2);
+        }
+
+        #[test]
+        fn scopes_by_document_id_and_document_set() {
+            let p = OpenProject::in_memory("t").unwrap();
+            let doc1 = documents::create(&p.conn, new_doc("apple apple")).unwrap();
+            let doc2 = documents::create(
+                &p.conn,
+                NewDocument {
+                    name: "Doc 2".into(),
+                    ..new_doc("banana banana")
+                },
+            )
+            .unwrap();
+            let scope = WordFrequencyScope {
+                document_ids: Some(vec![doc1.summary.id.clone()]),
+                ..Default::default()
+            };
+            let rows = word_frequencies(&p.conn, &scope, &WordFrequencyOptions::default()).unwrap();
+            assert!(wf(&rows, "apple").is_some());
+            assert!(wf(&rows, "banana").is_none());
+
+            let set = sets::create_set(
+                &p.conn,
+                "document",
+                "Wave 2",
+                std::slice::from_ref(&doc2.summary.id),
+                None,
+            )
+            .unwrap();
+            let scope = WordFrequencyScope {
+                document_set_ids: Some(vec![set.id]),
+                ..Default::default()
+            };
+            let rows = word_frequencies(&p.conn, &scope, &WordFrequencyOptions::default()).unwrap();
+            assert!(wf(&rows, "banana").is_some());
+            assert!(wf(&rows, "apple").is_none());
+        }
+
+        #[test]
+        fn scopes_by_code_including_descendants_and_counts_only_coded_text() {
+            let p = OpenProject::in_memory("t").unwrap();
+            let conn = &p.conn;
+            let doc = documents::create(conn, new_doc("apple banana cherry date")).unwrap();
+            let doc_id = doc.summary.id.clone();
+            let parent = mk_code(conn, "Fruit", None).id;
+            let child = mk_code(conn, "Citrus", Some(&parent)).id;
+            // "apple" is tagged with the parent code…
+            apply(conn, &doc_id, 0, 5, &[&parent]);
+            // …"banana" with the child, so a parent-scoped, descendant-
+            // inclusive query should still pick it up…
+            apply(conn, &doc_id, 6, 12, &[&child]);
+            // …and "cherry"/"date" carry no code at all.
+            let scope = WordFrequencyScope {
+                code_ids: Some(vec![parent.clone()]),
+                ..Default::default()
+            };
+            let options = WordFrequencyOptions {
+                min_length: 1,
+                stop_words: false,
+                ..WordFrequencyOptions::default()
+            };
+            let rows = word_frequencies(conn, &scope, &options).unwrap();
+            assert!(wf(&rows, "apple").is_some());
+            assert!(wf(&rows, "banana").is_some());
+            assert!(wf(&rows, "cherry").is_none());
+            assert!(wf(&rows, "date").is_none());
+        }
+
+        #[test]
+        fn stemming_groups_word_forms_under_their_most_frequent_surface_form() {
+            let p = OpenProject::in_memory("t").unwrap();
+            documents::create(&p.conn, new_doc("coding coded coded coding coded")).unwrap();
+            let options = WordFrequencyOptions {
+                stem: true,
+                ..WordFrequencyOptions::default()
+            };
+            let rows = word_frequencies(&p.conn, &WordFrequencyScope::default(), &options).unwrap();
+            assert_eq!(rows.len(), 1);
+            assert_eq!(rows[0].count, 5);
+            assert_eq!(rows[0].term, "coded"); // 3 occurrences beats "coding"'s 2
+        }
+
+        #[test]
+        fn limit_caps_the_result() {
+            let p = OpenProject::in_memory("t").unwrap();
+            documents::create(&p.conn, new_doc("alpha beta gamma delta epsilon")).unwrap();
+            let options = WordFrequencyOptions {
+                limit: 2,
+                ..WordFrequencyOptions::default()
+            };
+            let rows = word_frequencies(&p.conn, &WordFrequencyScope::default(), &options).unwrap();
+            assert_eq!(rows.len(), 2);
+        }
+    }
+
+    mod code_timeline_tests {
+        use super::*;
+
+        fn at(conn: &Connection, doc: &str, start: i64, end: i64, code_id: &str, created_at: &str) {
+            let excerpt_id = apply(conn, doc, start, end, &[code_id]);
+            conn.execute(
+                "UPDATE excerpts SET created_at = ?1 WHERE id = ?2",
+                rusqlite::params![created_at, excerpt_id],
+            )
+            .unwrap();
+        }
+
+        #[test]
+        fn buckets_by_day_week_and_month() {
+            let p = OpenProject::in_memory("t").unwrap();
+            let conn = &p.conn;
+            let doc = documents::create(conn, new_doc(&"x".repeat(40)))
+                .unwrap()
+                .summary
+                .id;
+            let code = mk_code(conn, "A", None).id;
+            at(conn, &doc, 0, 1, &code, "2024-01-10T00:00:00Z");
+            at(conn, &doc, 1, 2, &code, "2024-01-10T12:00:00Z");
+            at(conn, &doc, 2, 3, &code, "2024-01-17T00:00:00Z");
+            at(conn, &doc, 3, 4, &code, "2024-02-01T00:00:00Z");
+
+            let by_day = code_timeline(conn, &code, false, "day").unwrap();
+            assert_eq!(
+                by_day,
+                vec![
+                    ("2024-01-10".to_string(), 2),
+                    ("2024-01-17".to_string(), 1),
+                    ("2024-02-01".to_string(), 1),
+                ]
+            );
+
+            let by_month = code_timeline(conn, &code, false, "month").unwrap();
+            assert_eq!(
+                by_month,
+                vec![("2024-01".to_string(), 3), ("2024-02".to_string(), 1)]
+            );
+
+            // Weeks group differently than days/months, but should still
+            // account for every excerpt, with same-day events landing in
+            // the same bucket.
+            let by_week = code_timeline(conn, &code, false, "week").unwrap();
+            let total: i64 = by_week.iter().map(|(_, c)| *c).sum();
+            assert_eq!(total, 4);
+            assert!(by_week.iter().any(|(_, c)| *c == 2));
+        }
+
+        #[test]
+        fn includes_descendants_only_when_asked_and_rejects_unknown_bucket() {
+            let p = OpenProject::in_memory("t").unwrap();
+            let conn = &p.conn;
+            let doc = documents::create(conn, new_doc(&"x".repeat(40)))
+                .unwrap()
+                .summary
+                .id;
+            let parent = mk_code(conn, "A", None).id;
+            let child = mk_code(conn, "A1", Some(&parent)).id;
+            at(conn, &doc, 0, 1, &parent, "2024-01-01T00:00:00Z");
+            at(conn, &doc, 1, 2, &child, "2024-01-01T00:00:00Z");
+
+            let own_only = code_timeline(conn, &parent, false, "day").unwrap();
+            assert_eq!(own_only, vec![("2024-01-01".to_string(), 1)]);
+            let with_descendants = code_timeline(conn, &parent, true, "day").unwrap();
+            assert_eq!(with_descendants, vec![("2024-01-01".to_string(), 2)]);
+
+            assert!(code_timeline(conn, &parent, false, "year").is_err());
+        }
     }
 }

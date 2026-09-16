@@ -6,6 +6,7 @@ import { CoOccurrenceMatrix } from "./CoOccurrenceMatrix";
 import { CodeByDocumentMatrix } from "./CodeByDocumentMatrix";
 import { FrameworkMatrixView } from "./FrameworkMatrixView";
 import { CodeByDescriptorMatrix } from "./CodeByDescriptorMatrix";
+import { WordFrequencies } from "./WordFrequencies";
 
 const TABS: { id: AnalysisTab; label: string }[] = [
   { id: "frequencies", label: "Frequencies" },
@@ -13,6 +14,7 @@ const TABS: { id: AnalysisTab; label: string }[] = [
   { id: "matrix", label: "Code × document" },
   { id: "framework", label: "Framework" },
   { id: "descriptor", label: "By descriptor" },
+  { id: "words", label: "Words" },
 ];
 
 export function AnalysisView({ tab }: { tab: AnalysisTab }) {
@@ -42,12 +44,14 @@ export function AnalysisView({ tab }: { tab: AnalysisTab }) {
           <CodeFrequencies />
         ) : tab === "cooccurrence" ? (
           <CoOccurrenceMatrix />
+        ) : tab === "matrix" ? (
+          <CodeByDocumentMatrix />
         ) : tab === "framework" ? (
           <FrameworkMatrixView />
         ) : tab === "descriptor" ? (
           <CodeByDescriptorMatrix />
         ) : (
-          <CodeByDocumentMatrix />
+          <WordFrequencies />
         )}
       </div>
     </div>

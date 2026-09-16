@@ -594,6 +594,56 @@ pub struct CodeByDocument {
     pub cells: Vec<(String, String, i64)>,
 }
 
+/// What text to count words over: every document by default, narrowed by
+/// document/set (unioned, same as the other analysis views) and/or by code
+/// — when `code_ids` is set, only text inside excerpts carrying one of
+/// those codes (or a descendant) is counted, not whole documents.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct WordFrequencyScope {
+    pub document_ids: Option<Vec<String>>,
+    pub document_set_ids: Option<Vec<String>>,
+    pub code_ids: Option<Vec<String>>,
+}
+
+/// See `db::analysis::word_frequencies`.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct WordFrequencyOptions {
+    /// Words shorter than this many code points are dropped.
+    pub min_length: i64,
+    /// Drop the built-in English stop words plus the project's own list
+    /// (`db::analysis::stop_words`).
+    pub stop_words: bool,
+    /// Group word forms by stem (`text::stem`), reporting the most frequent
+    /// surface form as `term`.
+    pub stem: bool,
+    pub limit: usize,
+}
+
+impl Default for WordFrequencyOptions {
+    fn default() -> Self {
+        Self {
+            min_length: 3,
+            stop_words: true,
+            stem: false,
+            limit: 200,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct WordFrequency {
+    /// The word itself, or (when `stem` is on) the most frequent surface
+    /// form of the stem it represents.
+    pub term: String,
+    pub count: i64,
+    /// Distinct documents this term (or, stemmed, any of its surface forms)
+    /// appears in, within the scope.
+    pub documents: i64,
+}
+
 /// What a code-by-descriptor cross-tab should show. One struct rather than a
 /// row of positional arguments, because the frontend sends it as one object
 /// and it will grow (normalized percentages, a second field) before long.
@@ -911,8 +961,9 @@ pub struct SearchHit {
     /// Code points, end-exclusive.
     pub start_pos: i64,
     pub end_pos: i64,
-    /// The exact matched text (not the query/pattern), so regex hits display
-    /// what actually matched rather than the pattern itself.
+    /// The exact matched text (not the query/pattern), so a regex, stemmed
+    /// or case-folded hit displays what actually matched rather than the
+    /// query itself.
     pub matched_text: String,
     pub context_before: String,
     pub context_after: String,

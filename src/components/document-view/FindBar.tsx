@@ -10,6 +10,8 @@ interface Props {
   onNext: () => void;
   onPrev: () => void;
   onClose: () => void;
+  matchWordForms: boolean;
+  onMatchWordFormsChange: (v: boolean) => void;
 }
 
 /** A compact "find in document" bar docked at the top of the document view. */
@@ -21,6 +23,8 @@ export function FindBar({
   onNext,
   onPrev,
   onClose,
+  matchWordForms,
+  onMatchWordFormsChange,
 }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -59,6 +63,18 @@ export function FindBar({
       <span className="w-16 shrink-0 text-center text-xs text-fg-muted" data-testid="find-count">
         {total === 0 ? "0 of 0" : `${currentIndex + 1} of ${total}`}
       </span>
+      <label
+        className="flex shrink-0 items-center gap-1 px-1 text-xs text-fg-muted"
+        title="Also match other forms of the same word (e.g. “code” finds “coding”)"
+      >
+        <input
+          type="checkbox"
+          checked={matchWordForms}
+          onChange={(e) => onMatchWordFormsChange(e.target.checked)}
+          data-testid="find-match-word-forms"
+        />
+        Match word forms
+      </label>
       <button
         type="button"
         className="rounded p-1 text-fg-muted hover:bg-muted disabled:pointer-events-none disabled:opacity-40"
