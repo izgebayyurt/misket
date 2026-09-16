@@ -219,6 +219,8 @@ pub fn create_field(conn: &Connection, input: NewDescriptorField) -> Result<Desc
             field.name, field.kind
         ),
         json!({ "name": field.name, "kind": field.kind, "options": field.options }),
+        None,
+        None,
     )?;
     Ok(field)
 }
@@ -322,6 +324,8 @@ pub fn update_field(
             Some(&after.id),
             summary,
             Value::Object(detail),
+            None,
+            None,
         )?;
     }
     Ok(after)
@@ -330,7 +334,7 @@ pub fn update_field(
 /// Delete a field; its values go with it.
 pub fn delete_field(conn: &Connection, id: &str) -> Result<DescriptorField> {
     let field = get_field(conn, id)?;
-    let tx = conn.unchecked_transaction()?;
+    let tx = util::tx(conn)?;
     tx.execute("DELETE FROM descriptor_fields WHERE id = ?1", [id])?;
     renumber(&tx)?;
     activity::record(
@@ -345,6 +349,8 @@ pub fn delete_field(conn: &Connection, id: &str) -> Result<DescriptorField> {
             "options": field.options,
             "valueCount": field.value_count,
         }),
+        None,
+        None,
     )?;
     tx.commit()?;
     Ok(field)
@@ -369,7 +375,7 @@ fn renumber(conn: &Connection) -> Result<()> {
 /// Put `ids` in this order; fields not listed keep their relative order after
 /// the listed ones.
 pub fn reorder_fields(conn: &Connection, ids: &[String]) -> Result<Vec<DescriptorField>> {
-    let tx = conn.unchecked_transaction()?;
+    let tx = util::tx(conn)?;
     let existing = list_fields(&tx)?;
     let mut order: Vec<String> = ids
         .iter()
@@ -411,7 +417,7 @@ pub fn set_value(
         .optional()?;
     let raw = value.map(str::trim).filter(|v| !v.is_empty());
     let Some(raw) = raw else {
-        let tx = conn.unchecked_transaction()?;
+        let tx = util::tx(conn)?;
         tx.execute(
             "DELETE FROM descriptor_values WHERE document_id = ?1 AND field_id = ?2",
             params![document_id, field_id],
@@ -423,7 +429,7 @@ pub fn set_value(
         return Ok(None);
     };
     let canonical = canonical_value(&field, raw)?;
-    let tx = conn.unchecked_transaction()?;
+    let tx = util::tx(conn)?;
     tx.execute(
         "INSERT INTO descriptor_values (document_id, field_id, value) VALUES (?1, ?2, ?3)
          ON CONFLICT(document_id, field_id) DO UPDATE SET value = excluded.value",
@@ -473,6 +479,8 @@ fn log_value(
             "fieldName": field.name,
             "value": activity::change(before.map(String::from), after.map(String::from)),
         }),
+        None,
+        None,
     )
 }
 

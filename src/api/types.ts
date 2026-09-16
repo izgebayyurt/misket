@@ -302,6 +302,15 @@ export interface ExcerptDetail extends ExcerptWithCodes {
 export interface ExcerptSnapshot {
   excerpt: ExcerptWithCodes;
   memos: Memo[];
+  /** The excerpt's tags with their own timestamps; absent in older snapshots. */
+  tags?: TagRow[];
+}
+
+/** One `excerpt_codes` row. */
+export interface TagRow {
+  excerptId: string;
+  codeId: string;
+  createdAt: string;
 }
 
 /** The two halves left by `split_excerpt`; `left` keeps the original id. */
@@ -658,11 +667,16 @@ export interface BackupInfo {
   sizeBytes: number;
 }
 
-// ------------------------------------------------------------- activity log
+// ----------------------------------------------------------------- history
 
-/** One row of `activity_log`: something that happened to the project. */
+/**
+ * One node of the history tree, read as a log entry: something that happened
+ * to the project.
+ */
 export interface ActivityEntry {
   id: number;
+  /** The node this one follows; null for a root. */
+  parentId: number | null;
   at: string;
   /** Whoever was at the keyboard; empty when no name was ever set. */
   actor: string;
@@ -673,6 +687,12 @@ export interface ActivityEntry {
   summary: string;
   /** `detail_json`, already parsed. Shape depends on `kind`. */
   detail: Record<string, unknown>;
+  /** Whether this step carries an inverse and can be taken back. */
+  undoable: boolean;
+  /** The name "fork here" gave this node, if any. */
+  branchName: string | null;
+  /** Whether this is the step undo would take back next. */
+  isHead: boolean;
 }
 
 export interface ActivityFilter {
@@ -691,4 +711,43 @@ export interface ActivityPage {
   total: number;
   /** Every kind present in the whole log, sorted. */
   kinds: string[];
+}
+
+/** One operation in the undo tree, with the payloads that replay it. */
+export interface HistoryNode {
+  id: number;
+  parentId: number | null;
+  at: string;
+  actor: string;
+  kind: string;
+  targetKind: string;
+  targetId: string | null;
+  summary: string;
+  detail: Record<string, unknown>;
+  /** The operation, and its opposite; null when it cannot be replayed. */
+  forward: unknown | null;
+  inverse: unknown | null;
+  branchName: string | null;
+  preferredChild: number | null;
+}
+
+/** A node as the history view draws it: no payloads, but the shape around it. */
+export interface HistoryNodeSummary {
+  id: number;
+  parentId: number | null;
+  at: string;
+  actor: string;
+  kind: string;
+  summary: string;
+  branchName: string | null;
+  undoable: boolean;
+  isHead: boolean;
+  /** Oldest first; more than one means the tree branches here. */
+  children: number[];
+}
+
+/** What compacting threw away. */
+export interface CompactReport {
+  droppedNodes: number;
+  droppedBranches: string[];
 }

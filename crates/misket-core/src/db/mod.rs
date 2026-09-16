@@ -11,6 +11,7 @@ pub mod documents;
 pub mod excerpts;
 pub mod export;
 pub mod framework;
+pub mod history;
 pub mod memos;
 pub mod migrations;
 pub mod query_expr;
@@ -250,11 +251,13 @@ mod tests {
             let p = OpenProject::create(&path, "Old", "0.1.0").unwrap();
             p.conn
                 .execute_batch(
-                    "DROP TRIGGER framework_cells_code_deleted;
+                    "DROP TABLE history_blobs;
+                     DROP TABLE history;
+                     DELETE FROM project_meta WHERE key = 'history_head';
+                     DROP TRIGGER framework_cells_code_deleted;
                      DROP TABLE framework_cells;
                      ALTER TABLE documents DROP COLUMN transcript_json;
                      DROP TABLE framework_matrices;
-                     DROP TABLE activity_log;
                      DROP TABLE descriptor_values;
                      DROP TABLE descriptor_fields;
                      DROP TABLE media_blobs;
@@ -291,7 +294,7 @@ mod tests {
                 "SELECT count(*) FROM descriptor_fields;
                  SELECT count(*) FROM media_blobs;
                  SELECT count(*) FROM sets;
-                 SELECT count(*) FROM activity_log;
+                 SELECT count(*) FROM history;
                  SELECT count(*) FROM framework_matrices;
                  SELECT count(*) FROM codes WHERE inclusion = '' AND exclusion = ''
                    AND example_excerpt_id IS NULL;

@@ -6,14 +6,14 @@ Misket is a local-first desktop app for qualitative coding (Tauri 2 + React/Type
 
 - `crates/misket-core/` — schema, migrations, and all domain logic as plain functions over `&rusqlite::Connection`. No UI or Tauri dependency. Tests run against in-memory databases. New behavior that touches data belongs here first, with a test.
 - `src-tauri/` — thin Tauri commands over the core crate. `AppState` holds the open project behind a mutex. Errors are `misket_core::AppError` and serialize as `{ code, message }`.
-- `src/core/` — pure TypeScript with no `react`, `@tauri-apps/*`, or `@/api` runtime imports (an ESLint rule enforces it; type-only imports are fine). Offsets, segmentation, DOM selection mapping, code tree, undo stack, keymap, importers. Most Vitest tests live here.
-- `src/api/` typed `invoke()` wrappers; `src/queries/` TanStack Query hooks that also register undo commands; `src/state/` zustand stores; `src/components/` UI.
+- `src/core/` — pure TypeScript with no `react`, `@tauri-apps/*`, or `@/api` runtime imports (an ESLint rule enforces it; type-only imports are fine). Offsets, segmentation, DOM selection mapping, code tree, keymap, importers. Most Vitest tests live here.
+- `src/api/` typed `invoke()` wrappers; `src/queries/` TanStack Query hooks; `src/state/` zustand stores; `src/components/` UI.
 
 ## Rules that matter
 
 - Document text is immutable after import. Excerpt offsets are Unicode code points, end-exclusive. Convert to UTF-16 only through `src/core/offsets.ts`.
 - Inside the document view text root, all text lives in `span[data-s]` elements whose only child is a text node. Do not put other text-bearing elements inside `.doc-text`.
-- Every mutation that can be undone registers a command via `useUndoStore.getState().run(...)`. Non-undoable operations confirm first and call `clear()`.
+- Every mutation records forward and inverse payloads through `activity::record`; new domain writes must supply both or the operation is not undoable. Undo is a tree in the project file (`db::history`); the frontend only calls `history_undo`/`history_redo`.
 - `ExcerptFilter` has a manual `Default` in Rust (limit 200, include descendants); keep TS `src/api/types.ts` in sync with `crates/misket-core/src/models.rs`.
 - Image documents keep their bytes in `media_blobs` and are served to the webview through the `misket-media` URI scheme (`src-tauri/src/lib.rs`, `src/api/media.ts`), never over `invoke`. Region excerpts are normalized rectangles; Rust writes `geometry` in one canonical form so the partial unique index can upsert it.
 

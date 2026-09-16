@@ -26,7 +26,8 @@ use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
-use super::{activity, documents, util};
+use super::history::TranscriptChange;
+use super::{activity, documents, history, util};
 use crate::error::{AppError, Result};
 use crate::text::transcript::{self, TranscriptFormat, Turn};
 
@@ -104,7 +105,7 @@ pub fn set_default(conn: &Connection, format: Option<TranscriptFormat>) -> Resul
     if value == before {
         return Ok(());
     }
-    let tx = conn.unchecked_transaction()?;
+    let tx = util::tx(conn)?;
     tx.execute(
         "INSERT INTO project_meta(key, value) VALUES (?1, ?2)
          ON CONFLICT(key) DO UPDATE SET value = excluded.value",
@@ -122,7 +123,19 @@ pub fn set_default(conn: &Connection, format: Option<TranscriptFormat>) -> Resul
                 .map(|f| f.label())
                 .unwrap_or_else(|| "Detect automatically".into())
         ),
-        json!({ "format": activity::change(before, value) }),
+        json!({ "format": activity::change(before.clone(), value) }),
+        Some(history::payload(&TranscriptChange {
+            document_id: None,
+            format: format.clone(),
+        })),
+        Some(history::payload(&TranscriptChange {
+            document_id: None,
+            // What was there before, read back the same way `get_default` does.
+            format: match before.as_str() {
+                "auto" | "" => None,
+                json => serde_json::from_str(json).ok(),
+            },
+        })),
     )?;
     tx.commit()?;
     Ok(())
@@ -238,7 +251,7 @@ pub fn set_format(
     format: Option<TranscriptFormat>,
 ) -> Result<TranscriptInfo> {
     let before = ensure(conn, id)?.format;
-    let tx = conn.unchecked_transaction()?;
+    let tx = util::tx(conn)?;
     match &format {
         Some(f) => {
             transcript::compile(f)?;
@@ -284,6 +297,16 @@ pub fn set_format(
                 serde_json::to_value(&next)?,
             )
         }),
+        Some(history::payload(&TranscriptChange {
+            document_id: Some(id.to_string()),
+            format: format.clone(),
+        })),
+        // Undo pins whatever was in force before — the same reading of the
+        // document, whether it had been detected or chosen.
+        Some(history::payload(&TranscriptChange {
+            document_id: Some(id.to_string()),
+            format: Some(before.clone()),
+        })),
     )?;
     tx.commit()?;
     get(conn, id)
@@ -499,6 +522,41 @@ mod tests {
         assert_eq!(entry.target_id.as_deref(), Some(doc.summary.id.as_str()));
         assert_eq!(entry.detail["format"]["from"]["preset"], "name_colon");
         assert_eq!(entry.detail["format"]["to"]["kind"], "none");
+    }
+
+    #[test]
+    fn setting_a_format_is_undoable_through_the_history_tree() {
+        let p = project();
+        let doc = documents::create(&p.conn, new_doc(TRANSCRIPT)).unwrap();
+        let id = doc.summary.id;
+        set_format(&p.conn, &id, Some(TranscriptFormat::none())).unwrap();
+        assert_eq!(get(&p.conn, &id).unwrap().format, TranscriptFormat::none());
+
+        history::undo(&p.conn).unwrap().expect("a node to undo");
+        assert_eq!(
+            get(&p.conn, &id).unwrap().format,
+            TranscriptFormat::preset("name_colon")
+        );
+        history::redo(&p.conn, None)
+            .unwrap()
+            .expect("a node to redo");
+        assert_eq!(get(&p.conn, &id).unwrap().format, TranscriptFormat::none());
+
+        // …and so is the project default.
+        set_default(&p.conn, Some(TranscriptFormat::preset("bracket_name"))).unwrap();
+        history::undo(&p.conn).unwrap().expect("a node to undo");
+        assert_eq!(get_default(&p.conn).unwrap(), None);
+        history::redo(&p.conn, None)
+            .unwrap()
+            .expect("a node to redo");
+        assert_eq!(
+            get_default(&p.conn).unwrap(),
+            Some(TranscriptFormat::preset("bracket_name"))
+        );
+        // Replaying a step never writes a second history node.
+        let steps = history::tree(&p.conn).unwrap().len();
+        history::undo(&p.conn).unwrap();
+        assert_eq!(history::tree(&p.conn).unwrap().len(), steps);
     }
 
     #[test]

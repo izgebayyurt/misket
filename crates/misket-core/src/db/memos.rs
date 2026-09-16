@@ -1,15 +1,15 @@
 //! Memos: free-text notes on a document, a code, an excerpt, or the project.
 
 use rusqlite::{params, Connection, OptionalExtension, Row};
-use serde_json::json;
+use serde_json::{json, Value};
 
-use super::{activity, util};
+use super::{activity, history, util};
 use crate::error::{AppError, Result};
 use crate::models::{Memo, MemoTarget};
 
 const COLUMNS: &str = "id, document_id, code_id, excerpt_id, title, body, created_at, updated_at";
 
-fn from_row(r: &Row) -> rusqlite::Result<Memo> {
+pub(super) fn from_row(r: &Row) -> rusqlite::Result<Memo> {
     Ok(Memo {
         id: r.get(0)?,
         document_id: r.get(1)?,
@@ -87,7 +87,18 @@ fn target_of(memo: &Memo) -> (&'static str, Option<&str>, String) {
 }
 
 /// One entry for a memo write, attributed to the memo's target.
-fn log_memo(conn: &Connection, kind: &str, verb: &str, memo: &Memo) -> Result<()> {
+///
+/// `forward` and `inverse` are whole rows either way: upserting a memo covers
+/// writing it, editing it and putting it back, and the opposite is either the
+/// row as it was or no row at all.
+fn log_memo(
+    conn: &Connection,
+    kind: &str,
+    verb: &str,
+    memo: &Memo,
+    forward: Value,
+    inverse: Value,
+) -> Result<()> {
     let (target_kind, target_id, noun) = target_of(memo);
     let title = if memo.title.trim().is_empty() {
         activity::elide(&memo.body, 40)
@@ -113,6 +124,8 @@ fn log_memo(conn: &Connection, kind: &str, verb: &str, memo: &Memo) -> Result<()
             "codeId": memo.code_id,
             "excerptId": memo.excerpt_id,
         }),
+        Some(forward),
+        Some(inverse),
     )
 }
 
@@ -140,29 +153,48 @@ pub fn create(conn: &Connection, target: MemoTarget, title: &str, body: &str) ->
         }
     })?;
     let memo = get(conn, &id)?;
-    log_memo(conn, "memo.created", "Added", &memo)?;
+    log_memo(
+        conn,
+        "memo.created",
+        "Added",
+        &memo,
+        history::memos_restored(std::slice::from_ref(&memo)),
+        history::memos_deleted(std::slice::from_ref(&memo.id)),
+    )?;
     Ok(memo)
 }
 
 pub fn update(conn: &Connection, id: &str, title: &str, body: &str) -> Result<Memo> {
-    let n = conn.execute(
+    let before = get(conn, id)?;
+    conn.execute(
         "UPDATE memos SET title = ?2, body = ?3, updated_at = ?4 WHERE id = ?1",
         params![id, title, body, util::now()],
     )?;
-    if n == 0 {
-        return Err(AppError::NotFound(format!("memo {id} not found")));
-    }
     let memo = get(conn, id)?;
-    log_memo(conn, "memo.updated", "Edited", &memo)?;
+    log_memo(
+        conn,
+        "memo.updated",
+        "Edited",
+        &memo,
+        history::memos_restored(std::slice::from_ref(&memo)),
+        history::memos_restored(std::slice::from_ref(&before)),
+    )?;
     Ok(memo)
 }
 
 /// Delete a memo and return it (for undo).
 pub fn delete(conn: &Connection, id: &str) -> Result<Memo> {
     let memo = get(conn, id)?;
-    let tx = conn.unchecked_transaction()?;
+    let tx = util::tx(conn)?;
     tx.execute("DELETE FROM memos WHERE id = ?1", [id])?;
-    log_memo(&tx, "memo.deleted", "Deleted", &memo)?;
+    log_memo(
+        &tx,
+        "memo.deleted",
+        "Deleted",
+        &memo,
+        history::memos_deleted(std::slice::from_ref(&memo.id)),
+        history::memos_restored(std::slice::from_ref(&memo)),
+    )?;
     tx.commit()?;
     Ok(memo)
 }
@@ -190,7 +222,14 @@ pub fn restore(conn: &Connection, memo: &Memo) -> Result<Memo> {
         }
     })?;
     let restored = get(conn, &memo.id)?;
-    log_memo(conn, "memo.restored", "Restored", &restored)?;
+    log_memo(
+        conn,
+        "memo.restored",
+        "Restored",
+        &restored,
+        history::memos_restored(std::slice::from_ref(&restored)),
+        history::memos_deleted(std::slice::from_ref(&restored.id)),
+    )?;
     Ok(restored)
 }
 

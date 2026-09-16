@@ -12,10 +12,10 @@ const plural = (n: number, noun: string) => `${n} ${noun}${n === 1 ? "" : "s"}`;
  * excerpts) to the parent in one step, and decide separately whether the
  * emptied codes should go too.
  *
- * Keeping them is the reversible half and the default, because "lump these
- * back together" is exactly the move people want to try and then reconsider.
- * Deleting them is a code delete like any other: it confirms here and clears
- * the undo history.
+ * Keeping them is the default, because "lump these back together" is exactly
+ * the move people want to try and then reconsider. Deleting them is a code
+ * delete like any other — and, since the history keeps a snapshot of each
+ * branch it removes, just as reversible.
  */
 export function RollUpDialog({
   parent,
@@ -86,8 +86,8 @@ export function RollUpDialog({
             afterwards
             <span className="block text-xs text-fg-muted">
               {deleteEmptied
-                ? "Their own sub-codes move up to the parent. Deleting codes cannot be undone, and clears the undo history."
-                : "Off: the sub-codes stay in the codebook with no excerpts, and the whole roll-up can be undone."}
+                ? "Their own sub-codes move up to the parent. You can undo this, one code at a time."
+                : "Off: the sub-codes stay in the codebook with no excerpts."}
             </span>
           </span>
         </label>
