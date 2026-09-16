@@ -28,6 +28,7 @@ import { useSettings } from "@/state/settings";
 import { SelectionToolbar } from "./SelectionToolbar";
 import { ExcerptPopover } from "./ExcerptPopover";
 import { FindBar } from "./FindBar";
+import { GoToParagraphBar } from "./GoToParagraphBar";
 import { toast } from "@/state/toasts";
 import { cn } from "@/lib/utils";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -70,11 +71,21 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
   const [findQuery, setFindQuery] = useState("");
   const [findIndex, setFindIndex] = useState(0);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [goToOpen, setGoToOpen] = useState(false);
   const showParagraphNumbers = useSettings((s) => s.settings.showParagraphNumbers);
 
   const text = doc?.text ?? "";
   const offsetMap = useMemo(() => buildOffsetMap(text), [text]);
   const paragraphs = useMemo(() => splitParagraphs(text), [text]);
+  /**
+   * UTF-16 starts of the paragraphs that carry a number in the gutter, in
+   * order: blank lines are skipped, exactly as the CSS counter skips them, so
+   * `numberedStarts[n - 1]` is the paragraph the reader sees as "n".
+   */
+  const numberedStarts = useMemo(
+    () => paragraphs.filter((p) => p.text.length > 0).map((p) => p.start),
+    [paragraphs],
+  );
   const colorById = useMemo(() => new Map((codes ?? []).map((c) => [c.id, c.color])), [codes]);
   const shortcutToCode = useMemo(
     () => new Map((codes ?? []).filter((c) => c.shortcut).map((c) => [c.shortcut!, c.id])),
@@ -239,6 +250,38 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
     // Re-run only when the target offset (or the document) changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scrollToOffset, text]);
+
+  // --- jumping around the document -----------------------------------------
+  const jumpTo = useCallback((where: "top" | "bottom") => {
+    const container = scrollRef.current;
+    if (!container) return;
+    container.scrollTo({
+      top: where === "top" ? 0 : container.scrollHeight,
+      behavior: "smooth",
+    });
+  }, []);
+
+  /** Scroll to the paragraph the gutter numbers `n` and flash it. */
+  const jumpToParagraph = useCallback(
+    (n: number) => {
+      const root = rootRef.current;
+      if (!root || numberedStarts.length === 0) return;
+      const i = Math.min(Math.max(Math.trunc(n), 1), numberedStarts.length) - 1;
+      const el = root.querySelector<HTMLElement>(`p[data-p="${numberedStarts[i]}"]`);
+      if (!el) return;
+      el.scrollIntoView({ block: "center", behavior: "smooth" });
+      const span = el.querySelector<HTMLElement>("span[data-s]");
+      if (!span) return;
+      span.classList.add("flash");
+      setTimeout(() => span.classList.remove("flash"), 1300);
+    },
+    [numberedStarts],
+  );
+
+  const closeGoTo = useCallback(() => {
+    setGoToOpen(false);
+    rootRef.current?.focus();
+  }, []);
 
   // --- selection -> pendingSelection ---------------------------------------
   const readSelection = useCallback(() => {
@@ -579,10 +622,18 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
       extendSelectionLeft: () => extendSelection("left"),
       extendSelectionRight: () => extendSelection("right"),
       find: () => setFindOpen(true),
-      // Escape peels one layer at a time: find bar, then selection, then
-      // focus. (An open popover is closed by Radix before this runs, and the
-      // find bar's own input handles Escape locally while it has focus.)
+      jumpTop: () => jumpTo("top"),
+      jumpBottom: () => jumpTo("bottom"),
+      goToParagraph: () => setGoToOpen(true),
+      // Escape peels one layer at a time: the go-to bar, the find bar, then
+      // the selection, then the focus. (An open popover is closed by Radix
+      // before this runs, and each bar's own input handles Escape locally
+      // while it has focus.)
       escape: () => {
+        if (goToOpen) {
+          closeGoTo();
+          return;
+        }
         if (findOpen) {
           closeFind();
           return;
@@ -624,6 +675,9 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
     extendSelection,
     findOpen,
     closeFind,
+    goToOpen,
+    closeGoTo,
+    jumpTo,
     nudgeBoundary,
     splitFocused,
     mergeWith,
@@ -707,6 +761,13 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
           onNext={findNext}
           onPrev={findPrev}
           onClose={closeFind}
+        />
+      ) : null}
+      {goToOpen ? (
+        <GoToParagraphBar
+          total={numberedStarts.length}
+          onGo={jumpToParagraph}
+          onClose={closeGoTo}
         />
       ) : null}
       <div ref={scrollRef} className="relative min-h-0 flex-1 overflow-y-auto">

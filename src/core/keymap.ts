@@ -43,6 +43,9 @@ export type Action =
   | "excerptStartRightChar"
   | "splitExcerpt"
   | "mergeExcerpt"
+  | "jumpTop"
+  | "jumpBottom"
+  | "goToParagraph"
   | "escape";
 
 export interface Shortcut {
@@ -91,6 +94,11 @@ export const SHORTCUTS: Record<Action, Shortcut> = {
   excerptStartRightChar: { key: "ArrowRight", mod: true, alt: true, shift: true },
   splitExcerpt: { key: "s", mod: true, shift: true },
   mergeExcerpt: { key: "m", mod: true, shift: true },
+  // Document orientation. Home/End keep their plain meaning (and their
+  // meaning inside a text field); only the modified chords are ours.
+  jumpTop: { key: "Home", mod: true },
+  jumpBottom: { key: "End", mod: true },
+  goToParagraph: { key: "g", mod: true },
   escape: { key: "Escape", global: true },
 };
 
@@ -167,6 +175,9 @@ export const LABELS: Record<Action, string> = {
   excerptStartRightChar: "Move excerpt start right by a character",
   splitExcerpt: "Split excerpt at the cursor",
   mergeExcerpt: "Merge excerpt with its neighbour",
+  jumpTop: "Jump to the top of the document",
+  jumpBottom: "Jump to the bottom of the document",
+  goToParagraph: "Go to paragraph",
   escape: "Cancel / close",
 };
 

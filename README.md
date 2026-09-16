@@ -73,6 +73,9 @@ keyboard-friendly interface without a subscription.
 | Apply a code directly                                  | its hotkey (set in the code's settings)       |
 | Fit / zoom an image                                    | `0` / `+` / `-`                               |
 | Next / previous excerpt                                | `Tab` / `Shift`+`Tab`                         |
+| Jump to the top / bottom of the document               | `Ctrl`/`⌘` + `Home` / `End`                   |
+| Go to paragraph                                        | `Ctrl`/`⌘` + `G`                              |
+| Rename the open document                               | `F2` or double-click its title                |
 | Edit the focused excerpt                               | `Enter`                                       |
 | Delete the focused excerpt                             | `Backspace`                                   |
 | Move the excerpt's **end** by a word                   | `Alt` + `←` / `→`                             |
@@ -90,7 +93,7 @@ keyboard-friendly interface without a subscription.
 | Find in project (search every document)                | `Shift` + `Ctrl`/`⌘` + `F`                    |
 | Import documents                                       | `Ctrl`/`⌘` + `I`                              |
 | Undo / redo                                            | `Ctrl`/`⌘` + `Z` / `Shift` + `Ctrl`/`⌘` + `Z` |
-| Settings (theme, text size, confirm-delete)            | `Ctrl`/`⌘` + `,`                              |
+| Settings (theme, text size, paragraph numbers)         | `Ctrl`/`⌘` + `,`                              |
 | Keyboard shortcuts reference                           | `Ctrl`/`⌘` + `/`                              |
 
 `Alt` + arrows move the focused excerpt's **end** edge; adding `Ctrl`/`⌘`
