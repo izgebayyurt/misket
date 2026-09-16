@@ -23,8 +23,9 @@ interface Row extends CodeFrequency {
 
 export function CodeFrequencies() {
   const [documentIds, setDocumentIds] = useState<string[]>([]);
+  const [documentSetIds, setDocumentSetIds] = useState<string[]>([]);
   const [sort, setSort] = useState<{ key: SortKey; desc: boolean }>({ key: "code", desc: false });
-  const { data, isPending } = useCodeFrequencies(documentIds);
+  const { data, isPending } = useCodeFrequencies(documentIds, documentSetIds);
   const tree = useCodeTree();
   const { data: docs } = useDocuments();
   const openExcerpts = useWorkspace((s) => s.openExcerpts);
@@ -98,7 +99,12 @@ export function CodeFrequencies() {
   return (
     <div className="flex h-full flex-col" data-testid="analysis-frequencies">
       <AnalysisToolbar>
-        <DocumentFilter documentIds={documentIds} onChange={setDocumentIds} />
+        <DocumentFilter
+          documentIds={documentIds}
+          onChange={setDocumentIds}
+          documentSetIds={documentSetIds}
+          onSetIdsChange={setDocumentSetIds}
+        />
         <span className="text-xs text-fg-muted">
           {rows.length} code{rows.length === 1 ? "" : "s"}
         </span>

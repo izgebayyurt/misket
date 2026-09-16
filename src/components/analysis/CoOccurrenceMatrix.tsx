@@ -10,8 +10,9 @@ import { shade } from "./shade";
 
 export function CoOccurrenceMatrix() {
   const [documentIds, setDocumentIds] = useState<string[]>([]);
+  const [documentSetIds, setDocumentSetIds] = useState<string[]>([]);
   const [onlyUsed, setOnlyUsed] = useState(true);
-  const { data, isPending } = useCoOccurrence(documentIds);
+  const { data, isPending } = useCoOccurrence(documentIds, documentSetIds);
   const tree = useCodeTree();
   const openExcerpts = useWorkspace((s) => s.openExcerpts);
 
@@ -47,6 +48,8 @@ export function CoOccurrenceMatrix() {
         <Toolbar
           documentIds={documentIds}
           setDocumentIds={setDocumentIds}
+          documentSetIds={documentSetIds}
+          setDocumentSetIds={setDocumentSetIds}
           onlyUsed={onlyUsed}
           setOnlyUsed={setOnlyUsed}
           csv={csv}
@@ -66,6 +69,8 @@ export function CoOccurrenceMatrix() {
       <Toolbar
         documentIds={documentIds}
         setDocumentIds={setDocumentIds}
+        documentSetIds={documentSetIds}
+        setDocumentSetIds={setDocumentSetIds}
         onlyUsed={onlyUsed}
         setOnlyUsed={setOnlyUsed}
         csv={csv}
@@ -160,6 +165,8 @@ export function CoOccurrenceMatrix() {
 function Toolbar({
   documentIds,
   setDocumentIds,
+  documentSetIds,
+  setDocumentSetIds,
   onlyUsed,
   setOnlyUsed,
   csv,
@@ -167,6 +174,8 @@ function Toolbar({
 }: {
   documentIds: string[];
   setDocumentIds: (ids: string[]) => void;
+  documentSetIds: string[];
+  setDocumentSetIds: (ids: string[]) => void;
   onlyUsed: boolean;
   setOnlyUsed: (v: boolean) => void;
   csv: () => string;
@@ -174,7 +183,12 @@ function Toolbar({
 }) {
   return (
     <AnalysisToolbar>
-      <DocumentFilter documentIds={documentIds} onChange={setDocumentIds} />
+      <DocumentFilter
+        documentIds={documentIds}
+        onChange={setDocumentIds}
+        documentSetIds={documentSetIds}
+        onSetIdsChange={setDocumentSetIds}
+      />
       <label className="flex items-center gap-1.5 text-xs">
         <input
           type="checkbox"

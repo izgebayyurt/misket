@@ -134,6 +134,16 @@ build, or hand-edited — reads back as the default filter rather than making th
 whole list unreadable. Applying one sets every field of the browser's filter
 state, so anything it leaves out returns to its default.
 
+`db::sets::union_with_sets` is the one place that does this expansion (the
+picked ids, then the ids the picked sets expand to, de-duplicated);
+`excerpts::query` uses it for both `code_set_ids` and `document_set_ids`.
+`db::analysis::code_frequencies` and `db::analysis::co_occurrence` reuse it for
+a `document_set_ids` parameter — the only id filter either of them takes — so
+the "Sets" group in the analysis views' document picker behaves exactly like
+the excerpt browser's: a set that is picked but empty or unknown matches no
+document, not every document. `code_by_document` and the sets UI itself take
+no code filter, so there is no `code_set_ids` in the analysis views.
+
 ## Adjusting excerpts
 
 Three operations in `db::excerpts` refine an existing text excerpt, each in one
@@ -184,9 +194,12 @@ them back instead of failing on the primary key.
   field, named after the field, holding the excerpt's document's value.
   `start`/`end` are empty for image excerpts and `geometry` is empty for text
   ones; `text` holds the snapshot either way
-- Project JSON: `{ format: "misket-project", formatVersion: 1, meta, documents, codes, excerpts, memos, descriptorFields, descriptorValues }`.
-  Image bytes are not included: the JSON stays a readable text export, and the
-  `.misket` file remains the thing that holds the media.
+- Project JSON: `{ format: "misket-project", formatVersion: 1, meta, documents, codes, excerpts, memos, descriptorFields, descriptorValues, sets, savedFilters }`.
+  `sets` is `[{ set: SetInfo, memberIds }]` for every code set and document
+  set; `savedFilters` is the `SavedFilter` list with `filter` already parsed
+  back into an `ExcerptFilter` object, not left as a JSON string. Image bytes
+  are not included: the JSON stays a readable text export, and the `.misket`
+  file remains the thing that holds the media.
 
 ## Codebook import
 
