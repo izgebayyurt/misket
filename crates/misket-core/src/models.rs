@@ -194,6 +194,9 @@ pub struct ExcerptFilter {
     pub code_ids: Option<Vec<String>>,
     #[serde(default = "default_true")]
     pub include_descendants: bool,
+    /// All listed codes must be present (default: any of them).
+    #[serde(default)]
+    pub require_all_codes: bool,
     #[serde(default)]
     pub document_ids: Option<Vec<String>>,
     #[serde(default)]
@@ -216,6 +219,7 @@ impl Default for ExcerptFilter {
         Self {
             code_ids: None,
             include_descendants: true,
+            require_all_codes: false,
             document_ids: None,
             uncoded_only: false,
             limit: default_limit(),
@@ -239,6 +243,42 @@ pub struct ExcerptRow {
 pub struct ExcerptPage {
     pub rows: Vec<ExcerptRow>,
     pub total: i64,
+}
+
+// ----------------------------------------------------------------- analysis
+
+/// One row of the code frequency table. `own` counts excerpts tagged with the
+/// code itself; `with_descendants`, `document_count` and `per_document`
+/// describe the excerpts tagged with the code or any of its descendants.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct CodeFrequency {
+    pub code_id: String,
+    pub own: i64,
+    pub with_descendants: i64,
+    pub document_count: i64,
+    /// `(document_id, excerpt count)`, in project document order.
+    pub per_document: Vec<(String, i64)>,
+}
+
+/// Square, symmetric matrix of codes that share overlapping text. `cells` is
+/// sparse (`(row code, column code, count)`, both orientations present) and the
+/// diagonal holds each code's own frequency.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct CoOccurrence {
+    pub code_ids: Vec<String>,
+    pub cells: Vec<(String, String, i64)>,
+}
+
+/// Excerpts per document and code (direct tags only). `cells` is sparse:
+/// `(document_id, code_id, count)`.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct CodeByDocument {
+    pub document_ids: Vec<String>,
+    pub code_ids: Vec<String>,
+    pub cells: Vec<(String, String, i64)>,
 }
 
 // -------------------------------------------------------------------- memos

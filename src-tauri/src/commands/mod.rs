@@ -1,3 +1,4 @@
+pub mod analysis;
 pub mod codes;
 pub mod documents;
 pub mod e2e;
