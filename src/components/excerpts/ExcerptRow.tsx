@@ -7,27 +7,33 @@ import { RegionThumbnail } from "./RegionThumbnail";
 
 interface Props {
   row: Row;
-  selected: boolean;
+  selected?: boolean;
   onOpen: () => void;
-  /** Checkbox click; `shiftKey` extends the selection from the last click. */
-  onToggle: (shiftKey: boolean) => void;
+  /**
+   * Checkbox click; `shiftKey` extends the selection from the last click.
+   * Omitted where there is nothing to select — the framework matrix's
+   * evidence drawer shows the same rows, read-only.
+   */
+  onToggle?: (shiftKey: boolean) => void;
 }
 
-export function ExcerptRow({ row, selected, onOpen, onToggle }: Props) {
+export function ExcerptRow({ row, selected = false, onOpen, onToggle }: Props) {
   const tree = useCodeTree();
   const isRegion = row.kind === "image_region";
   return (
     <li className={cn("flex items-start gap-2 pl-3", selected && "bg-accent/10")}>
-      <input
-        type="checkbox"
-        className="mt-3.5"
-        checked={selected}
-        // Click, not change: only a MouseEvent carries the Shift modifier.
-        onClick={(e) => onToggle(e.shiftKey)}
-        onChange={() => {}}
-        aria-label={`Select excerpt from ${row.documentName}`}
-        data-testid="excerpt-select"
-      />
+      {onToggle ? (
+        <input
+          type="checkbox"
+          className="mt-3.5"
+          checked={selected}
+          // Click, not change: only a MouseEvent carries the Shift modifier.
+          onClick={(e) => onToggle(e.shiftKey)}
+          onChange={() => {}}
+          aria-label={`Select excerpt from ${row.documentName}`}
+          data-testid="excerpt-select"
+        />
+      ) : null}
       <button
         className="flex min-w-0 flex-1 gap-3 py-2.5 pr-4 text-left hover:bg-muted focus-visible:bg-muted focus-visible:outline-none"
         onClick={onOpen}

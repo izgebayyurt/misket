@@ -6,7 +6,7 @@
     <title>Coding tutorial</title>
     <meta
       name="description"
-      content="A walk-through of coding a project in Misket: importing documents, building a codebook, coding text, adjusting boundaries, filtering excerpts, memos, analysis and export."
+      content="A walk-through of coding a project in Misket: importing documents, building a codebook, coding text, adjusting boundaries, filtering excerpts, Boolean and proximity queries, memos, analysis and export."
     />
     <link rel="stylesheet" href="../style.css" />
   </head>
@@ -40,11 +40,14 @@
           <li><a href="#import">Import documents</a></li>
           <li><a href="#codebook">Build a codebook</a></li>
           <li><a href="#coding">Code text</a></li>
+          <li><a href="#auto-code">Auto-code many matches or turns at once</a></li>
           <li><a href="#orientation">Find your place in a long transcript</a></li>
           <li><a href="#boundaries">Adjust boundaries</a></li>
           <li><a href="#browser">Excerpt browser and filters</a></li>
+          <li><a href="#query">Boolean and proximity queries</a></li>
           <li><a href="#memos">Memos</a></li>
           <li><a href="#analysis">Analysis views</a></li>
+          <li><a href="#framework">Framework matrices</a></li>
           <li><a href="#export">Export and backups</a></li>
         </ul>
       </nav>
@@ -102,6 +105,23 @@
         tint, so you can see everything that applies to a passage at a glance.
       </p>
 
+      <h2 id="auto-code">Auto-code many matches or turns at once</h2>
+      <p>
+        Once you keep finding the same pattern by hand, code every instance in one step. Open
+        <strong>Search</strong> (<kbd>Shift</kbd>+<kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>F</kbd>), turn
+        on <strong>Regex</strong> if you need a pattern rather than plain text (a name spelled two
+        ways, a number followed by a unit), then click <strong>Auto-code all N matches…</strong>.
+        Pick a code, choose whether to code just the match, its whole sentence, or its whole
+        paragraph, and confirm — matches that share a sentence or paragraph become one excerpt. The
+        whole batch is one undo step.
+      </p>
+      <p>
+        For interview transcripts that consistently mark who is speaking —
+        <code>Name:</code>, <code>[Name]</code> or <code>Name (00:12):</code> lines that recur
+        through the document — the document header shows a <strong>Speakers</strong> menu listing
+        each detected speaker with their turn count. Pick one and a code to tag every one of their
+        turns (the spoken text, not the label) in a single step.
+      </p>
       <h2 id="orientation">Find your place in a long transcript</h2>
       <p>
         Every paragraph is numbered in the document's left gutter, so you can cite "paragraph 47" in
@@ -146,8 +166,9 @@
         <li><strong>Uncoded only</strong> — find passages nobody has coded yet;</li>
         <li>
           <strong>Descriptors</strong> — document attributes such as "Age is more than 30" or "Site
-          is any of North, South".
+          is any of North, South";
         </li>
+        <li><strong>Query</strong> — a Boolean or proximity expression over codes (see below).</li>
       </ul>
       <p>
         Clicking a row jumps back to that excerpt in context. Tick the checkboxes
@@ -159,6 +180,33 @@
         Descriptors themselves — document attributes such as site, interview wave or age group — are
         defined and assigned from the descriptors panel, either per document or in a table of every
         document at once. Fields can be text, number, choice or date.
+      </p>
+
+      <h2 id="query">Boolean and proximity queries</h2>
+      <p>
+        The <strong>Query</strong> chip builds a retrieval expression over codes: pick an operator,
+        then a code per row. Add a <em>group</em> row to nest one level, so you can ask for "Access
+        and (Barriers or Cost)".
+      </p>
+      <ul>
+        <li><strong>and</strong> — both codes, on the same or overlapping passages;</li>
+        <li><strong>or</strong> — either code;</li>
+        <li><strong>not</strong> — the first code, where the second does not overlap it;</li>
+        <li>
+          <strong>near</strong> — the first code close to the second, either in the same paragraph
+          or within a number of characters you choose.
+        </li>
+      </ul>
+      <p>
+        Codes count as together when their excerpts <em>overlap</em>, not only when one excerpt
+        carries both — two coders rarely draw exactly the same range, and "A and B" would find
+        almost nothing if they had to. An excerpt carrying both codes matches "A and B" and "A near
+        B", and is excluded from "A not B".
+      </p>
+      <p>
+        Save a query with the rest of the filter under a name ("Access without cost talk") and it
+        reappears in the <strong>Saved</strong> menu, spelled out underneath so you can tell two
+        apart at a glance.
       </p>
 
       <h2 id="memos">Memos</h2>
@@ -197,6 +245,14 @@
           how densely;
         </li>
         <li>
+          a <strong>code-by-descriptor cross-tab</strong> ("By descriptor") putting codes against
+          the values of any document attribute — one column per site or interview wave, automatic
+          bins for a number field, one column per month for a date field, and a
+          <em>(no value)</em> column for the documents you have not filled in yet. Choose whether a
+          cell counts excerpts or documents; the <em>n</em> under each column header is how many
+          documents fall in it, so an uneven group is visible rather than implied;
+        </li>
+        <li>
           a <strong>word frequency</strong> view: pick a document/set or a code (only the text under
           that code is counted, not the whole document), turn stop words and stemming on or off, and
           get a sortable table or a word cloud. Stemming groups word forms together ("code",
@@ -215,6 +271,36 @@
         (<kbd>Shift</kbd>+<kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>F</kbd>) have a
         <strong>Match word forms</strong> toggle: turn it on and a search for "code" also finds
         "coding" and "coded", using the same stemming as the word frequency view.
+      </p>
+
+      <h2 id="framework">Framework matrices</h2>
+      <p>
+        The fourth tab, <strong>Framework</strong>, is the grid applied research is usually written
+        up from: cases down the side, themes across the top, and a short summary of what that case
+        said about that theme in every cell.
+      </p>
+      <p>
+        Press <strong>New</strong> and give the matrix a name, then choose its shape.
+        <strong>Rows</strong> are one per document, one per document in a set ("Round 1
+        interviews"), or one per value of a descriptor — pick "Site" and you get a
+        <em>North</em> row and a <em>South</em> row, each pooling that site's documents, with
+        anything unlabelled gathered under <em>(no value)</em>. <strong>Columns</strong> are the
+        codes in a code set, or a list you tick. Nothing is frozen: importing a document, filling in
+        a descriptor or coding another passage changes the grid the next time you open it, and
+        <strong>Configure</strong> reshapes it without losing a single summary.
+      </p>
+      <p>
+        Type straight into a cell; it saves a moment after you stop, and every edit is undoable. The
+        badge in the corner counts the excerpts behind that cell — the ones in that row's documents
+        carrying that code or any of its sub-codes. Click it, or press
+        <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>Enter</kbd>, and they open in a drawer beside the grid
+        rather than replacing it, so you can read the evidence while writing the summary.
+        <kbd>Tab</kbd> and <kbd>Shift</kbd>+<kbd>Tab</kbd> walk the cells in reading order, and
+        <kbd>Ctrl</kbd>/<kbd>⌘</kbd> with an arrow key moves by one.
+      </p>
+      <p>
+        Export the finished matrix as CSV for a spreadsheet, or as a Markdown table to paste into a
+        report.
       </p>
 
       <h2 id="export">Export and backups</h2>

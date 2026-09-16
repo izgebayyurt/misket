@@ -8,7 +8,8 @@ import { FilterPicker } from "@/components/ui/filter-picker";
 import { DescriptorConditions } from "@/components/descriptors/DescriptorConditions";
 import { SetsPickerGroup } from "@/components/sets/SetsPickerGroup";
 import { SavedFilters } from "./SavedFilters";
-import type { DescriptorFilter, ExcerptFilter } from "@/api/types";
+import { QueryBuilder } from "./QueryBuilder";
+import type { DescriptorFilter, ExcerptFilter, Query } from "@/api/types";
 
 interface Props {
   codeIds: string[];
@@ -30,6 +31,9 @@ interface Props {
   onOverlapsCodeId: (v: string | null) => void;
   descriptors: DescriptorFilter[];
   onDescriptors: (v: DescriptorFilter[]) => void;
+  /** The Boolean/proximity query, built by the "Query" chip. */
+  query: Query | null;
+  onQuery: (v: Query | null) => void;
   /** The filter as it stands, for "Save current filter…". */
   filter: ExcerptFilter;
   onApplyFilter: (filter: ExcerptFilter) => void;
@@ -172,6 +176,7 @@ export function ExcerptFilters(p: Props) {
         </span>
       ) : null}
       <DescriptorConditions conditions={p.descriptors} onChange={p.onDescriptors} />
+      <QueryBuilder query={p.query} onChange={p.onQuery} />
       <label className="flex items-center gap-1.5 text-xs">
         <input
           type="checkbox"

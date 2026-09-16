@@ -2,6 +2,8 @@ import { invoke } from "./client";
 import type {
   ApplyCodesInput,
   ApplyResult,
+  AutoCodeHit,
+  AutoCodeReport,
   BulkCodeReport,
   ExcerptDetail,
   ExcerptFilter,
@@ -45,3 +47,7 @@ export const removeCodesFromExcerpts = (ids: string[], codeIds: string[]) =>
 /** Move every excerpt from one code to another, keeping both codes. */
 export const retagCode = (fromCodeId: string, toCodeId: string) =>
   invoke<RetagReport>("retag_code", { fromCodeId, toCodeId });
+/** Auto-code every hit (a search match, or one already expanded to its
+ * sentence/paragraph) with `codeId`. */
+export const autoCode = (hits: AutoCodeHit[], codeId: string) =>
+  invoke<AutoCodeReport>("auto_code", { hits, codeId });

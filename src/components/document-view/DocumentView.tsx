@@ -30,6 +30,7 @@ import { useSettings } from "@/state/settings";
 import { SelectionToolbar } from "./SelectionToolbar";
 import { ExcerptPopover } from "./ExcerptPopover";
 import { DocumentTitle } from "./DocumentTitle";
+import { SpeakersMenu } from "./SpeakersMenu";
 import { FindBar } from "./FindBar";
 import { GoToParagraphBar } from "./GoToParagraphBar";
 import { toast } from "@/state/toasts";
@@ -872,13 +873,16 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
         <div
           className={cn("mx-auto max-w-3xl py-10 pr-10", showParagraphNumbers ? "pl-20" : "pl-10")}
         >
-          <DocumentTitle
-            documentId={documentId}
-            name={doc.name}
-            editing={renaming}
-            onEditingChange={setRenaming}
-            className="mb-6 block font-serif text-2xl font-medium"
-          />
+          <div className="mb-6 flex items-start justify-between gap-3">
+            <DocumentTitle
+              documentId={documentId}
+              name={doc.name}
+              editing={renaming}
+              onEditingChange={setRenaming}
+              className="min-w-0 flex-1 font-serif text-2xl font-medium"
+            />
+            <SpeakersMenu documentId={documentId} />
+          </div>
           <div
             ref={rootRef}
             tabIndex={-1}

@@ -1932,6 +1932,7 @@ name = "misket-core"
 version = "0.1.0"
 dependencies = [
  "csv",
+ "regex",
  "rusqlite",
  "serde",
  "serde_json",

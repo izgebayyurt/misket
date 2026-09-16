@@ -1,3 +1,4 @@
+pub mod activity;
 pub mod analysis;
 pub mod backup;
 pub mod codebook;
@@ -7,6 +8,7 @@ pub mod documents;
 pub mod e2e;
 pub mod excerpts;
 pub mod export;
+pub mod framework;
 pub mod memos;
 pub mod project;
 pub mod search;

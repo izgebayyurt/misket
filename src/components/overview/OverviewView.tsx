@@ -8,6 +8,7 @@ import { useCodeTimeline } from "@/queries/analysis";
 import { useSets } from "@/queries/sets";
 import { pathOf } from "@/core/codeTree";
 import { sparklineAreaPath, sparklineLinePath, zeroFillDays } from "@/core/sparkline";
+import { relativeTime } from "@/core/activity";
 import { CodePicker } from "@/components/analysis/shared";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,6 +16,7 @@ import { ColorDot } from "@/components/codebook/ColorSwatch";
 import { CodeDialog } from "@/components/codebook/CodeDialog";
 import { MemoEditor } from "@/components/memos/MemoEditor";
 import { useImportFiles } from "@/components/documents/useImportFiles";
+import { ActivityFeed } from "@/components/activity/ActivityFeed";
 import { useWorkspace } from "@/state/workspace";
 import { toast } from "@/state/toasts";
 import { cn } from "@/lib/utils";
@@ -144,6 +146,13 @@ export function OverviewView() {
             tree={tree}
             onOpen={(id) => openExcerpts({ codeIds: [id], includeDescendants: false })}
           />
+        </section>
+
+        <section>
+          <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-fg-muted">
+            Activity
+          </h2>
+          <ActivityFeed />
         </section>
 
         <section>
@@ -359,7 +368,7 @@ function StatGrid({ stats }: { stats: ProjectStats | undefined }) {
       </div>
       <div className="rounded-md border border-border bg-panel p-3" data-testid="stat-lastActivity">
         <div className="text-2xl font-medium text-fg">
-          {stats?.lastActivityAt ? formatRelative(stats.lastActivityAt) : "–"}
+          {stats?.lastActivityAt ? relativeTime(stats.lastActivityAt) : "–"}
         </div>
         <div className="text-xs text-fg-muted">Last activity</div>
       </div>
@@ -369,20 +378,6 @@ function StatGrid({ stats }: { stats: ProjectStats | undefined }) {
 
 function formatCount(n: number): string {
   return n.toLocaleString();
-}
-
-function formatRelative(iso: string): string {
-  const then = new Date(iso).getTime();
-  if (Number.isNaN(then)) return "–";
-  const diffMs = Date.now() - then;
-  const minutes = Math.round(diffMs / 60_000);
-  if (minutes < 1) return "just now";
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.round(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.round(hours / 24);
-  if (days < 30) return `${days}d ago`;
-  return new Date(iso).toLocaleDateString();
 }
 
 const SPARK_WIDTH = 300;

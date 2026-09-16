@@ -1,5 +1,6 @@
 //! Project database: one SQLite file per project.
 
+pub mod activity;
 pub mod analysis;
 pub mod backup;
 pub mod bulk;
@@ -9,8 +10,10 @@ pub mod descriptors;
 pub mod documents;
 pub mod excerpts;
 pub mod export;
+pub mod framework;
 pub mod memos;
 pub mod migrations;
+pub mod query_expr;
 pub mod search;
 pub mod sets;
 pub mod stats;
@@ -133,12 +136,15 @@ impl OpenProject {
     }
 
     pub fn info(&self) -> Result<ProjectInfo> {
+        let sync_warning = crate::sync::detect_sync_folder(&self.path)
+            .map(|provider| crate::sync::warning_message(&provider, &self.path));
         Ok(ProjectInfo {
             path: self.path.to_string_lossy().into_owned(),
             name: meta(&self.conn, "name")?.unwrap_or_default(),
             project_id: meta(&self.conn, "project_id")?.unwrap_or_default(),
             schema_version: migrations::current_version(&self.conn)?,
             counts: counts(&self.conn)?,
+            sync_warning,
         })
     }
 
@@ -243,7 +249,11 @@ mod tests {
             let p = OpenProject::create(&path, "Old", "0.1.0").unwrap();
             p.conn
                 .execute_batch(
-                    "DROP TABLE descriptor_values;
+                    "DROP TRIGGER framework_cells_code_deleted;
+                     DROP TABLE framework_cells;
+                     DROP TABLE framework_matrices;
+                     DROP TABLE activity_log;
+                     DROP TABLE descriptor_values;
                      DROP TABLE descriptor_fields;
                      DROP TABLE media_blobs;
                      DROP INDEX excerpts_image_region_uq;
@@ -274,9 +284,31 @@ mod tests {
             .execute_batch(
                 "SELECT count(*) FROM descriptor_fields;
                  SELECT count(*) FROM media_blobs;
-                 SELECT count(*) FROM sets;",
+                 SELECT count(*) FROM sets;
+                 SELECT count(*) FROM activity_log;
+                 SELECT count(*) FROM framework_matrices;",
             )
             .unwrap();
+    }
+
+    #[test]
+    fn info_flags_a_project_inside_a_cloud_synced_folder() {
+        let dir = tempfile::tempdir().unwrap();
+        let synced = dir.path().join("Dropbox");
+        std::fs::create_dir_all(&synced).unwrap();
+        let path = synced.join("study.misket");
+        let p = OpenProject::create(&path, "Study", "test").unwrap();
+        let warning = p.info().unwrap().sync_warning.unwrap();
+        assert!(warning.contains("inside Dropbox"));
+        assert!(warning.contains("study.backups"));
+    }
+
+    #[test]
+    fn info_has_no_sync_warning_for_a_plain_local_folder() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("study.misket");
+        let p = OpenProject::create(&path, "Study", "test").unwrap();
+        assert_eq!(p.info().unwrap().sync_warning, None);
     }
 
     #[test]

@@ -11,20 +11,22 @@ stays a single file that can be copied while open), `synchronous = NORMAL`.
 
 ## Tables
 
-| Table               | Purpose                                                                                                                                                                                                                                                                       |
-| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `project_meta`      | key/value: `schema_version`, `project_id`, `name`, `created_at`, `created_with_app_version`                                                                                                                                                                                   |
-| `documents`         | imported sources. `kind` is `text` or `image` (`video` later). `text` is immutable and NULL for media; `text_length` is the code point count; `media_json` holds `{width,height,mime}`; `content_hash` de-duplicates imports                                                  |
-| `codes`             | the codebook tree: adjacency list (`parent_id`) with `sort_order` among siblings, `color`, optional single-key `shortcut`. Sibling names are unique case-insensitively                                                                                                        |
-| `excerpts`          | coded ranges. `kind` = `text` (code point `start_pos`/`end_pos`), `video_range` (milliseconds) or `image_region` (`geometry` JSON `{x,y,w,h}` normalized 0..1). `snapshot` stores the excerpted text or a description of the region. One excerpt per exact range or rectangle |
-| `excerpt_codes`     | many-to-many between excerpts and codes                                                                                                                                                                                                                                       |
-| `media_blobs`       | the bytes of an image document, with their MIME type, one row per document. Deleting the document drops them                                                                                                                                                                  |
-| `memos`             | notes with at most one target: `document_id`, `code_id`, `excerpt_id`, or none (project memo). Each target is a real foreign key so deletes cascade                                                                                                                           |
-| `descriptor_fields` | document attributes ("Site", "Age group"). `kind` is `text`, `number`, `choice` or `date`; `options_json` holds a choice field's options as a JSON array of strings; `sort_order` is the order they are shown in. Names are unique case-insensitively                         |
-| `descriptor_values` | one value per (`document_id`, `field_id`), `WITHOUT ROWID`. Both foreign keys cascade, so deleting a document or a field takes its values with it                                                                                                                             |
-| `sets`              | named groups of codes or of documents. `kind` is `code` or `document`; names are unique per kind, case-insensitively, so "Round 1" can be both                                                                                                                                |
-| `set_members`       | `(set_id, member_id)`, `WITHOUT ROWID`. `member_id` is a code id or a document id depending on the set's kind, so it is not a foreign key; two triggers stand in for the cascade                                                                                              |
-| `saved_filters`     | a whole `ExcerptFilter` as JSON under a unique (case-insensitive) name                                                                                                                                                                                                        |
+| Table                | Purpose                                                                                                                                                                                                                                                                       |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `project_meta`       | key/value: `schema_version`, `project_id`, `name`, `created_at`, `created_with_app_version`                                                                                                                                                                                   |
+| `documents`          | imported sources. `kind` is `text` or `image` (`video` later). `text` is immutable and NULL for media; `text_length` is the code point count; `media_json` holds `{width,height,mime}`; `content_hash` de-duplicates imports                                                  |
+| `codes`              | the codebook tree: adjacency list (`parent_id`) with `sort_order` among siblings, `color`, optional single-key `shortcut`. Sibling names are unique case-insensitively                                                                                                        |
+| `excerpts`           | coded ranges. `kind` = `text` (code point `start_pos`/`end_pos`), `video_range` (milliseconds) or `image_region` (`geometry` JSON `{x,y,w,h}` normalized 0..1). `snapshot` stores the excerpted text or a description of the region. One excerpt per exact range or rectangle |
+| `excerpt_codes`      | many-to-many between excerpts and codes                                                                                                                                                                                                                                       |
+| `media_blobs`        | the bytes of an image document, with their MIME type, one row per document. Deleting the document drops them                                                                                                                                                                  |
+| `memos`              | notes with at most one target: `document_id`, `code_id`, `excerpt_id`, or none (project memo). Each target is a real foreign key so deletes cascade                                                                                                                           |
+| `descriptor_fields`  | document attributes ("Site", "Age group"). `kind` is `text`, `number`, `choice` or `date`; `options_json` holds a choice field's options as a JSON array of strings; `sort_order` is the order they are shown in. Names are unique case-insensitively                         |
+| `descriptor_values`  | one value per (`document_id`, `field_id`), `WITHOUT ROWID`. Both foreign keys cascade, so deleting a document or a field takes its values with it                                                                                                                             |
+| `sets`               | named groups of codes or of documents. `kind` is `code` or `document`; names are unique per kind, case-insensitively, so "Round 1" can be both                                                                                                                                |
+| `set_members`        | `(set_id, member_id)`, `WITHOUT ROWID`. `member_id` is a code id or a document id depending on the set's kind, so it is not a foreign key; two triggers stand in for the cascade                                                                                              |
+| `saved_filters`      | a whole `ExcerptFilter` as JSON under a unique (case-insensitive) name                                                                                                                                                                                                        |
+| `framework_matrices` | a saved framework matrix: its name, how to make its rows (`row_kind`, `row_field_id`, `row_set_id`) and where its columns come from (`code_set_id`, or `code_ids_json`). Names are unique case-insensitively                                                                  |
+| `framework_cells`    | the written summary for one (`matrix_id`, `row_key`, `code_id`), `WITHOUT ROWID`. `row_key` is a document id or a descriptor value; a trigger stands in for the missing `code_id` cascade                                                                                     |
 
 All ids are UUID v4 strings so deleted rows can be restored with their original
 identity (undo) and so exports are stable.
@@ -96,6 +98,100 @@ kind compares as text, which is also the right order for ISO dates. Because
 `neq` and `empty` are `NOT EXISTS`, documents with no value for the field match
 them.
 
+### The code-by-descriptor cross-tab
+
+`db::analysis::code_by_descriptor` turns one descriptor field into the columns
+of a matrix whose rows are codes — the mixed-methods comparison ("how often
+does each theme come up at each site"). It takes a `CrosstabRequest` rather
+than a row of arguments: the field, the codes to use as rows (every code when
+none are picked), `include_descendants`, the usual document ids and document
+sets, a bin count, and a mode.
+
+Columns come from the values the **documents in scope** actually have, so a
+matrix never carries a column nobody used:
+
+| Kind     | Columns                                                                                                                                                  | Click-through operator |
+| -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- |
+| `choice` | one per option in use, in the field's own option order                                                                                                   | `eq`                   |
+| `text`   | one per distinct value, sorted case-insensitively                                                                                                        | `eq`                   |
+| `number` | `bins` equal-width bins between the smallest and the largest value (4 by default); half-open, except the last, which is closed so the maximum has a home | `between`              |
+| `date`   | one per year-month that occurs, ascending                                                                                                                | `between`              |
+
+A `(no value)` column (`empty`) is appended only when some document in scope
+has no value for the field. Every column carries the `DescriptorFilter` that
+reproduces it, so a cell click opens the excerpt browser on exactly what the
+cell counted. `between` is inclusive on both ends, which is what the browser
+supports, so a document sitting exactly on a bin edge is reachable from either
+neighbouring column even though it was counted in only one.
+
+A cell counts excerpts — de-duplicated, so an excerpt tagged with both a code
+and one of its sub-codes counts once — or, with `mode = "documents"`, distinct
+documents. Every document belongs to exactly one column, so a row's cells add
+up to its total either way; `documentsPerColumn` is the denominator, the
+documents in scope per column whether or not anything in them is coded.
+
+## Boolean and proximity queries
+
+`ExcerptFilter.query` is the one condition that is not SQL. It is a small
+recursive expression:
+
+```jsonc
+{
+  "op": "near",
+  "terms": [
+    { "codeId": "…", "includeDescendants": true },
+    { "op": "or", "terms": [{ "codeId": "…" }, { "codeId": "…" }] },
+  ],
+  "within": { "kind": "paragraph" },
+}
+```
+
+A term is either a code (with the same "include sub-codes" choice as the rest
+of the browser) or a nested query, told apart by their fields. `op` is `and`,
+`or`, `not` or `near`; `within` applies only to `near` and is either
+`{"kind":"paragraph"}` (the default) or `{"kind":"chars","n":…}`.
+
+The semantics are **co-located**, not per-excerpt: an excerpt satisfies a term
+when it carries the code itself _or_ overlaps an excerpt that does, using the
+same half-open `a.start < b.end AND b.start < a.end` as `co_occurrence` and
+`overlaps_code_id`. That is the only reading that is useful on real coding,
+where two coders rarely draw byte-identical ranges. Because an excerpt always
+overlaps itself, one carrying both codes matches `and` and `near` on its own,
+and is excluded from `not`.
+
+| `op`   | An excerpt matches when it…                                                      |
+| ------ | -------------------------------------------------------------------------------- |
+| `and`  | satisfies every term                                                             |
+| `or`   | satisfies any term                                                               |
+| `not`  | satisfies the first term and does not overlap any excerpt satisfying a later one |
+| `near` | satisfies the first term and lies near an excerpt satisfying each later one      |
+
+`near` in paragraph scope means the two excerpts touch a common paragraph;
+paragraphs are the document text split on `\n`, and an excerpt's paragraph
+span is computed from its offsets, so an excerpt crossing a break belongs to
+both. In character scope it means at most `n` **code points** lie between them
+(overlapping or touching counts as zero), so emoji and CJK text measure the way
+the offsets do.
+
+Image regions never match: a query is defined on ranges, exactly like
+`overlaps_code_id`.
+
+`db::query_expr` evaluates it in Rust rather than in SQL: `excerpts::query`
+runs the rest of the filter, takes the candidate ids **in result order**, and
+for each document involved loads that document's text excerpts once and
+evaluates the expression over bitmasks. The neighbours a term looks at are
+every text excerpt of the document, not only the candidates — asking whether
+an excerpt overlaps something coded B is a question about the document, not
+about what the browser would otherwise have shown. Filtering happens before
+paging, so `total` is the number of real matches and the page is then re-read
+by id. `validate` rejects an unknown operator, a `not`/`near` with fewer than
+two terms, an empty code id, an out-of-range distance or excessive nesting
+before any of that runs; `src/core/query.ts` mirrors those rules so the
+builder can grey out "Apply" instead of bouncing off an error.
+
+A saved filter is a whole `ExcerptFilter`, so queries save with it and the
+saved-filter list shows `describeQuery` under the name.
+
 ## Sets and saved filters
 
 A **set** is a named group of codes or of documents. The two kinds live in one
@@ -144,6 +240,65 @@ the excerpt browser's: a set that is picked but empty or unknown matches no
 document, not every document. `code_by_document` and the sets UI itself take
 no code filter, so there is no `code_set_ids` in the analysis views.
 
+## Framework matrices
+
+A framework matrix (Ritchie & Spencer; NVivo calls them "framework matrices")
+is a grid of **cases** by **themes** where every cell holds a short written
+summary of what that case says about that theme, with the excerpts behind it
+one click away. `framework_matrices` stores only the _configuration_; the grid
+itself is recomputed on every read by `db::framework::get_matrix`, so
+importing a document, filling in a descriptor or coding another passage
+changes the grid without rewriting anything.
+
+| Column                          | Meaning                                                                                          |
+| ------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `row_kind = 'document'`         | one row per document: every document, or the members of `row_set_id`                             |
+| `row_kind = 'descriptor_value'` | one row per distinct value of `row_field_id` among those documents; the row pools their excerpts |
+| `code_set_id`                   | the columns are that code set's members, in codebook order                                       |
+| `code_ids_json`                 | otherwise the columns are this JSON array of code ids, in column order                           |
+
+Rows come out in project document order; grouped rows follow the field's own
+order (a `choice` field's options in the order they are defined, numbers
+numerically, everything else — including ISO dates — as text), and documents
+with no value gather into a last row labelled `(no value)` whose `row_key` is
+the empty string. A row set or grouping field that no longer exists yields no
+rows, and a column code that no longer exists is dropped, rather than making
+the matrix unopenable.
+
+`row_field_id`, `row_set_id` and `code_set_id` are deliberately **not**
+foreign keys. Deleting a set or a descriptor field is undoable and recreates
+it with its original id, so a matrix that names one keeps pointing at it
+instead of being silently rewritten by `ON DELETE SET NULL`.
+
+A cell's `excerptCount` is the distinct excerpts in that row's documents
+carrying that code **or any of its descendants** — the same
+descendant-inclusive counting `code_frequencies` does, so the badge and the
+drawer agree. `get_matrix` returns one cell per (row, column) pair, summary
+included, which is exactly what the grid renders.
+
+`framework_cells.row_key` is the document id or the descriptor value rather
+than a row index, so reordering documents or reshaping the matrix never moves
+a summary onto the wrong case. `set_cell_summary` returns the previous text so
+the frontend's undo stack can put it back, and deletes the row when the new
+summary is blank instead of storing an empty one. `code_id` is not a foreign
+key for the same reason `set_members.member_id` is not, so a trigger takes the
+place of the cascade:
+
+```sql
+CREATE TRIGGER framework_cells_code_deleted AFTER DELETE ON codes BEGIN
+  DELETE FROM framework_cells WHERE code_id = OLD.id;
+END;
+```
+
+A deleted _document_ keeps its summaries: the row simply stops being listed,
+and undoing the delete brings the row and its text back together.
+
+`delete_matrix` hands back the matrix with every summary it held
+(`FrameworkMatrixWithCells`) and `restore_matrix` puts both back, so deleting
+a matrix is undoable like everything else. `export_csv` writes the row label
+then one column per code holding that cell's summary, with the code paths as
+the header.
+
 ## Adjusting excerpts
 
 Three operations in `db::excerpts` refine an existing text excerpt, each in one
@@ -165,6 +320,73 @@ Because a merge re-points memos to the survivor rather than deleting them,
 `restore` upserts memos (`ON CONFLICT(id) DO UPDATE`) so undoing a merge moves
 them back instead of failing on the primary key.
 
+## The activity log
+
+`activity_log` (schema 5) records who changed what, and when. It is a table in
+the project file rather than a sidecar, so the trail is copied by
+`backup::save_copy`, written into every timestamped backup, and restored with
+the data it describes.
+
+Every write path in `db::` logs its own entry, inside the same transaction as
+the change:
+
+```rust
+activity::record(&tx, "code.moved", "code", Some(id), summary, detail)?;
+```
+
+so an entry can never outlive — or be lost by — what it describes. Nothing is
+logged at the Tauri layer except `undo`/`redo`, which the backend cannot infer
+because the undo stack lives in the frontend.
+
+**The actor.** Misket has no user accounts, so it is a plain string: the name
+set in Settings (`AppSettings.coderName`) or the OS user name
+(`USER`/`USERNAME`). Rather than grow an `actor` parameter on forty functions,
+the Tauri layer puts it on the connection once, at open, with
+`activity::set_actor`, which writes it to a `TEMP` table. SQLite keeps temp
+tables per connection and outside the database file, so two people opening the
+same project never see each other's name and the `.misket` is unchanged by it.
+A `&Connection` that was never told (every core test) logs an empty actor.
+
+**Kinds.** The verb is dotted, `noun.past_tense`:
+
+| Group        | Kinds                                                                                                                           |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------- |
+| `code`       | `created`, `updated`, `moved`, `deleted`, `merged_into` (the source), `merged_from` (the survivor)                              |
+| `excerpt`    | `created`, `codes_added`, `code_removed`, `range_updated`, `split`, `split_off`, `merged`, `merged_into`, `deleted`, `restored` |
+| `bulk`       | `excerpts_deleted`, `codes_added`, `codes_removed`, `retagged`                                                                  |
+| `memo`       | `created`, `updated`, `deleted`, `restored`                                                                                     |
+| `descriptor` | `field_created`, `field_updated`, `field_deleted`, `value_set`                                                                  |
+| `set`        | `created`, `renamed`, `members_changed`, `deleted`                                                                              |
+| `filter`     | `saved`, `deleted`                                                                                                              |
+| `document`   | `imported`, `renamed`, `deleted`                                                                                                |
+| `codebook`   | `imported`                                                                                                                      |
+| —            | `undo`, `redo`                                                                                                                  |
+
+`target_kind` is `code`, `excerpt`, `document`, `descriptor_field`, `set`,
+`saved_filter`, `codebook` or `project`. Three conventions make the per-target
+timelines readable:
+
+- A **merge** and a **split** write one entry per side (`code.merged_into` on
+  the source and `code.merged_from` on the survivor; `excerpt.split` and
+  `excerpt.split_off`), because both halves need the event in their own
+  history and one of them is about to disappear. Everything else writes one
+  entry, or none when nothing actually changed (saving a code dialog without
+  an edit, setting a descriptor to the value it already had).
+- A **memo** is logged against what it is attached to, not against itself, so
+  a code's history shows the note written while it was being renamed.
+- A **bulk** operation targets its kind with a null `target_id` (or, for
+  `retag_code`, the source code) and lists the ids it touched in
+  `detail_json`.
+
+`detail_json` holds a `{"from": …, "to": …}` object per field that moved, plus
+whatever context the summary leaves out. `activity::code_history` and
+`activity::excerpt_history` are `target_kind`/`target_id` lookups ordered by
+`id`; `activity::list` pages the whole log newest first and also returns every
+kind present, so the UI builds its filter from one call.
+
+Ordering is by `id`, never by `at`: `util::now()` formats RFC 3339 with
+trailing zeros trimmed, so `…:00Z` sorts _after_ `…:00.5Z` as a string.
+
 ## Queries worth knowing
 
 - Descendants of a code use a recursive CTE, not a materialized path:
@@ -183,6 +405,9 @@ them back instead of failing on the primary key.
   de-duplicate excerpts, and co-occurrence pairs text excerpts in one document
   whose ranges overlap (`a.start < b.end AND b.start < a.end`), counting each
   pair of excerpts once per pair of codes.
+- The code-by-descriptor cross-tab reads `descriptor_values` for one field,
+  maps every in-scope document to exactly one column, and then counts the
+  excerpt tags in Rust; nothing about the binning belongs in SQL.
 
 ## Exports
 
@@ -194,10 +419,13 @@ them back instead of failing on the primary key.
   field, named after the field, holding the excerpt's document's value.
   `start`/`end` are empty for image excerpts and `geometry` is empty for text
   ones; `text` holds the snapshot either way
-- Project JSON: `{ format: "misket-project", formatVersion: 1, meta, documents, codes, excerpts, memos, descriptorFields, descriptorValues, sets, savedFilters }`.
+- Activity CSV: `at, actor, kind, target_kind, target_id, summary, detail_json`, oldest first
+- Project JSON: `{ format: "misket-project", formatVersion: 1, meta, documents, codes, excerpts, memos, descriptorFields, descriptorValues, sets, savedFilters, activity }`.
   `sets` is `[{ set: SetInfo, memberIds }]` for every code set and document
   set; `savedFilters` is the `SavedFilter` list with `filter` already parsed
-  back into an `ExcerptFilter` object, not left as a JSON string. Image bytes
+  back into an `ExcerptFilter` object, not left as a JSON string; `activity`
+  is the whole log, oldest first, with each entry's `detail` already parsed.
+  Image bytes
   are not included: the JSON stays a readable text export, and the `.misket`
   file remains the thing that holds the media.
 

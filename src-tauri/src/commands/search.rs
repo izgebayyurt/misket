@@ -10,7 +10,8 @@ pub fn search_project(
     state: State<'_, AppState>,
     query: String,
     limit: usize,
+    regex: bool,
     stem: bool,
 ) -> Result<Vec<SearchHit>> {
-    state.with_project(|p| search::search_project(&p.conn, &query, limit, stem))
+    state.with_project(|p| search::search_project(&p.conn, &query, limit, regex, stem))
 }

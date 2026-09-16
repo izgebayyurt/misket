@@ -1,4 +1,6 @@
 import type {
+  ActivityFilter,
+  CrosstabRequest,
   ExcerptFilter,
   MemoTarget,
   SetKind,
@@ -35,6 +37,12 @@ export const keys = {
   stopWords: ["analysis", "stopWords"] as const,
   codeTimeline: (codeId: string, includeDescendants: boolean, bucket: TimelineBucket) =>
     ["analysis", "codeTimeline", codeId, includeDescendants, bucket] as const,
+  /** The saved matrix configurations. */
+  frameworkMatrices: ["framework", "matrices"] as const,
+  /** One rendered grid. Under "analysis" so a coding change refetches it. */
+  frameworkMatrix: (id: string) => ["analysis", "framework", id] as const,
+  codeByDescriptor: (request: CrosstabRequest) =>
+    ["analysis", "codeByDescriptor", request] as const,
   memos: (target: MemoTarget) => ["memos", target] as const,
   allMemos: ["memos"] as const,
   sets: (kind: SetKind) => ["sets", kind] as const,
@@ -42,6 +50,11 @@ export const keys = {
   setMembers: (setId: string) => ["setMembers", setId] as const,
   allSetMembers: ["setMembers"] as const,
   savedFilters: ["savedFilters"] as const,
-  search: (query: string, stem: boolean) => ["search", query, stem] as const,
+  search: (query: string, regex: boolean, stem: boolean) => ["search", query, regex, stem] as const,
   backups: ["backups"] as const,
+  activity: ["activity"] as const,
+  activityList: (filter: ActivityFilter) => ["activity", "list", filter] as const,
+  codeHistory: (id: string) => ["activity", "code", id] as const,
+  excerptHistory: (id: string) => ["activity", "excerpt", id] as const,
+  speakerTurns: (documentId: string) => ["speakerTurns", documentId] as const,
 };

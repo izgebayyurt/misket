@@ -51,18 +51,44 @@ keyboard-friendly interface without a subscription.
   Tick the checkboxes (`Shift`+click for a range, or "Select all N loaded") to
   add a code to, remove a code from, or delete many excerpts at once; `Escape`
   clears the selection and undo reverses the whole batch.
+- **Auto-code by pattern**: in project search, toggle "Regex" to search with a
+  regular expression instead of plain text, then "Auto-code all N matches…" to
+  pick a code, choose what gets coded (just the match, its whole sentence, or
+  its whole paragraph) and apply it to every hit in one undoable step —
+  matches that share a sentence or paragraph share one excerpt.
+- **Auto-code by speaker turn**: transcripts with `Name:`, `[Name]` or
+  `Name (00:12):` lines get a "Speakers" menu in the document header listing
+  each detected speaker and their turn count; "Code all turns of _Speaker_
+  with…" codes every one of their turns (the spoken text, not the label) with
+  one chosen code. Detection is conservative — a label only counts once it
+  recurs at least twice in the document.
+- **Query**: build Boolean and proximity retrievals in the browser — "Access
+  and Barriers", "Access not Barriers", "Access near Barriers in the same
+  paragraph" or within N characters — with one level of grouping, and save
+  them with the rest of the filter. Codes count as together when their
+  excerpts overlap, not only when one excerpt carries both.
 - **Analyse**: a code frequency table (own counts and counts with sub-codes,
   per document, plus a 30-day coding-activity sparkline per code), a code
   co-occurrence matrix showing which codes overlap on the same text, a
-  code-by-document heatmap, and a word frequency view (scoped to a
-  document/set or to the text under a code, with stop words and stemming as
-  toggles, a project-editable stop-word list, a sortable table and a word
-  cloud). Every cell or word clicks through to the matching excerpts or a
-  seeded project search, and each view exports to CSV. The overview screen's
-  30-day sparkline can be narrowed to a single code the same way.
-- **Search**: find-in-document and find-in-project both have a "Match word
-  forms" toggle that matches other forms of the same word by stem (e.g.
-  "code" also finds "coding" and "coded").
+  code-by-document heatmap, a code-by-descriptor cross-tab putting codes
+  against the values of any document attribute — sites, waves, age bands
+  binned automatically, dates by month — counting excerpts or documents, and
+  a word frequency view (scoped to a document/set or to the text under a
+  code, with stop words and stemming as toggles, a project-editable
+  stop-word list, a sortable table and a word cloud). Every cell or word
+  clicks through to the matching excerpts or a seeded project search, and
+  each view exports to CSV. The overview screen's 30-day sparkline can be
+  narrowed to a single code the same way.
+- **Framework matrices**: a grid of cases by themes — a row per document, per
+  document in a set, or per value of a descriptor ("Site", "Wave"), and a
+  column per code or per code in a set — where you write a short summary in
+  every cell. The badge on a cell counts the excerpts behind it and opens them
+  in a drawer beside the grid, so the summary is written while reading the
+  evidence. Exports as CSV or as a Markdown table.
+- **Stemmed search**: find-in-document and find-in-project both have a "Match
+  word forms" toggle that matches other forms of the same word by stem (e.g.
+  "code" also finds "coding" and "coded"); turned off automatically while the
+  project search's regex toggle is on, since a pattern matches raw text.
 - **Descriptors**: define document attributes (text, number, choice or date)
   such as site, interview wave or age group, set them per document or in a
   table of every document, and filter excerpts by them ("Age is more than 30",
@@ -74,9 +100,16 @@ keyboard-friendly interface without a subscription.
   under a name to come back to it. Sets and saved filters are included in the
   project JSON export.
 - **Memos** on documents, codes, excerpts and the project.
+- **Audit trail**: every change — a code created, renamed, moved or merged, an
+  excerpt coded, adjusted or deleted, a memo written, a descriptor set — is
+  recorded in the project file with who made it and when. The overview screen
+  lists the latest hundred, the code and excerpt inspectors show one thing's
+  history as a timeline with the values before and after, and the whole log
+  exports as CSV. Set your name under Settings → "Your name (for the activity
+  log)"; without one Misket uses your computer's user name.
 - **Undo/redo** for every coding and codebook action.
-- **Export** the codebook as CSV or a reusable JSON file, excerpts as CSV, or
-  the whole project as JSON.
+- **Export** the codebook as CSV or a reusable JSON file, excerpts as CSV, the
+  activity log as CSV, or the whole project as JSON.
 
 ![Excerpt browser](docs/screenshots/browser.png)
 
@@ -138,6 +171,15 @@ restore one (which first backs up the current state too, so restoring is
 itself never destructive). Use **Export > Save a copy as…** at any time for a
 manual snapshot. None of this replaces your own backup discipline for
 anything that matters.
+
+If you create or open a project inside a folder a cloud sync client manages
+(Dropbox, OneDrive, Google Drive, iCloud Drive, Box, Nextcloud, ownCloud,
+Syncthing, MEGA, pCloud…), Misket shows a dismissable banner: sync clients can
+rewrite a file out from under an open database and corrupt it, a documented
+failure mode in other QDA tools. Keep it there only if you close Misket before
+the folder syncs to another machine, or use the banner's **Move project…** to
+copy it to a local folder and switch to the copy (the original file is left in
+place, just in case).
 
 No project yet? Click "Try Misket with sample data" on the start screen for a
 ready-made study to explore.

@@ -1,8 +1,9 @@
 //! The codebook: a tree of codes (adjacency list with explicit sibling order).
 
 use rusqlite::{params, Connection, OptionalExtension, Row};
+use serde_json::{json, Value};
 
-use super::util;
+use super::{activity, util};
 use crate::error::{AppError, Result};
 use crate::models::{ChildrenStrategy, Code, CodeImpact, CodePatch, DeleteCodeReport, NewCode};
 
@@ -150,7 +151,23 @@ pub fn create(conn: &Connection, input: NewCode) -> Result<Code> {
         ],
     )
     .map_err(|e| map_unique(e, name, shortcut.as_deref()))?;
-    get(conn, &id)
+    let code = get(conn, &id)?;
+    activity::record(
+        conn,
+        "code.created",
+        "code",
+        Some(&code.id),
+        format!("Created code \"{}\"", code.name),
+        json!({
+            "name": code.name,
+            "parentId": code.parent_id,
+            "parentName": code.parent_id.as_deref().map(|p| activity::code_name(conn, p)),
+            "color": code.color,
+            "description": code.description,
+            "shortcut": code.shortcut,
+        }),
+    )?;
+    Ok(code)
 }
 
 pub fn update(conn: &Connection, id: &str, patch: CodePatch) -> Result<Code> {
@@ -176,7 +193,62 @@ pub fn update(conn: &Connection, id: &str, patch: CodePatch) -> Result<Code> {
         params![id, name, color, description, shortcut, util::now()],
     )
     .map_err(|e| map_unique(e, &name, shortcut.as_deref()))?;
-    get(conn, id)
+    let updated = get(conn, id)?;
+    log_update(conn, &current, &updated)?;
+    Ok(updated)
+}
+
+/// One `code.updated` entry per real change, with every field that moved
+/// recorded as `{"from": …, "to": …}`. An update that changes nothing (the
+/// dialog saved without an edit) writes nothing, so the log stays readable.
+fn log_update(conn: &Connection, before: &Code, after: &Code) -> Result<()> {
+    let mut detail = serde_json::Map::new();
+    let mut fields: Vec<&str> = vec![];
+    if before.name != after.name {
+        fields.push("name");
+        detail.insert(
+            "name".into(),
+            activity::change(before.name.clone(), after.name.clone()),
+        );
+    }
+    if before.description != after.description {
+        fields.push("description");
+        detail.insert(
+            "description".into(),
+            activity::change(before.description.clone(), after.description.clone()),
+        );
+    }
+    if before.color != after.color {
+        fields.push("color");
+        detail.insert(
+            "color".into(),
+            activity::change(before.color.clone(), after.color.clone()),
+        );
+    }
+    if before.shortcut != after.shortcut {
+        fields.push("shortcut");
+        detail.insert(
+            "shortcut".into(),
+            activity::change(before.shortcut.clone(), after.shortcut.clone()),
+        );
+    }
+    if fields.is_empty() {
+        return Ok(());
+    }
+    let summary = if before.name != after.name {
+        format!("Renamed code \"{}\" to \"{}\"", before.name, after.name)
+    } else {
+        format!("Changed {} of code \"{}\"", fields.join(", "), after.name)
+    };
+    detail.insert("changed".into(), json!(fields));
+    activity::record(
+        conn,
+        "code.updated",
+        "code",
+        Some(&after.id),
+        summary,
+        Value::Object(detail),
+    )
 }
 
 /// All ids in the subtrees rooted at `roots` (roots included), via a recursive CTE.
@@ -255,6 +327,26 @@ pub fn move_code(
             params![sid, i as i64],
         )?;
     }
+    let destination = match new_parent_id {
+        Some(p) => format!("under \"{}\"", activity::code_name(&tx, p)),
+        None => "to the top level".to_string(),
+    };
+    activity::record(
+        &tx,
+        "code.moved",
+        "code",
+        Some(id),
+        format!("Moved code \"{}\" {destination}", current.name),
+        json!({
+            "name": current.name,
+            "parentId": activity::change(current.parent_id.clone(), new_parent_id.map(String::from)),
+            "parentName": activity::change(
+                current.parent_id.as_deref().map(|p| activity::code_name(&tx, p)),
+                new_parent_id.map(|p| activity::code_name(&tx, p)),
+            ),
+            "index": activity::change(current.sort_order, index as i64),
+        }),
+    )?;
     tx.commit()?;
     get(conn, id)
 }
@@ -311,6 +403,25 @@ pub fn delete(conn: &Connection, id: &str, children: ChildrenStrategy) -> Result
     };
     tx.execute("DELETE FROM codes WHERE id = ?1", [id])?;
     renumber(&tx, code.parent_id.as_deref())?;
+    activity::record(
+        &tx,
+        "code.deleted",
+        "code",
+        Some(id),
+        format!("Deleted code \"{}\"", code.name),
+        json!({
+            "name": code.name,
+            "parentId": code.parent_id,
+            "description": code.description,
+            "shortcut": code.shortcut,
+            "children": match children {
+                ChildrenStrategy::Delete => "delete",
+                ChildrenStrategy::Promote => "promote",
+            },
+            "deletedCodeIds": deleted_ids,
+            "affectedExcerptCount": affected,
+        }),
+    )?;
     tx.commit()?;
     Ok(DeleteCodeReport {
         deleted_code_ids: deleted_ids,
@@ -334,11 +445,11 @@ pub fn merge(conn: &Connection, source_id: &str, target_id: &str) -> Result<Code
         ));
     }
     let tx = conn.unchecked_transaction()?;
-    tx.execute(
+    let moved_excerpts = tx.execute(
         "INSERT OR IGNORE INTO excerpt_codes (excerpt_id, code_id, created_at)
          SELECT excerpt_id, ?2, created_at FROM excerpt_codes WHERE code_id = ?1",
         params![source_id, target_id],
-    )?;
+    )? as i64;
     let base = next_sort_order(&tx, Some(target_id))?;
     let mut stmt = tx.prepare("SELECT id FROM codes WHERE parent_id = ?1 ORDER BY sort_order")?;
     let kids: Vec<String> = stmt
@@ -356,8 +467,37 @@ pub fn merge(conn: &Connection, source_id: &str, target_id: &str) -> Result<Code
         "UPDATE memos SET code_id = ?2, updated_at = ?3 WHERE code_id = ?1",
         params![source_id, target_id, util::now()],
     )?;
+    let target_name = activity::code_name(&tx, target_id);
     tx.execute("DELETE FROM codes WHERE id = ?1", [source_id])?;
     renumber(&tx, source.parent_id.as_deref())?;
+    // Two entries, one per side: a merge is the one operation both codes'
+    // histories have to show, and the source's row is about to disappear.
+    activity::record(
+        &tx,
+        "code.merged_into",
+        "code",
+        Some(source_id),
+        format!("Merged code \"{}\" into \"{target_name}\"", source.name),
+        json!({
+            "name": source.name,
+            "targetId": target_id,
+            "targetName": target_name,
+            "movedExcerptCount": moved_excerpts,
+        }),
+    )?;
+    activity::record(
+        &tx,
+        "code.merged_from",
+        "code",
+        Some(target_id),
+        format!("Merged code \"{}\" into \"{target_name}\"", source.name),
+        json!({
+            "name": target_name,
+            "sourceId": source_id,
+            "sourceName": source.name,
+            "movedExcerptCount": moved_excerpts,
+        }),
+    )?;
     tx.commit()?;
     get(conn, target_id)
 }

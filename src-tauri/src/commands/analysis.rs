@@ -1,7 +1,7 @@
 use misket_core::db::analysis;
 use misket_core::models::{
-    CoOccurrence, CodeByDocument, CodeFrequency, WordFrequency, WordFrequencyOptions,
-    WordFrequencyScope,
+    CoOccurrence, CodeByDescriptor, CodeByDocument, CodeFrequency, CrosstabRequest, WordFrequency,
+    WordFrequencyOptions, WordFrequencyScope,
 };
 use misket_core::Result;
 use tauri::State;
@@ -71,4 +71,14 @@ pub fn code_timeline(
     bucket: String,
 ) -> Result<Vec<(String, i64)>> {
     state.with_project(|p| analysis::code_timeline(&p.conn, &code_id, include_descendants, &bucket))
+}
+
+/// Codes against one descriptor field's values; see
+/// `misket_core::db::analysis::code_by_descriptor`.
+#[tauri::command]
+pub fn code_by_descriptor(
+    state: State<'_, AppState>,
+    request: CrosstabRequest,
+) -> Result<CodeByDescriptor> {
+    state.with_project(|p| analysis::code_by_descriptor(&p.conn, &request))
 }

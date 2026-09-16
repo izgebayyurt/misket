@@ -1,6 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as api from "@/api/analysis";
-import type { TimelineBucket, WordFrequencyOptions, WordFrequencyScope } from "@/api/types";
+import type {
+  CrosstabRequest,
+  TimelineBucket,
+  WordFrequencyOptions,
+  WordFrequencyScope,
+} from "@/api/types";
 import { keys } from "./keys";
 
 /**
@@ -69,6 +74,19 @@ export function useCodeTimeline(
     queryKey: keys.codeTimeline(codeId ?? "", includeDescendants, bucket),
     queryFn: () => api.codeTimeline(codeId!, includeDescendants, bucket),
     enabled: codeId !== null,
+    placeholderData: (prev) => prev,
+  });
+}
+
+/**
+ * The code-by-descriptor cross-tab. Disabled until a field is picked, since
+ * there is nothing to cross-tabulate against without one.
+ */
+export function useCodeByDescriptor(request: CrosstabRequest | null) {
+  return useQuery({
+    queryKey: keys.codeByDescriptor(request ?? { fieldId: "" }),
+    queryFn: () => api.codeByDescriptor(request!),
+    enabled: !!request?.fieldId,
     placeholderData: (prev) => prev,
   });
 }

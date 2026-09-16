@@ -1,8 +1,10 @@
 import { invoke } from "./client";
 import type {
+  CodeByDescriptor,
   CodeByDocument,
   CodeFrequency,
   CoOccurrence,
+  CrosstabRequest,
   TimelineBucket,
   WordFrequency,
   WordFrequencyOptions,
@@ -38,3 +40,7 @@ export const codeTimeline = (codeId: string, includeDescendants: boolean, bucket
     includeDescendants,
     bucket,
   });
+
+/** Codes against one descriptor field's values (the mixed-methods cross-tab). */
+export const codeByDescriptor = (request: CrosstabRequest) =>
+  invoke<CodeByDescriptor>("code_by_descriptor", { request });

@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use misket_core::db::{stats, OpenProject};
+use misket_core::db::{activity, stats, OpenProject};
 use misket_core::models::{ProjectInfo, ProjectStats, RecentProject};
 use misket_core::{AppError, Result};
 use tauri::{AppHandle, Manager, State};
@@ -14,6 +14,11 @@ pub(crate) fn install(
     project: OpenProject,
 ) -> Result<ProjectInfo> {
     let info = project.info()?;
+    // Whoever opened it signs everything they do to it from here on.
+    let actor = crate::settings::load(app)
+        .map(|s| crate::settings::actor_name(&s))
+        .unwrap_or_default();
+    activity::set_actor(&project.conn, &actor)?;
     recent::touch(app, &info.path, &info.name)?;
     let mut guard = state
         .project

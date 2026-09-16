@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { Search } from "lucide-react";
+import { Search, Sparkles } from "lucide-react";
 import type { SearchHit } from "@/api/types";
 import { useProjectSearch } from "@/queries/search";
 import { useWorkspace } from "@/state/workspace";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { isAppError } from "@/api/client";
+import { AutoCodeDialog } from "./AutoCodeDialog";
 
 const DEBOUNCE_MS = 200;
 
@@ -33,6 +36,8 @@ export function SearchView({ initialQuery }: { initialQuery?: string } = {}) {
   const [input, setInput] = useState(initialQuery ?? "");
   const [debounced, setDebounced] = useState(initialQuery ?? "");
   const [stem, setStem] = useState(false);
+  const [regexMode, setRegexMode] = useState(false);
+  const [autoCoding, setAutoCoding] = useState(false);
   const openDocument = useWorkspace((s) => s.openDocument);
 
   useEffect(() => {
@@ -40,9 +45,10 @@ export function SearchView({ initialQuery }: { initialQuery?: string } = {}) {
     return () => window.clearTimeout(t);
   }, [input]);
 
-  const { data: hits, isFetching } = useProjectSearch(debounced, stem);
+  const { data: hits, isFetching, error } = useProjectSearch(debounced, regexMode, stem);
   const groups = useMemo(() => groupByDocument(hits ?? []), [hits]);
   const hasQuery = debounced.trim().length > 0;
+  const invalidRegex = isAppError(error, "Validation") ? error.message : null;
 
   return (
     <div className="flex h-full flex-col" data-testid="search-view">
@@ -54,31 +60,69 @@ export function SearchView({ initialQuery }: { initialQuery?: string } = {}) {
             autoFocus
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Search across all documents…"
+            placeholder={
+              regexMode ? "Search with a regular expression…" : "Search across all documents…"
+            }
             className="h-8 pl-7"
             data-testid="search-input"
           />
         </div>
+        <Button
+          size="sm"
+          variant={regexMode ? "default" : "outline"}
+          onClick={() =>
+            setRegexMode((v) => {
+              // Regex matches raw text, so "Match word forms" wouldn't mean
+              // anything while it's on; keep the two mutually exclusive.
+              if (!v) setStem(false);
+              return !v;
+            })
+          }
+          aria-pressed={regexMode}
+          title="Treat the query as a regular expression"
+          data-testid="regex-toggle"
+        >
+          .*
+        </Button>
         <label
           className="flex shrink-0 items-center gap-1.5 text-xs text-fg-muted"
-          title="Also match other forms of the same word (e.g. “code” finds “coding”)"
+          title={
+            regexMode
+              ? "Not available with a regular expression"
+              : "Also match other forms of the same word (e.g. “code” finds “coding”)"
+          }
         >
           <input
             type="checkbox"
             checked={stem}
+            disabled={regexMode}
             onChange={(e) => setStem(e.target.checked)}
             data-testid="search-match-word-forms"
           />
           Match word forms
         </label>
-        {hasQuery ? (
+        {hasQuery && !invalidRegex ? (
           <span className="ml-auto text-xs text-fg-muted" data-testid="search-total">
             {hits?.length ?? 0} match{hits?.length === 1 ? "" : "es"}
           </span>
         ) : null}
+        {hasQuery && !invalidRegex && hits && hits.length > 0 ? (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setAutoCoding(true)}
+            data-testid="auto-code-all"
+          >
+            <Sparkles /> Auto-code all {hits.length} match{hits.length === 1 ? "" : "es"}…
+          </Button>
+        ) : null}
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto">
-        {!hasQuery ? (
+        {invalidRegex ? (
+          <p className="p-6 text-sm text-danger" data-testid="search-error">
+            {invalidRegex}
+          </p>
+        ) : !hasQuery ? (
           <p className="p-6 text-sm text-fg-muted">Type to search across every document.</p>
         ) : groups.length === 0 && !isFetching ? (
           <p className="p-6 text-sm text-fg-muted">Nothing matches “{debounced.trim()}”.</p>
@@ -97,7 +141,7 @@ export function SearchView({ initialQuery }: { initialQuery?: string } = {}) {
                       data-testid="search-hit"
                     >
                       <span className="text-fg-muted">{h.contextBefore}</span>
-                      <span className="font-semibold text-fg">{h.matchText}</span>
+                      <span className="font-semibold text-fg">{h.matchedText}</span>
                       <span className="text-fg-muted">{h.contextAfter}</span>
                     </button>
                   </li>
@@ -107,6 +151,9 @@ export function SearchView({ initialQuery }: { initialQuery?: string } = {}) {
           ))
         )}
       </div>
+      {autoCoding && hits && hits.length > 0 ? (
+        <AutoCodeDialog hits={hits} onClose={() => setAutoCoding(false)} />
+      ) : null}
     </div>
   );
 }

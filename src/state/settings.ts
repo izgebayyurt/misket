@@ -10,6 +10,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   confirmDeleteExcerpt: false,
   keepBackups: 20,
   showParagraphNumbers: true,
+  coderName: null,
 };
 
 const SAVE_DEBOUNCE_MS = 400;

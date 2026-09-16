@@ -5,8 +5,11 @@
 //! and code-point slicing of document text); this one is about turning text
 //! into words, not about offsets.
 
+mod speakers;
 pub mod stem;
 pub mod stopwords;
+
+pub use speakers::{speaker_turns, Turn};
 
 /// Tokenize `text` into lowercase words: maximal runs of Unicode
 /// letters/marks/digits and apostrophes, with leading/trailing apostrophes

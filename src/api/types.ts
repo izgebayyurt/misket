@@ -16,6 +16,9 @@ export interface ProjectInfo {
   projectId: string;
   schemaVersion: number;
   counts: ProjectCounts;
+  /** Set when the project file lives inside a cloud-synced folder (Dropbox,
+   * OneDrive, iCloud Drive, ...); ready to show as-is. */
+  syncWarning: string | null;
 }
 
 export interface RecentProject {
@@ -57,6 +60,8 @@ export interface AppSettings {
   keepBackups: number;
   /** Show a paragraph number in the document view's left gutter. */
   showParagraphNumbers: boolean;
+  /** Recorded as the actor in the activity log; empty means the OS user name. */
+  coderName?: string | null;
 }
 
 export type DocumentKind = "text" | "image" | "video";
@@ -304,6 +309,32 @@ export interface MergeResult {
   addedCodeIds: string[];
 }
 
+/** One code in a `Query`, with the same "include sub-codes" choice. */
+export interface CodeRef {
+  codeId: string;
+  includeDescendants: boolean;
+}
+
+export type QueryOp = "and" | "or" | "not" | "near";
+
+/** How close `near` counts as near; the default is the same paragraph. */
+export type QueryWithin = { kind: "paragraph" } | { kind: "chars"; n: number };
+
+/** A `Query` operand: a code, or a nested query. */
+export type QueryTerm = CodeRef | Query;
+
+/**
+ * A Boolean/proximity expression over codes, applied in Rust to the excerpts
+ * the rest of the filter leaves. The semantics are "co-located": an excerpt
+ * satisfies a term when it carries the code itself or overlaps an excerpt
+ * that does. See `src/core/query.ts` and `docs/DATA_MODEL.md`.
+ */
+export interface Query {
+  op: QueryOp;
+  terms: QueryTerm[];
+  within?: QueryWithin | null;
+}
+
 export interface ExcerptFilter {
   codeIds?: string[] | null;
   /** Code sets; each stands for all of its members, as if every member were
@@ -322,6 +353,9 @@ export interface ExcerptFilter {
   overlapsCodeId?: string | null;
   /** Descriptor conditions, ANDed together. */
   descriptors?: DescriptorFilter[] | null;
+  /** A Boolean/proximity expression over codes ("A and B", "A not near B"),
+   * applied to text excerpts before paging. */
+  query?: Query | null;
   limit?: number;
   offset?: number;
 }
@@ -345,6 +379,27 @@ export interface RetagReport {
   moved: string[];
   /** Excerpts that already carried the target, so they only lost the source. */
   alreadyHad: string[];
+}
+
+/** One range to auto-code (a search match, or one already expanded to its
+ * sentence/paragraph). */
+export interface AutoCodeHit {
+  documentId: string;
+  startPos: number;
+  endPos: number;
+}
+
+/**
+ * What `autoCode` did. Each hit either created a fresh excerpt
+ * (`createdExcerptIds`) or reused one that already covered that exact range,
+ * adding the code only if it was missing (`reusedExcerptIds`); a hit whose
+ * excerpt already carried the code only counts toward `alreadyCoded`. Undo
+ * deletes `createdExcerptIds` and removes the code from `reusedExcerptIds`.
+ */
+export interface AutoCodeReport {
+  createdExcerptIds: string[];
+  reusedExcerptIds: string[];
+  alreadyCoded: number;
 }
 
 export interface ExcerptRow extends ExcerptWithCodes {
@@ -455,16 +510,128 @@ export interface WordFrequency {
 
 export type TimelineBucket = "day" | "week" | "month";
 
+/** One column of the code-by-descriptor cross-tab. */
+export interface CrosstabColumn {
+  /** The header: a value, `"18 – 30.5"`, `"2026-09"` or `"(no value)"`. */
+  label: string;
+  /** The `DescriptorFilter` operator that reproduces this column. */
+  op: DescriptorOp;
+  values: string[];
+}
+
+export interface CrosstabRow {
+  codeId: string;
+  /** One count per column, in `columns` order. */
+  cells: number[];
+}
+
+/** What a cell counts: excerpts (the default) or distinct documents. */
+export type CrosstabMode = "excerpts" | "documents";
+
+export interface CrosstabRequest {
+  fieldId: string;
+  /** Rows; every code when absent or empty. */
+  codeIds?: string[] | null;
+  includeDescendants?: boolean;
+  documentIds?: string[] | null;
+  documentSetIds?: string[] | null;
+  /** Number fields only: equal-width bins between min and max (default 4). */
+  bins?: number | null;
+  mode?: CrosstabMode | null;
+}
+
+export interface CodeByDescriptor {
+  field: DescriptorField;
+  columns: CrosstabColumn[];
+  rows: CrosstabRow[];
+  /** Documents in scope per column, whether or not anything in them is coded. */
+  documentsPerColumn: number[];
+  mode: CrosstabMode;
+}
+
 export interface SearchHit {
   documentId: string;
   documentName: string;
   startPos: number;
   endPos: number;
-  /** The actual matched text — not always the query text verbatim (case, or
-   * a different word form when the search matched by stem). */
-  matchText: string;
+  /** The exact matched text — not always the query text verbatim (case, a
+   * regex capture, or a different word form when matched by stem). */
+  matchedText: string;
   contextBefore: string;
   contextAfter: string;
+}
+
+// ---------------------------------------------------------------- framework
+
+export type FrameworkRowKind = "document" | "descriptor_value";
+
+/**
+ * A saved framework matrix: cases down the side, themes across the top. Only
+ * the configuration is stored; `getFrameworkMatrix` recomputes the rows.
+ */
+export interface FrameworkMatrix {
+  id: string;
+  name: string;
+  rowKind: FrameworkRowKind;
+  /** The descriptor field the rows group by, when `rowKind` is `descriptor_value`. */
+  rowFieldId: string | null;
+  /** Restrict the rows to this document set's members; null means every document. */
+  rowSetId: string | null;
+  /** Take the columns from this code set; null means use `codeIds`. */
+  codeSetId: string | null;
+  /** The columns, in column order, when `codeSetId` is null. */
+  codeIds: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** A whole configuration, so undo is "apply the previous one". */
+export interface FrameworkMatrixInput {
+  name: string;
+  rowKind: FrameworkRowKind;
+  rowFieldId?: string | null;
+  rowSetId?: string | null;
+  codeSetId?: string | null;
+  codeIds: string[];
+}
+
+export interface FrameworkRow {
+  /** The document id, or the descriptor value (empty for "no value"). */
+  rowKey: string;
+  label: string;
+  documentIds: string[];
+}
+
+export interface FrameworkCell {
+  rowKey: string;
+  codeId: string;
+  summary: string;
+  /** Distinct excerpts in the row's documents carrying this code or a descendant. */
+  excerptCount: number;
+}
+
+export interface FrameworkMatrixView {
+  matrix: FrameworkMatrix;
+  rows: FrameworkRow[];
+  /** Code ids, in column order. */
+  columns: string[];
+  /** One per (row, column) pair, rows outermost. */
+  cells: FrameworkCell[];
+}
+
+/** A deleted matrix with every summary it held, so undo can put it back. */
+export interface FrameworkMatrixWithCells {
+  matrix: FrameworkMatrix;
+  /** `[rowKey, codeId, summary]`. */
+  cells: [string, string, string][];
+}
+
+/** One speaker's turn detected in a document (see `detectSpeakerTurns`).
+ * Code points, end-exclusive; the label itself is excluded. */
+export interface SpeakerTurn {
+  speaker: string;
+  start: number;
+  end: number;
 }
 
 // ------------------------------------------------------------------ backups
@@ -475,4 +642,39 @@ export interface BackupInfo {
   createdAt: string;
   reason: string;
   sizeBytes: number;
+}
+
+// ------------------------------------------------------------- activity log
+
+/** One row of `activity_log`: something that happened to the project. */
+export interface ActivityEntry {
+  id: number;
+  at: string;
+  /** Whoever was at the keyboard; empty when no name was ever set. */
+  actor: string;
+  /** A dotted verb: `code.created`, `excerpt.split`, `undo`, … */
+  kind: string;
+  targetKind: string;
+  targetId: string | null;
+  summary: string;
+  /** `detail_json`, already parsed. Shape depends on `kind`. */
+  detail: Record<string, unknown>;
+}
+
+export interface ActivityFilter {
+  targetKind?: string | null;
+  targetId?: string | null;
+  kinds?: string[] | null;
+  /** Only entries at or after this timestamp. */
+  since?: string | null;
+  limit?: number;
+  offset?: number;
+}
+
+export interface ActivityPage {
+  entries: ActivityEntry[];
+  /** Matches for the filter, ignoring `limit`/`offset`. */
+  total: number;
+  /** Every kind present in the whole log, sorted. */
+  kinds: string[];
 }

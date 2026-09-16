@@ -1,7 +1,8 @@
 use misket_core::db::{bulk, excerpts};
 use misket_core::models::{
-    ApplyCodesInput, ApplyResult, BulkCodeReport, ExcerptDetail, ExcerptFilter, ExcerptPage,
-    ExcerptSnapshot, ExcerptWithCodes, MergeResult, RetagReport, SplitResult,
+    ApplyCodesInput, ApplyResult, AutoCodeHit, AutoCodeReport, BulkCodeReport, ExcerptDetail,
+    ExcerptFilter, ExcerptPage, ExcerptSnapshot, ExcerptWithCodes, MergeResult, RetagReport,
+    SplitResult,
 };
 use misket_core::Result;
 use tauri::State;
@@ -126,4 +127,15 @@ pub fn retag_code(
     to_code_id: String,
 ) -> Result<RetagReport> {
     state.with_project(|p| bulk::retag_code(&p.conn, &from_code_id, &to_code_id))
+}
+
+/// Auto-code every hit (a search match, or one already expanded to its
+/// sentence/paragraph by the caller) with `code_id`.
+#[tauri::command]
+pub fn auto_code(
+    state: State<'_, AppState>,
+    hits: Vec<AutoCodeHit>,
+    code_id: String,
+) -> Result<AutoCodeReport> {
+    state.with_project(|p| bulk::auto_code(&p.conn, &hits, &code_id))
 }

@@ -10,6 +10,11 @@ pub struct ProjectInfo {
     pub project_id: String,
     pub schema_version: i64,
     pub counts: ProjectCounts,
+    /// Set when the project file lives inside a folder a cloud sync client
+    /// manages (Dropbox, OneDrive, iCloud Drive, ...); see `crate::sync`.
+    /// The message is ready to show as-is.
+    #[serde(default)]
+    pub sync_warning: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
@@ -339,6 +344,53 @@ pub struct MergeResult {
     pub added_code_ids: Vec<String>,
 }
 
+/// One code in a [`Query`], with the same "include sub-codes" choice the
+/// rest of the browser offers.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct CodeRef {
+    pub code_id: String,
+    #[serde(default = "default_true")]
+    pub include_descendants: bool,
+}
+
+/// A [`Query`] operand: a code, or a nested query.
+///
+/// Untagged, because the two are told apart by their fields: a code has
+/// `codeId`, a group has `op`.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(untagged)]
+pub enum QueryTerm {
+    Code(CodeRef),
+    Group(Box<Query>),
+}
+
+/// How close `near` counts as near.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum Within {
+    /// The same paragraph, paragraphs being the document text split on `\n`.
+    Paragraph,
+    /// At most `n` code points apart.
+    Chars { n: i64 },
+}
+
+/// A Boolean/proximity retrieval expression over coded excerpts.
+///
+/// `op` is `and`, `or`, `not` or `near`; `within` only applies to `near` and
+/// defaults to the same paragraph. See
+/// [`crate::db::query_expr`] for the semantics, which are "co-located":
+/// an excerpt satisfies a term when it carries the code itself *or* overlaps
+/// an excerpt that does.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Query {
+    pub op: String,
+    pub terms: Vec<QueryTerm>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub within: Option<Within>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct ExcerptFilter {
@@ -371,6 +423,12 @@ pub struct ExcerptFilter {
     /// Descriptor conditions, ANDed together.
     #[serde(default)]
     pub descriptors: Option<Vec<DescriptorFilter>>,
+    /// A Boolean/proximity expression over codes ("A and B", "A not near B").
+    /// Unlike every other field it cannot be expressed in SQL, so it is
+    /// applied in Rust to the excerpts the rest of the filter leaves, before
+    /// paging. Text excerpts only.
+    #[serde(default)]
+    pub query: Option<Query>,
     #[serde(default = "default_limit")]
     pub limit: i64,
     #[serde(default)]
@@ -396,6 +454,7 @@ impl Default for ExcerptFilter {
             uncoded_only: false,
             overlaps_code_id: None,
             descriptors: None,
+            query: None,
             limit: default_limit(),
             offset: 0,
         }
@@ -443,6 +502,34 @@ pub struct RetagReport {
     /// Excerpts that already carried the target code, so they only lost the
     /// source. Undo must not take the target away from these.
     pub already_had: Vec<String>,
+}
+
+/// One text range to auto-code: a search match, or a match already expanded
+/// to its enclosing sentence or paragraph by the caller. Code points,
+/// end-exclusive, same convention as everywhere else.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct AutoCodeHit {
+    pub document_id: String,
+    pub start_pos: i64,
+    pub end_pos: i64,
+}
+
+/// What `db::bulk::auto_code` actually did, with everything undo needs.
+///
+/// Each hit's `[start, end)` either creates a fresh excerpt (`created_excerpt_ids`)
+/// or reuses an excerpt that already covered that exact range: if that
+/// excerpt did not yet carry `code_id`, the id goes into `reused_excerpt_ids`
+/// (undo removes just the code); if it already did, nothing changes and the
+/// hit only counts toward `already_coded`. Undo therefore deletes exactly
+/// `created_excerpt_ids` and removes `code_id` from exactly
+/// `reused_excerpt_ids`, leaving everything else untouched.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct AutoCodeReport {
+    pub created_excerpt_ids: Vec<String>,
+    pub reused_excerpt_ids: Vec<String>,
+    pub already_coded: i64,
 }
 
 // ----------------------------------------------------------------- analysis
@@ -529,6 +616,87 @@ pub struct WordFrequency {
     /// Distinct documents this term (or, stemmed, any of its surface forms)
     /// appears in, within the scope.
     pub documents: i64,
+}
+
+/// What a code-by-descriptor cross-tab should show. One struct rather than a
+/// row of positional arguments, because the frontend sends it as one object
+/// and it will grow (normalized percentages, a second field) before long.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct CrosstabRequest {
+    pub field_id: String,
+    /// The codes to make rows from; every code when absent or empty.
+    #[serde(default)]
+    pub code_ids: Option<Vec<String>>,
+    /// Count a code's descendants towards it, de-duplicated per excerpt.
+    #[serde(default = "default_true")]
+    pub include_descendants: bool,
+    #[serde(default)]
+    pub document_ids: Option<Vec<String>>,
+    /// Document sets; unioned into `document_ids`, as everywhere else.
+    #[serde(default)]
+    pub document_set_ids: Option<Vec<String>>,
+    /// Number fields only: how many equal-width bins to cut the range into
+    /// (default [`crate::db::analysis::DEFAULT_NUMBER_BINS`]).
+    #[serde(default)]
+    pub bins: Option<i64>,
+    /// What a cell counts: `excerpts` (the default) or `documents`.
+    #[serde(default)]
+    pub mode: Option<String>,
+}
+
+impl Default for CrosstabRequest {
+    fn default() -> Self {
+        Self {
+            field_id: String::new(),
+            code_ids: None,
+            include_descendants: true,
+            document_ids: None,
+            document_set_ids: None,
+            bins: None,
+            mode: None,
+        }
+    }
+}
+
+/// One column of the code-by-descriptor cross-tab: a descriptor value, a bin
+/// of a number field or a month of a date field, plus the descriptor
+/// condition that reproduces it in the excerpt browser.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct CrosstabColumn {
+    /// What the column header shows: the value, `"18 – 30.5"`, `"2026-09"`
+    /// or `"(no value)"`.
+    pub label: String,
+    /// `eq`, `between` or `empty` — a [`DescriptorFilter`] operator, so a
+    /// cell click can open the excerpt browser on exactly this column.
+    pub op: String,
+    pub values: Vec<String>,
+}
+
+/// One row of the code-by-descriptor cross-tab: a code and one count per
+/// column, in `columns` order.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct CrosstabRow {
+    pub code_id: String,
+    pub cells: Vec<i64>,
+}
+
+/// Codes against the values of one descriptor field. See
+/// [`crate::db::analysis::code_by_descriptor`] for how the columns are built
+/// and what a cell counts.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct CodeByDescriptor {
+    pub field: DescriptorField,
+    pub columns: Vec<CrosstabColumn>,
+    pub rows: Vec<CrosstabRow>,
+    /// How many documents in scope fall in each column, whether or not
+    /// anything in them is coded; the denominator for a column.
+    pub documents_per_column: Vec<i64>,
+    /// `excerpts` or `documents`, echoing what the cells count.
+    pub mode: String,
 }
 
 // -------------------------------------------------------------- descriptors
@@ -685,6 +853,78 @@ pub struct BackupInfo {
     pub size_bytes: u64,
 }
 
+// ------------------------------------------------------------- activity log
+
+/// One row of `activity_log`: something that happened to the project.
+///
+/// `detail` is `detail_json` parsed back into a JSON object (an empty object
+/// when the stored text cannot be parsed), so the frontend never has to
+/// double-decode a string.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ActivityEntry {
+    pub id: i64,
+    pub at: String,
+    pub actor: String,
+    /// A dotted verb: `code.created`, `excerpt.split`, `undo`, …
+    pub kind: String,
+    /// `code`, `excerpt`, `document`, `memo`, `descriptor_field`, `set`,
+    /// `saved_filter`, `codebook` or `project`.
+    pub target_kind: String,
+    pub target_id: Option<String>,
+    pub summary: String,
+    pub detail: serde_json::Value,
+}
+
+/// What `db::activity::list` should return. Every field narrows the result;
+/// `limit`/`offset` page through what is left, newest first.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ActivityFilter {
+    #[serde(default)]
+    pub target_kind: Option<String>,
+    #[serde(default)]
+    pub target_id: Option<String>,
+    /// Keep only these kinds (exact matches).
+    #[serde(default)]
+    pub kinds: Option<Vec<String>>,
+    /// Only entries at or after this timestamp (RFC 3339, as stored).
+    #[serde(default)]
+    pub since: Option<String>,
+    #[serde(default = "default_activity_limit")]
+    pub limit: i64,
+    #[serde(default)]
+    pub offset: i64,
+}
+
+fn default_activity_limit() -> i64 {
+    100
+}
+
+impl Default for ActivityFilter {
+    fn default() -> Self {
+        Self {
+            target_kind: None,
+            target_id: None,
+            kinds: None,
+            since: None,
+            limit: default_activity_limit(),
+            offset: 0,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ActivityPage {
+    pub entries: Vec<ActivityEntry>,
+    /// How many entries match the filter, ignoring `limit`/`offset`.
+    pub total: i64,
+    /// Every `kind` present in the log, sorted, so the UI can offer a filter
+    /// without a second round trip.
+    pub kinds: Vec<String>,
+}
+
 // ------------------------------------------------------------------- search
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -695,12 +935,100 @@ pub struct SearchHit {
     /// Code points, end-exclusive.
     pub start_pos: i64,
     pub end_pos: i64,
-    /// The actual matched text, which is not always the query text verbatim:
-    /// a plain search can match a different case, and a stemmed search can
-    /// match an altogether different word form.
-    pub match_text: String,
+    /// The exact matched text (not the query/pattern), so a regex, stemmed
+    /// or case-folded hit displays what actually matched rather than the
+    /// query itself.
+    pub matched_text: String,
     pub context_before: String,
     pub context_after: String,
+}
+
+// ---------------------------------------------------------------- framework
+
+/// A saved framework matrix (Ritchie & Spencer): cases down the side, themes
+/// across the top, a written summary in every cell.
+///
+/// Only the configuration is stored. The rows are recomputed on every read
+/// from `row_kind` (one row per document, or one per distinct value of a
+/// descriptor field) so importing a document or filling in a descriptor
+/// changes the grid without touching this row.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct FrameworkMatrix {
+    pub id: String,
+    pub name: String,
+    /// `document` | `descriptor_value`
+    pub row_kind: String,
+    /// The descriptor field the rows group by, when `row_kind` is
+    /// `descriptor_value`.
+    pub row_field_id: Option<String>,
+    /// Restrict the rows to this document set's members; `None` means every
+    /// document.
+    pub row_set_id: Option<String>,
+    /// Take the columns from this code set; `None` means use `code_ids`.
+    pub code_set_id: Option<String>,
+    /// The columns, in column order, when `code_set_id` is `None`.
+    pub code_ids: Vec<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+/// What `create_matrix` and `update_matrix` take: a whole configuration, so
+/// undo is "apply the previous one".
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct FrameworkMatrixInput {
+    pub name: String,
+    /// `document` | `descriptor_value`
+    pub row_kind: String,
+    pub row_field_id: Option<String>,
+    pub row_set_id: Option<String>,
+    pub code_set_id: Option<String>,
+    pub code_ids: Vec<String>,
+}
+
+/// One computed row of a matrix: the key its summaries are stored under, what
+/// to show in the row header, and the documents it stands for.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct FrameworkRow {
+    /// The document id, or the descriptor value (empty for "no value").
+    pub row_key: String,
+    pub label: String,
+    pub document_ids: Vec<String>,
+}
+
+/// One cell: the written summary plus how much evidence sits behind it.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct FrameworkCell {
+    pub row_key: String,
+    pub code_id: String,
+    pub summary: String,
+    /// Distinct excerpts in the row's documents carrying this code or any of
+    /// its descendants.
+    pub excerpt_count: i64,
+}
+
+/// A matrix ready to render: the configuration, the computed rows, the
+/// resolved columns and one cell per (row, column) pair.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct FrameworkMatrixView {
+    pub matrix: FrameworkMatrix,
+    pub rows: Vec<FrameworkRow>,
+    /// Code ids, in column order.
+    pub columns: Vec<String>,
+    pub cells: Vec<FrameworkCell>,
+}
+
+/// A deleted matrix with every summary it held, so undo can put it back.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct FrameworkMatrixWithCells {
+    pub matrix: FrameworkMatrix,
+    /// `(rowKey, codeId, summary)`.
+    pub cells: Vec<(String, String, String)>,
 }
 
 /// serde helper: distinguishes "absent" from "present but null".
