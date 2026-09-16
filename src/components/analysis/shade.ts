@@ -4,12 +4,17 @@ import type { CSSProperties } from "react";
 
 /**
  * Cell shading: the accent colour at an opacity proportional to the count.
- * `color-mix` against `transparent` keeps it readable in both themes.
+ * `color-mix` against `transparent` keeps it readable in both themes, and the
+ * darkest cells switch to the accent's own foreground so the number stays
+ * legible (light text on orange in light mode, dark text in dark mode).
  */
 export function shade(count: number, max: number): CSSProperties {
   if (count <= 0 || max <= 0) return {};
   // Square root so a few large cells do not flatten everything else.
   const t = Math.sqrt(count / max);
   const pct = Math.round(10 + 62 * t);
-  return { backgroundColor: `color-mix(in srgb, var(--accent) ${pct}%, transparent)` };
+  return {
+    backgroundColor: `color-mix(in srgb, var(--accent) ${pct}%, transparent)`,
+    ...(pct >= 45 ? { color: "var(--accent-fg)" } : {}),
+  };
 }

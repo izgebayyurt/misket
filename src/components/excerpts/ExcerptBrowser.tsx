@@ -66,7 +66,9 @@ export function ExcerptBrowser() {
           <p className="p-6 text-sm text-fg-muted">
             {data.total === 0 && !codeIds.length && !documentIds.length && !uncodedOnly
               ? "No excerpts yet. Select text in a document and press the palette shortcut to code it."
-              : "Nothing matches these filters."}
+              : requireAllCodes && codeIds.length > 1
+                ? "No single excerpt carries all of these codes. Untick “match all selected codes” to see excerpts carrying any of them."
+                : "Nothing matches these filters."}
           </p>
         ) : null}
         <ul className="divide-y divide-border">
