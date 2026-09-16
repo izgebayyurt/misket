@@ -339,6 +339,53 @@ pub struct MergeResult {
     pub added_code_ids: Vec<String>,
 }
 
+/// One code in a [`Query`], with the same "include sub-codes" choice the
+/// rest of the browser offers.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct CodeRef {
+    pub code_id: String,
+    #[serde(default = "default_true")]
+    pub include_descendants: bool,
+}
+
+/// A [`Query`] operand: a code, or a nested query.
+///
+/// Untagged, because the two are told apart by their fields: a code has
+/// `codeId`, a group has `op`.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(untagged)]
+pub enum QueryTerm {
+    Code(CodeRef),
+    Group(Box<Query>),
+}
+
+/// How close `near` counts as near.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum Within {
+    /// The same paragraph, paragraphs being the document text split on `\n`.
+    Paragraph,
+    /// At most `n` code points apart.
+    Chars { n: i64 },
+}
+
+/// A Boolean/proximity retrieval expression over coded excerpts.
+///
+/// `op` is `and`, `or`, `not` or `near`; `within` only applies to `near` and
+/// defaults to the same paragraph. See
+/// [`crate::db::query_expr`] for the semantics, which are "co-located":
+/// an excerpt satisfies a term when it carries the code itself *or* overlaps
+/// an excerpt that does.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Query {
+    pub op: String,
+    pub terms: Vec<QueryTerm>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub within: Option<Within>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct ExcerptFilter {
@@ -371,6 +418,12 @@ pub struct ExcerptFilter {
     /// Descriptor conditions, ANDed together.
     #[serde(default)]
     pub descriptors: Option<Vec<DescriptorFilter>>,
+    /// A Boolean/proximity expression over codes ("A and B", "A not near B").
+    /// Unlike every other field it cannot be expressed in SQL, so it is
+    /// applied in Rust to the excerpts the rest of the filter leaves, before
+    /// paging. Text excerpts only.
+    #[serde(default)]
+    pub query: Option<Query>,
     #[serde(default = "default_limit")]
     pub limit: i64,
     #[serde(default)]
@@ -396,6 +449,7 @@ impl Default for ExcerptFilter {
             uncoded_only: false,
             overlaps_code_id: None,
             descriptors: None,
+            query: None,
             limit: default_limit(),
             offset: 0,
         }

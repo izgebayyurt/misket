@@ -3,7 +3,7 @@
 
 use rusqlite::{params, Connection, OptionalExtension, Row};
 
-use super::{codes, descriptors, documents, memos, sets, text, util};
+use super::{codes, descriptors, documents, memos, query_expr, sets, text, util};
 use crate::error::{AppError, Result};
 use crate::models::{
     ApplyCodesInput, ApplyResult, DescriptorFilter, ExcerptDetail, ExcerptFilter, ExcerptPage,
@@ -809,23 +809,61 @@ pub fn query(conn: &Connection, filter: &ExcerptFilter) -> Result<ExcerptPage> {
         where_clauses.push(sql);
         args.extend(cond_args);
     }
-    let where_sql = where_clauses.join(" AND ");
-
-    let total: i64 = conn.query_row(
-        &format!("SELECT count(*) FROM excerpts e WHERE {where_sql}"),
-        rusqlite::params_from_iter(args.iter()),
-        |r| r.get(0),
-    )?;
+    let mut where_sql = where_clauses.join(" AND ");
+    const ORDER_SQL: &str =
+        "ORDER BY d.sort_order, d.created_at, e.start_pos, e.end_pos, e.created_at, e.id";
 
     let limit = filter.limit.clamp(1, 1000);
-    let offset = filter.offset.max(0);
+    let mut offset = filter.offset.max(0);
+    let total: i64;
+    if let Some(expr) = &filter.query {
+        // A Boolean/proximity query is the one condition SQL cannot express,
+        // so the candidates the rest of the filter leaves are narrowed in
+        // Rust first. That happens before paging, which keeps `total` honest;
+        // the page is then re-read by id so the row SQL stays as it is.
+        let mut stmt = conn.prepare(&format!(
+            "SELECT e.id, e.document_id FROM excerpts e JOIN documents d ON d.id = e.document_id
+             WHERE {where_sql} {ORDER_SQL}"
+        ))?;
+        let candidates: Vec<(String, String)> = stmt
+            .query_map(rusqlite::params_from_iter(args.iter()), |r| {
+                Ok((r.get(0)?, r.get(1)?))
+            })?
+            .collect::<rusqlite::Result<_>>()?;
+        let kept = query_expr::retain_matches(conn, expr, &candidates)?;
+        total = kept.len() as i64;
+        let page: Vec<rusqlite::types::Value> = kept
+            .into_iter()
+            .skip(offset as usize)
+            .take(limit as usize)
+            .map(rusqlite::types::Value::from)
+            .collect();
+        if page.is_empty() {
+            return Ok(ExcerptPage {
+                rows: vec![],
+                total,
+            });
+        }
+        let ph = page.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+        where_sql = format!("{where_sql} AND e.id IN ({ph})");
+        args.extend(page);
+        // The slice above already skipped; the page query must not skip again.
+        offset = 0;
+    } else {
+        total = conn.query_row(
+            &format!("SELECT count(*) FROM excerpts e WHERE {where_sql}"),
+            rusqlite::params_from_iter(args.iter()),
+            |r| r.get(0),
+        )?;
+    }
+
     let sql = format!(
         "SELECT {COLUMNS}, d.name,
             substr(d.text, max(1, e.start_pos - {CONTEXT_CHARS} + 1), min(e.start_pos, {CONTEXT_CHARS})) AS before_ctx,
             substr(d.text, e.end_pos + 1, {CONTEXT_CHARS}) AS after_ctx
          FROM excerpts e JOIN documents d ON d.id = e.document_id
          WHERE {where_sql}
-         ORDER BY d.sort_order, d.created_at, e.start_pos, e.end_pos, e.created_at, e.id
+         {ORDER_SQL}
          LIMIT ? OFFSET ?"
     );
     let mut page_args = args.clone();

@@ -11,6 +11,7 @@ pub mod excerpts;
 pub mod export;
 pub mod memos;
 pub mod migrations;
+pub mod query_expr;
 pub mod search;
 pub mod sets;
 pub mod stats;
