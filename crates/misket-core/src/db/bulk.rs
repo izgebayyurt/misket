@@ -55,7 +55,7 @@ fn ensure_codes_exist(conn: &Connection, code_ids: &[String]) -> Result<()> {
 pub fn delete_many(conn: &Connection, ids: &[String]) -> Result<Vec<ExcerptSnapshot>> {
     let ids = unique(ids);
     ensure_excerpts_exist(conn, &ids)?;
-    let tx = conn.unchecked_transaction()?;
+    let tx = util::tx(conn)?;
     let mut snapshots = Vec::with_capacity(ids.len());
     for id in &ids {
         let excerpt = excerpts::get(&tx, id)?;
@@ -90,7 +90,7 @@ pub fn add_codes_many(
     ensure_excerpts_exist(conn, &ids)?;
     ensure_codes_exist(conn, &code_ids)?;
     let now = util::now();
-    let tx = conn.unchecked_transaction()?;
+    let tx = util::tx(conn)?;
     let mut report = BulkCodeReport::default();
     for id in &ids {
         let before = report.pairs.len();
@@ -167,7 +167,7 @@ pub fn remove_codes_many(
     let code_ids = unique(code_ids);
     ensure_excerpts_exist(conn, &ids)?;
     let now = util::now();
-    let tx = conn.unchecked_transaction()?;
+    let tx = util::tx(conn)?;
     let mut report = BulkCodeReport::default();
     for id in &ids {
         let before = report.pairs.len();
@@ -209,7 +209,7 @@ pub fn retag_code(conn: &Connection, from_code_id: &str, to_code_id: &str) -> Re
     codes::get(conn, from_code_id)?;
     codes::get(conn, to_code_id)?;
 
-    let tx = conn.unchecked_transaction()?;
+    let tx = util::tx(conn)?;
     let mut stmt = tx.prepare(
         "SELECT ec.excerpt_id,
                 EXISTS (SELECT 1 FROM excerpt_codes t
@@ -277,7 +277,7 @@ pub fn retag_code(conn: &Connection, from_code_id: &str, to_code_id: &str) -> Re
 pub fn auto_code(conn: &Connection, hits: &[AutoCodeHit], code_id: &str) -> Result<AutoCodeReport> {
     codes::get(conn, code_id)?;
     let now = util::now();
-    let tx = conn.unchecked_transaction()?;
+    let tx = util::tx(conn)?;
     let mut report = AutoCodeReport::default();
     // A bulk call is usually every match in one or a handful of documents,
     // so cache each document's text instead of re-reading it per hit.

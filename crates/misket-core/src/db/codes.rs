@@ -370,7 +370,7 @@ pub fn move_code(
             ));
         }
     }
-    let tx = conn.unchecked_transaction()?;
+    let tx = util::tx(conn)?;
     // Take it out of the old sibling group, then compact that group.
     tx.execute(
         "UPDATE codes SET parent_id = ?2, sort_order = -1, updated_at = ?3 WHERE id = ?1",
@@ -440,7 +440,7 @@ pub fn impact(conn: &Connection, id: &str) -> Result<CodeImpact> {
 /// Delete a code. Children are either deleted with it or promoted to its parent.
 pub fn delete(conn: &Connection, id: &str, children: ChildrenStrategy) -> Result<DeleteCodeReport> {
     let code = get(conn, id)?;
-    let tx = conn.unchecked_transaction()?;
+    let tx = util::tx(conn)?;
     let (deleted_ids, affected) = match children {
         ChildrenStrategy::Delete => {
             let subtree = descendant_ids(&tx, &[id.to_string()])?;
@@ -513,7 +513,7 @@ pub fn merge(conn: &Connection, source_id: &str, target_id: &str) -> Result<Code
             "cannot merge a code into one of its own descendants".into(),
         ));
     }
-    let tx = conn.unchecked_transaction()?;
+    let tx = util::tx(conn)?;
     let moved_excerpts = tx.execute(
         "INSERT OR IGNORE INTO excerpt_codes (excerpt_id, code_id, created_at)
          SELECT excerpt_id, ?2, created_at FROM excerpt_codes WHERE code_id = ?1",

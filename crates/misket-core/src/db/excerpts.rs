@@ -248,7 +248,7 @@ pub fn apply_codes(conn: &Connection, input: ApplyCodesInput) -> Result<ApplyRes
         }
     };
     ensure_codes_exist(conn, &input.code_ids)?;
-    let tx = conn.unchecked_transaction()?;
+    let tx = util::tx(conn)?;
     let now = util::now();
     let (id, created) = match &target {
         Target::Text {
@@ -358,7 +358,7 @@ pub fn add_codes(conn: &Connection, id: &str, code_ids: &[String]) -> Result<Exc
     let before = get(conn, id)?;
     ensure_codes_exist(conn, code_ids)?;
     let now = util::now();
-    let tx = conn.unchecked_transaction()?;
+    let tx = util::tx(conn)?;
     for code_id in code_ids {
         tx.execute(
             "INSERT OR IGNORE INTO excerpt_codes (excerpt_id, code_id, created_at) VALUES (?1, ?2, ?3)",
@@ -390,7 +390,7 @@ pub fn add_codes(conn: &Connection, id: &str, code_ids: &[String]) -> Result<Exc
 pub fn remove_code(conn: &Connection, id: &str, code_id: &str) -> Result<ExcerptWithCodes> {
     let before = get(conn, id)?;
     let name = activity::code_name(conn, code_id);
-    let tx = conn.unchecked_transaction()?;
+    let tx = util::tx(conn)?;
     tx.execute(
         "DELETE FROM excerpt_codes WHERE excerpt_id = ?1 AND code_id = ?2",
         params![id, code_id],
@@ -420,7 +420,7 @@ pub fn remove_code(conn: &Connection, id: &str, code_id: &str) -> Result<Excerpt
 pub fn delete(conn: &Connection, id: &str) -> Result<ExcerptSnapshot> {
     let excerpt = get(conn, id)?;
     let memos = memos::list_for_excerpt(conn, id)?;
-    let tx = conn.unchecked_transaction()?;
+    let tx = util::tx(conn)?;
     tx.execute("DELETE FROM excerpts WHERE id = ?1", [id])?;
     activity::record(
         &tx,
@@ -444,7 +444,7 @@ pub fn delete(conn: &Connection, id: &str) -> Result<ExcerptSnapshot> {
 pub fn restore(conn: &Connection, snapshot: &ExcerptSnapshot) -> Result<ExcerptWithCodes> {
     let e = &snapshot.excerpt;
     documents::get_summary(conn, &e.document_id)?;
-    let tx = conn.unchecked_transaction()?;
+    let tx = util::tx(conn)?;
     tx.execute(
         "INSERT INTO excerpts (id, document_id, kind, start_pos, end_pos, geometry, snapshot, created_at, updated_at)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
@@ -577,7 +577,7 @@ pub fn update_range(
             "another excerpt already covers exactly this range".into(),
         ));
     }
-    let tx = conn.unchecked_transaction()?;
+    let tx = util::tx(conn)?;
     tx.execute(
         "UPDATE excerpts SET start_pos = ?2, end_pos = ?3, snapshot = ?4, updated_at = ?5
          WHERE id = ?1",
@@ -629,7 +629,7 @@ pub fn split(conn: &Connection, id: &str, at: i64) -> Result<(ExcerptWithCodes, 
     }
     let now = util::now();
     let right_id = util::new_id();
-    let tx = conn.unchecked_transaction()?;
+    let tx = util::tx(conn)?;
     tx.execute(
         "UPDATE excerpts SET end_pos = ?2, snapshot = ?3, updated_at = ?4 WHERE id = ?1",
         params![id, at, snapshot_of(&doc_text, start, at)?, now],
@@ -729,7 +729,7 @@ pub fn merge_adjacent(conn: &Connection, left_id: &str, right_id: &str) -> Resul
         .cloned()
         .collect();
     let now = util::now();
-    let tx = conn.unchecked_transaction()?;
+    let tx = util::tx(conn)?;
     // Memos move to the survivor before the row goes, so nothing cascades away.
     tx.execute(
         "UPDATE memos SET excerpt_id = ?1, updated_at = ?3 WHERE excerpt_id = ?2",

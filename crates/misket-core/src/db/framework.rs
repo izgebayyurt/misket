@@ -171,7 +171,7 @@ pub fn restore_matrix(
 ) -> Result<FrameworkMatrix> {
     let m = &saved.matrix;
     let code_ids_json = serde_json::to_string(&m.code_ids)?;
-    let tx = conn.unchecked_transaction()?;
+    let tx = util::tx(conn)?;
     tx.execute(
         "INSERT INTO framework_matrices
            (id, name, row_kind, row_field_id, row_set_id, code_set_id, code_ids_json,

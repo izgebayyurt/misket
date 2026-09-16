@@ -110,7 +110,7 @@ pub fn create_set(
     }
     let id = id.map(str::to_string).unwrap_or_else(util::new_id);
     let now = util::now();
-    let tx = conn.unchecked_transaction()?;
+    let tx = util::tx(conn)?;
     let sort_order: i64 = tx.query_row(
         "SELECT COALESCE(MAX(sort_order), -1) + 1 FROM sets WHERE kind = ?1",
         [kind],
@@ -172,7 +172,7 @@ pub fn rename_set(conn: &Connection, id: &str, name: &str) -> Result<SetInfo> {
 pub fn delete_set(conn: &Connection, id: &str) -> Result<SetWithMembers> {
     let set = get_set(conn, id)?;
     let member_ids = set_members(conn, id)?;
-    let tx = conn.unchecked_transaction()?;
+    let tx = util::tx(conn)?;
     tx.execute("DELETE FROM sets WHERE id = ?1", [id])?;
     activity::record(
         &tx,
@@ -216,7 +216,7 @@ pub fn set_set_members(
     for m in member_ids {
         ensure_member_exists(conn, &set.kind, m)?;
     }
-    let tx = conn.unchecked_transaction()?;
+    let tx = util::tx(conn)?;
     tx.execute("DELETE FROM set_members WHERE set_id = ?1", [set_id])?;
     for m in member_ids {
         tx.execute(
@@ -248,7 +248,7 @@ pub fn set_set_members(
 pub fn add_to_set(conn: &Connection, set_id: &str, member_id: &str) -> Result<Vec<String>> {
     let set = get_set(conn, set_id)?;
     ensure_member_exists(conn, &set.kind, member_id)?;
-    let tx = conn.unchecked_transaction()?;
+    let tx = util::tx(conn)?;
     tx.execute(
         "INSERT OR IGNORE INTO set_members (set_id, member_id) VALUES (?1, ?2)",
         params![set_id, member_id],
@@ -291,7 +291,7 @@ fn log_membership(conn: &Connection, set: &SetInfo, verb: &str, member_id: &str)
 
 pub fn remove_from_set(conn: &Connection, set_id: &str, member_id: &str) -> Result<Vec<String>> {
     let set = get_set(conn, set_id)?;
-    let tx = conn.unchecked_transaction()?;
+    let tx = util::tx(conn)?;
     let member_name = if set.kind == "code" {
         activity::code_name(&tx, member_id)
     } else {
@@ -457,7 +457,7 @@ pub fn save_filter(conn: &Connection, name: &str, filter: &ExcerptFilter) -> Res
 
 pub fn delete_saved_filter(conn: &Connection, id: &str) -> Result<SavedFilter> {
     let saved = get_saved_filter(conn, id)?;
-    let tx = conn.unchecked_transaction()?;
+    let tx = util::tx(conn)?;
     tx.execute("DELETE FROM saved_filters WHERE id = ?1", [id])?;
     activity::record(
         &tx,

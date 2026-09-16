@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use rusqlite::Connection;
 use serde_json::json;
 
-use super::{activity, codes, export::code_paths};
+use super::{activity, codes, export::code_paths, util};
 use crate::error::{AppError, Result};
 use crate::models::{
     CodePatch, CodebookImport, CodebookJsonCode, ImportMode, ImportReport, NewCode,
@@ -246,7 +246,7 @@ pub fn import_codebook(
     // own entry before some descendant gets a chance to auto-create it bare.
     parsed.sort_by_key(|pc| pc.path.len());
 
-    let tx = conn.unchecked_transaction()?;
+    let tx = util::tx(conn)?;
     let mut report = ImportReport::default();
 
     let base_parent_id = match &mode {

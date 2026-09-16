@@ -160,7 +160,7 @@ pub fn update(conn: &Connection, id: &str, title: &str, body: &str) -> Result<Me
 /// Delete a memo and return it (for undo).
 pub fn delete(conn: &Connection, id: &str) -> Result<Memo> {
     let memo = get(conn, id)?;
-    let tx = conn.unchecked_transaction()?;
+    let tx = util::tx(conn)?;
     tx.execute("DELETE FROM memos WHERE id = ?1", [id])?;
     log_memo(&tx, "memo.deleted", "Deleted", &memo)?;
     tx.commit()?;
