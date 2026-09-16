@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Data &amp; privacy</title>
+    <meta
+      name="description"
+      content="How Misket stores your project, how backups work, what export formats are available, and why nothing leaves your machine."
+    />
+    <link rel="stylesheet" href="../style.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="site-header">
+      <div class="wrap">
+        <a class="brand" href="../index.html"><span class="dot">●</span> Misket</a>
+        <nav class="site-nav" aria-label="Site">
+          <a href="../index.html">Home</a>
+          <a href="install.html">Install</a>
+          <a href="tutorial.html">Tutorial</a>
+          <a href="shortcuts.html">Shortcuts</a>
+          <a href="data.html" aria-current="page">Data &amp; privacy</a>
+          <a href="https://github.com/izgebayyurt/misket">GitHub</a>
+        </nav>
+      </div>
+    </header>
+
+    <main id="main" class="prose narrow">
+      <h1>Data &amp; privacy</h1>
+      <p class="lede">
+        Misket is local-first: there is no server, no account and no telemetry. Your project lives
+        in one file, on your own disk, and nothing about it is ever sent anywhere.
+      </p>
+
+      <h2>The project file</h2>
+      <p>
+        A project is a single <code>.misket</code> file — a SQLite database — wherever you save it.
+        Every document, code, excerpt, memo and descriptor lives in that one file. Document text is
+        normalized once at import (line endings, Unicode form) and is then immutable, so excerpt
+        positions stay valid for the life of the project.
+      </p>
+
+      <h2>Backups</h2>
+      <p>
+        Before a destructive change — deleting a document, deleting a code that has excerpts,
+        merging one code into another, or importing a codebook — Misket automatically writes a
+        timestamped copy into a <code>&lt;project name&gt;.backups/</code> folder next to the
+        project file, and keeps the newest 20 (configurable in Settings). Use
+        <strong>Backups…</strong> in the status bar to see each backup's size and reason, and to
+        restore one; restoring backs up the current state first, so it is never itself destructive.
+        Use <strong>Export → Save a copy as…</strong> at any time to make a manual snapshot. None of
+        this replaces your own backup discipline for anything that matters — keep the project file
+        (and its backups folder) somewhere that is itself backed up, such as a synced drive or
+        version control.
+      </p>
+
+      <h2>Export formats</h2>
+      <ul>
+        <li>
+          <strong>Codebook</strong> — CSV, or a JSON file that another Misket project can import to
+          reuse the same codes.
+        </li>
+        <li>
+          <strong>Excerpts</strong> — CSV, one row per excerpt with its codes, document, position,
+          text and descriptor values.
+        </li>
+        <li>
+          <strong>Project</strong> — a full JSON export of the project's documents, codes, excerpts,
+          memos and descriptors.
+        </li>
+      </ul>
+
+      <h2>Nothing leaves your machine</h2>
+      <p>
+        Misket does not phone home, does not require an account, and does not upload your documents
+        or coding anywhere as part of normal use. The only network activity related to the app
+        itself is you downloading a release or, in future, an update check you would be asked about
+        explicitly. Any AI-assisted features on the
+        <a href="https://github.com/izgebayyurt/misket/blob/main/ROADMAP.md">roadmap</a> are planned
+        to be opt-in and to use a key or model you supply yourself — never on by default.
+      </p>
+    </main>
+
+    <footer class="site-footer">
+      <div class="wrap">
+        <span>Misket is free software, MIT-licensed.</span>
+        <span
+          ><a href="https://github.com/izgebayyurt/misket">Source on GitHub</a> ·
+          <a href="https://github.com/izgebayyurt/misket/blob/main/ROADMAP.md">Roadmap</a></span
+        >
+      </div>
+    </footer>
+  </body>
+</html>

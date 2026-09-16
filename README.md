@@ -4,6 +4,9 @@ Open-source qualitative coding for text, with images and video on the way.
 Misket is a local-first desktop app: your project is a single file on your
 machine, and nothing is uploaded anywhere.
 
+**[Website and docs](https://izgebayyurt.github.io/misket/)** — install
+guide, coding tutorial, keyboard cheatsheet.
+
 It is an alternative to tools like Dedoose for researchers who want a modern,
 keyboard-friendly interface without a subscription.
 

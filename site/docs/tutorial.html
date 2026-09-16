@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Coding tutorial</title>
+    <meta
+      name="description"
+      content="A walk-through of coding a project in Misket: importing documents, building a codebook, coding text, adjusting boundaries, filtering excerpts, memos, analysis and export."
+    />
+    <link rel="stylesheet" href="../style.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="site-header">
+      <div class="wrap">
+        <a class="brand" href="../index.html"><span class="dot">●</span> Misket</a>
+        <nav class="site-nav" aria-label="Site">
+          <a href="../index.html">Home</a>
+          <a href="install.html">Install</a>
+          <a href="tutorial.html" aria-current="page">Tutorial</a>
+          <a href="shortcuts.html">Shortcuts</a>
+          <a href="data.html">Data &amp; privacy</a>
+          <a href="https://github.com/izgebayyurt/misket">GitHub</a>
+        </nav>
+      </div>
+    </header>
+
+    <main id="main" class="prose narrow">
+      <h1>Coding a project, start to finish</h1>
+      <p class="lede">
+        This walks through everything you need for a first coding pass: getting documents in,
+        building a codebook, coding text, cleaning up what you coded, and getting results out.
+      </p>
+
+      <nav class="on-page-nav" aria-label="On this page">
+        <p>On this page</p>
+        <ul>
+          <li><a href="#try-it">Try it without a project</a></li>
+          <li><a href="#import">Import documents</a></li>
+          <li><a href="#codebook">Build a codebook</a></li>
+          <li><a href="#coding">Code text</a></li>
+          <li><a href="#boundaries">Adjust boundaries</a></li>
+          <li><a href="#browser">Excerpt browser and filters</a></li>
+          <li><a href="#memos">Memos</a></li>
+          <li><a href="#analysis">Analysis views</a></li>
+          <li><a href="#export">Export and backups</a></li>
+        </ul>
+      </nav>
+
+      <h2 id="try-it">Try it without a project</h2>
+      <p>
+        On the start screen, click <strong>Try Misket with sample data</strong> to open a ready-made
+        study — a quick way to see coding, the excerpt browser and the analysis views with real
+        content before importing your own documents.
+      </p>
+
+      <h2 id="import">Import documents</h2>
+      <p>
+        Use <strong>Import documents</strong> (<kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>I</kbd>) to add
+        plain text, Markdown, Word (<code>.docx</code>) and PDF (text only) files, one at a time or
+        a whole folder at once with <strong>Import folder…</strong> (optionally including
+        subfolders).
+      </p>
+      <p>
+        If a file has likely-accidental whitespace — runs of blank lines, trailing spaces, or
+        hard-wrapped lines — Misket offers to tidy it up before import, with a before/after preview.
+        This only happens at import time: document text is immutable afterwards, so it cannot be
+        fixed later. Check <strong>Remember my choice</strong> in that dialog to skip the prompt on
+        future imports; its <strong>Ask again on import</strong> link undoes that.
+      </p>
+
+      <h2 id="codebook">Build a codebook</h2>
+      <p>
+        Codes live in a nested tree with colors, descriptions and an optional single-key shortcut.
+        Drag and drop to reorder or re-nest them. Deleting or merging a code shows an impact preview
+        first (how many excerpts are affected), and
+        <strong>Move excerpts to…</strong> hands one code's excerpts to another code without
+        deleting either one.
+      </p>
+      <p>
+        You can also import a codebook exported from another Misket project (JSON or CSV): either
+        merge it into the current codebook by matching code names, or add it fresh under a code you
+        choose.
+      </p>
+
+      <h2 id="coding">Code text</h2>
+      <p>Select a span of text in the document, then either:</p>
+      <ul>
+        <li>
+          press <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>K</kbd> to open the code picker — type to filter,
+          or type <code>&gt;name</code> to create a new code on the spot and apply it immediately;
+          or
+        </li>
+        <li>press that code's own hotkey, if you gave it one in the codebook.</li>
+      </ul>
+      <p>
+        The picker shows each code's description and, for nested codes, its full path, so you can
+        tell similarly named codes apart. Excerpts can overlap: where several coded spans touch the
+        same text, Misket draws them as stacked colored underline lanes (up to four) over a neutral
+        tint, so you can see everything that applies to a passage at a glance.
+      </p>
+
+      <h2 id="boundaries">Adjust boundaries</h2>
+      <p>
+        Coded exactly the wrong three words? Focus the excerpt and use the keyboard to grow or
+        shrink either edge by a word or a character (see the
+        <a href="shortcuts.html">shortcuts page</a> for the exact chords), or drag the round grips
+        at either end of the focused excerpt with the mouse. You can also split an excerpt at the
+        text cursor, or merge it with a touching neighbour (their codes and memos combine). Every
+        adjustment, split and merge is undoable.
+      </p>
+
+      <h2 id="browser">Excerpt browser and filters</h2>
+      <p>
+        Open the excerpt browser with <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>E</kbd> to see every coded
+        excerpt across the project. Filter by:
+      </p>
+      <ul>
+        <li>
+          <strong>Codes</strong> — pick one or more, optionally including their sub-codes, and
+          require <strong>Match all selected codes</strong> instead of any of them;
+        </li>
+        <li><strong>Documents</strong> — narrow to one or more source documents;</li>
+        <li><strong>Uncoded only</strong> — find passages nobody has coded yet;</li>
+        <li>
+          <strong>Descriptors</strong> — document attributes such as "Age is more than 30" or "Site
+          is any of North, South".
+        </li>
+      </ul>
+      <p>
+        Clicking a row jumps back to that excerpt in context. Tick the checkboxes
+        (<kbd>Shift</kbd>+click for a range, or "Select all N loaded") to add a code to, remove a
+        code from, or delete many excerpts at once; <kbd>Escape</kbd> clears the selection and undo
+        reverses the whole batch.
+      </p>
+      <p>
+        Descriptors themselves — document attributes such as site, interview wave or age group — are
+        defined and assigned from the descriptors panel, either per document or in a table of every
+        document at once. Fields can be text, number, choice or date.
+      </p>
+
+      <h2 id="memos">Memos</h2>
+      <p>
+        Attach a memo to a document, a code, an excerpt, or the project as a whole with
+        <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>M</kbd>. Memos are plain notes for your own analytic
+        thinking — reflections, definitions, questions to revisit — kept next to whatever they are
+        about.
+      </p>
+      <figure>
+        <img
+          src="../screenshots/inspector.png"
+          alt="The excerpt inspector in Misket, showing a focused excerpt's text, its codes, and a memo attached to it."
+          width="1280"
+          height="820"
+        />
+        <figcaption>The excerpt inspector: codes and a memo attached to one excerpt</figcaption>
+      </figure>
+
+      <h2 id="analysis">Analysis views</h2>
+      <p>
+        Open the analysis views with <kbd>Shift</kbd>+<kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>A</kbd>:
+      </p>
+      <ul>
+        <li>
+          a <strong>code frequency</strong> table (each code's own count and its count including
+          sub-codes, per document);
+        </li>
+        <li>
+          a <strong>co-occurrence matrix</strong> showing how often two codes overlap on the same
+          text;
+        </li>
+        <li>
+          a <strong>code-by-document heatmap</strong> showing which documents carry which codes and
+          how densely.
+        </li>
+      </ul>
+      <p>
+        Every cell clicks through to the matching excerpts in the browser, and each view exports to
+        CSV.
+      </p>
+
+      <h2 id="export">Export and backups</h2>
+      <p>
+        Export the codebook as CSV or a reusable JSON file, excerpts as CSV, or the whole project as
+        JSON, from the export menu.
+      </p>
+      <p>
+        Before a destructive change — deleting a document, deleting a code that has excerpts,
+        merging one code into another, or importing a codebook — Misket writes a timestamped copy
+        into a <code>&lt;project name&gt;.backups/</code> folder next to the project file, keeping
+        the newest 20 (configurable in Settings). Open <strong>Backups…</strong> in the status bar
+        to browse them, see their size and reason, and restore one — restoring itself backs up the
+        current state first, so it is never destructive. Use
+        <strong>Export → Save a copy as…</strong> at any time for a manual snapshot. See
+        <a href="data.html">Data &amp; privacy</a> for more on how your project file is stored.
+      </p>
+    </main>
+
+    <footer class="site-footer">
+      <div class="wrap">
+        <span>Misket is free software, MIT-licensed.</span>
+        <span
+          ><a href="https://github.com/izgebayyurt/misket">Source on GitHub</a> ·
+          <a href="https://github.com/izgebayyurt/misket/blob/main/ROADMAP.md">Roadmap</a></span
+        >
+      </div>
+    </footer>
+  </body>
+</html>

@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Misket — local-first qualitative coding</title>
+    <meta
+      name="description"
+      content="Misket is a free, open-source, local-first desktop app for qualitative coding of text (images and video coming). No subscription, nothing uploaded."
+    />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="site-header">
+      <div class="wrap">
+        <a class="brand" href="index.html"><span class="dot">●</span> Misket</a>
+        <nav class="site-nav" aria-label="Site">
+          <a href="index.html" aria-current="page">Home</a>
+          <a href="docs/install.html">Install</a>
+          <a href="docs/tutorial.html">Tutorial</a>
+          <a href="docs/shortcuts.html">Shortcuts</a>
+          <a href="docs/data.html">Data &amp; privacy</a>
+          <a href="https://github.com/izgebayyurt/misket">GitHub</a>
+        </nav>
+      </div>
+    </header>
+
+    <main id="main">
+      <section class="hero">
+        <h1>Qualitative coding, on your own machine</h1>
+        <p class="lede">
+          Misket is a free, open-source desktop app for coding text documents (images and video are
+          on the way). Your project is a single file on your disk — nothing is ever uploaded.
+        </p>
+        <div class="hero-actions">
+          <a class="btn btn-primary" href="https://github.com/izgebayyurt/misket/releases"
+            >Download the latest release</a
+          >
+          <a class="btn btn-secondary" href="docs/tutorial.html">Read the tutorial</a>
+        </div>
+        <p class="badge-row">
+          Free &amp; MIT-licensed · macOS, Windows and Linux · no account, no subscription
+        </p>
+      </section>
+
+      <section class="features" aria-label="Highlights">
+        <div class="feature">
+          <h3>Keyboard-first coding</h3>
+          <p>
+            Select text and press <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>K</kbd> to code it, or hit a
+            code's own hotkey. Overlapping excerpts are drawn as stacked lanes so you can see every
+            code that touches a passage at once.
+          </p>
+        </div>
+        <div class="feature">
+          <h3>A real codebook</h3>
+          <p>
+            Nested codes with colors, descriptions and shortcuts; merge, delete with an impact
+            preview, and move excerpts from one code to another without losing either code.
+          </p>
+        </div>
+        <div class="feature">
+          <h3>Built-in analysis</h3>
+          <p>
+            Code frequency tables, a co-occurrence matrix and a code-by-document heatmap, every cell
+            clicking through to the matching excerpts and exporting to CSV.
+          </p>
+        </div>
+      </section>
+
+      <section aria-label="Screenshots">
+        <div class="shots">
+          <div class="shot">
+            <figure>
+              <img
+                src="screenshots/coding.png"
+                alt="Coding a transcript in Misket: a document with colored underlines marking coded passages, and a code palette open."
+                width="1280"
+                height="820"
+              />
+              <figcaption>Coding a transcript</figcaption>
+            </figure>
+          </div>
+          <div class="shot">
+            <figure>
+              <img
+                src="screenshots/browser.png"
+                alt="The excerpt browser in Misket, listing coded excerpts with filters for code, document and descriptors."
+                width="1280"
+                height="820"
+              />
+              <figcaption>Browsing and filtering excerpts</figcaption>
+            </figure>
+          </div>
+        </div>
+      </section>
+
+      <section class="prose">
+        <h2>Why Misket</h2>
+        <p>
+          Misket is an alternative to tools like Dedoose for researchers who want a modern,
+          keyboard-friendly interface without a subscription. It does what a first qualitative
+          coding pass needs: import your documents, build a codebook, code the text, browse and
+          filter what you have coded, and export it — all stored in one <code>.misket</code>
+          file that never leaves your computer.
+        </p>
+        <p>
+          Milestone 1 covers text: import plain text, Markdown, Word and PDF documents; a nested
+          codebook with hotkeys; coding with overlapping excerpts; boundary adjustment; an excerpt
+          browser with filters; descriptors (document attributes); memos; analysis views; undo/redo
+          for every action; and CSV/JSON export. Image and video coding are on the
+          <a href="https://github.com/izgebayyurt/misket/blob/main/ROADMAP.md">roadmap</a>.
+        </p>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="wrap">
+        <span>Misket is free software, MIT-licensed.</span>
+        <span
+          ><a href="https://github.com/izgebayyurt/misket">Source on GitHub</a> ·
+          <a href="https://github.com/izgebayyurt/misket/blob/main/ROADMAP.md">Roadmap</a></span
+        >
+      </div>
+    </footer>
+  </body>
+</html>
