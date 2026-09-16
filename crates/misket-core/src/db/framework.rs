@@ -491,7 +491,7 @@ pub fn export_csv(conn: &Connection, id: &str) -> Result<String> {
         wtr.write_record(&record)?;
     }
     let bytes = wtr.into_inner().map_err(|e| AppError::Io(e.to_string()))?;
-    Ok(String::from_utf8(bytes).map_err(|e| AppError::Io(e.to_string()))?)
+    String::from_utf8(bytes).map_err(|e| AppError::Io(e.to_string()))
 }
 
 #[cfg(test)]
