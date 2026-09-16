@@ -340,6 +340,40 @@ pub struct ExcerptDetail {
     pub memos: Vec<Memo>,
 }
 
+/// Everything a deleted document took with it, so undo can put it back with
+/// its original id: the row itself, the excerpts cut from it with their codes
+/// and memos, the descriptor values that described it, the sets it belonged
+/// to, the framework summaries written against its row, and its own memos.
+///
+/// The text and the image bytes are *not* here: they go in `history_blobs`
+/// beside the node, because a JSON payload is not the place for a megabyte of
+/// interview transcript.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct DocumentSnapshot {
+    pub id: String,
+    pub kind: String,
+    pub name: String,
+    pub source_path: Option<String>,
+    pub source_format: Option<String>,
+    pub content_hash: String,
+    pub media_json: Option<String>,
+    /// The MIME of the bytes stored under the node's `media` blob.
+    pub media_mime: Option<String>,
+    pub text_length: Option<i64>,
+    pub sort_order: i64,
+    pub created_at: String,
+    pub updated_at: String,
+    pub excerpts: Vec<ExcerptSnapshot>,
+    /// `(fieldId, value)`.
+    pub descriptor_values: Vec<(String, String)>,
+    /// The ids of the document sets this document was a member of.
+    pub set_members: Vec<String>,
+    pub framework_cells: Vec<FrameworkCellRow>,
+    /// Memos written about the document itself.
+    pub memos: Vec<Memo>,
+}
+
 /// Everything needed to restore a deleted excerpt with its original ids.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]

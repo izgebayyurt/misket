@@ -22,11 +22,11 @@ use rusqlite::{params, Connection, OptionalExtension, Row};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
-use super::{codes, excerpts, util};
+use super::{codes, documents, excerpts, util};
 use crate::error::{AppError, Result};
 use crate::models::{
-    ChildrenStrategy, CodePatch, CodeTreeSnapshot, CompactReport, ExcerptSnapshot, HistoryNode,
-    HistoryNodeSummary, Memo, TagRow,
+    ChildrenStrategy, CodePatch, CodeTreeSnapshot, CompactReport, DocumentSnapshot,
+    ExcerptSnapshot, HistoryNode, HistoryNodeSummary, Memo, TagRow,
 };
 
 // ------------------------------------------------------------- the head
@@ -527,6 +527,70 @@ pub struct ExcerptChange {
     pub touch: Vec<Touch>,
 }
 
+/// Everything that happens to a document. `Restore` is the inverse of a
+/// delete *and* the forward of an import: both put the row back with its
+/// original id, from the snapshot in the payload and the bytes in the node's
+/// blobs.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "op", rename_all = "camelCase")]
+pub enum DocumentOp {
+    Restore {
+        snapshot: Box<DocumentSnapshot>,
+    },
+    Drop {
+        document_id: String,
+    },
+    Rename {
+        document_id: String,
+        name: String,
+        updated_at: String,
+    },
+    /// The whole order, so replaying lands every document where it was.
+    Reorder {
+        ids: Vec<String>,
+    },
+}
+
+impl DocumentOp {
+    /// `node_id` is where the text and image bytes are: a payload carries the
+    /// shape of a document, `history_blobs` carries its weight.
+    fn run(&self, conn: &Connection, node_id: i64) -> Result<()> {
+        match self {
+            DocumentOp::Restore { snapshot } => {
+                let text =
+                    blob(conn, node_id, "text")?.map(|b| String::from_utf8_lossy(&b).into_owned());
+                let media = blob(conn, node_id, "media")?;
+                documents::restore(conn, snapshot, text.as_deref(), media.as_deref())?;
+                Ok(())
+            }
+            DocumentOp::Drop { document_id } => {
+                conn.execute("DELETE FROM documents WHERE id = ?1", [document_id])?;
+                Ok(())
+            }
+            DocumentOp::Rename {
+                document_id,
+                name,
+                updated_at,
+            } => {
+                conn.execute(
+                    "UPDATE documents SET name = ?2, updated_at = ?3 WHERE id = ?1",
+                    params![document_id, name, updated_at],
+                )?;
+                Ok(())
+            }
+            DocumentOp::Reorder { ids } => {
+                for (i, id) in ids.iter().enumerate() {
+                    conn.execute(
+                        "UPDATE documents SET sort_order = ?2 WHERE id = ?1",
+                        params![id, i as i64],
+                    )?;
+                }
+                Ok(())
+            }
+        }
+    }
+}
+
 /// Memo writes: `restore` upserts a whole row, so it covers create, edit and
 /// undelete alike.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -709,7 +773,7 @@ impl MemoChange {
 /// Anything this match does not list is a kind no inverse has been written
 /// for yet; it is still recorded (with no payloads) so the history reads
 /// correctly, but walking over it is refused rather than silently skipped.
-fn apply(conn: &Connection, kind: &str, payload: &Value) -> Result<()> {
+fn apply(conn: &Connection, node_id: i64, kind: &str, payload: &Value) -> Result<()> {
     if is_noop(payload) {
         return Ok(());
     }
@@ -734,6 +798,9 @@ fn apply(conn: &Connection, kind: &str, payload: &Value) -> Result<()> {
         "memo.created" | "memo.updated" | "memo.deleted" | "memo.restored" => {
             serde_json::from_value::<MemoChange>(payload.clone())?.run(conn)
         }
+        "document.imported" | "document.deleted" | "document.renamed" | "document.reordered" => {
+            serde_json::from_value::<DocumentOp>(payload.clone())?.run(conn, node_id)
+        }
         other => Err(AppError::Validation(format!("not undoable yet: {other}"))),
     }
 }
@@ -744,7 +811,7 @@ pub fn apply_forward(conn: &Connection, node: &HistoryNode) -> Result<()> {
         .forward
         .as_ref()
         .ok_or_else(|| AppError::Validation("this step cannot be redone".into()))?;
-    with_replay(conn, |conn| apply(conn, &node.kind, payload))
+    with_replay(conn, |conn| apply(conn, node.id, &node.kind, payload))
 }
 
 /// Undo one node.
@@ -753,7 +820,7 @@ pub fn apply_inverse(conn: &Connection, node: &HistoryNode) -> Result<()> {
         .inverse
         .as_ref()
         .ok_or_else(|| AppError::Validation("this step cannot be undone".into()))?;
-    with_replay(conn, |conn| apply(conn, &node.kind, payload))
+    with_replay(conn, |conn| apply(conn, node.id, &node.kind, payload))
 }
 
 // ------------------------------------------------------------ walking
@@ -1098,7 +1165,7 @@ pub fn memos_deleted(ids: &[String]) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db::{bulk, codes, documents, excerpts, memos, sets, OpenProject};
+    use crate::db::{bulk, codes, descriptors, documents, excerpts, memos, sets, OpenProject};
     use crate::models::{
         ActivityFilter, ApplyCodesInput, AutoCodeHit, ChildrenStrategy, CodePatch, MemoTarget,
         NewCode,
@@ -1615,6 +1682,198 @@ mod tests {
         assert_round_trip(c, "memo restore", |c| {
             memos::restore(c, &edited).unwrap();
         });
+    }
+
+    // --------------------------------------------------------- documents
+
+    /// Importing a document is undoable, and redoing it brings the same id
+    /// back — so an excerpt cut from it before the undo still points at it.
+    #[test]
+    fn round_trips_importing_a_text_and_an_image_document() {
+        let p = OpenProject::in_memory("t").unwrap();
+        let c = &p.conn;
+        assert_round_trip(c, "import text", |c| {
+            documents::create(c, documents::tests::new_doc("One two three four five.")).unwrap();
+        });
+        assert_round_trip(c, "import image", |c| {
+            documents::create_image(c, documents::tests::new_image(b"\x89PNG bytes")).unwrap();
+        });
+        let ids: Vec<String> = documents::list(c)
+            .unwrap()
+            .into_iter()
+            .map(|d| d.id)
+            .collect();
+        assert_eq!(ids.len(), 2);
+        // The bytes came back with the image, not just the row.
+        let image = ids
+            .iter()
+            .find(|id| documents::get_media(c, id).is_ok())
+            .unwrap();
+        assert_eq!(documents::get_media(c, image).unwrap().1, b"\x89PNG bytes");
+    }
+
+    /// Deleting a document takes its excerpts, memos, descriptor values, set
+    /// memberships and framework summaries with it. Undo has to bring back
+    /// every one of them, and the image's bytes.
+    #[test]
+    fn round_trips_deleting_a_document_with_everything_hanging_off_it() {
+        let f = Fixture::new();
+        let c = f.conn();
+        let code = f.code("Alpha", None);
+        let e = f.excerpt(0, 5, std::slice::from_ref(&code));
+        memos::create(
+            c,
+            MemoTarget {
+                excerpt_id: Some(e.clone()),
+                ..Default::default()
+            },
+            "On the excerpt",
+            "body",
+        )
+        .unwrap();
+        memos::create(
+            c,
+            MemoTarget {
+                document_id: Some(f.doc.clone()),
+                ..Default::default()
+            },
+            "On the document",
+            "body",
+        )
+        .unwrap();
+        let field = descriptors::tests::mk_field(c, "Site", "choice", &["North"]);
+        descriptors::set_value(c, &f.doc, &field.id, Some("North")).unwrap();
+        sets::create_set(c, "document", "Wave 1", std::slice::from_ref(&f.doc), None).unwrap();
+        c.execute_batch(&format!(
+            "INSERT INTO framework_matrices (id, name, row_kind, created_at, updated_at)
+               VALUES ('m', 'Wave 1', 'document', 't', 't');
+             INSERT INTO framework_cells (matrix_id, row_key, code_id, summary, updated_at)
+               VALUES ('m', '{}', '{code}', 'Said little.', 't');",
+            f.doc
+        ))
+        .unwrap();
+
+        assert_round_trip(c, "delete a text document", |c| {
+            documents::delete(c, &f.doc).unwrap();
+        });
+
+        // And an image document, whose weight is in `history_blobs`.
+        let image = documents::create_image(c, documents::tests::new_image(b"\x89PNG bytes"))
+            .unwrap()
+            .summary
+            .id;
+        excerpts::apply_codes(
+            c,
+            ApplyCodesInput {
+                document_id: image.clone(),
+                kind: Some("image_region".into()),
+                geometry: Some(crate::models::Rect {
+                    x: 0.1,
+                    y: 0.1,
+                    w: 0.4,
+                    h: 0.4,
+                }),
+                code_ids: vec![code.clone()],
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_round_trip(c, "delete an image document", |c| {
+            documents::delete(c, &image).unwrap();
+        });
+        // The round trip left it deleted; one more undo, and the pixels are
+        // back byte for byte from `history_blobs`.
+        undo(c).unwrap().unwrap();
+        assert_eq!(documents::get_media(c, &image).unwrap().1, b"\x89PNG bytes");
+        assert_eq!(excerpts::list_for_document(c, &image).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn round_trips_renaming_and_reordering_documents() {
+        let f = Fixture::new();
+        let c = f.conn();
+        let b = documents::create(c, documents::tests::new_doc("Second document."))
+            .unwrap()
+            .summary
+            .id;
+        assert_round_trip(c, "rename", |c| {
+            documents::rename(c, &f.doc, "Interview 7").unwrap();
+        });
+        assert_round_trip(c, "reorder", |c| {
+            documents::reorder(c, &[b.clone(), f.doc.clone()]).unwrap();
+        });
+        // A reorder that changes nothing is not worth a step.
+        let before = head(c).unwrap();
+        documents::reorder(c, &[b.clone(), f.doc.clone()]).unwrap();
+        assert_eq!(head(c).unwrap(), before);
+    }
+
+    /// Two files imported as one batch come back, and go away again, in one
+    /// step — and compacting past them takes their stored text with them.
+    #[test]
+    fn an_import_of_two_files_is_one_step_and_its_bytes_are_compacted_away() {
+        let p = OpenProject::in_memory("t").unwrap();
+        let c = &p.conn;
+        let blobs = |c: &Connection| -> i64 {
+            c.query_row("SELECT count(*) FROM history_blobs", [], |r| r.get(0))
+                .unwrap()
+        };
+        assert_round_trip(c, "import a batch", |c| {
+            group(c, "Imported 2 documents", |c| {
+                let mut a = documents::tests::new_doc("The first file.");
+                a.name = "A".into();
+                documents::create(c, a)?;
+                let mut b = documents::tests::new_doc("The second file.");
+                b.name = "B".into();
+                documents::create(c, b)?;
+                Ok(())
+            })
+            .unwrap();
+        });
+        assert_eq!(documents::list(c).unwrap().len(), 2, "both are back");
+        assert_eq!(blobs(c), 2, "one stored text per file");
+
+        // One node in the tree, two writes behind it.
+        let tree = tree(c).unwrap();
+        assert_eq!(tree.len(), 1);
+        assert_eq!(tree[0].summary, "Imported 2 documents");
+        assert_eq!(tree[0].step_count, 2);
+
+        // Compacting onto the import makes it the root: it can no longer be
+        // undone, so the text it was holding for that is dropped too.
+        let state = dump_state(c);
+        let report = compact_before(c, tree[0].id).unwrap();
+        assert_eq!(report.dropped_nodes, 0);
+        assert_same(&state, &dump_state(c), "compacting changes no data");
+        assert_eq!(blobs(c), 0, "the stored text went with the payloads");
+        assert!(matches!(undo(c), Err(AppError::Validation(_))));
+    }
+
+    /// Deleting the node a blob belongs to takes the blob with it.
+    #[test]
+    fn compacting_drops_the_blobs_of_the_nodes_it_drops() {
+        let p = OpenProject::in_memory("t").unwrap();
+        let c = &p.conn;
+        documents::create(c, documents::tests::new_doc("The first file.")).unwrap();
+        let mut second = documents::tests::new_doc("The second file.");
+        second.name = "B".into();
+        documents::create(c, second).unwrap();
+        let keep = head(c).unwrap().unwrap();
+        assert_eq!(
+            c.query_row("SELECT count(*) FROM history_blobs", [], |r| r
+                .get::<_, i64>(0))
+                .unwrap(),
+            2
+        );
+        compact_before(c, keep).unwrap();
+        // The first import's node is gone, and so is the text it carried;
+        // the kept node is the new root, so its own bytes go too.
+        assert_eq!(
+            c.query_row("SELECT count(*) FROM history_blobs", [], |r| r
+                .get::<_, i64>(0))
+                .unwrap(),
+            0
+        );
     }
 
     // -------------------------------------------------- compound steps
