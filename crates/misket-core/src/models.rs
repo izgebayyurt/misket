@@ -481,6 +481,87 @@ pub struct CodeByDocument {
     pub cells: Vec<(String, String, i64)>,
 }
 
+/// What a code-by-descriptor cross-tab should show. One struct rather than a
+/// row of positional arguments, because the frontend sends it as one object
+/// and it will grow (normalized percentages, a second field) before long.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct CrosstabRequest {
+    pub field_id: String,
+    /// The codes to make rows from; every code when absent or empty.
+    #[serde(default)]
+    pub code_ids: Option<Vec<String>>,
+    /// Count a code's descendants towards it, de-duplicated per excerpt.
+    #[serde(default = "default_true")]
+    pub include_descendants: bool,
+    #[serde(default)]
+    pub document_ids: Option<Vec<String>>,
+    /// Document sets; unioned into `document_ids`, as everywhere else.
+    #[serde(default)]
+    pub document_set_ids: Option<Vec<String>>,
+    /// Number fields only: how many equal-width bins to cut the range into
+    /// (default [`crate::db::analysis::DEFAULT_NUMBER_BINS`]).
+    #[serde(default)]
+    pub bins: Option<i64>,
+    /// What a cell counts: `excerpts` (the default) or `documents`.
+    #[serde(default)]
+    pub mode: Option<String>,
+}
+
+impl Default for CrosstabRequest {
+    fn default() -> Self {
+        Self {
+            field_id: String::new(),
+            code_ids: None,
+            include_descendants: true,
+            document_ids: None,
+            document_set_ids: None,
+            bins: None,
+            mode: None,
+        }
+    }
+}
+
+/// One column of the code-by-descriptor cross-tab: a descriptor value, a bin
+/// of a number field or a month of a date field, plus the descriptor
+/// condition that reproduces it in the excerpt browser.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct CrosstabColumn {
+    /// What the column header shows: the value, `"18 – 30.5"`, `"2026-09"`
+    /// or `"(no value)"`.
+    pub label: String,
+    /// `eq`, `between` or `empty` — a [`DescriptorFilter`] operator, so a
+    /// cell click can open the excerpt browser on exactly this column.
+    pub op: String,
+    pub values: Vec<String>,
+}
+
+/// One row of the code-by-descriptor cross-tab: a code and one count per
+/// column, in `columns` order.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct CrosstabRow {
+    pub code_id: String,
+    pub cells: Vec<i64>,
+}
+
+/// Codes against the values of one descriptor field. See
+/// [`crate::db::analysis::code_by_descriptor`] for how the columns are built
+/// and what a cell counts.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct CodeByDescriptor {
+    pub field: DescriptorField,
+    pub columns: Vec<CrosstabColumn>,
+    pub rows: Vec<CrosstabRow>,
+    /// How many documents in scope fall in each column, whether or not
+    /// anything in them is coded; the denominator for a column.
+    pub documents_per_column: Vec<i64>,
+    /// `excerpts` or `documents`, echoing what the cells count.
+    pub mode: String,
+}
+
 // -------------------------------------------------------------- descriptors
 
 /// A document attribute: "Age group", "Site", "Interview wave", "Gender".

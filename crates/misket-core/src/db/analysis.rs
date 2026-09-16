@@ -1,14 +1,17 @@
-//! Analysis views: code frequencies, code co-occurrence and the
-//! code-by-document matrix. Everything here is read-only and returns plain
-//! DTOs; the frontend does the layout, shading and CSV.
+//! Analysis views: code frequencies, code co-occurrence, the code-by-document
+//! matrix and the code-by-descriptor cross-tab. Everything here is read-only
+//! and returns plain DTOs; the frontend does the layout, shading and CSV.
 
 use std::collections::{HashMap, HashSet};
 
 use rusqlite::{types::Value, Connection};
 
-use super::{codes, documents, sets};
-use crate::error::Result;
-use crate::models::{CoOccurrence, CodeByDocument, CodeFrequency};
+use super::{codes, descriptors, documents, sets};
+use crate::error::{AppError, Result};
+use crate::models::{
+    CoOccurrence, CodeByDescriptor, CodeByDocument, CodeFrequency, CrosstabColumn, CrosstabRequest,
+    CrosstabRow,
+};
 
 /// `AND e.document_id IN (…)` for an optional document filter, expanding
 /// `document_set_ids` into `document_ids` exactly like `excerpts::query`
@@ -252,12 +255,357 @@ pub fn code_by_document(conn: &Connection) -> Result<CodeByDocument> {
     })
 }
 
+// ------------------------------------------------- code × descriptor cross-tab
+
+/// The default number of equal-width bins a number field is cut into.
+pub const DEFAULT_NUMBER_BINS: i64 = 4;
+
+/// Days in a month, so a date column can name its own last day.
+fn days_in_month(year: i64, month: i64) -> i64 {
+    match month {
+        1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
+        4 | 6 | 9 | 11 => 30,
+        _ if year % 4 == 0 && (year % 100 != 0 || year % 400 == 0) => 29,
+        _ => 28,
+    }
+}
+
+/// Trim a bin edge to something readable without losing the value: at most
+/// three decimals, with trailing zeros dropped.
+fn edge_label(v: f64) -> String {
+    let rounded = (v * 1000.0).round() / 1000.0;
+    let mut s = format!("{rounded}");
+    if s.ends_with(".0") {
+        s.truncate(s.len() - 2);
+    }
+    s
+}
+
+/// Where a stored descriptor value lands: a column index, or `None` when no
+/// column claims it (an unparseable number, a value the field lost).
+type ColumnOf = Box<dyn Fn(&str) -> Option<usize>>;
+
+/// Which column a document's value falls in, and the columns themselves.
+struct Columns {
+    columns: Vec<CrosstabColumn>,
+    /// `value -> column index`; numbers and dates are bucketed here once.
+    index_of: ColumnOf,
+}
+
+/// Build the columns for a field from the values the in-scope documents
+/// actually have.
+///
+/// * `choice` keeps the field's own option order, `text` sorts
+///   case-insensitively, and both get one column per distinct value.
+/// * `number` is cut into `bins` equal-width, half-open bins between the
+///   smallest and the largest value, the last one closed so the maximum has a
+///   home; a single distinct value becomes one bin.
+/// * `date` gets one column per year-month that occurs.
+///
+/// A `(no value)` column is appended only when some in-scope document has no
+/// value for the field.
+fn build_columns(kind: &str, options: &[String], values: &[String], bins: i64) -> Columns {
+    let mut columns: Vec<CrosstabColumn> = vec![];
+    let index_of: ColumnOf = match kind {
+        "number" => {
+            let nums: Vec<f64> = values
+                .iter()
+                .filter_map(|v| v.parse::<f64>().ok())
+                .collect();
+            let min = nums.iter().copied().fold(f64::INFINITY, f64::min);
+            let max = nums.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+            if nums.is_empty() {
+                Box::new(|_| None)
+            } else {
+                let n = if max > min { bins.clamp(1, 50) } else { 1 };
+                let width = if max > min {
+                    (max - min) / n as f64
+                } else {
+                    0.0
+                };
+                let mut edges: Vec<f64> = (0..=n).map(|i| min + width * i as f64).collect();
+                // Floating point can land the last edge just short of the max.
+                if let Some(last) = edges.last_mut() {
+                    *last = max;
+                }
+                for i in 0..n as usize {
+                    let (lo, hi) = (edges[i], edges[i + 1]);
+                    columns.push(CrosstabColumn {
+                        label: if lo == hi {
+                            edge_label(lo)
+                        } else {
+                            format!("{} – {}", edge_label(lo), edge_label(hi))
+                        },
+                        op: "between".into(),
+                        values: vec![edge_label(lo), edge_label(hi)],
+                    });
+                }
+                Box::new(move |raw: &str| {
+                    let v: f64 = raw.parse().ok()?;
+                    if v < edges[0] || v > *edges.last()? {
+                        return None;
+                    }
+                    // Half-open bins, except the last, which owns the maximum.
+                    let last = edges.len() - 2;
+                    Some(
+                        (0..=last)
+                            .find(|&i| v < edges[i + 1] || i == last)
+                            .unwrap_or(last),
+                    )
+                })
+            }
+        }
+        "date" => {
+            let mut months: Vec<String> = values
+                .iter()
+                .filter(|v| v.len() >= 7)
+                .map(|v| v[..7].to_string())
+                .collect();
+            months.sort();
+            months.dedup();
+            for m in &months {
+                let year: i64 = m[..4].parse().unwrap_or(0);
+                let month: i64 = m[5..7].parse().unwrap_or(1);
+                columns.push(CrosstabColumn {
+                    label: m.clone(),
+                    op: "between".into(),
+                    values: vec![
+                        format!("{m}-01"),
+                        format!("{m}-{:02}", days_in_month(year, month)),
+                    ],
+                });
+            }
+            let at: HashMap<String, usize> = months
+                .into_iter()
+                .enumerate()
+                .map(|(i, m)| (m, i))
+                .collect();
+            Box::new(move |raw: &str| raw.get(..7).and_then(|m| at.get(m)).copied())
+        }
+        _ => {
+            let present: HashSet<&str> = values.iter().map(String::as_str).collect();
+            let mut distinct: Vec<String> = if kind == "choice" {
+                options
+                    .iter()
+                    .filter(|o| present.contains(o.as_str()))
+                    .cloned()
+                    .collect()
+            } else {
+                let mut v: Vec<String> = present.iter().map(|s| s.to_string()).collect();
+                v.sort_by_key(|s| (s.to_lowercase(), s.clone()));
+                v
+            };
+            // A choice value stored before an option was renamed still needs
+            // a column, so anything the option list misses is appended.
+            for v in values {
+                if !distinct.contains(v) {
+                    distinct.push(v.clone());
+                }
+            }
+            for v in &distinct {
+                columns.push(CrosstabColumn {
+                    label: v.clone(),
+                    op: "eq".into(),
+                    values: vec![v.clone()],
+                });
+            }
+            let at: HashMap<String, usize> = distinct
+                .into_iter()
+                .enumerate()
+                .map(|(i, v)| (v, i))
+                .collect();
+            Box::new(move |raw: &str| at.get(raw).copied())
+        }
+    };
+    Columns { columns, index_of }
+}
+
+/// Codes against the values of one descriptor field: the mixed-methods
+/// cross-tab ("how often does each code appear in interviews from each site").
+///
+/// Columns come from the values the documents in scope actually have (see
+/// [`build_columns`]), with a trailing `(no value)` column when some document
+/// has none. Rows are the picked codes (every code when none are picked), in
+/// codebook order. A cell counts the excerpts — or, with `mode = "documents"`,
+/// the distinct documents — tagged with the row's code, or with any of its
+/// descendants when `include_descendants` is set, in the documents that fall
+/// in that column. Because every document belongs to exactly one column, a
+/// row's cells add up to its total either way.
+pub fn code_by_descriptor(conn: &Connection, req: &CrosstabRequest) -> Result<CodeByDescriptor> {
+    let CrosstabRequest {
+        field_id,
+        code_ids,
+        include_descendants,
+        document_ids,
+        document_set_ids,
+        bins,
+        ..
+    } = req;
+    let (code_ids, document_ids, document_set_ids) = (
+        code_ids.as_deref(),
+        document_ids.as_deref(),
+        document_set_ids.as_deref(),
+    );
+    let include_descendants = *include_descendants;
+    let mode = req.mode.as_deref().unwrap_or("excerpts");
+    if mode != "excerpts" && mode != "documents" {
+        return Err(AppError::Validation(format!(
+            "unknown cross-tab mode {mode:?}; expected \"excerpts\" or \"documents\""
+        )));
+    }
+    let field = descriptors::get_field(conn, field_id)?;
+
+    // Documents in scope, in project order, and their value for the field.
+    // The same expansion `document_clause` does, but over `documents` rather
+    // than over the excerpts joined to them.
+    let doc_sets = document_set_ids.unwrap_or_default();
+    let picked_docs = sets::union_with_sets(conn, document_ids, doc_sets)?;
+    let wanted: Option<HashSet<&str>> = if picked_docs.is_empty() && doc_sets.is_empty() {
+        None
+    } else {
+        Some(picked_docs.iter().map(String::as_str).collect())
+    };
+    let scope: Vec<String> = documents::list(conn)?
+        .into_iter()
+        .filter(|d| wanted.as_ref().is_none_or(|w| w.contains(d.id.as_str())))
+        .map(|d| d.id)
+        .collect();
+    let in_scope: HashSet<&str> = scope.iter().map(String::as_str).collect();
+    let (doc_sql, doc_args) = document_clause(conn, document_ids, document_set_ids)?;
+
+    let mut stmt =
+        conn.prepare("SELECT document_id, value FROM descriptor_values WHERE field_id = ?1")?;
+    let value_of: HashMap<String, String> = stmt
+        .query_map([field_id], |r| Ok((r.get(0)?, r.get(1)?)))?
+        .collect::<rusqlite::Result<HashMap<_, _>>>()?
+        .into_iter()
+        .filter(|(d, _): &(String, String)| in_scope.contains(d.as_str()))
+        .collect();
+
+    let values: Vec<String> = scope
+        .iter()
+        .filter_map(|d| value_of.get(d).cloned())
+        .collect();
+    let Columns {
+        mut columns,
+        index_of,
+    } = build_columns(
+        &field.kind,
+        &field.options,
+        &values,
+        bins.unwrap_or(DEFAULT_NUMBER_BINS),
+    );
+    // Documents whose value the columns above could not place (a number
+    // outside every bin cannot happen, but a malformed one can) join the
+    // documents with no value at all.
+    let column_of: HashMap<&str, usize> = scope
+        .iter()
+        .filter_map(|d| {
+            let i = value_of.get(d).and_then(|v| index_of(v))?;
+            Some((d.as_str(), i))
+        })
+        .collect();
+    let unplaced = scope.len() - column_of.len();
+    if unplaced > 0 {
+        columns.push(CrosstabColumn {
+            label: "(no value)".into(),
+            op: "empty".into(),
+            values: vec![],
+        });
+    }
+    let no_value_column = columns.len().wrapping_sub(1);
+    let column_for = |doc: &str| -> Option<usize> {
+        match column_of.get(doc) {
+            Some(i) => Some(*i),
+            None if unplaced > 0 && in_scope.contains(doc) => Some(no_value_column),
+            None => None,
+        }
+    };
+
+    let mut documents_per_column = vec![0i64; columns.len()];
+    for d in &scope {
+        if let Some(i) = column_for(d) {
+            documents_per_column[i] += 1;
+        }
+    }
+
+    // Rows: the picked codes, or the whole codebook, in codebook order.
+    let picked: Option<HashSet<&str>> = code_ids
+        .filter(|ids| !ids.is_empty())
+        .map(|ids| ids.iter().map(String::as_str).collect());
+    let rows_codes: Vec<String> = codes::list(conn)?
+        .into_iter()
+        .filter(|c| picked.as_ref().is_none_or(|p| p.contains(c.id.as_str())))
+        .map(|c| c.id)
+        .collect();
+
+    // Every tag once: code -> (excerpt, document).
+    let mut stmt = conn.prepare(&format!(
+        "SELECT ec.code_id, ec.excerpt_id, e.document_id
+         FROM excerpt_codes ec JOIN excerpts e ON e.id = ec.excerpt_id
+         WHERE 1 = 1{doc_sql}"
+    ))?;
+    let tags: Vec<(String, String, String)> = stmt
+        .query_map(rusqlite::params_from_iter(doc_args.iter()), |r| {
+            Ok((r.get(0)?, r.get(1)?, r.get(2)?))
+        })?
+        .collect::<rusqlite::Result<_>>()?;
+    let mut by_code: HashMap<&str, Vec<(&str, &str)>> = HashMap::new();
+    for (code_id, excerpt_id, document_id) in &tags {
+        by_code
+            .entry(code_id.as_str())
+            .or_default()
+            .push((excerpt_id.as_str(), document_id.as_str()));
+    }
+
+    let mut rows = Vec::with_capacity(rows_codes.len());
+    for code_id in &rows_codes {
+        let subtree = if include_descendants {
+            codes::descendant_ids(conn, std::slice::from_ref(code_id))?
+        } else {
+            vec![code_id.clone()]
+        };
+        let mut cells = vec![0i64; columns.len()];
+        // De-duplicate per excerpt (an excerpt tagged with both a code and its
+        // child must count once) and, in document mode, per document.
+        let mut seen: HashSet<&str> = HashSet::new();
+        let mut seen_docs: HashSet<(usize, &str)> = HashSet::new();
+        for id in &subtree {
+            for (excerpt_id, document_id) in by_code.get(id.as_str()).into_iter().flatten() {
+                let Some(i) = column_for(document_id) else {
+                    continue;
+                };
+                if mode == "documents" {
+                    if seen_docs.insert((i, document_id)) {
+                        cells[i] += 1;
+                    }
+                } else if seen.insert(excerpt_id) {
+                    cells[i] += 1;
+                }
+            }
+        }
+        rows.push(CrosstabRow {
+            code_id: code_id.clone(),
+            cells,
+        });
+    }
+
+    Ok(CodeByDescriptor {
+        field,
+        columns,
+        rows,
+        documents_per_column,
+        mode: mode.to_string(),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::db::codes::tests::mk as mk_code;
+    use crate::db::descriptors::tests::mk_field;
     use crate::db::documents::tests::new_doc;
-    use crate::db::{documents, excerpts, OpenProject};
+    use crate::db::{descriptors, documents, excerpts, OpenProject};
     use crate::models::{ApplyCodesInput, NewDocument};
 
     struct Fixture {
@@ -516,6 +864,259 @@ mod tests {
         assert_eq!(cell(&m.cells, &f.doc2, &f.b), 1);
         // Cells are sparse: only non-zero combinations are returned.
         assert_eq!(m.cells.len(), 6);
+    }
+
+    // ------------------------------------------------- code × descriptor
+
+    /// Four documents with one excerpt each, so a cross-tab cell is easy to
+    /// read: doc n carries code A (and doc 4 also A1).
+    fn crosstab_fixture() -> (OpenProject, Vec<String>, String, String) {
+        let p = OpenProject::in_memory("t").unwrap();
+        let conn = &p.conn;
+        let mut docs = vec![];
+        for i in 0..4 {
+            docs.push(
+                documents::create(
+                    conn,
+                    NewDocument {
+                        name: format!("Interview {i}"),
+                        ..new_doc(&format!("{i}{}", "x".repeat(40)))
+                    },
+                )
+                .unwrap()
+                .summary
+                .id,
+            );
+        }
+        let a = mk_code(conn, "A", None).id;
+        let a1 = mk_code(conn, "A1", Some(&a)).id;
+        for d in &docs {
+            apply(conn, d, 0, 5, &[&a]);
+        }
+        apply(conn, &docs[3], 10, 15, &[&a1]);
+        (p, docs, a, a1)
+    }
+
+    /// The plain request the cross-tab tests start from: this field, every
+    /// code, direct tags only, every document, excerpt counts.
+    fn req(field_id: &str) -> CrosstabRequest {
+        CrosstabRequest {
+            field_id: field_id.into(),
+            include_descendants: false,
+            ..Default::default()
+        }
+    }
+
+    fn set_value(conn: &Connection, doc: &str, field: &str, value: &str) {
+        descriptors::set_value(conn, doc, field, Some(value)).unwrap();
+    }
+
+    fn row<'a>(m: &'a CodeByDescriptor, code_id: &str) -> &'a CrosstabRow {
+        m.rows.iter().find(|r| r.code_id == code_id).unwrap()
+    }
+
+    fn labels(m: &CodeByDescriptor) -> Vec<&str> {
+        m.columns.iter().map(|c| c.label.as_str()).collect()
+    }
+
+    #[test]
+    fn crosstab_over_a_choice_field_has_a_column_per_used_option() {
+        let (p, docs, a, a1) = crosstab_fixture();
+        let site = mk_field(&p.conn, "Site", "choice", &["North", "South", "East"]);
+        set_value(&p.conn, &docs[0], &site.id, "North");
+        set_value(&p.conn, &docs[1], &site.id, "South");
+        set_value(&p.conn, &docs[2], &site.id, "North");
+        // docs[3] deliberately has no value.
+
+        let m = code_by_descriptor(&p.conn, &req(&site.id)).unwrap();
+        // Option order, unused options dropped, "(no value)" last.
+        assert_eq!(labels(&m), vec!["North", "South", "(no value)"]);
+        assert_eq!(m.columns[0].op, "eq");
+        assert_eq!(m.columns[0].values, vec!["North".to_string()]);
+        assert_eq!(m.columns[2].op, "empty");
+        assert!(m.columns[2].values.is_empty());
+        assert_eq!(m.documents_per_column, vec![2, 1, 1]);
+        assert_eq!(row(&m, &a).cells, vec![2, 1, 1]);
+        assert_eq!(row(&m, &a1).cells, vec![0, 0, 1]);
+
+        // Sub-codes roll up into the parent without double-counting.
+        let m = code_by_descriptor(
+            &p.conn,
+            &CrosstabRequest {
+                include_descendants: true,
+                ..req(&site.id)
+            },
+        )
+        .unwrap();
+        assert_eq!(row(&m, &a).cells, vec![2, 1, 2]);
+
+        // Document mode counts each document once, however many excerpts it has.
+        let m = code_by_descriptor(
+            &p.conn,
+            &CrosstabRequest {
+                include_descendants: true,
+                mode: Some("documents".into()),
+                ..req(&site.id)
+            },
+        )
+        .unwrap();
+        assert_eq!(m.mode, "documents");
+        assert_eq!(row(&m, &a).cells, vec![2, 1, 1]);
+
+        // Picking codes chooses the rows; the codebook order is kept.
+        let m = code_by_descriptor(
+            &p.conn,
+            &CrosstabRequest {
+                code_ids: Some(vec![a1.clone()]),
+                ..req(&site.id)
+            },
+        )
+        .unwrap();
+        assert_eq!(m.rows.len(), 1);
+        assert_eq!(m.rows[0].code_id, a1);
+
+        // An unknown mode is a validation error, not a silent count.
+        assert!(matches!(
+            code_by_descriptor(
+                &p.conn,
+                &CrosstabRequest {
+                    mode: Some("cases".into()),
+                    ..req(&site.id)
+                }
+            ),
+            Err(AppError::Validation(_))
+        ));
+    }
+
+    #[test]
+    fn crosstab_over_a_number_field_bins_between_min_and_max() {
+        let (p, docs, a, _) = crosstab_fixture();
+        let age = mk_field(&p.conn, "Age", "number", &[]);
+        for (doc, v) in docs.iter().zip(["20", "30", "40", "60"]) {
+            set_value(&p.conn, doc, &age.id, v);
+        }
+
+        // Four equal-width bins over 20..60: 20–30, 30–40, 40–50, 50–60. The
+        // bins are half-open, so 30 belongs to the second and 40 to the third;
+        // the last bin is closed so 60 has a home.
+        let m = code_by_descriptor(&p.conn, &req(&age.id)).unwrap();
+        assert_eq!(labels(&m), vec!["20 – 30", "30 – 40", "40 – 50", "50 – 60"]);
+        assert_eq!(m.columns[1].op, "between");
+        assert_eq!(
+            m.columns[1].values,
+            vec!["30".to_string(), "40".to_string()]
+        );
+        // No "(no value)" column when every document has one.
+        assert_eq!(m.documents_per_column, vec![1, 1, 1, 1]);
+        assert_eq!(row(&m, &a).cells, vec![1, 1, 1, 1]);
+
+        // A user-chosen bin count.
+        let m = code_by_descriptor(
+            &p.conn,
+            &CrosstabRequest {
+                bins: Some(2),
+                ..req(&age.id)
+            },
+        )
+        .unwrap();
+        assert_eq!(labels(&m), vec!["20 – 40", "40 – 60"]);
+        assert_eq!(row(&m, &a).cells, vec![2, 2]);
+
+        // One distinct value is one bin, not a zero-width division.
+        let single = mk_field(&p.conn, "Score", "number", &[]);
+        set_value(&p.conn, &docs[0], &single.id, "7.5");
+        let m = code_by_descriptor(&p.conn, &req(&single.id)).unwrap();
+        assert_eq!(labels(&m), vec!["7.5", "(no value)"]);
+        assert_eq!(row(&m, &a).cells, vec![1, 3]);
+    }
+
+    #[test]
+    fn crosstab_over_a_date_field_buckets_by_year_month() {
+        let (p, docs, a, _) = crosstab_fixture();
+        let wave = mk_field(&p.conn, "Interviewed", "date", &[]);
+        set_value(&p.conn, &docs[0], &wave.id, "2026-02-28");
+        set_value(&p.conn, &docs[1], &wave.id, "2026-02-01");
+        set_value(&p.conn, &docs[2], &wave.id, "2025-12-31");
+
+        let m = code_by_descriptor(&p.conn, &req(&wave.id)).unwrap();
+        // Months sort ascending, whatever order the documents are in.
+        assert_eq!(labels(&m), vec!["2025-12", "2026-02", "(no value)"]);
+        assert_eq!(m.columns[0].op, "between");
+        assert_eq!(
+            m.columns[0].values,
+            vec!["2025-12-01".to_string(), "2025-12-31".to_string()]
+        );
+        // February 2026 is not a leap year, so the column ends on the 28th.
+        assert_eq!(
+            m.columns[1].values,
+            vec!["2026-02-01".to_string(), "2026-02-28".to_string()]
+        );
+        assert_eq!(m.documents_per_column, vec![1, 2, 1]);
+        assert_eq!(row(&m, &a).cells, vec![1, 2, 1]);
+
+        // A leap February keeps its 29th.
+        let leap = mk_field(&p.conn, "Leap", "date", &[]);
+        set_value(&p.conn, &docs[0], &leap.id, "2028-02-03");
+        let m = code_by_descriptor(&p.conn, &req(&leap.id)).unwrap();
+        assert_eq!(m.columns[0].values[1], "2028-02-29");
+    }
+
+    #[test]
+    fn crosstab_honours_the_document_filter_and_an_empty_project() {
+        let (p, docs, a, _) = crosstab_fixture();
+        let site = mk_field(&p.conn, "Site", "choice", &["North", "South"]);
+        set_value(&p.conn, &docs[0], &site.id, "North");
+        set_value(&p.conn, &docs[1], &site.id, "South");
+
+        // Only doc 0 is in scope: doc 1's "South" is not a column at all.
+        let m = code_by_descriptor(
+            &p.conn,
+            &CrosstabRequest {
+                document_ids: Some(vec![docs[0].clone()]),
+                ..req(&site.id)
+            },
+        )
+        .unwrap();
+        assert_eq!(labels(&m), vec!["North"]);
+        assert_eq!(row(&m, &a).cells, vec![1]);
+
+        // A document set behaves like the equivalent explicit id.
+        let set = crate::db::sets::create_set(
+            &p.conn,
+            "document",
+            "Wave 1",
+            std::slice::from_ref(&docs[1]),
+            None,
+        )
+        .unwrap();
+        let m = code_by_descriptor(
+            &p.conn,
+            &CrosstabRequest {
+                document_set_ids: Some(vec![set.id.clone()]),
+                ..req(&site.id)
+            },
+        )
+        .unwrap();
+        assert_eq!(labels(&m), vec!["South"]);
+        assert_eq!(row(&m, &a).cells, vec![1]);
+
+        // A picked but empty set matches no document, so there are no columns.
+        let empty = crate::db::sets::create_set(&p.conn, "document", "Empty", &[], None).unwrap();
+        let m = code_by_descriptor(
+            &p.conn,
+            &CrosstabRequest {
+                document_set_ids: Some(vec![empty.id.clone()]),
+                ..req(&site.id)
+            },
+        )
+        .unwrap();
+        assert!(m.columns.is_empty());
+        assert!(row(&m, &a).cells.is_empty());
+
+        assert!(matches!(
+            code_by_descriptor(&p.conn, &req("nope")),
+            Err(AppError::NotFound(_))
+        ));
     }
 
     #[test]

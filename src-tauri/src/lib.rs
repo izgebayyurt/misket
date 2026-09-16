@@ -147,6 +147,7 @@ pub fn run() {
             commands::analysis::code_frequencies,
             commands::analysis::co_occurrence,
             commands::analysis::code_by_document,
+            commands::analysis::code_by_descriptor,
             commands::search::search_project,
             commands::sets::list_sets,
             commands::sets::create_set,
