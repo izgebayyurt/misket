@@ -1,8 +1,9 @@
 //! Memos: free-text notes on a document, a code, an excerpt, or the project.
 
 use rusqlite::{params, Connection, OptionalExtension, Row};
+use serde_json::json;
 
-use super::util;
+use super::{activity, util};
 use crate::error::{AppError, Result};
 use crate::models::{Memo, MemoTarget};
 
@@ -70,6 +71,51 @@ pub fn list_for_excerpt(conn: &Connection, excerpt_id: &str) -> Result<Vec<Memo>
     )
 }
 
+/// A memo is logged against whatever it is attached to, not against itself:
+/// that is what makes a code's history show the note someone wrote while
+/// renaming it, and an excerpt's history show the note written while coding.
+fn target_of(memo: &Memo) -> (&'static str, Option<&str>, String) {
+    if let Some(id) = memo.code_id.as_deref() {
+        ("code", Some(id), "code".into())
+    } else if let Some(id) = memo.excerpt_id.as_deref() {
+        ("excerpt", Some(id), "excerpt".into())
+    } else if let Some(id) = memo.document_id.as_deref() {
+        ("document", Some(id), "document".into())
+    } else {
+        ("project", None, "project".into())
+    }
+}
+
+/// One entry for a memo write, attributed to the memo's target.
+fn log_memo(conn: &Connection, kind: &str, verb: &str, memo: &Memo) -> Result<()> {
+    let (target_kind, target_id, noun) = target_of(memo);
+    let title = if memo.title.trim().is_empty() {
+        activity::elide(&memo.body, 40)
+    } else {
+        memo.title.clone()
+    };
+    let title = if title.trim().is_empty() {
+        "(empty)".to_string()
+    } else {
+        title
+    };
+    activity::record(
+        conn,
+        kind,
+        target_kind,
+        target_id,
+        format!("{verb} a {noun} memo: \"{title}\""),
+        json!({
+            "memoId": memo.id,
+            "title": memo.title,
+            "body": activity::elide(&memo.body, 400),
+            "documentId": memo.document_id,
+            "codeId": memo.code_id,
+            "excerptId": memo.excerpt_id,
+        }),
+    )
+}
+
 pub fn create(conn: &Connection, target: MemoTarget, title: &str, body: &str) -> Result<Memo> {
     validate_target(&target)?;
     let id = util::new_id();
@@ -93,7 +139,9 @@ pub fn create(conn: &Connection, target: MemoTarget, title: &str, body: &str) ->
             AppError::from(e)
         }
     })?;
-    get(conn, &id)
+    let memo = get(conn, &id)?;
+    log_memo(conn, "memo.created", "Added", &memo)?;
+    Ok(memo)
 }
 
 pub fn update(conn: &Connection, id: &str, title: &str, body: &str) -> Result<Memo> {
@@ -104,13 +152,18 @@ pub fn update(conn: &Connection, id: &str, title: &str, body: &str) -> Result<Me
     if n == 0 {
         return Err(AppError::NotFound(format!("memo {id} not found")));
     }
-    get(conn, id)
+    let memo = get(conn, id)?;
+    log_memo(conn, "memo.updated", "Edited", &memo)?;
+    Ok(memo)
 }
 
 /// Delete a memo and return it (for undo).
 pub fn delete(conn: &Connection, id: &str) -> Result<Memo> {
     let memo = get(conn, id)?;
-    conn.execute("DELETE FROM memos WHERE id = ?1", [id])?;
+    let tx = conn.unchecked_transaction()?;
+    tx.execute("DELETE FROM memos WHERE id = ?1", [id])?;
+    log_memo(&tx, "memo.deleted", "Deleted", &memo)?;
+    tx.commit()?;
     Ok(memo)
 }
 
@@ -136,7 +189,9 @@ pub fn restore(conn: &Connection, memo: &Memo) -> Result<Memo> {
             AppError::from(e)
         }
     })?;
-    get(conn, &memo.id)
+    let restored = get(conn, &memo.id)?;
+    log_memo(conn, "memo.restored", "Restored", &restored)?;
+    Ok(restored)
 }
 
 #[cfg(test)]

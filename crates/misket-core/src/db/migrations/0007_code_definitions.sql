@@ -1,4 +1,4 @@
--- Misket project schema, version 5: structured code definitions.
+-- Misket project schema, version 7: structured code definitions.
 -- Applied inside a transaction by db::migrate().
 --
 -- A code's `description` stays "what this code means". The two new columns

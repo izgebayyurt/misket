@@ -6,8 +6,9 @@
 use std::collections::HashMap;
 
 use rusqlite::Connection;
+use serde_json::json;
 
-use super::{codes, export::code_paths};
+use super::{activity, codes, export::code_paths};
 use crate::error::{AppError, Result};
 use crate::models::{
     CodePatch, CodebookImport, CodebookJsonCode, ImportMode, ImportReport, NewCode,
@@ -317,6 +318,30 @@ pub fn import_codebook(
         }
     }
 
+    // The codes themselves each logged a `code.created`/`code.updated`; this
+    // is the one entry that says they arrived together, and from where.
+    activity::record(
+        &tx,
+        "codebook.imported",
+        "codebook",
+        None,
+        format!(
+            "Imported a codebook: {} code{} created, {} matched",
+            report.created,
+            if report.created == 1 { "" } else { "s" },
+            report.matched
+        ),
+        json!({
+            "mode": match &mode {
+                ImportMode::Merge => "merge",
+                ImportMode::AddUnder { .. } => "add-under",
+            },
+            "parentId": base_parent_id,
+            "created": report.created,
+            "matched": report.matched,
+            "skippedShortcuts": report.skipped_shortcuts,
+        }),
+    )?;
     tx.commit()?;
     Ok(report)
 }

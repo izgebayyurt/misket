@@ -49,6 +49,10 @@ pub struct AppSettings {
     /// Show a paragraph number in the document view's left gutter.
     #[serde(default = "default_true")]
     pub show_paragraph_numbers: bool,
+    /// The name recorded as the actor in a project's activity log. Empty (or
+    /// absent) means "use the OS user name".
+    #[serde(default)]
+    pub coder_name: Option<String>,
 }
 
 impl Default for AppSettings {
@@ -60,6 +64,7 @@ impl Default for AppSettings {
             confirm_delete_excerpt: false,
             keep_backups: default_keep_backups(),
             show_paragraph_numbers: default_true(),
+            coder_name: None,
         }
     }
 }
@@ -87,6 +92,25 @@ fn read(path: &Path) -> Result<AppSettings> {
 fn write(path: &Path, settings: &AppSettings) -> Result<()> {
     std::fs::write(path, serde_json::to_string_pretty(settings)?)?;
     Ok(())
+}
+
+/// The OS user name, `whoami`-style: Misket has no accounts, so this is the
+/// best default for "who did this".
+fn os_user_name() -> String {
+    std::env::var("USER")
+        .or_else(|_| std::env::var("USERNAME"))
+        .unwrap_or_default()
+        .trim()
+        .to_string()
+}
+
+/// Who the activity log should credit: the name set in settings, or the OS
+/// user name, or nothing at all.
+pub fn actor_name(settings: &AppSettings) -> String {
+    match settings.coder_name.as_deref().map(str::trim) {
+        Some(name) if !name.is_empty() => name.to_string(),
+        _ => os_user_name(),
+    }
 }
 
 pub fn load(app: &AppHandle) -> Result<AppSettings> {
@@ -119,6 +143,7 @@ mod tests {
             confirm_delete_excerpt: true,
             keep_backups: 5,
             show_paragraph_numbers: false,
+            coder_name: Some("Ada".into()),
         };
         write(&path, &settings).unwrap();
         assert_eq!(read(&path).unwrap(), settings);
@@ -144,5 +169,23 @@ mod tests {
         assert!(!settings.confirm_delete_excerpt);
         assert_eq!(settings.keep_backups, default_keep_backups());
         assert!(settings.show_paragraph_numbers);
+        assert_eq!(settings.coder_name, None);
+    }
+
+    #[test]
+    fn coder_name_is_whoever_is_at_the_keyboard() {
+        // No setting: fall back to the OS user name, whatever it is.
+        assert_eq!(actor_name(&AppSettings::default()), os_user_name());
+        let named = AppSettings {
+            coder_name: Some("  Ada Lovelace  ".into()),
+            ..AppSettings::default()
+        };
+        assert_eq!(actor_name(&named), "Ada Lovelace");
+        // A blank name is no name.
+        let blank = AppSettings {
+            coder_name: Some("   ".into()),
+            ..AppSettings::default()
+        };
+        assert_eq!(actor_name(&blank), os_user_name());
     }
 }

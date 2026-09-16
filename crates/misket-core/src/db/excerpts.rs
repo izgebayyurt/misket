@@ -2,8 +2,9 @@
 //! this table; video ranges will reuse it too.
 
 use rusqlite::{params, Connection, OptionalExtension, Row};
+use serde_json::json;
 
-use super::{codes, descriptors, documents, memos, sets, text, util};
+use super::{activity, codes, descriptors, documents, memos, sets, text, util};
 use crate::error::{AppError, Result};
 use crate::models::{
     ApplyCodesInput, ApplyResult, DescriptorFilter, ExcerptDetail, ExcerptFilter, ExcerptPage,
@@ -19,6 +20,32 @@ const GEOMETRY_EPSILON: f64 = 1e-6;
 const COLUMNS: &str = "e.id, e.document_id, e.kind, e.start_pos, e.end_pos, e.geometry, e.snapshot,
      (SELECT count(*) FROM memos m WHERE m.excerpt_id = e.id) AS memo_count,
      e.created_at, e.updated_at";
+
+/// The names of `ids`, in order, for a log summary; unknown ids keep theirs.
+fn code_names(conn: &Connection, ids: &[String]) -> Vec<String> {
+    ids.iter().map(|id| activity::code_name(conn, id)).collect()
+}
+
+/// How an excerpt reads in a one-line summary: `"the quoted text…"`.
+fn quoted(e: &ExcerptWithCodes) -> String {
+    format!(
+        "\"{}\"",
+        activity::elide(e.snapshot.as_deref().unwrap_or(""), 48)
+    )
+}
+
+/// The excerpt's position, for a `detail` payload.
+fn where_json(conn: &Connection, e: &ExcerptWithCodes) -> serde_json::Value {
+    json!({
+        "documentId": e.document_id,
+        "documentName": activity::document_name(conn, &e.document_id),
+        "excerptKind": e.kind,
+        "startPos": e.start_pos,
+        "endPos": e.end_pos,
+        "geometry": e.geometry,
+        "snapshot": e.snapshot,
+    })
+}
 
 fn from_row(r: &Row) -> rusqlite::Result<ExcerptWithCodes> {
     Ok(ExcerptWithCodes {
@@ -287,6 +314,38 @@ pub fn apply_codes(conn: &Connection, input: ApplyCodesInput) -> Result<ApplyRes
             params![id, now],
         )?;
     }
+    if created || !added.is_empty() {
+        let names = code_names(&tx, &added);
+        let doc_name = activity::document_name(&tx, &input.document_id);
+        let summary = if created {
+            match names.len() {
+                0 => format!("Created an excerpt in {doc_name}"),
+                _ => format!("Coded an excerpt in {doc_name} as {}", names.join(", ")),
+            }
+        } else {
+            format!("Added {} to an excerpt in {doc_name}", names.join(", "))
+        };
+        activity::record(
+            &tx,
+            if created {
+                "excerpt.created"
+            } else {
+                "excerpt.codes_added"
+            },
+            "excerpt",
+            Some(&id),
+            summary,
+            json!({
+                "documentId": input.document_id,
+                "documentName": doc_name,
+                "excerptKind": kind,
+                "startPos": input.start_pos,
+                "endPos": input.end_pos,
+                "codeIds": added,
+                "codeNames": names,
+            }),
+        )?;
+    }
     tx.commit()?;
     Ok(ApplyResult {
         excerpt: get(conn, &id)?,
@@ -296,7 +355,7 @@ pub fn apply_codes(conn: &Connection, input: ApplyCodesInput) -> Result<ApplyRes
 }
 
 pub fn add_codes(conn: &Connection, id: &str, code_ids: &[String]) -> Result<ExcerptWithCodes> {
-    get(conn, id)?;
+    let before = get(conn, id)?;
     ensure_codes_exist(conn, code_ids)?;
     let now = util::now();
     let tx = conn.unchecked_transaction()?;
@@ -310,20 +369,50 @@ pub fn add_codes(conn: &Connection, id: &str, code_ids: &[String]) -> Result<Exc
         "UPDATE excerpts SET updated_at = ?2 WHERE id = ?1",
         params![id, now],
     )?;
+    let names = code_names(&tx, code_ids);
+    activity::record(
+        &tx,
+        "excerpt.codes_added",
+        "excerpt",
+        Some(id),
+        format!("Added {} to {}", names.join(", "), quoted(&before)),
+        {
+            let mut d = where_json(&tx, &before);
+            d["codeIds"] = json!(code_ids);
+            d["codeNames"] = json!(names);
+            d
+        },
+    )?;
     tx.commit()?;
     get(conn, id)
 }
 
 pub fn remove_code(conn: &Connection, id: &str, code_id: &str) -> Result<ExcerptWithCodes> {
-    get(conn, id)?;
-    conn.execute(
+    let before = get(conn, id)?;
+    let name = activity::code_name(conn, code_id);
+    let tx = conn.unchecked_transaction()?;
+    tx.execute(
         "DELETE FROM excerpt_codes WHERE excerpt_id = ?1 AND code_id = ?2",
         params![id, code_id],
     )?;
-    conn.execute(
+    tx.execute(
         "UPDATE excerpts SET updated_at = ?2 WHERE id = ?1",
         params![id, util::now()],
     )?;
+    activity::record(
+        &tx,
+        "excerpt.code_removed",
+        "excerpt",
+        Some(id),
+        format!("Removed {name} from {}", quoted(&before)),
+        {
+            let mut d = where_json(&tx, &before);
+            d["codeIds"] = json!([code_id]);
+            d["codeNames"] = json!([name]);
+            d
+        },
+    )?;
+    tx.commit()?;
     get(conn, id)
 }
 
@@ -331,7 +420,22 @@ pub fn remove_code(conn: &Connection, id: &str, code_id: &str) -> Result<Excerpt
 pub fn delete(conn: &Connection, id: &str) -> Result<ExcerptSnapshot> {
     let excerpt = get(conn, id)?;
     let memos = memos::list_for_excerpt(conn, id)?;
-    conn.execute("DELETE FROM excerpts WHERE id = ?1", [id])?;
+    let tx = conn.unchecked_transaction()?;
+    tx.execute("DELETE FROM excerpts WHERE id = ?1", [id])?;
+    activity::record(
+        &tx,
+        "excerpt.deleted",
+        "excerpt",
+        Some(id),
+        format!("Deleted excerpt {}", quoted(&excerpt)),
+        {
+            let mut d = where_json(&tx, &excerpt);
+            d["codeIds"] = json!(excerpt.code_ids);
+            d["codeNames"] = json!(code_names(&tx, &excerpt.code_ids));
+            d
+        },
+    )?;
+    tx.commit()?;
     Ok(ExcerptSnapshot { excerpt, memos })
 }
 
@@ -387,6 +491,19 @@ pub fn restore(conn: &Connection, snapshot: &ExcerptSnapshot) -> Result<ExcerptW
             params![m.id, e.id, m.title, m.body, m.created_at, m.updated_at],
         )?;
     }
+    activity::record(
+        &tx,
+        "excerpt.restored",
+        "excerpt",
+        Some(&e.id),
+        format!("Restored excerpt {}", quoted(e)),
+        {
+            let mut d = where_json(&tx, e);
+            d["codeIds"] = json!(e.code_ids);
+            d["codeNames"] = json!(code_names(&tx, &e.code_ids));
+            d
+        },
+    )?;
     tx.commit()?;
     get(conn, &e.id)
 }
@@ -472,6 +589,21 @@ pub fn update_range(
             util::now()
         ],
     )?;
+    let after = get(&tx, id)?;
+    activity::record(
+        &tx,
+        "excerpt.range_updated",
+        "excerpt",
+        Some(id),
+        format!("Adjusted excerpt to {}", quoted(&after)),
+        {
+            let mut d = where_json(&tx, &after);
+            d["startPos"] = activity::change(excerpt.start_pos, after.start_pos);
+            d["endPos"] = activity::change(excerpt.end_pos, after.end_pos);
+            d["snapshot"] = activity::change(excerpt.snapshot.clone(), after.snapshot.clone());
+            d
+        },
+    )?;
     tx.commit()?;
     get(conn, id)
 }
@@ -520,6 +652,36 @@ pub fn split(conn: &Connection, id: &str, at: i64) -> Result<(ExcerptWithCodes, 
             params![right_id, code_id, now],
         )?;
     }
+    // One entry per half: the right half is a new excerpt whose history would
+    // otherwise start out of nowhere.
+    let detail = json!({
+        "documentId": excerpt.document_id,
+        "documentName": activity::document_name(&tx, &excerpt.document_id),
+        "at": at,
+        "leftId": id,
+        "rightId": right_id,
+        "startPos": start,
+        "endPos": end,
+        "codeIds": excerpt.code_ids,
+        "codeNames": code_names(&tx, &excerpt.code_ids),
+    });
+    let summary = format!("Split excerpt {} at {at}", quoted(&excerpt));
+    activity::record(
+        &tx,
+        "excerpt.split",
+        "excerpt",
+        Some(id),
+        &summary,
+        detail.clone(),
+    )?;
+    activity::record(
+        &tx,
+        "excerpt.split_off",
+        "excerpt",
+        Some(&right_id),
+        &summary,
+        detail,
+    )?;
     tx.commit()?;
     Ok((get(conn, id)?, get(conn, &right_id)?))
 }
@@ -590,6 +752,40 @@ pub fn merge_adjacent(conn: &Connection, left_id: &str, right_id: &str) -> Resul
             snapshot_of(&doc_text, start, end)?,
             now
         ],
+    )?;
+    let survivor = get(&tx, left_id)?;
+    let detail = json!({
+        "documentId": left.document_id,
+        "documentName": activity::document_name(&tx, &left.document_id),
+        "leftId": left_id,
+        "rightId": right_id,
+        "startPos": activity::change(ls, start),
+        "endPos": activity::change(le, end),
+        "addedCodeIds": added,
+        "addedCodeNames": code_names(&tx, &added),
+        "snapshot": survivor.snapshot,
+    });
+    let summary = format!(
+        "Merged excerpt {} into {}",
+        quoted(&right),
+        quoted(&survivor)
+    );
+    // Both the survivor and the excerpt that disappeared get an entry.
+    activity::record(
+        &tx,
+        "excerpt.merged",
+        "excerpt",
+        Some(left_id),
+        &summary,
+        detail.clone(),
+    )?;
+    activity::record(
+        &tx,
+        "excerpt.merged_into",
+        "excerpt",
+        Some(right_id),
+        &summary,
+        detail,
     )?;
     tx.commit()?;
     Ok(MergeResult {

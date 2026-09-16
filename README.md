@@ -78,9 +78,16 @@ keyboard-friendly interface without a subscription.
   under a name to come back to it. Sets and saved filters are included in the
   project JSON export.
 - **Memos** on documents, codes, excerpts and the project.
+- **Audit trail**: every change — a code created, renamed, moved or merged, an
+  excerpt coded, adjusted or deleted, a memo written, a descriptor set — is
+  recorded in the project file with who made it and when. The overview screen
+  lists the latest hundred, the code and excerpt inspectors show one thing's
+  history as a timeline with the values before and after, and the whole log
+  exports as CSV. Set your name under Settings → "Your name (for the activity
+  log)"; without one Misket uses your computer's user name.
 - **Undo/redo** for every coding and codebook action.
-- **Export** the codebook as CSV or a reusable JSON file, excerpts as CSV, or
-  the whole project as JSON.
+- **Export** the codebook as CSV or a reusable JSON file, excerpts as CSV, the
+  activity log as CSV, or the whole project as JSON.
 
 ![Excerpt browser](docs/screenshots/browser.png)
 

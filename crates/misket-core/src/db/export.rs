@@ -6,12 +6,40 @@ use std::io::Write;
 use rusqlite::Connection;
 use serde::Serialize;
 
-use super::{codes, descriptors, documents, excerpts, memos, sets};
+use super::{activity, codes, descriptors, documents, excerpts, memos, sets};
 use crate::error::Result;
 use crate::models::{
-    Code, CodebookJsonCode, DescriptorField, DescriptorValue, ExcerptFilter, ExcerptWithCodes,
-    Memo, SavedFilter, SetWithMembers,
+    ActivityEntry, Code, CodebookJsonCode, DescriptorField, DescriptorValue, ExcerptFilter,
+    ExcerptWithCodes, Memo, SavedFilter, SetWithMembers,
 };
+
+/// The activity log as CSV: the audit trail in a form a reviewer, a
+/// supervisor or a spreadsheet can read without Misket.
+pub fn activity_csv<W: Write>(conn: &Connection, w: W) -> Result<()> {
+    let mut wtr = csv::Writer::from_writer(w);
+    wtr.write_record([
+        "at",
+        "actor",
+        "kind",
+        "target_kind",
+        "target_id",
+        "summary",
+        "detail_json",
+    ])?;
+    for e in activity::all(conn)? {
+        wtr.write_record([
+            &e.at,
+            &e.actor,
+            &e.kind,
+            &e.target_kind,
+            e.target_id.as_deref().unwrap_or(""),
+            &e.summary,
+            &e.detail.to_string(),
+        ])?;
+    }
+    wtr.flush()?;
+    Ok(())
+}
 
 /// Full code path ("Parent / Child") for every code.
 pub(crate) fn code_paths(all: &[Code]) -> HashMap<String, String> {
@@ -200,6 +228,8 @@ struct ProjectJson {
     descriptor_values: Vec<DescriptorValue>,
     sets: Vec<SetWithMembers>,
     saved_filters: Vec<SavedFilter>,
+    /// The whole audit trail, oldest first.
+    activity: Vec<ActivityEntry>,
 }
 
 pub fn project_json<W: Write>(conn: &Connection, w: W) -> Result<()> {
@@ -247,6 +277,7 @@ pub fn project_json<W: Write>(conn: &Connection, w: W) -> Result<()> {
         descriptor_values: all_descriptor_values,
         sets: all_sets,
         saved_filters: sets::list_saved_filters(conn)?,
+        activity: activity::all(conn)?,
     };
     serde_json::to_writer_pretty(w, &out)?;
     Ok(())
@@ -309,6 +340,32 @@ mod tests {
         )
         .unwrap();
         p
+    }
+
+    #[test]
+    fn activity_csv_and_project_json_carry_the_audit_trail() {
+        let p = populated();
+        let mut buf = vec![];
+        activity_csv(&p.conn, &mut buf).unwrap();
+        let csv = String::from_utf8(buf).unwrap();
+        let lines: Vec<_> = csv.lines().collect();
+        assert_eq!(
+            lines[0],
+            "at,actor,kind,target_kind,target_id,summary,detail_json"
+        );
+        // Oldest first: the document was imported before anything else.
+        assert!(lines[1].contains("document.imported"), "{}", lines[1]);
+        assert!(csv.contains("code.created"));
+        assert!(csv.contains("excerpt.created"));
+
+        let mut buf = vec![];
+        project_json(&p.conn, &mut buf).unwrap();
+        let v: serde_json::Value = serde_json::from_slice(&buf).unwrap();
+        let entries = v["activity"].as_array().unwrap();
+        assert_eq!(entries.len(), lines.len() - 1);
+        assert_eq!(entries[0]["kind"], "document.imported");
+        // `detail` is a real object, not a string to decode twice.
+        assert!(entries[0]["detail"].is_object());
     }
 
     #[test]

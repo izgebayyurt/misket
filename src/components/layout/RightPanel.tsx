@@ -4,6 +4,7 @@ import { ExcerptInspector } from "@/components/excerpts/ExcerptInspector";
 import { MemoList } from "@/components/memos/MemoList";
 import { DocumentDescriptors } from "@/components/descriptors/DocumentDescriptors";
 import { CodeDefinition } from "@/components/codebook/CodeDefinition";
+import { CodeHistory } from "@/components/activity/HistoryTimeline";
 import { useDocuments } from "@/queries/documents";
 import { useCodeTree } from "@/queries/codes";
 import { pathOf } from "@/core/codeTree";
@@ -102,6 +103,9 @@ export function RightPanel() {
                   : "Project memos"
             }
           />
+          {effectiveScope === "code" && selectedCodeId ? (
+            <CodeHistory codeId={selectedCodeId} />
+          ) : null}
         </>
       )}
     </aside>

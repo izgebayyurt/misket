@@ -57,6 +57,8 @@ export interface AppSettings {
   keepBackups: number;
   /** Show a paragraph number in the document view's left gutter. */
   showParagraphNumbers: boolean;
+  /** Recorded as the actor in the activity log; empty means the OS user name. */
+  coderName?: string | null;
 }
 
 export type DocumentKind = "text" | "image" | "video";
@@ -448,4 +450,39 @@ export interface BackupInfo {
   createdAt: string;
   reason: string;
   sizeBytes: number;
+}
+
+// ------------------------------------------------------------- activity log
+
+/** One row of `activity_log`: something that happened to the project. */
+export interface ActivityEntry {
+  id: number;
+  at: string;
+  /** Whoever was at the keyboard; empty when no name was ever set. */
+  actor: string;
+  /** A dotted verb: `code.created`, `excerpt.split`, `undo`, … */
+  kind: string;
+  targetKind: string;
+  targetId: string | null;
+  summary: string;
+  /** `detail_json`, already parsed. Shape depends on `kind`. */
+  detail: Record<string, unknown>;
+}
+
+export interface ActivityFilter {
+  targetKind?: string | null;
+  targetId?: string | null;
+  kinds?: string[] | null;
+  /** Only entries at or after this timestamp. */
+  since?: string | null;
+  limit?: number;
+  offset?: number;
+}
+
+export interface ActivityPage {
+  entries: ActivityEntry[];
+  /** Matches for the filter, ignoring `limit`/`offset`. */
+  total: number;
+  /** Every kind present in the whole log, sorted. */
+  kinds: string[];
 }

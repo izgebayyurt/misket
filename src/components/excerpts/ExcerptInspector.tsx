@@ -6,6 +6,7 @@ import { ColorDot } from "@/components/codebook/ColorSwatch";
 import { UseAsExampleButton } from "@/components/codebook/UseAsExampleButton";
 import { Button } from "@/components/ui/button";
 import { MemoList } from "@/components/memos/MemoList";
+import { ExcerptHistory } from "@/components/activity/HistoryTimeline";
 import { useWorkspace } from "@/state/workspace";
 import { toast } from "@/state/toasts";
 import { RegionThumbnail } from "./RegionThumbnail";
@@ -83,6 +84,7 @@ export function ExcerptInspector({ excerptId }: { excerptId: string }) {
         </ul>
       </div>
       <MemoList target={{ excerptId }} heading="Memos" />
+      <ExcerptHistory excerptId={excerptId} />
     </div>
   );
 }

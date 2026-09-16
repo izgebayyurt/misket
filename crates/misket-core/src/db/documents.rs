@@ -1,8 +1,9 @@
 //! Documents: imported text (milestone 1) and, later, images and video.
 
 use rusqlite::{params, Connection, OptionalExtension, Row};
+use serde_json::json;
 
-use super::{text, util};
+use super::{activity, text, util};
 use crate::error::{AppError, Result};
 use crate::models::{Document, DocumentSummary, MediaInfo, NewDocument, NewImageDocument};
 
@@ -83,7 +84,27 @@ pub fn create(conn: &Connection, input: NewDocument) -> Result<Document> {
             now
         ],
     )?;
-    get(conn, &id)
+    let doc = get(conn, &id)?;
+    log_import(conn, &doc.summary)?;
+    Ok(doc)
+}
+
+/// One entry per imported document, whatever its kind.
+fn log_import(conn: &Connection, doc: &DocumentSummary) -> Result<()> {
+    activity::record(
+        conn,
+        "document.imported",
+        "document",
+        Some(&doc.id),
+        format!("Imported {} document \"{}\"", doc.kind, doc.name),
+        json!({
+            "name": doc.name,
+            "documentKind": doc.kind,
+            "sourceFormat": doc.source_format,
+            "sourcePath": doc.source_path,
+            "textLength": doc.text_length,
+        }),
+    )
 }
 
 /// Import an image document. The bytes are stored inside the project file
@@ -171,6 +192,7 @@ pub fn create_image(conn: &Connection, input: NewImageDocument) -> Result<Docume
         "INSERT INTO media_blobs (document_id, mime, bytes) VALUES (?1, ?2, ?3)",
         params![id, mime, bytes],
     )?;
+    log_import(&tx, &get_summary(&tx, &id)?)?;
     tx.commit()?;
     get(conn, &id)
 }
@@ -228,12 +250,23 @@ pub fn rename(conn: &Connection, id: &str, name: &str) -> Result<DocumentSummary
     if name.is_empty() {
         return Err(AppError::Validation("document name is required".into()));
     }
+    let before = get_summary(conn, id)?;
     let n = conn.execute(
         "UPDATE documents SET name = ?2, updated_at = ?3 WHERE id = ?1",
         params![id, name, util::now()],
     )?;
     if n == 0 {
         return Err(AppError::NotFound(format!("document {id} not found")));
+    }
+    if before.name != name {
+        activity::record(
+            conn,
+            "document.renamed",
+            "document",
+            Some(id),
+            format!("Renamed document \"{}\" to \"{name}\"", before.name),
+            json!({ "name": activity::change(before.name.clone(), name.to_string()) }),
+        )?;
     }
     get_summary(conn, id)
 }
@@ -259,10 +292,25 @@ pub fn reorder(conn: &Connection, ids: &[String]) -> Result<()> {
 }
 
 pub fn delete(conn: &Connection, id: &str) -> Result<()> {
-    let n = conn.execute("DELETE FROM documents WHERE id = ?1", [id])?;
+    let doc = get_summary(conn, id)?;
+    let tx = conn.unchecked_transaction()?;
+    let n = tx.execute("DELETE FROM documents WHERE id = ?1", [id])?;
     if n == 0 {
         return Err(AppError::NotFound(format!("document {id} not found")));
     }
+    activity::record(
+        &tx,
+        "document.deleted",
+        "document",
+        Some(id),
+        format!("Deleted document \"{}\"", doc.name),
+        json!({
+            "name": doc.name,
+            "documentKind": doc.kind,
+            "excerptCount": doc.excerpt_count,
+        }),
+    )?;
+    tx.commit()?;
     Ok(())
 }
 
