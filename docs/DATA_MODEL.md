@@ -54,6 +54,27 @@ kind compares as text, which is also the right order for ISO dates. Because
 `neq` and `empty` are `NOT EXISTS`, documents with no value for the field match
 them.
 
+## Adjusting excerpts
+
+Three operations in `db::excerpts` refine an existing text excerpt, each in one
+transaction and each invertible from the frontend's undo stack:
+
+| Operation        | Effect                                                                                                                                                            | Inverse                                                                                     |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `update_range`   | moves `start_pos`/`end_pos`, recomputes `snapshot` from the document text and bumps `updated_at`; codes and memos are untouched                                   | `update_range` back to the old offsets                                                      |
+| `split`          | cuts `[start, end)` at a code point into `[start, at)` and `[at, end)`; the left half keeps the id and the memos, the right half copies the codes                 | `merge_adjacent` of the two halves                                                          |
+| `merge_adjacent` | folds two touching or overlapping excerpts into `[min start, max end)` with the union of their codes; the right one is deleted and its memos move to the survivor | undo the added codes, `update_range` the survivor back, then `restore` the removed snapshot |
+
+Ranges are still validated against `documents.text_length` in code points, and
+a range another text excerpt already occupies exactly is a `Conflict`, because
+`excerpts_text_range_uq` allows one text excerpt per exact range. Two excerpts
+count as mergeable when they touch or overlap (`left.start <= right.end AND
+right.start <= left.end`).
+
+Because a merge re-points memos to the survivor rather than deleting them,
+`restore` upserts memos (`ON CONFLICT(id) DO UPDATE`) so undoing a merge moves
+them back instead of failing on the primary key.
+
 ## Queries worth knowing
 
 - Descendants of a code use a recursive CTE, not a materialized path:
