@@ -21,4 +21,5 @@ export const keys = {
   memos: (target: MemoTarget) => ["memos", target] as const,
   allMemos: ["memos"] as const,
   search: (query: string) => ["search", query] as const,
+  backups: ["backups"] as const,
 };

@@ -32,6 +32,8 @@ export interface AppSettings {
   editorFontSize: number;
   editorLineHeight: number;
   confirmDeleteExcerpt: boolean;
+  /** How many timestamped backups to keep per project. */
+  keepBackups: number;
 }
 
 export type DocumentKind = "text" | "image" | "video";
@@ -276,4 +278,14 @@ export interface SearchHit {
   endPos: number;
   contextBefore: string;
   contextAfter: string;
+}
+
+// ------------------------------------------------------------------ backups
+
+export interface BackupInfo {
+  path: string;
+  /** RFC 3339 UTC. */
+  createdAt: string;
+  reason: string;
+  sizeBytes: number;
 }

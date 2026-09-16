@@ -65,6 +65,26 @@ deletes return snapshots that `restore_*` reinserts with the original ids.
 Operations that cannot be inverted cheaply (deleting a document or code,
 merging codes, importing) confirm first and clear the stack.
 
+## Backups
+
+`crates/misket-core/src/db/backup.rs` covers both "Save a copy as…" and the
+automatic safety net. Both go through SQLite's `VACUUM INTO`, which is safe to
+run against a database that is currently open (a raw file copy is not).
+`save_copy` writes to a path the user picked, refusing to target the open
+project file and replacing an existing destination only after copying to a
+temp file next to it and renaming over it. `backup_before` writes into
+`<project stem>.backups/` next to the project, prunes that folder to the
+newest `keepBackups` backups (default 20, in `AppSettings`), and
+`backup_before_throttled` skips the write entirely if the newest backup for
+the same reason is under 60 seconds old, so a bulk delete does not produce one
+copy per item.
+
+The Tauri command layer (`src-tauri/src/backup_guard.rs`) calls
+`backup_before_throttled` ahead of `delete_document`, `delete_code` (only
+when it would affect existing excerpts) and `merge_code`, outside any
+transaction the operation itself opens. A backup failure is logged and
+swallowed — it never turns a successful edit into a failed one.
+
 ## Milestone 2 (images and video)
 
 The `excerpts` table already has `kind` (`text` | `image_region` |

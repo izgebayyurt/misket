@@ -1,8 +1,9 @@
 use misket_core::db::documents;
 use misket_core::models::{Document, DocumentSummary, NewDocument};
 use misket_core::Result;
-use tauri::State;
+use tauri::{AppHandle, State};
 
+use crate::backup_guard;
 use crate::state::AppState;
 
 #[tauri::command]
@@ -35,6 +36,9 @@ pub fn reorder_documents(state: State<'_, AppState>, ids: Vec<String>) -> Result
 }
 
 #[tauri::command]
-pub fn delete_document(state: State<'_, AppState>, id: String) -> Result<()> {
-    state.with_project(|p| documents::delete(&p.conn, &id))
+pub fn delete_document(state: State<'_, AppState>, app: AppHandle, id: String) -> Result<()> {
+    state.with_project(|p| {
+        backup_guard::before(&app, p, "delete-document");
+        documents::delete(&p.conn, &id)
+    })
 }

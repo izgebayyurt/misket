@@ -1,3 +1,4 @@
+mod backup_guard;
 mod commands;
 mod recent;
 mod settings;
@@ -95,6 +96,9 @@ pub fn run() {
             commands::e2e::get_e2e_config,
             commands::settings::get_settings,
             commands::settings::set_settings,
+            commands::backup::save_project_copy,
+            commands::backup::list_backups,
+            commands::backup::restore_backup,
         ])
         .build(tauri::generate_context!())
         .expect("error while building Misket");

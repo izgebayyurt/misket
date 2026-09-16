@@ -24,6 +24,10 @@ fn default_line_height() -> f64 {
     1.7
 }
 
+fn default_keep_backups() -> u32 {
+    20
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct AppSettings {
@@ -35,6 +39,9 @@ pub struct AppSettings {
     pub editor_line_height: f64,
     #[serde(default)]
     pub confirm_delete_excerpt: bool,
+    /// How many timestamped backups to keep per project.
+    #[serde(default = "default_keep_backups")]
+    pub keep_backups: u32,
 }
 
 impl Default for AppSettings {
@@ -44,6 +51,7 @@ impl Default for AppSettings {
             editor_font_size: default_font_size(),
             editor_line_height: default_line_height(),
             confirm_delete_excerpt: false,
+            keep_backups: default_keep_backups(),
         }
     }
 }
@@ -101,6 +109,7 @@ mod tests {
             editor_font_size: 20.0,
             editor_line_height: 1.9,
             confirm_delete_excerpt: true,
+            keep_backups: 5,
         };
         write(&path, &settings).unwrap();
         assert_eq!(read(&path).unwrap(), settings);
@@ -124,5 +133,6 @@ mod tests {
         assert_eq!(settings.editor_font_size, default_font_size());
         assert_eq!(settings.editor_line_height, default_line_height());
         assert!(!settings.confirm_delete_excerpt);
+        assert_eq!(settings.keep_backups, default_keep_backups());
     }
 }
