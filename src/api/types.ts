@@ -201,3 +201,12 @@ export interface CodeByDocument {
   /** Sparse `[documentId, codeId, count]`, direct tags only. */
   cells: MatrixCell[];
 }
+
+export interface SearchHit {
+  documentId: string;
+  documentName: string;
+  startPos: number;
+  endPos: number;
+  contextBefore: string;
+  contextAfter: string;
+}

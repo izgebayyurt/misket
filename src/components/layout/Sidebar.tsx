@@ -5,7 +5,7 @@ import { useWorkspace } from "@/state/workspace";
 import { DocumentList } from "@/components/documents/DocumentList";
 import { CodeTree } from "@/components/codebook/CodeTree";
 import { Button } from "@/components/ui/button";
-import { BarChart3, List } from "lucide-react";
+import { BarChart3, List, Search } from "lucide-react";
 
 export function Sidebar({ project }: { project: ProjectInfo }) {
   const tab = useWorkspace((s) => s.sidebarTab);
@@ -55,6 +55,15 @@ export function Sidebar({ project }: { project: ProjectInfo }) {
         >
           <BarChart3 /> Analysis
           <span className="ml-auto text-xs text-fg-muted">{describe("analysis")}</span>
+        </Button>
+        <Button
+          variant={view.kind === "search" ? "secondary" : "ghost"}
+          className="w-full justify-start"
+          onClick={() => setView({ kind: "search" })}
+          data-testid="open-search"
+        >
+          <Search /> Search
+          <span className="ml-auto text-xs text-fg-muted">{describe("findInProject")}</span>
         </Button>
       </div>
     </aside>

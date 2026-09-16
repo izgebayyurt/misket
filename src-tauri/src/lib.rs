@@ -73,6 +73,7 @@ pub fn run() {
             commands::analysis::code_frequencies,
             commands::analysis::co_occurrence,
             commands::analysis::code_by_document,
+            commands::search::search_project,
             commands::memos::list_memos,
             commands::memos::create_memo,
             commands::memos::update_memo,

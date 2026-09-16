@@ -16,4 +16,5 @@ export const keys = {
   codeByDocument: ["analysis", "codeByDocument"] as const,
   memos: (target: MemoTarget) => ["memos", target] as const,
   allMemos: ["memos"] as const,
+  search: (query: string) => ["search", query] as const,
 };

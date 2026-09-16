@@ -21,6 +21,8 @@ describe("keymap", () => {
       "extendSelectionRight",
     );
     expect(matchAction(ev({ key: "ArrowRight", shiftKey: true }))).toBeNull();
+    expect(matchAction(ev({ key: "f", ctrlKey: true }))).toBe("find");
+    expect(matchAction(ev({ key: "f", ctrlKey: true, shiftKey: true }))).toBe("findInProject");
   });
 
   it("only fires global shortcuts inside text fields", () => {
@@ -28,5 +30,9 @@ describe("keymap", () => {
     expect(matchAction(ev({ key: "Backspace" }, input))).toBeNull();
     expect(matchAction(ev({ key: "Escape" }, input))).toBe("escape");
     expect(matchAction(ev({ key: "k", ctrlKey: true }, input))).toBe("palette");
+    expect(matchAction(ev({ key: "f", ctrlKey: true }, input))).toBe("find");
+    expect(matchAction(ev({ key: "f", ctrlKey: true, shiftKey: true }, input))).toBe(
+      "findInProject",
+    );
   });
 });

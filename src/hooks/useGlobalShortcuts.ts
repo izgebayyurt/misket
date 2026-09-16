@@ -28,6 +28,10 @@ export function useGlobalShortcuts() {
           e.preventDefault();
           ws.setView({ kind: "analysis", tab: "frequencies" });
           return;
+        case "findInProject":
+          e.preventDefault();
+          ws.setView({ kind: "search" });
+          return;
         case "tabDocuments":
           e.preventDefault();
           ws.setSidebarTab("documents");

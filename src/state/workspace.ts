@@ -4,10 +4,11 @@ import type { ExcerptFilter } from "@/api/types";
 export type AnalysisTab = "frequencies" | "cooccurrence" | "matrix";
 
 export type View =
-  | { kind: "document"; documentId: string; focusExcerptId?: string }
+  | { kind: "document"; documentId: string; focusExcerptId?: string; scrollToOffset?: number }
   /** `initialFilter` seeds the browser's filters when it mounts. */
   | { kind: "excerpts"; initialFilter?: ExcerptFilter }
   | { kind: "analysis"; tab: AnalysisTab }
+  | { kind: "search" }
   | { kind: "empty" };
 
 export type SidebarTab = "documents" | "codes";
@@ -27,7 +28,7 @@ interface WorkspaceState {
   focusedExcerptId: string | null;
   paletteOpen: boolean;
   setView: (view: View) => void;
-  openDocument: (documentId: string, focusExcerptId?: string) => void;
+  openDocument: (documentId: string, focusExcerptId?: string, scrollToOffset?: number) => void;
   /** Open the excerpt browser, optionally pre-filtered (analysis click-through). */
   openExcerpts: (initialFilter?: ExcerptFilter) => void;
   setSidebarTab: (tab: SidebarTab) => void;
@@ -50,9 +51,9 @@ const initial = {
 export const useWorkspace = create<WorkspaceState>((set) => ({
   ...initial,
   setView: (view) => set({ view, pendingSelection: null, focusedExcerptId: null }),
-  openDocument: (documentId, focusExcerptId) =>
+  openDocument: (documentId, focusExcerptId, scrollToOffset) =>
     set({
-      view: { kind: "document", documentId, focusExcerptId },
+      view: { kind: "document", documentId, focusExcerptId, scrollToOffset },
       pendingSelection: null,
       focusedExcerptId: focusExcerptId ?? null,
     }),

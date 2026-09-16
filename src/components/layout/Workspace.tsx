@@ -9,6 +9,7 @@ import { useWorkspace } from "@/state/workspace";
 import { useGlobalShortcuts } from "@/hooks/useGlobalShortcuts";
 import { ExcerptBrowser } from "@/components/excerpts/ExcerptBrowser";
 import { AnalysisView } from "@/components/analysis/AnalysisView";
+import { SearchView } from "@/components/search/SearchView";
 import { CodePalette } from "@/components/palette/CodePalette";
 import { ImportDropzone } from "@/components/documents/ImportDropzone";
 
@@ -32,6 +33,7 @@ export function Workspace({ project }: { project: ProjectInfo }) {
               key={view.documentId}
               documentId={view.documentId}
               focusExcerptId={view.focusExcerptId}
+              scrollToOffset={view.scrollToOffset}
             />
           ) : view.kind === "excerpts" ? (
             // Remount when the analysis views hand over a new filter, which
@@ -39,6 +41,8 @@ export function Workspace({ project }: { project: ProjectInfo }) {
             <ExcerptBrowser key={JSON.stringify(view.initialFilter ?? null)} />
           ) : view.kind === "analysis" ? (
             <AnalysisView tab={view.tab} />
+          ) : view.kind === "search" ? (
+            <SearchView />
           ) : (
             <EmptyState />
           )}
