@@ -742,6 +742,8 @@ export interface HistoryNodeSummary {
   branchName: string | null;
   undoable: boolean;
   isHead: boolean;
+  /** Which child redo would follow from here; null on a leaf. */
+  preferredChild: number | null;
   /** Oldest first; more than one means the tree branches here. */
   children: number[];
 }
