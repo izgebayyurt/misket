@@ -374,11 +374,12 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
       if (o.id === ex.id || o.kind !== "text" || o.startPos === null || o.endPos === null) continue;
       // Mergeable means touching or overlapping, which is what the backend accepts.
       if (o.startPos > ex.endPos || o.endPos < ex.startPos) continue;
-      const after =
-        o.startPos > ex.startPos || (o.startPos === ex.startPos && o.endPos > ex.endPos);
-      if (after) {
-        if (!next || o.startPos < next.startPos! || o.endPos! < next.endPos!) next = o;
-      } else if (!prev || o.startPos > prev.startPos! || o.endPos! > prev.endPos!) {
+      // Order by (start, end), the same order the list arrives in.
+      const before = (a: ExcerptWithCodes, b: ExcerptWithCodes) =>
+        a.startPos! < b.startPos! || (a.startPos === b.startPos && a.endPos! < b.endPos!);
+      if (before(ex, o)) {
+        if (!next || before(o, next)) next = o;
+      } else if (!prev || before(prev, o)) {
         prev = o;
       }
     }
