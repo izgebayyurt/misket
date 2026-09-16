@@ -2,6 +2,7 @@ import type { ExcerptFilter, MemoTarget, SetKind } from "@/api/types";
 
 export const keys = {
   project: ["project"] as const,
+  stats: ["stats"] as const,
   recent: ["recent"] as const,
   documents: ["documents"] as const,
   document: (id: string) => ["document", id] as const,

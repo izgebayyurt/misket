@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { createRequire } from "node:module";
-import { baseName, extensionOf, importFile } from "./index";
+import { baseName, extensionOf, imageMimeForPath, importFile, SUPPORTED_EXTENSIONS } from "./index";
 import { configurePdfWorker, linesFromItems } from "./pdf";
 import type { TextItem } from "pdfjs-dist/types/src/display/api";
 
@@ -65,7 +65,23 @@ describe("importers", () => {
     expect(text).toBe("Hello same worldtight\nBelow");
   });
 
+  it("recognises image extensions by their MIME type", () => {
+    expect(imageMimeForPath("/a/b/Poster.PNG")).toBe("image/png");
+    expect(imageMimeForPath("shot.jpg")).toBe("image/jpeg");
+    expect(imageMimeForPath("shot.jpeg")).toBe("image/jpeg");
+    expect(imageMimeForPath("diagram.webp")).toBe("image/webp");
+    expect(imageMimeForPath("notes.txt")).toBeNull();
+    expect(imageMimeForPath("scan.gif")).toBeNull();
+    expect(imageMimeForPath("noext")).toBeNull();
+    // Every image extension is offered in the file dialog.
+    for (const ext of ["png", "jpg", "jpeg", "webp"]) {
+      expect(SUPPORTED_EXTENSIONS).toContain(ext);
+    }
+  });
+
   it("rejects unknown extensions", async () => {
     await expect(importFile("x.rtf", new Uint8Array())).rejects.toThrow(/Unsupported/);
+    // Images are imported by the hook, not parsed into text here.
+    await expect(importFile("x.png", new Uint8Array())).rejects.toThrow(/Unsupported/);
   });
 });

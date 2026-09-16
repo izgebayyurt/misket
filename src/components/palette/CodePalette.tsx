@@ -59,7 +59,9 @@ function PaletteBody({ close }: { close: () => void }) {
   const target = picker
     ? picker.label
     : pending
-      ? "Code selection"
+      ? pending.kind === "image"
+        ? "Code region"
+        : "Code selection"
       : focused
         ? "Add to excerpt"
         : "No target";
@@ -71,12 +73,21 @@ function PaletteBody({ close }: { close: () => void }) {
       if (picker) {
         await picker.onPick(codeId);
       } else if (pending && documentId) {
-        const r = await applyCodes.mutateAsync({
-          documentId,
-          startPos: pending.start,
-          endPos: pending.end,
-          codeIds: [codeId],
-        });
+        const r = await applyCodes.mutateAsync(
+          pending.kind === "image"
+            ? {
+                documentId,
+                kind: "image_region",
+                geometry: pending.geometry,
+                codeIds: [codeId],
+              }
+            : {
+                documentId,
+                startPos: pending.start,
+                endPos: pending.end,
+                codeIds: [codeId],
+              },
+        );
         window.getSelection()?.removeAllRanges();
         setPending(null);
         setFocusedId(r.excerpt.id);
@@ -87,7 +98,7 @@ function PaletteBody({ close }: { close: () => void }) {
           codeIds: [codeId],
         });
       } else {
-        toast.info("Select some text or an excerpt first.");
+        toast.info("Select some text, draw a region, or focus an excerpt first.");
       }
       if (!keepOpen) close();
       else setQuery("");

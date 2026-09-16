@@ -24,6 +24,27 @@ export interface RecentProject {
   lastOpenedAt: string;
 }
 
+/** Everything the overview screen shows. */
+export interface ProjectStats {
+  documents: number;
+  textDocuments: number;
+  imageDocuments: number;
+  codes: number;
+  excerpts: number;
+  /** Excerpts tagged with at least one code. */
+  codedExcerpts: number;
+  memos: number;
+  descriptorFields: number;
+  /** Code points, summed over text documents. */
+  totalTextLength: number;
+  /** Latest `updatedAt` across documents, codes, excerpts and memos. */
+  lastActivityAt: string | null;
+  /** `[date "YYYY-MM-DD", count]`, oldest first, one per of the last 30 days. */
+  excerptsPerDay: [string, number][];
+  /** `[codeId, count]`, direct tags only, highest first, top 8. */
+  topCodes: [string, number][];
+}
+
 // Mirrors AppSettings in src-tauri/src/settings.rs (app-level, not project data).
 export type Theme = "system" | "light" | "dark";
 
@@ -37,6 +58,28 @@ export interface AppSettings {
 }
 
 export type DocumentKind = "text" | "image" | "video";
+
+/** Size and MIME of an image (later: video) document's stored media. */
+export interface MediaInfo {
+  width: number;
+  height: number;
+  mime: string;
+}
+
+/**
+ * An image import. The bytes are copied into the project file; when they are
+ * omitted the backend reads them from `sourcePath`, which keeps megabytes off
+ * the IPC bridge.
+ */
+export interface NewImageDocument {
+  name: string;
+  sourcePath?: string | null;
+  mime: string;
+  width: number;
+  height: number;
+  bytes?: number[] | null;
+  allowDuplicate?: boolean;
+}
 
 export interface NewDocument {
   name: string;
@@ -53,6 +96,8 @@ export interface DocumentSummary {
   sourcePath: string | null;
   sourceFormat: string | null;
   textLength: number | null;
+  /** Image and video documents only. */
+  media: MediaInfo | null;
   sortOrder: number;
   excerptCount: number;
   createdAt: string;
@@ -130,10 +175,21 @@ export interface ExcerptWithCodes {
   updatedAt: string;
 }
 
+/** A region of an image, as fractions of its width and height (0..1). */
+export interface Rect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/** `kind` defaults to `text`, which uses `startPos`/`endPos`; `image_region` uses `geometry`. */
 export interface ApplyCodesInput {
   documentId: string;
-  startPos: number;
-  endPos: number;
+  kind?: ExcerptKind;
+  startPos?: number | null;
+  endPos?: number | null;
+  geometry?: Rect | null;
   codeIds: string[];
 }
 

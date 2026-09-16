@@ -13,6 +13,7 @@ pub mod memos;
 pub mod migrations;
 pub mod search;
 pub mod sets;
+pub mod stats;
 pub mod text;
 pub mod util;
 
@@ -140,6 +141,20 @@ impl OpenProject {
             counts: counts(&self.conn)?,
         })
     }
+
+    /// Rename the project (`project_meta.name`). Trims the name and rejects
+    /// an empty one.
+    pub fn rename(&self, name: &str) -> Result<ProjectInfo> {
+        let name = name.trim();
+        if name.is_empty() {
+            return Err(AppError::Validation("project name is required".into()));
+        }
+        self.conn.execute(
+            "UPDATE project_meta SET value = ?1 WHERE key = 'name'",
+            [name],
+        )?;
+        self.info()
+    }
 }
 
 fn set_pragmas(conn: &Connection) -> Result<()> {
@@ -228,13 +243,15 @@ mod tests {
             let p = OpenProject::create(&path, "Old", "0.1.0").unwrap();
             p.conn
                 .execute_batch(
-                    "DROP TRIGGER set_members_code_deleted;
+                    "DROP TABLE descriptor_values;
+                     DROP TABLE descriptor_fields;
+                     DROP TABLE media_blobs;
+                     DROP INDEX excerpts_image_region_uq;
+                     DROP TRIGGER set_members_code_deleted;
                      DROP TRIGGER set_members_document_deleted;
                      DROP TABLE saved_filters;
                      DROP TABLE set_members;
                      DROP TABLE sets;
-                     DROP TABLE descriptor_values;
-                     DROP TABLE descriptor_fields;
                      PRAGMA user_version = 1;",
                 )
                 .unwrap();
@@ -252,10 +269,26 @@ mod tests {
             .query_row("PRAGMA user_version", [], |r| r.get(0))
             .unwrap();
         assert_eq!(backup_version, 1);
-        // The tables the later migrations added are usable.
+        // The tables the migrations added are usable again.
         p.conn
-            .execute_batch("SELECT count(*) FROM descriptor_fields; SELECT count(*) FROM sets;")
+            .execute_batch(
+                "SELECT count(*) FROM descriptor_fields;
+                 SELECT count(*) FROM media_blobs;
+                 SELECT count(*) FROM sets;",
+            )
             .unwrap();
+    }
+
+    #[test]
+    fn rename_trims_and_rejects_empty() {
+        let p = OpenProject::in_memory("Old name").unwrap();
+        let info = p.rename("  New name  ").unwrap();
+        assert_eq!(info.name, "New name");
+        assert_eq!(p.info().unwrap().name, "New name");
+        assert!(matches!(p.rename(""), Err(AppError::Validation(_))));
+        assert!(matches!(p.rename("   "), Err(AppError::Validation(_))));
+        // A rejected rename does not touch the stored name.
+        assert_eq!(p.info().unwrap().name, "New name");
     }
 
     #[test]

@@ -256,6 +256,7 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
     }
     setPending({
       documentId,
+      kind: "text",
       start: utf16ToCp(offsetMap, offs.start),
       end: utf16ToCp(offsetMap, offs.end),
     });
@@ -631,7 +632,7 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
   const applyToSelection = useCallback(
     async (codeIds: string[]) => {
       const p = useWorkspace.getState().pendingSelection;
-      if (!p) return;
+      if (p?.kind !== "text") return;
       try {
         const r = await applyCodes.mutateAsync({
           documentId,
@@ -657,7 +658,7 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
       const codeId = shortcutToCode.get(e.key.toLowerCase());
       if (!codeId) return;
       const ws = useWorkspace.getState();
-      if (ws.pendingSelection && ws.pendingSelection.documentId === documentId) {
+      if (ws.pendingSelection?.kind === "text" && ws.pendingSelection.documentId === documentId) {
         e.preventDefault();
         void applyToSelection([codeId]);
       } else if (ws.focusedExcerptId) {

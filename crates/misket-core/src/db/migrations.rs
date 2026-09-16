@@ -7,7 +7,8 @@ use crate::error::Result;
 const MIGRATIONS: &[(i64, &str)] = &[
     (1, include_str!("migrations/0001_init.sql")),
     (2, include_str!("migrations/0002_descriptors.sql")),
-    (3, include_str!("migrations/0003_sets.sql")),
+    (3, include_str!("migrations/0003_media_blobs.sql")),
+    (4, include_str!("migrations/0004_sets.sql")),
 ];
 
 pub fn latest_version() -> i64 {
@@ -64,6 +65,43 @@ mod tests {
         assert_eq!(MIGRATIONS.first().unwrap().0, 1);
         assert!(MIGRATIONS.windows(2).all(|w| w[0].0 + 1 == w[1].0));
         assert_eq!(latest_version(), MIGRATIONS.len() as i64);
+    }
+
+    #[test]
+    fn media_blob_table_and_image_region_index_exist() {
+        let conn = Connection::open_in_memory().unwrap();
+        migrate(&conn).unwrap();
+        let table: i64 = conn
+            .query_row(
+                "SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = 'media_blobs'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(table, 1);
+        let index: i64 = conn
+            .query_row(
+                "SELECT count(*) FROM sqlite_master WHERE type = 'index'
+                 AND name = 'excerpts_image_region_uq'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(index, 1);
+        // The blob rows go with their document.
+        conn.execute_batch(
+            "INSERT INTO documents (id, kind, name, content_hash, media_json, created_at, updated_at)
+               VALUES ('d', 'image', 'Poster', 'h', '{}', 't', 't');
+             INSERT INTO media_blobs (document_id, mime, bytes)
+               VALUES ('d', 'image/png', x'89504e47');",
+        )
+        .unwrap();
+        conn.execute_batch("PRAGMA foreign_keys = ON; DELETE FROM documents;")
+            .unwrap();
+        let left: i64 = conn
+            .query_row("SELECT count(*) FROM media_blobs", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(left, 0);
     }
 
     #[test]

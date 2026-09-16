@@ -1,6 +1,13 @@
 import { describe } from "@/core/keymap";
 import { useState } from "react";
-import { ChevronDown, FileText, FolderOpen, MoreHorizontal, Upload } from "lucide-react";
+import {
+  ChevronDown,
+  FileText,
+  FolderOpen,
+  Image as ImageIcon,
+  MoreHorizontal,
+  Upload,
+} from "lucide-react";
 import { useDeleteDocument, useDocuments, useRenameDocument } from "@/queries/documents";
 import { useWorkspace } from "@/state/workspace";
 import { Button } from "@/components/ui/button";
@@ -70,7 +77,9 @@ export function DocumentList() {
         </DropdownMenu>
       </div>
       {docs && docs.length === 0 ? (
-        <p className="px-3 py-2 text-xs text-fg-muted">No documents yet. Import txt, md or docx.</p>
+        <p className="px-3 py-2 text-xs text-fg-muted">
+          No documents yet. Import txt, md, docx, pdf or images.
+        </p>
       ) : null}
       <ul>
         {docs?.map((d) => {
@@ -91,7 +100,11 @@ export function DocumentList() {
                   }}
                   data-testid="document-item"
                 >
-                  <FileText className="size-4 shrink-0 text-fg-muted" />
+                  {d.kind === "image" ? (
+                    <ImageIcon className="size-4 shrink-0 text-fg-muted" />
+                  ) : (
+                    <FileText className="size-4 shrink-0 text-fg-muted" />
+                  )}
                   <span className="truncate">{d.name}</span>
                   {d.sourceFormat ? (
                     <span className="shrink-0 rounded border border-border px-1 text-[10px] uppercase text-fg-muted">

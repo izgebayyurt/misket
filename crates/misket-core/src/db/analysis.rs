@@ -302,9 +302,10 @@ mod tests {
             conn,
             ApplyCodesInput {
                 document_id: doc.into(),
-                start_pos: start,
-                end_pos: end,
+                start_pos: Some(start),
+                end_pos: Some(end),
                 code_ids: code_ids.iter().map(|c| c.to_string()).collect(),
+                ..Default::default()
             },
         )
         .unwrap()

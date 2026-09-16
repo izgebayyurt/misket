@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Keyboard shortcuts</title>
+    <meta
+      name="description"
+      content="Every Misket keyboard shortcut, for macOS and for Windows/Linux, generated from the app's own keymap."
+    />
+    <link rel="stylesheet" href="../style.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="site-header">
+      <div class="wrap">
+        <a class="brand" href="../index.html"><span class="dot">●</span> Misket</a>
+        <nav class="site-nav" aria-label="Site">
+          <a href="../index.html">Home</a>
+          <a href="install.html">Install</a>
+          <a href="tutorial.html">Tutorial</a>
+          <a href="shortcuts.html" aria-current="page">Shortcuts</a>
+          <a href="data.html">Data &amp; privacy</a>
+          <a href="https://github.com/izgebayyurt/misket">GitHub</a>
+        </nav>
+      </div>
+    </header>
+
+    <main id="main" class="prose">
+      <h1>Keyboard shortcuts</h1>
+      <p class="lede">
+        Misket is built to be used without reaching for the mouse. This page mirrors
+        <code>src/core/keymap.ts</code> — every action the app binds a chord to, for both macOS and
+        Windows/Linux. In the app itself, open this same reference any time with
+        <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>/</kbd>.
+      </p>
+      <p>
+        A test in the app's own repository (<code>src/core/keymap.test.ts</code>) checks that every
+        action listed here still appears on this page, so this table cannot silently go stale as
+        shortcuts change.
+      </p>
+
+      <h2>Global</h2>
+      <table>
+        <caption>
+          Available anywhere in the app, even while typing in a text field.
+        </caption>
+        <thead>
+          <tr>
+            <th scope="col">Action</th>
+            <th scope="col">macOS</th>
+            <th scope="col">Windows / Linux</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Open project</td>
+            <td><kbd>⌘O</kbd></td>
+            <td><kbd>Ctrl+O</kbd></td>
+          </tr>
+          <tr>
+            <td>New project</td>
+            <td><kbd>⌘N</kbd></td>
+            <td><kbd>Ctrl+N</kbd></td>
+          </tr>
+          <tr>
+            <td>Import documents</td>
+            <td><kbd>⌘I</kbd></td>
+            <td><kbd>Ctrl+I</kbd></td>
+          </tr>
+          <tr>
+            <td>Project overview</td>
+            <td><kbd>⌘⇧H</kbd></td>
+            <td><kbd>Ctrl+Shift+H</kbd></td>
+          </tr>
+          <tr>
+            <td>Excerpt browser</td>
+            <td><kbd>⌘E</kbd></td>
+            <td><kbd>Ctrl+E</kbd></td>
+          </tr>
+          <tr>
+            <td>Analysis views</td>
+            <td><kbd>⌘⇧A</kbd></td>
+            <td><kbd>Ctrl+Shift+A</kbd></td>
+          </tr>
+          <tr>
+            <td>Switch to Documents tab</td>
+            <td><kbd>⌘1</kbd></td>
+            <td><kbd>Ctrl+1</kbd></td>
+          </tr>
+          <tr>
+            <td>Switch to Codes tab</td>
+            <td><kbd>⌘2</kbd></td>
+            <td><kbd>Ctrl+2</kbd></td>
+          </tr>
+          <tr>
+            <td>New memo</td>
+            <td><kbd>⌘M</kbd></td>
+            <td><kbd>Ctrl+M</kbd></td>
+          </tr>
+          <tr>
+            <td>Open code palette</td>
+            <td><kbd>⌘K</kbd></td>
+            <td><kbd>Ctrl+K</kbd></td>
+          </tr>
+          <tr>
+            <td>Find in document</td>
+            <td><kbd>⌘F</kbd></td>
+            <td><kbd>Ctrl+F</kbd></td>
+          </tr>
+          <tr>
+            <td>Find in project</td>
+            <td><kbd>⌘⇧F</kbd></td>
+            <td><kbd>Ctrl+Shift+F</kbd></td>
+          </tr>
+          <tr>
+            <td>Open settings</td>
+            <td><kbd>⌘,</kbd></td>
+            <td><kbd>Ctrl+,</kbd></td>
+          </tr>
+          <tr>
+            <td>Keyboard shortcuts</td>
+            <td><kbd>⌘/</kbd></td>
+            <td><kbd>Ctrl+/</kbd></td>
+          </tr>
+          <tr>
+            <td>Cancel / close</td>
+            <td><kbd>Esc</kbd></td>
+            <td><kbd>Esc</kbd></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h2>Undo and history</h2>
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">Action</th>
+            <th scope="col">macOS</th>
+            <th scope="col">Windows / Linux</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Undo</td>
+            <td><kbd>⌘Z</kbd></td>
+            <td><kbd>Ctrl+Z</kbd></td>
+          </tr>
+          <tr>
+            <td>Redo</td>
+            <td><kbd>⌘⇧Z</kbd></td>
+            <td><kbd>Ctrl+Shift+Z</kbd></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h2>Coding and the focused excerpt</h2>
+      <table>
+        <caption>
+          These are disabled while typing in a text field.
+        </caption>
+        <thead>
+          <tr>
+            <th scope="col">Action</th>
+            <th scope="col">macOS</th>
+            <th scope="col">Windows / Linux</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Next excerpt</td>
+            <td><kbd>Tab</kbd></td>
+            <td><kbd>Tab</kbd></td>
+          </tr>
+          <tr>
+            <td>Previous excerpt</td>
+            <td><kbd>⇧Tab</kbd></td>
+            <td><kbd>Shift+Tab</kbd></td>
+          </tr>
+          <tr>
+            <td>Edit focused excerpt</td>
+            <td><kbd>Enter</kbd></td>
+            <td><kbd>Enter</kbd></td>
+          </tr>
+          <tr>
+            <td>Delete focused excerpt</td>
+            <td><kbd>Backspace</kbd></td>
+            <td><kbd>Backspace</kbd></td>
+          </tr>
+          <tr>
+            <td>Extend selection left</td>
+            <td><kbd>⌥⇧←</kbd></td>
+            <td><kbd>Alt+Shift+←</kbd></td>
+          </tr>
+          <tr>
+            <td>Extend selection right</td>
+            <td><kbd>⌥⇧→</kbd></td>
+            <td><kbd>Alt+Shift+→</kbd></td>
+          </tr>
+          <tr>
+            <td>Split excerpt at the cursor</td>
+            <td><kbd>⌘⇧S</kbd></td>
+            <td><kbd>Ctrl+Shift+S</kbd></td>
+          </tr>
+          <tr>
+            <td>Merge excerpt with its neighbour</td>
+            <td><kbd>⌘⇧M</kbd></td>
+            <td><kbd>Ctrl+Shift+M</kbd></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h2>Moving excerpt boundaries</h2>
+      <p>
+        <kbd>Alt</kbd> + arrows moves the focused excerpt's <strong>end</strong> edge; adding
+        <kbd>Ctrl</kbd>/<kbd>⌘</kbd> moves the <strong>start</strong> edge instead, and adding
+        <kbd>Shift</kbd> steps by one character rather than one word. The end edge's character step
+        is the one exception to that rule — it drops <kbd>Alt</kbd>, because
+        <kbd>Alt+Shift</kbd>+arrows already extends the selection (above). You can also drag the
+        round grips at either end of the focused excerpt with the mouse.
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">Action</th>
+            <th scope="col">macOS</th>
+            <th scope="col">Windows / Linux</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Move excerpt end left by a word</td>
+            <td><kbd>⌥←</kbd></td>
+            <td><kbd>Alt+←</kbd></td>
+          </tr>
+          <tr>
+            <td>Move excerpt end right by a word</td>
+            <td><kbd>⌥→</kbd></td>
+            <td><kbd>Alt+→</kbd></td>
+          </tr>
+          <tr>
+            <td>Move excerpt end left by a character</td>
+            <td><kbd>⌘⇧←</kbd></td>
+            <td><kbd>Ctrl+Shift+←</kbd></td>
+          </tr>
+          <tr>
+            <td>Move excerpt end right by a character</td>
+            <td><kbd>⌘⇧→</kbd></td>
+            <td><kbd>Ctrl+Shift+→</kbd></td>
+          </tr>
+          <tr>
+            <td>Move excerpt start left by a word</td>
+            <td><kbd>⌘⌥←</kbd></td>
+            <td><kbd>Ctrl+Alt+←</kbd></td>
+          </tr>
+          <tr>
+            <td>Move excerpt start right by a word</td>
+            <td><kbd>⌘⌥→</kbd></td>
+            <td><kbd>Ctrl+Alt+→</kbd></td>
+          </tr>
+          <tr>
+            <td>Move excerpt start left by a character</td>
+            <td><kbd>⌘⌥⇧←</kbd></td>
+            <td><kbd>Ctrl+Alt+Shift+←</kbd></td>
+          </tr>
+          <tr>
+            <td>Move excerpt start right by a character</td>
+            <td><kbd>⌘⌥⇧→</kbd></td>
+            <td><kbd>Ctrl+Alt+Shift+→</kbd></td>
+          </tr>
+        </tbody>
+      </table>
+    </main>
+
+    <footer class="site-footer">
+      <div class="wrap">
+        <span>Misket is free software, MIT-licensed.</span>
+        <span
+          ><a href="https://github.com/izgebayyurt/misket">Source on GitHub</a> ·
+          <a href="https://github.com/izgebayyurt/misket/blob/main/ROADMAP.md">Roadmap</a></span
+        >
+      </div>
+    </footer>
+  </body>
+</html>

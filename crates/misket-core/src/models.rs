@@ -29,6 +29,30 @@ pub struct RecentProject {
     pub last_opened_at: String,
 }
 
+/// Everything the overview screen shows. See `db::stats::project_stats`.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectStats {
+    pub documents: i64,
+    pub text_documents: i64,
+    pub image_documents: i64,
+    pub codes: i64,
+    pub excerpts: i64,
+    /// Excerpts tagged with at least one code.
+    pub coded_excerpts: i64,
+    pub memos: i64,
+    pub descriptor_fields: i64,
+    /// Code points, summed over text documents.
+    pub total_text_length: i64,
+    /// Latest `updated_at` across documents, codes, excerpts and memos.
+    pub last_activity_at: Option<String>,
+    /// `(date "YYYY-MM-DD", count)`, one entry per of the last 30 days
+    /// (oldest first), zero-filled, based on `excerpts.created_at`.
+    pub excerpts_per_day: Vec<(String, i64)>,
+    /// `(codeId, count)`, direct tags only, highest first, top 8.
+    pub top_codes: Vec<(String, i64)>,
+}
+
 // ---------------------------------------------------------------- documents
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -43,6 +67,35 @@ pub struct NewDocument {
     pub allow_duplicate: bool,
 }
 
+/// An image document. The bytes are stored inside the project file so a
+/// `.misket` stays self-contained; `source_path` is kept as a reference to
+/// where the file came from. When `bytes` is absent they are read from
+/// `source_path` instead.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct NewImageDocument {
+    pub name: String,
+    #[serde(default)]
+    pub source_path: Option<String>,
+    /// `image/png`, `image/jpeg` or `image/webp`.
+    pub mime: String,
+    pub width: i64,
+    pub height: i64,
+    #[serde(default)]
+    pub bytes: Option<Vec<u8>>,
+    #[serde(default)]
+    pub allow_duplicate: bool,
+}
+
+/// `documents.media_json` for an image (and, later, a video) document.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct MediaInfo {
+    pub width: i64,
+    pub height: i64,
+    pub mime: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct DocumentSummary {
@@ -52,6 +105,8 @@ pub struct DocumentSummary {
     pub source_path: Option<String>,
     pub source_format: Option<String>,
     pub text_length: Option<i64>,
+    /// Image and video documents only: size and MIME of the stored media.
+    pub media: Option<MediaInfo>,
     pub sort_order: i64,
     pub excerpt_count: i64,
     pub created_at: String,
@@ -189,12 +244,33 @@ pub struct ImportReport {
 
 // ----------------------------------------------------------------- excerpts
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+/// A normalized rectangle on an image document: fractions of the image's
+/// width and height, so it survives any zoom level or re-export.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct Rect {
+    pub x: f64,
+    pub y: f64,
+    pub w: f64,
+    pub h: f64,
+}
+
+/// Apply codes to a range of a document, creating the excerpt if needed.
+///
+/// `kind` defaults to `text`, which uses `start_pos`/`end_pos` (code points,
+/// end-exclusive); `image_region` uses `geometry` instead.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ApplyCodesInput {
     pub document_id: String,
-    pub start_pos: i64,
-    pub end_pos: i64,
+    #[serde(default)]
+    pub kind: Option<String>,
+    #[serde(default)]
+    pub start_pos: Option<i64>,
+    #[serde(default)]
+    pub end_pos: Option<i64>,
+    #[serde(default)]
+    pub geometry: Option<Rect>,
     pub code_ids: Vec<String>,
 }
 

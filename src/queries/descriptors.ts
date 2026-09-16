@@ -37,6 +37,7 @@ export function useInvalidateDescriptors() {
     else qc.invalidateQueries({ queryKey: keys.allDescriptorValues });
     // Descriptor conditions change what the excerpt browser shows.
     qc.invalidateQueries({ queryKey: keys.excerptQueries });
+    qc.invalidateQueries({ queryKey: keys.stats });
   };
 }
 

@@ -15,6 +15,7 @@ Misket is a local-first desktop app for qualitative coding (Tauri 2 + React/Type
 - Inside the document view text root, all text lives in `span[data-s]` elements whose only child is a text node. Do not put other text-bearing elements inside `.doc-text`.
 - Every mutation that can be undone registers a command via `useUndoStore.getState().run(...)`. Non-undoable operations confirm first and call `clear()`.
 - `ExcerptFilter` has a manual `Default` in Rust (limit 200, include descendants); keep TS `src/api/types.ts` in sync with `crates/misket-core/src/models.rs`.
+- Image documents keep their bytes in `media_blobs` and are served to the webview through the `misket-media` URI scheme (`src-tauri/src/lib.rs`, `src/api/media.ts`), never over `invoke`. Region excerpts are normalized rectangles; Rust writes `geometry` in one canonical form so the partial unique index can upsert it.
 
 ## Before pushing
 

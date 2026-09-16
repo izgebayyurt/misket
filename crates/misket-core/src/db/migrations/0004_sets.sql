@@ -1,4 +1,4 @@
--- Misket project schema, version 3: code and document sets, saved filters.
+-- Misket project schema, version 4: code and document sets, saved filters.
 -- Applied inside a transaction by db::migrate().
 
 -- A named group of codes or of documents. Names are unique per kind,
