@@ -55,6 +55,12 @@ keyboard-friendly interface without a subscription.
   per document), a code co-occurrence matrix showing which codes overlap on the
   same text, and a code-by-document heatmap. Every cell clicks through to the
   matching excerpts, and each view exports to CSV.
+- **Framework matrices**: a grid of cases by themes — a row per document, per
+  document in a set, or per value of a descriptor ("Site", "Wave"), and a
+  column per code or per code in a set — where you write a short summary in
+  every cell. The badge on a cell counts the excerpts behind it and opens them
+  in a drawer beside the grid, so the summary is written while reading the
+  evidence. Exports as CSV or as a Markdown table.
 - **Descriptors**: define document attributes (text, number, choice or date)
   such as site, interview wave or age group, set them per document or in a
   table of every document, and filter excerpts by them ("Age is more than 30",
