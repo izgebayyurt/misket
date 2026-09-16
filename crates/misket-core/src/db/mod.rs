@@ -12,6 +12,7 @@ pub mod export;
 pub mod memos;
 pub mod migrations;
 pub mod search;
+pub mod sets;
 pub mod stats;
 pub mod text;
 pub mod util;
@@ -246,6 +247,11 @@ mod tests {
                      DROP TABLE descriptor_fields;
                      DROP TABLE media_blobs;
                      DROP INDEX excerpts_image_region_uq;
+                     DROP TRIGGER set_members_code_deleted;
+                     DROP TRIGGER set_members_document_deleted;
+                     DROP TABLE saved_filters;
+                     DROP TABLE set_members;
+                     DROP TABLE sets;
                      PRAGMA user_version = 1;",
                 )
                 .unwrap();
@@ -267,7 +273,8 @@ mod tests {
         p.conn
             .execute_batch(
                 "SELECT count(*) FROM descriptor_fields;
-                 SELECT count(*) FROM media_blobs;",
+                 SELECT count(*) FROM media_blobs;
+                 SELECT count(*) FROM sets;",
             )
             .unwrap();
     }

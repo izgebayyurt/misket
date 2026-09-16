@@ -3,7 +3,7 @@
 
 use rusqlite::{params, Connection, OptionalExtension, Row};
 
-use super::{codes, descriptors, documents, memos, text, util};
+use super::{codes, descriptors, documents, memos, sets, text, util};
 use crate::error::{AppError, Result};
 use crate::models::{
     ApplyCodesInput, ApplyResult, DescriptorFilter, ExcerptDetail, ExcerptFilter, ExcerptPage,
@@ -723,12 +723,36 @@ fn descriptor_clause(
 }
 
 /// Query excerpts across the project with code/document filters and paging.
+/// The picked ids followed by the ids the picked sets expand to, without
+/// duplicates.
+fn union(picked: Option<&[String]>, from_sets: &[String]) -> Vec<String> {
+    let mut out: Vec<String> = picked.unwrap_or_default().to_vec();
+    for id in from_sets {
+        if !out.contains(id) {
+            out.push(id.clone());
+        }
+    }
+    out
+}
+
 pub fn query(conn: &Connection, filter: &ExcerptFilter) -> Result<ExcerptPage> {
     let mut where_clauses = vec!["1 = 1".to_string()];
     let mut args: Vec<rusqlite::types::Value> = vec![];
 
-    if let Some(code_ids) = &filter.code_ids {
-        if !code_ids.is_empty() {
+    // A code set stands for all of its codes, so it is simply unioned into the
+    // picked code ids before anything else looks at them; the same for
+    // document sets and document ids.
+    let code_sets = filter.code_set_ids.as_deref().unwrap_or_default();
+    let code_ids = union(
+        filter.code_ids.as_deref(),
+        &sets::union_members(conn, code_sets)?,
+    );
+    let wants_codes = !code_ids.is_empty() || !code_sets.is_empty();
+    if wants_codes {
+        if code_ids.is_empty() {
+            // Only empty or unknown sets were picked: nothing can match.
+            where_clauses.push("0 = 1".into());
+        } else {
             // Any of the listed codes by default; with `require_all_codes`
             // every one of them must be present, each still standing for its
             // whole subtree when descendants are included.
@@ -756,11 +780,18 @@ pub fn query(conn: &Connection, filter: &ExcerptFilter) -> Result<ExcerptPage> {
             }
         }
     }
-    if let Some(doc_ids) = &filter.document_ids {
-        if !doc_ids.is_empty() {
+    let doc_sets = filter.document_set_ids.as_deref().unwrap_or_default();
+    let doc_ids = union(
+        filter.document_ids.as_deref(),
+        &sets::union_members(conn, doc_sets)?,
+    );
+    if !doc_ids.is_empty() || !doc_sets.is_empty() {
+        if doc_ids.is_empty() {
+            where_clauses.push("0 = 1".into());
+        } else {
             let ph = doc_ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
             where_clauses.push(format!("e.document_id IN ({ph})"));
-            args.extend(doc_ids.iter().cloned().map(rusqlite::types::Value::from));
+            args.extend(doc_ids.into_iter().map(rusqlite::types::Value::from));
         }
     }
     if filter.uncoded_only {
@@ -1283,6 +1314,118 @@ mod tests {
         assert_eq!(page.total, 3);
         assert_eq!(page.rows.len(), 1);
         assert_eq!(page.rows[0].excerpt.id, e2);
+    }
+
+    #[test]
+    fn code_and_document_sets_expand_into_the_filter() {
+        let (p, doc, a, b) = setup();
+        let mut other = new_doc("second document text");
+        other.name = "Doc 2".into();
+        let doc2 = documents::create(&p.conn, other).unwrap().summary.id;
+        let c = mk_code(&p.conn, "C", None);
+        let e1 = apply(&p.conn, &doc, 0, 5, &[&a]).excerpt.id;
+        let e2 = apply(&p.conn, &doc, 6, 11, &[&c.id]).excerpt.id;
+        let e3 = apply(&p.conn, &doc2, 0, 6, &[&c.id]).excerpt.id;
+
+        let code_set = sets::create_set(&p.conn, "code", "Both", &[a.clone(), c.id.clone()], None)
+            .unwrap()
+            .id;
+        let doc_set = sets::create_set(
+            &p.conn,
+            "document",
+            "Wave 1",
+            std::slice::from_ref(&doc),
+            None,
+        )
+        .unwrap()
+        .id;
+
+        // A code set behaves exactly like ticking each of its codes.
+        let by_set = query(
+            &p.conn,
+            &ExcerptFilter {
+                code_set_ids: Some(vec![code_set.clone()]),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(by_set.total, 3);
+        assert_eq!(
+            by_set
+                .rows
+                .iter()
+                .map(|r| r.excerpt.id.clone())
+                .collect::<Vec<_>>(),
+            vec![e1.clone(), e2.clone(), e3.clone()]
+        );
+
+        // Combined with a document set, which narrows it to one document.
+        let narrowed = query(
+            &p.conn,
+            &ExcerptFilter {
+                code_set_ids: Some(vec![code_set.clone()]),
+                document_set_ids: Some(vec![doc_set.clone()]),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(narrowed.total, 2);
+        assert!(narrowed.rows.iter().all(|r| r.excerpt.document_id == doc));
+
+        // Members union with explicitly picked ids rather than replacing them.
+        let with_picked = query(
+            &p.conn,
+            &ExcerptFilter {
+                code_ids: Some(vec![b.clone()]),
+                code_set_ids: Some(vec![code_set.clone()]),
+                document_ids: Some(vec![doc2.clone()]),
+                document_set_ids: Some(vec![doc_set.clone()]),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(with_picked.total, 3);
+
+        // `require_all_codes` treats a set as "all of these codes".
+        let all_of = query(
+            &p.conn,
+            &ExcerptFilter {
+                code_set_ids: Some(vec![code_set.clone()]),
+                require_all_codes: true,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(all_of.total, 0);
+        add_codes(&p.conn, &e2, std::slice::from_ref(&a)).unwrap();
+        let all_of = query(
+            &p.conn,
+            &ExcerptFilter {
+                code_set_ids: Some(vec![code_set.clone()]),
+                require_all_codes: true,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(all_of.total, 1);
+        assert_eq!(all_of.rows[0].excerpt.id, e2);
+
+        // An empty (or unknown) set matches nothing rather than everything.
+        let empty = sets::create_set(&p.conn, "code", "Empty", &[], None)
+            .unwrap()
+            .id;
+        for f in [
+            ExcerptFilter {
+                code_set_ids: Some(vec![empty]),
+                ..Default::default()
+            },
+            ExcerptFilter {
+                document_set_ids: Some(vec!["nope".into()]),
+                ..Default::default()
+            },
+        ] {
+            assert_eq!(query(&p.conn, &f).unwrap().total, 0);
+        }
     }
 
     #[test]

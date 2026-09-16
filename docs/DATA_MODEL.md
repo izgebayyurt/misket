@@ -22,6 +22,9 @@ stays a single file that can be copied while open), `synchronous = NORMAL`.
 | `memos`             | notes with at most one target: `document_id`, `code_id`, `excerpt_id`, or none (project memo). Each target is a real foreign key so deletes cascade                                                                                                                           |
 | `descriptor_fields` | document attributes ("Site", "Age group"). `kind` is `text`, `number`, `choice` or `date`; `options_json` holds a choice field's options as a JSON array of strings; `sort_order` is the order they are shown in. Names are unique case-insensitively                         |
 | `descriptor_values` | one value per (`document_id`, `field_id`), `WITHOUT ROWID`. Both foreign keys cascade, so deleting a document or a field takes its values with it                                                                                                                             |
+| `sets`              | named groups of codes or of documents. `kind` is `code` or `document`; names are unique per kind, case-insensitively, so "Round 1" can be both                                                                                                                                |
+| `set_members`       | `(set_id, member_id)`, `WITHOUT ROWID`. `member_id` is a code id or a document id depending on the set's kind, so it is not a foreign key; two triggers stand in for the cascade                                                                                              |
+| `saved_filters`     | a whole `ExcerptFilter` as JSON under a unique (case-insensitive) name                                                                                                                                                                                                        |
 
 All ids are UUID v4 strings so deleted rows can be restored with their original
 identity (undo) and so exports are stable.
@@ -92,6 +95,44 @@ that is still in use cannot be removed; both return `Validation`.
 kind compares as text, which is also the right order for ISO dates. Because
 `neq` and `empty` are `NOT EXISTS`, documents with no value for the field match
 them.
+
+## Sets and saved filters
+
+A **set** is a named group of codes or of documents. The two kinds live in one
+table because they behave identically; `sets.kind` says which, and the unique
+index is on `(kind, name COLLATE NOCASE)`, so the same name can name a code set
+and a document set.
+
+`set_members.member_id` points at `codes.id` or at `documents.id` depending on
+the set's kind, so it cannot be a foreign key and `ON DELETE CASCADE` cannot
+clean it up. Two triggers do that instead:
+
+```sql
+CREATE TRIGGER set_members_code_deleted AFTER DELETE ON codes BEGIN
+  DELETE FROM set_members
+   WHERE member_id = OLD.id
+     AND set_id IN (SELECT id FROM sets WHERE kind = 'code');
+END;
+```
+
+and the mirror image for `documents`. A set whose members have all been deleted
+is still a set; deleting a set (`ON DELETE CASCADE` on `set_id`) takes its
+member rows but never the codes or documents themselves.
+
+`ExcerptFilter` gains `code_set_ids` and `document_set_ids`. `db::excerpts::query`
+expands each set to its members and unions them into the ids the user picked
+before anything else looks at them, so a code set behaves exactly like ticking
+every code in it: `include_descendants` still expands each member to its
+subtree, and `require_all_codes` still asks for every one of them at once. A
+filter that names only empty or unknown sets matches nothing rather than
+everything.
+
+A **saved filter** is that whole `ExcerptFilter` serialized to JSON under a
+name. `save_filter` upserts on the name (case-insensitively), so saving twice
+under one name replaces it. JSON that cannot be parsed — written by a newer
+build, or hand-edited — reads back as the default filter rather than making the
+whole list unreadable. Applying one sets every field of the browser's filter
+state, so anything it leaves out returns to its default.
 
 ## Adjusting excerpts
 

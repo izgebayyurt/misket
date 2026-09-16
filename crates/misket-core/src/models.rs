@@ -344,6 +344,10 @@ pub struct MergeResult {
 pub struct ExcerptFilter {
     #[serde(default)]
     pub code_ids: Option<Vec<String>>,
+    /// Code sets; each one stands for all of its members, as if every member
+    /// had been ticked in `code_ids`.
+    #[serde(default)]
+    pub code_set_ids: Option<Vec<String>>,
     #[serde(default = "default_true")]
     pub include_descendants: bool,
     /// All listed codes must be present (default: any of them).
@@ -351,6 +355,9 @@ pub struct ExcerptFilter {
     pub require_all_codes: bool,
     #[serde(default)]
     pub document_ids: Option<Vec<String>>,
+    /// Document sets; unioned into `document_ids`.
+    #[serde(default)]
+    pub document_set_ids: Option<Vec<String>>,
     #[serde(default)]
     pub uncoded_only: bool,
     /// Descriptor conditions, ANDed together.
@@ -373,9 +380,11 @@ impl Default for ExcerptFilter {
     fn default() -> Self {
         Self {
             code_ids: None,
+            code_set_ids: None,
             include_descendants: true,
             require_all_codes: false,
             document_ids: None,
+            document_set_ids: None,
             uncoded_only: false,
             descriptors: None,
             limit: default_limit(),
@@ -540,6 +549,42 @@ pub struct DescriptorFilter {
     pub op: String,
     #[serde(default)]
     pub values: Vec<String>,
+}
+
+// --------------------------------------------------------------------- sets
+
+/// A named group of codes or of documents.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct SetInfo {
+    pub id: String,
+    /// `code` | `document`
+    pub kind: String,
+    pub name: String,
+    pub sort_order: i64,
+    pub member_count: i64,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+/// A deleted set plus its members, so undo can recreate it unchanged.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct SetWithMembers {
+    pub set: SetInfo,
+    pub member_ids: Vec<String>,
+}
+
+/// A named [`ExcerptFilter`], stored as JSON in `saved_filters.filter_json`.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct SavedFilter {
+    pub id: String,
+    pub name: String,
+    pub filter: ExcerptFilter,
+    pub sort_order: i64,
+    pub created_at: String,
+    pub updated_at: String,
 }
 
 // -------------------------------------------------------------------- memos

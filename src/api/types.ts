@@ -304,10 +304,15 @@ export interface MergeResult {
 
 export interface ExcerptFilter {
   codeIds?: string[] | null;
+  /** Code sets; each stands for all of its members, as if every member were
+   * ticked in `codeIds`. */
+  codeSetIds?: string[] | null;
   includeDescendants?: boolean;
   /** All listed codes must be present (default: any of them). */
   requireAllCodes?: boolean;
   documentIds?: string[] | null;
+  /** Document sets; unioned into `documentIds`. */
+  documentSetIds?: string[] | null;
   uncodedOnly?: boolean;
   /** Descriptor conditions, ANDed together. */
   descriptors?: DescriptorFilter[] | null;
@@ -345,6 +350,35 @@ export interface ExcerptRow extends ExcerptWithCodes {
 export interface ExcerptPage {
   rows: ExcerptRow[];
   total: number;
+}
+
+export type SetKind = "code" | "document";
+
+/** A named group of codes or of documents. */
+export interface SetInfo {
+  id: string;
+  kind: SetKind;
+  name: string;
+  sortOrder: number;
+  memberCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** A deleted set plus its members, so undo can recreate it unchanged. */
+export interface SetWithMembers {
+  set: SetInfo;
+  memberIds: string[];
+}
+
+/** A named `ExcerptFilter`. */
+export interface SavedFilter {
+  id: string;
+  name: string;
+  filter: ExcerptFilter;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
 }
 
 // ----------------------------------------------------------------- analysis
