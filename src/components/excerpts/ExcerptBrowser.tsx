@@ -89,6 +89,8 @@ export function ExcerptBrowser() {
         onDocumentSetIds={(documentSetIds) => update({ documentSetIds })}
         uncodedOnly={state.uncodedOnly}
         onUncodedOnly={(uncodedOnly) => update({ uncodedOnly })}
+        overlapsCodeId={state.overlapsCodeId}
+        onOverlapsCodeId={(overlapsCodeId) => update({ overlapsCodeId })}
         descriptors={state.descriptors}
         onDescriptors={(descriptors) => update({ descriptors })}
         filter={filter}
@@ -117,7 +119,7 @@ export function ExcerptBrowser() {
           <p className="p-6 text-sm text-fg-muted">
             {data.total === 0 && !isFiltered(state)
               ? "No excerpts yet. Select text in a document and press the palette shortcut to code it."
-              : state.requireAllCodes && codePickCount(state) > 1
+              : state.requireAllCodes && !state.overlapsCodeId && codePickCount(state) > 1
                 ? "No single excerpt carries all of these codes. Untick “match all selected codes” to see excerpts carrying any of them."
                 : "Nothing matches these filters."}
           </p>

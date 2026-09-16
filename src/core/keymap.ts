@@ -102,6 +102,14 @@ export const SHORTCUTS: Record<Action, Shortcut> = {
   escape: { key: "Escape", global: true },
 };
 
+/**
+ * Is `target` a genuine text-entry surface (typing there should keep its own
+ * keys)? A `<button>`, a menu trigger/item, or anything else that is merely
+ * *focusable* is not: shortcuts without `global` still fire normally there.
+ * This matters right after a dropdown-menu action (delete, rename, add to
+ * set…), where focus can land on the trigger button rather than back on the
+ * document — undo/redo must still work without an extra click. See issue #37.
+ */
 export function isTextField(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
   const tag = target.tagName;

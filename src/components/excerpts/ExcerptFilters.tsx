@@ -1,3 +1,4 @@
+import { X } from "lucide-react";
 import { useCodeTree } from "@/queries/codes";
 import { useDocuments } from "@/queries/documents";
 import { useSets } from "@/queries/sets";
@@ -24,6 +25,9 @@ interface Props {
   onDocumentSetIds: (v: string[]) => void;
   uncodedOnly: boolean;
   onUncodedOnly: (v: boolean) => void;
+  /** Set only by the analysis views' click-through; shown as a removable chip. */
+  overlapsCodeId: string | null;
+  onOverlapsCodeId: (v: string | null) => void;
   descriptors: DescriptorFilter[];
   onDescriptors: (v: DescriptorFilter[]) => void;
   /** The filter as it stands, for "Save current filter…". */
@@ -41,6 +45,9 @@ export function ExcerptFilters(p: Props) {
     list.includes(id) ? list.filter((x) => x !== id) : [...list, id];
   const codeCount = p.codeIds.length + p.codeSetIds.length;
   const docCount = p.documentIds.length + p.documentSetIds.length;
+  const overlapsCode = p.overlapsCodeId
+    ? flattenTree(tree).find((n) => n.code.id === p.overlapsCodeId)?.code
+    : undefined;
 
   return (
     <div className="flex flex-wrap items-center gap-2 border-b border-border bg-panel px-4 py-2 text-sm">
@@ -147,6 +154,21 @@ export function ExcerptFilters(p: Props) {
       {codeCount > 1 ? (
         <span className="text-xs text-fg-muted" data-testid="code-match-mode">
           {p.requireAllCodes ? "all of" : "any of"}
+        </span>
+      ) : null}
+      {p.overlapsCodeId ? (
+        <span
+          className="flex items-center gap-1 rounded-md border border-accent bg-accent/10 px-2 py-1 text-xs"
+          data-testid="overlaps-code-chip"
+        >
+          overlapping {overlapsCode?.name ?? p.overlapsCodeId}
+          <button
+            className="rounded p-0.5 text-fg-muted hover:bg-muted"
+            onClick={() => p.onOverlapsCodeId(null)}
+            aria-label={`Remove overlapping ${overlapsCode?.name ?? p.overlapsCodeId} filter`}
+          >
+            <X className="size-3" />
+          </button>
         </span>
       ) : null}
       <DescriptorConditions conditions={p.descriptors} onChange={p.onDescriptors} />

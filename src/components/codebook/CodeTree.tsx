@@ -420,7 +420,7 @@ function CodeRow(p: RowProps) {
                 <MoreHorizontal className="size-4" />
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" onCloseAutoFocus={(e) => e.preventDefault()}>
+            <DropdownMenuContent align="end">
               <CodeRowMenuItems code={code} onAction={p.onAction} menu={dropdownMenuPrimitives} />
             </DropdownMenuContent>
           </DropdownMenu>

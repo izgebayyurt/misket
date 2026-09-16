@@ -46,6 +46,36 @@ describe("keymap", () => {
     expect(matchAction(ev({ key: "h", ctrlKey: true, shiftKey: true }, input))).toBe("overview");
   });
 
+  it("treats a focused button or menu trigger as passthrough, not a text field", () => {
+    // After a dropdown-menu action (delete a set, rename, add to set…) focus
+    // can land on the trigger button rather than back on the document. Every
+    // shortcut that already works with nothing focused must keep working
+    // there too — undo/redo in particular (issue #37), without needing
+    // `global: true` and without an extra click to "reset" focus first.
+    const button = document.createElement("button");
+    expect(matchAction(ev({ key: "z", ctrlKey: true }, button))).toBe("undo");
+    expect(matchAction(ev({ key: "Z", ctrlKey: true, shiftKey: true }, button))).toBe("redo");
+    expect(matchAction(ev({ key: "k", ctrlKey: true }, button))).toBe("palette");
+    expect(matchAction(ev({ key: "f", ctrlKey: true }, button))).toBe("find");
+    expect(matchAction(ev({ key: "h", ctrlKey: true, shiftKey: true }, button))).toBe("overview");
+    expect(matchAction(ev({ key: "e", ctrlKey: true }, button))).toBe("excerptBrowser");
+
+    // A dropdown-menu trigger is still just a button.
+    button.setAttribute("aria-haspopup", "menu");
+    expect(matchAction(ev({ key: "z", ctrlKey: true }, button))).toBe("undo");
+
+    // Focus falling back to the document root behaves the same way.
+    expect(matchAction(ev({ key: "z", ctrlKey: true }, document.body))).toBe("undo");
+
+    // `matchAction` itself does not know about the focused excerpt: Backspace
+    // still resolves to `deleteExcerpt` here (as it would with nothing
+    // focused). What stops it from actually deleting anything is that
+    // clicking a sidebar button clears `focusedExcerptId` in the workspace
+    // store (see DocumentList's blur-on-click); this is a keymap-level check
+    // only, not a guarantee that nothing gets deleted.
+    expect(matchAction(ev({ key: "Backspace" }, button))).toBe("deleteExcerpt");
+  });
+
   it("matches the settings and shortcuts-help shortcuts, even in a text field", () => {
     const input = document.createElement("input");
     expect(matchAction(ev({ key: ",", ctrlKey: true }))).toBe("settings");

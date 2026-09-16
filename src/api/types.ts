@@ -316,6 +316,10 @@ export interface ExcerptFilter {
   /** Document sets; unioned into `documentIds`. */
   documentSetIds?: string[] | null;
   uncodedOnly?: boolean;
+  /** Restrict results to excerpts that overlap at least one excerpt carrying
+   * this code (subject to `includeDescendants`, same as the main code
+   * filter). Matches how `co_occurrence` counts pairs: text ranges only. */
+  overlapsCodeId?: string | null;
   /** Descriptor conditions, ANDed together. */
   descriptors?: DescriptorFilter[] | null;
   limit?: number;

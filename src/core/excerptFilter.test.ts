@@ -24,6 +24,7 @@ describe("filterState", () => {
       documentIds: ["d1"],
       documentSetIds: ["s2"],
       uncodedOnly: true,
+      overlapsCodeId: "c9",
       descriptors: [{ fieldId: "f", op: "eq", values: ["x"] }],
       limit: 10,
     });
@@ -35,6 +36,7 @@ describe("filterState", () => {
       documentIds: ["d1"],
       documentSetIds: ["s2"],
       uncodedOnly: true,
+      overlapsCodeId: "c9",
       descriptors: [{ fieldId: "f", op: "eq", values: ["x"] }],
     });
   });
@@ -61,6 +63,7 @@ describe("toFilter", () => {
       documentIds: null,
       documentSetIds: null,
       uncodedOnly: false,
+      overlapsCodeId: null,
       descriptors: null,
       limit: 200,
       offset: 0,
@@ -76,6 +79,13 @@ describe("toFilter", () => {
     expect(f.limit).toBe(50);
     expect(f.offset).toBe(50);
     expect(filterState(f)).toEqual(state);
+  });
+
+  it("carries overlapsCodeId straight through, unlike the list fields", () => {
+    const state = { ...emptyFilterState, overlapsCodeId: "c9" };
+    const f = toFilter(state, 50);
+    expect(f.overlapsCodeId).toBe("c9");
+    expect(filterState(f).overlapsCodeId).toBe("c9");
   });
 });
 
@@ -103,6 +113,7 @@ describe("counts and isFiltered", () => {
       { documentIds: ["d"] },
       { documentSetIds: ["s"] },
       { uncodedOnly: true },
+      { overlapsCodeId: "c" },
       { descriptors: [{ fieldId: "f", op: "empty" as const, values: [] }] },
     ]) {
       expect(isFiltered({ ...emptyFilterState, ...patch })).toBe(true);
