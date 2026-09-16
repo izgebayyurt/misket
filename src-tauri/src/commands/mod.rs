@@ -10,4 +10,5 @@ pub mod export;
 pub mod memos;
 pub mod project;
 pub mod search;
+pub mod sets;
 pub mod settings;

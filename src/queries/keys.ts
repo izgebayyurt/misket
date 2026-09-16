@@ -1,4 +1,4 @@
-import type { ExcerptFilter, MemoTarget } from "@/api/types";
+import type { ExcerptFilter, MemoTarget, SetKind } from "@/api/types";
 
 export const keys = {
   project: ["project"] as const,
@@ -22,6 +22,11 @@ export const keys = {
   codeByDocument: ["analysis", "codeByDocument"] as const,
   memos: (target: MemoTarget) => ["memos", target] as const,
   allMemos: ["memos"] as const,
+  sets: (kind: SetKind) => ["sets", kind] as const,
+  allSets: ["sets"] as const,
+  setMembers: (setId: string) => ["setMembers", setId] as const,
+  allSetMembers: ["setMembers"] as const,
+  savedFilters: ["savedFilters"] as const,
   search: (query: string) => ["search", query] as const,
   backups: ["backups"] as const,
 };
