@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { describe } from "@/core/keymap";
 import type { ProjectInfo } from "@/api/types";
 import { cn } from "@/lib/utils";
@@ -5,13 +6,15 @@ import { useWorkspace } from "@/state/workspace";
 import { DocumentList } from "@/components/documents/DocumentList";
 import { CodeTree } from "@/components/codebook/CodeTree";
 import { Button } from "@/components/ui/button";
-import { List } from "lucide-react";
+import { DescriptorsDialog } from "@/components/descriptors/DescriptorsDialog";
+import { List, Tags } from "lucide-react";
 
 export function Sidebar({ project }: { project: ProjectInfo }) {
   const tab = useWorkspace((s) => s.sidebarTab);
   const setTab = useWorkspace((s) => s.setSidebarTab);
   const view = useWorkspace((s) => s.view);
   const setView = useWorkspace((s) => s.setView);
+  const [descriptors, setDescriptors] = useState(false);
   return (
     <aside className="flex w-64 shrink-0 flex-col border-r border-border bg-panel">
       <div className="border-b border-border px-3 py-2">
@@ -37,7 +40,17 @@ export function Sidebar({ project }: { project: ProjectInfo }) {
       <div className="min-h-0 flex-1 overflow-y-auto">
         {tab === "documents" ? <DocumentList /> : <CodeTree />}
       </div>
-      <div className="border-t border-border p-2">
+      <div className="space-y-1 border-t border-border p-2">
+        {tab === "documents" ? (
+          <Button
+            variant="ghost"
+            className="w-full justify-start"
+            onClick={() => setDescriptors(true)}
+            data-testid="open-descriptors"
+          >
+            <Tags /> Descriptors…
+          </Button>
+        ) : null}
         <Button
           variant={view.kind === "excerpts" ? "secondary" : "ghost"}
           className="w-full justify-start"
@@ -48,6 +61,7 @@ export function Sidebar({ project }: { project: ProjectInfo }) {
           <span className="ml-auto text-xs text-fg-muted">{describe("excerptBrowser")}</span>
         </Button>
       </div>
+      {descriptors ? <DescriptorsDialog onClose={() => setDescriptors(false)} /> : null}
     </aside>
   );
 }

@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import type { ExcerptFilter } from "@/api/types";
+import type { DescriptorFilter, ExcerptFilter } from "@/api/types";
 import { useExcerptQuery } from "@/queries/excerpts";
 import { useWorkspace } from "@/state/workspace";
 import { ExcerptFilters } from "./ExcerptFilters";
@@ -13,6 +13,7 @@ export function ExcerptBrowser() {
   const [includeDescendants, setIncludeDescendants] = useState(true);
   const [documentIds, setDocumentIds] = useState<string[]>([]);
   const [uncodedOnly, setUncodedOnly] = useState(false);
+  const [descriptors, setDescriptors] = useState<DescriptorFilter[]>([]);
   const [pages, setPages] = useState(1);
   const openDocument = useWorkspace((s) => s.openDocument);
 
@@ -22,10 +23,11 @@ export function ExcerptBrowser() {
       includeDescendants,
       documentIds: documentIds.length ? documentIds : null,
       uncodedOnly,
+      descriptors: descriptors.length ? descriptors : null,
       limit: PAGE * pages,
       offset: 0,
     }),
-    [codeIds, includeDescendants, documentIds, uncodedOnly, pages],
+    [codeIds, includeDescendants, documentIds, uncodedOnly, descriptors, pages],
   );
   const { data, isFetching } = useExcerptQuery(filter);
 
@@ -49,12 +51,21 @@ export function ExcerptBrowser() {
           setUncodedOnly(v);
           setPages(1);
         }}
+        descriptors={descriptors}
+        onDescriptors={(v) => {
+          setDescriptors(v);
+          setPages(1);
+        }}
         total={data?.total ?? 0}
       />
       <div className="min-h-0 flex-1 overflow-y-auto">
         {data && data.rows.length === 0 ? (
           <p className="p-6 text-sm text-fg-muted">
-            {data.total === 0 && !codeIds.length && !documentIds.length && !uncodedOnly
+            {data.total === 0 &&
+            !codeIds.length &&
+            !documentIds.length &&
+            !descriptors.length &&
+            !uncodedOnly
               ? "No excerpts yet. Select text in a document and press the palette shortcut to code it."
               : "Nothing matches these filters."}
           </p>

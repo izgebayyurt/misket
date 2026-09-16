@@ -121,6 +121,61 @@ export interface ApplyResult {
   addedCodeIds: string[];
 }
 
+export type DescriptorKind = "text" | "number" | "choice" | "date";
+
+export interface DescriptorField {
+  id: string;
+  name: string;
+  kind: DescriptorKind;
+  /** The allowed values of a `choice` field; empty for every other kind. */
+  options: string[];
+  sortOrder: number;
+  /** How many documents have a value for this field. */
+  valueCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface NewDescriptorField {
+  name: string;
+  kind: DescriptorKind;
+  options?: string[] | null;
+}
+
+export interface DescriptorFieldPatch {
+  name?: string;
+  /** Only allowed while no document has a value for the field. */
+  kind?: DescriptorKind;
+  options?: string[];
+}
+
+export interface DescriptorValue {
+  documentId: string;
+  fieldId: string;
+  value: string;
+}
+
+export interface DescriptorMatrixRow {
+  documentId: string;
+  documentName: string;
+  /** field id -> value, only for fields this document has a value for. */
+  values: Record<string, string>;
+}
+
+export interface DescriptorMatrix {
+  fields: DescriptorField[];
+  rows: DescriptorMatrixRow[];
+}
+
+export type DescriptorOp =
+  "eq" | "neq" | "contains" | "gt" | "lt" | "between" | "in" | "empty" | "notEmpty";
+
+export interface DescriptorFilter {
+  fieldId: string;
+  op: DescriptorOp;
+  values: string[];
+}
+
 export interface Memo {
   id: string;
   documentId: string | null;
@@ -155,6 +210,8 @@ export interface ExcerptFilter {
   includeDescendants?: boolean;
   documentIds?: string[] | null;
   uncodedOnly?: boolean;
+  /** Descriptor conditions, ANDed together. */
+  descriptors?: DescriptorFilter[] | null;
   limit?: number;
   offset?: number;
 }

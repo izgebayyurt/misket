@@ -6,6 +6,8 @@ import { flattenTree, pathOf } from "@/core/codeTree";
 import { ColorDot } from "@/components/codebook/ColorSwatch";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
+import { DescriptorConditions } from "@/components/descriptors/DescriptorConditions";
+import type { DescriptorFilter } from "@/api/types";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -17,6 +19,8 @@ interface Props {
   onDocumentIds: (v: string[]) => void;
   uncodedOnly: boolean;
   onUncodedOnly: (v: boolean) => void;
+  descriptors: DescriptorFilter[];
+  onDescriptors: (v: DescriptorFilter[]) => void;
   total: number;
 }
 
@@ -99,6 +103,7 @@ export function ExcerptFilters(p: Props) {
           </>
         )}
       </FilterPicker>
+      <DescriptorConditions conditions={p.descriptors} onChange={p.onDescriptors} />
       <label className="flex items-center gap-1.5 text-xs">
         <input
           type="checkbox"
