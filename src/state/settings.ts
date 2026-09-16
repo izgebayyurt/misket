@@ -10,6 +10,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   confirmDeleteExcerpt: false,
   keepBackups: 20,
   showParagraphNumbers: true,
+  showSpeakerGutter: true,
   coderName: null,
 };
 

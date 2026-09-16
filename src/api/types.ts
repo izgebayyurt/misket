@@ -60,6 +60,9 @@ export interface AppSettings {
   keepBackups: number;
   /** Show a paragraph number in the document view's left gutter. */
   showParagraphNumbers: boolean;
+  /** Lay a transcript's speaker labels out in a gutter beside the text
+   * instead of leaving them inline where they are stored. */
+  showSpeakerGutter: boolean;
   /** Recorded as the actor in the activity log; empty means the OS user name. */
   coderName?: string | null;
 }
@@ -107,6 +110,9 @@ export interface DocumentSummary {
   media: MediaInfo | null;
   sortOrder: number;
   excerptCount: number;
+  /** The speakers this document's transcript format finds, in first-seen
+   * order; empty for anything that is not a transcript. */
+  speakers: string[];
   createdAt: string;
   updatedAt: string;
 }
@@ -379,6 +385,9 @@ export interface ExcerptFilter {
   /** A Boolean/proximity expression over codes ("A and B", "A not near B"),
    * applied to text excerpts before paging. */
   query?: Query | null;
+  /** Only what these speakers said. Answered from each document's transcript
+   * format before paging, like `query`; an empty list is no filter. */
+  speakers?: string[] | null;
   limit?: number;
   offset?: number;
 }
@@ -429,6 +438,8 @@ export interface ExcerptRow extends ExcerptWithCodes {
   documentName: string;
   contextBefore: string;
   contextAfter: string;
+  /** Who was speaking where this excerpt starts, in a transcript. */
+  speaker: string | null;
 }
 
 export interface ExcerptPage {
@@ -649,12 +660,50 @@ export interface FrameworkMatrixWithCells {
   cells: [string, string, string][];
 }
 
-/** One speaker's turn detected in a document (see `detectSpeakerTurns`).
- * Code points, end-exclusive; the label itself is excluded. */
+/**
+ * One speaker's turn in a transcript. Code points, end-exclusive, mirroring
+ * `misket_core::text::Turn`.
+ *
+ * `[labelStart, labelEnd)` is the whole speaker label — leading spaces, name,
+ * timestamp, delimiter and the spaces after it — and `[start, end)` is what
+ * was said, trailing whitespace already trimmed.
+ */
 export interface SpeakerTurn {
   speaker: string;
+  /** The timestamp the label carried, verbatim, when the format captures one. */
+  time: string | null;
+  labelStart: number;
+  labelEnd: number;
   start: number;
   end: number;
+}
+
+/** Which shapes of speaker label a document's turns are written in. */
+export type TranscriptPreset =
+  "name_colon" | "bracket_name" | "name_paren_time" | "bracket_time_name" | "time_name";
+
+/**
+ * How a document marks who is speaking: one of the built-in presets, a custom
+ * regular expression with named `speaker` (and optional `time`) groups, or
+ * `none` — "this is not a transcript".
+ */
+export interface TranscriptFormat {
+  kind: "preset" | "regex" | "none";
+  preset?: TranscriptPreset | null;
+  pattern?: string | null;
+}
+
+/** A speaker and how many turns they take in one document. */
+export interface SpeakerCount {
+  name: string;
+  turns: number;
+}
+
+/** A document's transcript: the format in force and what it finds. */
+export interface TranscriptInfo {
+  format: TranscriptFormat;
+  turns: SpeakerTurn[];
+  speakers: SpeakerCount[];
 }
 
 // ------------------------------------------------------------------ backups

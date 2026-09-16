@@ -21,6 +21,7 @@ import {
   type Segment,
 } from "@/core/segmentation";
 import { offsetsToRange, pointToOffset, rangeToOffsets } from "@/core/selection";
+import { clipToSpokenText, labelCut } from "@/core/turns";
 import { nextBoundary, type Direction, type Granularity } from "@/core/wordBounds";
 import { isTextField, mod, type Action } from "@/core/keymap";
 import { findMatches } from "@/core/find";
@@ -29,10 +30,12 @@ import { useWorkspace } from "@/state/workspace";
 import { useReadingPositions } from "@/state/readingPositions";
 import { useShortcutActions } from "@/state/shortcutActions";
 import { useSettings } from "@/state/settings";
+import { useTranscript } from "@/queries/transcripts";
 import { SelectionToolbar } from "./SelectionToolbar";
 import { ExcerptPopover } from "./ExcerptPopover";
 import { DocumentTitle } from "./DocumentTitle";
 import { SpeakersMenu } from "./SpeakersMenu";
+import { TranscriptChip } from "./TranscriptChip";
 import { FindBar } from "./FindBar";
 import { GoToParagraphBar } from "./GoToParagraphBar";
 import { toast } from "@/state/toasts";
@@ -84,6 +87,8 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
   const [goToOpen, setGoToOpen] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const showParagraphNumbers = useSettings((s) => s.settings.showParagraphNumbers);
+  const showSpeakerGutter = useSettings((s) => s.settings.showSpeakerGutter);
+  const { data: transcript } = useTranscript(documentId);
 
   const text = doc?.text ?? "";
   const offsetMap = useMemo(() => buildOffsetMap(text), [text]);
@@ -97,6 +102,43 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
     () => paragraphs.filter((p) => p.text.length > 0).map((p) => p.start),
     [paragraphs],
   );
+  /**
+   * The turns, in DOM (UTF-16) space. The labels stay in the text — it is
+   * immutable, and every excerpt offset is an index into it — so the view
+   * only lays them out elsewhere: each label range becomes its own segment(s)
+   * (`cuts`) that CSS lifts into a gutter beside the paragraph.
+   */
+  const turnsU16 = useMemo(() => {
+    if (!transcript || !text) return [];
+    return transcript.turns.map((t) => ({
+      speaker: t.speaker,
+      time: t.time,
+      labelStart: cpToUtf16(offsetMap, t.labelStart),
+      labelEnd: cpToUtf16(offsetMap, t.labelEnd),
+      start: cpToUtf16(offsetMap, t.start),
+      end: cpToUtf16(offsetMap, t.end),
+    }));
+  }, [offsetMap, text, transcript]);
+
+  /**
+   * Turn layout by paragraph start: a label always begins its own line, so
+   * the paragraph that opens a turn is the one whose `data-p` is its
+   * `labelStart`. `cuts` are the extra segment boundaries inside it.
+   */
+  const turnByParagraph = useMemo(() => {
+    const out = new Map<number, { speaker: string; time: string | null; cuts: number[] }>();
+    if (!showSpeakerGutter) return out;
+    for (const t of turnsU16) {
+      const cut = labelCut(text, t);
+      out.set(t.labelStart, {
+        speaker: t.speaker,
+        time: t.time,
+        cuts: cut === null ? [t.labelEnd] : [cut, t.labelEnd],
+      });
+    }
+    return out;
+  }, [showSpeakerGutter, text, turnsU16]);
+
   const colorById = useMemo(() => new Map((codes ?? []).map((c) => [c.id, c.color])), [codes]);
   const shortcutToCode = useMemo(
     () => new Map((codes ?? []).filter((c) => c.shortcut).map((c) => [c.shortcut!, c.id])),
@@ -389,12 +431,18 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
       setToolbarPos(null);
       return;
     }
-    setPending({
-      documentId,
-      kind: "text",
-      start: utf16ToCp(offsetMap, offs.start),
-      end: utf16ToCp(offsetMap, offs.end),
-    });
+    // A label is laid out in the gutter but still lives in the text, so a
+    // drag that started on one (or a select-all) would otherwise code it.
+    const clipped = clipToSpokenText(
+      { start: utf16ToCp(offsetMap, offs.start), end: utf16ToCp(offsetMap, offs.end) },
+      transcript?.turns ?? [],
+    );
+    if (!clipped) {
+      setPending(null);
+      setToolbarPos(null);
+      return;
+    }
+    setPending({ documentId, kind: "text", ...clipped });
     const rects = range.getClientRects();
     const rect = rects[rects.length - 1] ?? range.getBoundingClientRect();
     const container = scrollRef.current;
@@ -403,7 +451,7 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
       top: rect.bottom - (box?.top ?? 0) + (container?.scrollTop ?? 0) + 6,
       left: Math.max(8, rect.right - (box?.left ?? 0) - 60),
     });
-  }, [documentId, offsetMap, setPending, text]);
+  }, [documentId, offsetMap, setPending, text, transcript]);
 
   useEffect(() => {
     const onMouseUp = () => setTimeout(readSelection, 0);
@@ -958,7 +1006,10 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
               onEditingChange={setRenaming}
               className="min-w-0 flex-1 font-serif text-2xl font-medium"
             />
-            <SpeakersMenu documentId={documentId} />
+            <span className="flex shrink-0 items-center gap-2">
+              <TranscriptChip documentId={documentId} />
+              <SpeakersMenu documentId={documentId} />
+            </span>
           </div>
           <div
             ref={rootRef}
@@ -972,6 +1023,7 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
                 start={p.start}
                 end={p.end}
                 text={p.text}
+                turn={turnByParagraph.get(p.start)}
                 excerpts={previewed}
                 colorById={colorById}
                 focusedId={focusedId}
@@ -1109,14 +1161,20 @@ interface ParagraphProps {
   colorById: Map<string, string>;
   focusedId: string | null;
   flashId: string | null;
+  /** Set when this paragraph opens a speaker turn and the gutter is on. */
+  turn?: { speaker: string; time: string | null; cuts: number[] };
   onSegmentClick: (e: React.MouseEvent, seg: Segment) => void;
 }
 
 const Paragraph = memo(function Paragraph(p: ParagraphProps) {
+  const cuts = p.turn?.cuts;
   const segments = useMemo(
-    () => segmentParagraph(p.start, p.end, p.excerpts),
-    [p.start, p.end, p.excerpts],
+    () => segmentParagraph(p.start, p.end, p.excerpts, cuts),
+    [p.start, p.end, p.excerpts, cuts],
   );
+  // Where the speaker label ends: every segment before it is gutter, the rest
+  // is what was said. `cuts` always ends at the label's own end.
+  const labelEnd = cuts?.[cuts.length - 1] ?? p.start;
   if (p.text.length === 0) {
     // Blank lines carry no paragraph number, so the gutter counts paragraphs
     // rather than lines (see `.doc-text.with-para-numbers` in globals.css).
@@ -1127,7 +1185,18 @@ const Paragraph = memo(function Paragraph(p: ParagraphProps) {
     );
   }
   return (
-    <p data-p={p.start}>
+    <p
+      data-p={p.start}
+      data-turn={p.turn?.speaker}
+      data-time={p.turn?.time ?? undefined}
+      className={cn(
+        p.turn && "turn",
+        // Two label segments already put the timestamp on its own line; with
+        // one, `data-time` draws it as a pseudo-element, which is not a DOM
+        // text node and so leaves the span[data-s] contract intact.
+        p.turn?.time && p.turn.cuts.length < 2 && "time-after",
+      )}
+    >
       {segments.map((seg) => {
         const lanes = seg.codeIds.slice(0, MAX_LANES).map((id) => p.colorById.get(id) ?? "#999");
         const style: Record<string, string> = {};
@@ -1141,7 +1210,14 @@ const Paragraph = memo(function Paragraph(p: ParagraphProps) {
             data-s={seg.start}
             data-x={seg.excerptIds.length ? seg.excerptIds.join(" ") : undefined}
             data-n={n}
-            className={cn("seg", focused && "focused", flash && "flash")}
+            className={cn(
+              "seg",
+              // Part of the speaker label: still a span[data-s] with one text
+              // node, just positioned in the gutter by CSS.
+              seg.end <= labelEnd && p.turn && "label",
+              focused && "focused",
+              flash && "flash",
+            )}
             style={style as React.CSSProperties}
             onClick={(e) => p.onSegmentClick(e, seg)}
             title={
@@ -1162,6 +1238,10 @@ const Paragraph = memo(function Paragraph(p: ParagraphProps) {
 function areParagraphPropsEqual(a: ParagraphProps, b: ParagraphProps): boolean {
   if (a.start !== b.start || a.end !== b.end || a.text !== b.text || a.colorById !== b.colorById)
     return false;
+  // Turning the gutter on or off, or re-reading the document with another
+  // transcript format, changes where the segments break.
+  if (a.turn?.speaker !== b.turn?.speaker || a.turn?.time !== b.turn?.time) return false;
+  if ((a.turn?.cuts ?? []).join() !== (b.turn?.cuts ?? []).join()) return false;
   const intersects = (list: RenderableExcerpt[]) =>
     list.filter((e) => e.start < b.end && e.end > b.start);
   const ia = intersects(a.excerpts);

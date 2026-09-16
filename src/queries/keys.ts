@@ -57,4 +57,9 @@ export const keys = {
   codeHistory: (id: string) => ["activity", "code", id] as const,
   excerptHistory: (id: string) => ["activity", "excerpt", id] as const,
   speakerTurns: (documentId: string) => ["speakerTurns", documentId] as const,
+  /** One document's transcript: format, turns and speakers. */
+  transcript: (documentId: string) => ["transcript", documentId] as const,
+  allTranscripts: ["transcript"] as const,
+  transcriptDefault: ["transcriptDefault"] as const,
+  projectSpeakers: ["projectSpeakers"] as const,
 };

@@ -19,6 +19,8 @@ export interface FilterState {
   descriptors: DescriptorFilter[];
   /** A Boolean/proximity expression over codes; `null` when none is set. */
   query: Query | null;
+  /** Only what these speakers said; empty is no filter. */
+  speakers: string[];
 }
 
 export const emptyFilterState: FilterState = {
@@ -32,6 +34,7 @@ export const emptyFilterState: FilterState = {
   overlapsCodeId: null,
   descriptors: [],
   query: null,
+  speakers: [],
 };
 
 /** Read a filter (a saved one, or the analysis views' click-through). */
@@ -47,6 +50,7 @@ export function filterState(f: ExcerptFilter | undefined | null): FilterState {
     overlapsCodeId: f?.overlapsCodeId ?? null,
     descriptors: f?.descriptors ?? [],
     query: f?.query ?? null,
+    speakers: f?.speakers ?? [],
   };
 }
 
@@ -63,6 +67,7 @@ export function toFilter(state: FilterState, limit: number, offset = 0): Excerpt
     overlapsCodeId: state.overlapsCodeId,
     descriptors: state.descriptors.length ? state.descriptors : null,
     query: state.query,
+    speakers: state.speakers.length ? state.speakers : null,
     limit,
     offset,
   };
@@ -85,6 +90,7 @@ export function isFiltered(state: FilterState): boolean {
     state.descriptors.length > 0 ||
     state.uncodedOnly ||
     state.overlapsCodeId !== null ||
-    state.query !== null
+    state.query !== null ||
+    state.speakers.length > 0
   );
 }

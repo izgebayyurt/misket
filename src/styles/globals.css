@@ -134,6 +134,73 @@ textarea {
   pointer-events: none;
 }
 
+/* --- transcript speaker gutter ------------------------------------------
+
+   A transcript's speaker labels are part of the stored document text — it is
+   immutable and every excerpt offset indexes into it — so they are not moved,
+   only laid out: the label's own span[data-s] segments are taken out of flow
+   and parked in a gutter the paragraph pads itself for. Nothing is added to
+   or removed from the DOM, so `.doc-text`'s textContent is still exactly the
+   document text and selection mapping is unaffected.
+
+   The turn gutter sits INSIDE the paragraph box (padding-left); the paragraph
+   number sits outside it (`right: 100%`), so the two never collide. */
+.doc-text p.turn {
+  position: relative;
+  padding-left: var(--turn-gutter, 9rem);
+}
+
+.doc-text p.turn > span.label {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: calc(var(--turn-gutter, 9rem) - 1rem);
+  /* Not selectable and not hittable: a drag in the gutter falls through to the
+     paragraph, and `clipToSpokenText` trims whatever still slips in. */
+  user-select: none;
+  pointer-events: none;
+  color: var(--fg-muted);
+  font-family: var(--font-sans);
+  font-size: 0.8em;
+  line-height: 1.3;
+  white-space: normal;
+  overflow-wrap: break-word;
+}
+
+/* The timestamp, when the format captures one, is the label's second segment
+   and goes on a second line under the name. */
+.doc-text p.turn > span.label ~ span.label {
+  top: 1.4em;
+  opacity: 0.8;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Fallback for a label the timestamp could not be split out of (a custom
+   pattern that rewrites what it captures): drawn from the attribute, so it is
+   a pseudo-element and never a DOM text node. */
+.doc-text p.turn.time-after[data-time]::after {
+  content: attr(data-time);
+  position: absolute;
+  left: 0;
+  top: 1.4em;
+  width: calc(var(--turn-gutter, 9rem) - 1rem);
+  color: var(--fg-muted);
+  font-family: var(--font-sans);
+  font-size: 0.8em;
+  line-height: 1.3;
+  opacity: 0.8;
+  font-variant-numeric: tabular-nums;
+  user-select: none;
+  pointer-events: none;
+}
+
+/* A narrow window has no room for a 9rem gutter beside the text. */
+@media (max-width: 40rem) {
+  .doc-text p.turn {
+    --turn-gutter: 5.5rem;
+  }
+}
+
 /* A segment covered by one excerpt: tint + one underline lane.
    Covered by several: neutral tint, one lane per code (max 4). */
 .seg {
