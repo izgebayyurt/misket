@@ -4,7 +4,7 @@ import type { ProjectInfo } from "@/api/types";
 import { Sidebar } from "./Sidebar";
 import { StatusBar } from "./StatusBar";
 import { RightPanel } from "./RightPanel";
-import { DocumentView } from "@/components/document-view/DocumentView";
+import { DocumentPane } from "@/components/document-view/DocumentPane";
 import { useWorkspace } from "@/state/workspace";
 import { useGlobalShortcuts } from "@/hooks/useGlobalShortcuts";
 import { ExcerptBrowser } from "@/components/excerpts/ExcerptBrowser";
@@ -36,7 +36,7 @@ export function Workspace({ project }: { project: ProjectInfo }) {
         <Sidebar project={project} />
         <main className="relative flex min-w-0 flex-1 flex-col bg-bg">
           {view.kind === "document" ? (
-            <DocumentView
+            <DocumentPane
               key={view.documentId}
               documentId={view.documentId}
               focusExcerptId={view.focusExcerptId}
@@ -72,8 +72,8 @@ function EmptyState() {
     <div className="flex h-full flex-col items-center justify-center text-center text-fg-muted">
       <p className="font-serif text-2xl text-fg">Nothing open yet</p>
       <p className="mt-2 max-w-sm text-sm">
-        Import a transcript or notes from the sidebar, or drop text, Markdown or Word files anywhere
-        in this window.
+        Import a transcript, notes or an image from the sidebar, or drop text, Markdown, Word, PDF
+        or image files anywhere in this window.
       </p>
     </div>
   );

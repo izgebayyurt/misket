@@ -1,8 +1,10 @@
 import { invoke } from "./client";
-import type { Document, DocumentSummary, NewDocument } from "./types";
+import type { Document, DocumentSummary, NewDocument, NewImageDocument } from "./types";
 
 export const createDocument = (input: NewDocument) =>
   invoke<Document>("create_document", { input });
+export const createImageDocument = (input: NewImageDocument) =>
+  invoke<Document>("create_image_document", { input });
 export const listDocuments = () => invoke<DocumentSummary[]>("list_documents");
 export const getDocument = (id: string) => invoke<Document>("get_document", { id });
 export const renameDocument = (id: string, name: string) =>

@@ -11,7 +11,8 @@ import { toast } from "@/state/toasts";
 
 interface Props {
   excerpt: ExcerptWithCodes;
-  anchor: HTMLElement;
+  /** Anything measurable: a text span, or an SVG rectangle on an image. */
+  anchor: Element;
   onClose: () => void;
   /** Requests deletion of this excerpt; the caller decides whether to confirm first. */
   onDelete: () => void;

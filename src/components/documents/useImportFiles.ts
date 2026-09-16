@@ -2,12 +2,20 @@ import { useCallback } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { readSourceFile } from "@/api/project";
 import { listDocuments } from "@/api/documents";
-import { importFile, SUPPORTED_EXTENSIONS, type ImportedDocument } from "@/core/importers";
+import {
+  baseName,
+  imageMimeForPath,
+  IMAGE_EXTENSIONS,
+  importFile,
+  SUPPORTED_EXTENSIONS,
+  TEXT_EXTENSIONS,
+  type ImportedDocument,
+} from "@/core/importers";
 import { configurePdfWorker } from "@/core/importers/pdf";
 import pdfWorkerUrl from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
 
 configurePdfWorker(pdfWorkerUrl);
-import { useCreateDocument } from "@/queries/documents";
+import { useCreateDocument, useCreateImageDocument } from "@/queries/documents";
 import { useWorkspace } from "@/state/workspace";
 import { toast } from "@/state/toasts";
 import { isAppError } from "@/api/client";
@@ -15,9 +23,15 @@ import { useUndoStore } from "@/state/undoStore";
 import { analyzeWhitespace, tidyText } from "@/core/importers/tidy";
 import { loadRememberedTidyChoice, useTidyPromptStore, type TidyChoice } from "@/state/tidyPrompt";
 
-/** Import files by path: read bytes, parse, and create documents. */
+/** A file that has been read and is ready to become a document. */
+type Planned =
+  | { kind: "text"; path: string; parsed: ImportedDocument }
+  | { kind: "image"; path: string; name: string; mime: string; width: number; height: number };
+
+/** Import files by path: read bytes, parse or measure, and create documents. */
 export function useImportFiles() {
   const create = useCreateDocument();
+  const createImage = useCreateImageDocument();
   const openDocument = useWorkspace((s) => s.openDocument);
 
   const importPaths = useCallback(
@@ -25,38 +39,68 @@ export function useImportFiles() {
       let lastId: string | null = null;
       let imported = 0;
       const taken = new Set((await listDocuments()).map((d) => d.name));
-      const parsedFiles: { path: string; parsed: ImportedDocument }[] = [];
+      const planned: Planned[] = [];
       for (const path of paths) {
         try {
           const bytes = await readSourceFile(path);
-          const parsed = await importFile(path, bytes);
-          parsed.name = uniqueName(parsed.name, taken);
-          taken.add(parsed.name);
-          parsedFiles.push({ path, parsed });
+          const mime = imageMimeForPath(path);
+          if (mime) {
+            const { width, height } = await readImageSize(bytes, mime);
+            const name = uniqueName(baseName(path), taken);
+            taken.add(name);
+            if (bytes.length > 20_000_000) {
+              toast.info(
+                `${name} is ${Math.round(bytes.length / 1_000_000)} MB; it is copied into the project file.`,
+              );
+            }
+            planned.push({ kind: "image", path, name, mime, width, height });
+          } else {
+            const parsed = await importFile(path, bytes);
+            parsed.name = uniqueName(parsed.name, taken);
+            taken.add(parsed.name);
+            planned.push({ kind: "text", path, parsed });
+          }
         } catch (e) {
           toast.error(e);
         }
       }
 
-      await maybeTidy(parsedFiles.map((f) => f.parsed));
+      await maybeTidy(
+        planned
+          .filter((f): f is Extract<Planned, { kind: "text" }> => f.kind === "text")
+          .map((f) => f.parsed),
+      );
 
-      for (const { path, parsed } of parsedFiles) {
+      for (const file of planned) {
         try {
-          if (parsed.text.length > 2_000_000) {
-            toast.info(`${parsed.name} is very large; the document view may be slow.`);
+          if (file.kind === "image") {
+            // The bytes stay out of the IPC bridge: the backend reads them
+            // from `sourcePath` and copies them into the project file.
+            const doc = await createImage.mutateAsync({
+              name: file.name,
+              sourcePath: file.path,
+              mime: file.mime,
+              width: file.width,
+              height: file.height,
+            });
+            lastId = doc.id;
+          } else {
+            if (file.parsed.text.length > 2_000_000) {
+              toast.info(`${file.parsed.name} is very large; the document view may be slow.`);
+            }
+            const doc = await create.mutateAsync({
+              name: file.parsed.name,
+              sourcePath: file.path,
+              sourceFormat: file.parsed.sourceFormat,
+              text: file.parsed.text,
+            });
+            lastId = doc.id;
           }
-          const doc = await create.mutateAsync({
-            name: parsed.name,
-            sourcePath: path,
-            sourceFormat: parsed.sourceFormat,
-            text: parsed.text,
-          });
-          lastId = doc.id;
           imported++;
         } catch (e) {
           if (isAppError(e, "Conflict")) {
             toast.info(
-              `Skipped ${path.split(/[\\/]/).pop()}: identical document already imported.`,
+              `Skipped ${file.path.split(/[\\/]/).pop()}: identical document already imported.`,
             );
           } else {
             toast.error(e);
@@ -68,20 +112,60 @@ export function useImportFiles() {
         if (lastId) openDocument(lastId);
       }
     },
-    [create, openDocument],
+    [create, createImage, openDocument],
   );
 
   const pickAndImport = useCallback(async () => {
     const picked = await open({
       multiple: true,
       directory: false,
-      filters: [{ name: "Documents", extensions: [...SUPPORTED_EXTENSIONS] }],
+      filters: [
+        { name: "Documents and images", extensions: [...SUPPORTED_EXTENSIONS] },
+        { name: "Documents", extensions: [...TEXT_EXTENSIONS] },
+        { name: "Images", extensions: [...IMAGE_EXTENSIONS] },
+      ],
     });
     if (!picked) return;
     await importPaths(Array.isArray(picked) ? picked : [picked]);
   }, [importPaths]);
 
-  return { importPaths, pickAndImport, isPending: create.isPending };
+  return { importPaths, pickAndImport, isPending: create.isPending || createImage.isPending };
+}
+
+/**
+ * The pixel size of an image, decoded in the webview: `createImageBitmap`
+ * where it exists, otherwise an `<img>` with an object URL. The backend needs
+ * it because it stores the bytes without decoding them.
+ */
+async function readImageSize(
+  bytes: Uint8Array,
+  mime: string,
+): Promise<{ width: number; height: number }> {
+  const blob = new Blob([bytes as BlobPart], { type: mime });
+  if (typeof createImageBitmap === "function") {
+    try {
+      const bitmap = await createImageBitmap(blob);
+      const size = { width: bitmap.width, height: bitmap.height };
+      bitmap.close();
+      if (size.width > 0 && size.height > 0) return size;
+    } catch {
+      // Fall through to the <img> path (older webviews, exotic WebP).
+    }
+  }
+  const url = URL.createObjectURL(blob);
+  try {
+    return await new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () =>
+        img.naturalWidth > 0
+          ? resolve({ width: img.naturalWidth, height: img.naturalHeight })
+          : reject(new Error("The image has no size."));
+      img.onerror = () => reject(new Error("This image could not be read."));
+      img.src = url;
+    });
+  } finally {
+    URL.revokeObjectURL(url);
+  }
 }
 
 /**
