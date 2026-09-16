@@ -1,5 +1,6 @@
 mod commands;
 mod recent;
+mod settings;
 mod state;
 
 use state::AppState;
@@ -78,6 +79,8 @@ pub fn run() {
             commands::export::export_excerpts_csv,
             commands::export::export_project_json,
             commands::e2e::get_e2e_config,
+            commands::settings::get_settings,
+            commands::settings::set_settings,
         ])
         .build(tauri::generate_context!())
         .expect("error while building Misket");

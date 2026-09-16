@@ -14,10 +14,12 @@ import { offsetsToRange, rangeToOffsets } from "@/core/selection";
 import { isTextField, mod } from "@/core/keymap";
 import { useWorkspace } from "@/state/workspace";
 import { useShortcutActions } from "@/state/shortcutActions";
+import { useSettings } from "@/state/settings";
 import { SelectionToolbar } from "./SelectionToolbar";
 import { ExcerptPopover } from "./ExcerptPopover";
 import { toast } from "@/state/toasts";
 import { cn } from "@/lib/utils";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 interface Props {
   documentId: string;
@@ -40,6 +42,7 @@ export function DocumentView({ documentId, focusExcerptId }: Props) {
   const [flashId, setFlashId] = useState<string | null>(null);
   const [toolbarPos, setToolbarPos] = useState<{ top: number; left: number } | null>(null);
   const [popover, setPopover] = useState<{ id: string; anchor: HTMLElement } | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   const text = doc?.text ?? "";
   const offsetMap = useMemo(() => buildOffsetMap(text), [text]);
@@ -192,7 +195,12 @@ export function DocumentView({ documentId, focusExcerptId }: Props) {
         if (focusedId) openPopover(focusedId);
       },
       deleteExcerpt: () => {
-        if (focusedId) deleteExcerpt.mutate({ id: focusedId, documentId });
+        if (!focusedId) return;
+        if (useSettings.getState().settings.confirmDeleteExcerpt) {
+          setConfirmDeleteId(focusedId);
+        } else {
+          deleteExcerpt.mutate({ id: focusedId, documentId });
+        }
       },
       extendSelectionLeft: () => extendSelection("left"),
       extendSelectionRight: () => extendSelection("right"),
@@ -303,6 +311,26 @@ export function DocumentView({ documentId, focusExcerptId }: Props) {
           excerpt={excerptById.get(popover.id)!}
           anchor={popover.anchor}
           onClose={() => setPopover(null)}
+          onDelete={() => {
+            const id = popover.id;
+            setPopover(null);
+            if (useSettings.getState().settings.confirmDeleteExcerpt) {
+              setConfirmDeleteId(id);
+            } else {
+              deleteExcerpt.mutate({ id, documentId });
+            }
+          }}
+        />
+      ) : null}
+      {confirmDeleteId ? (
+        <ConfirmDialog
+          title="Delete this excerpt?"
+          description="Its codes and memos go with it. You can undo with Ctrl/⌘+Z."
+          onConfirm={() => {
+            deleteExcerpt.mutate({ id: confirmDeleteId, documentId });
+            setConfirmDeleteId(null);
+          }}
+          onCancel={() => setConfirmDeleteId(null)}
         />
       ) : null}
     </div>

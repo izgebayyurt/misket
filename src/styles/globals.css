@@ -14,6 +14,9 @@
   --focus: #b8571c;
   --danger: #b3261e;
   --radius: 8px;
+  /* Overridden on <html> by src/state/settings.ts once settings load. */
+  --doc-font-size: 17px;
+  --doc-line-height: 1.7;
 }
 
 .dark {
@@ -77,8 +80,8 @@ textarea {
   user-select: text;
   cursor: text;
   font-family: var(--font-serif);
-  font-size: 17px;
-  line-height: 1.7;
+  font-size: var(--doc-font-size);
+  line-height: var(--doc-line-height);
 }
 
 .doc-text p {

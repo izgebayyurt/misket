@@ -24,6 +24,16 @@ export interface RecentProject {
   lastOpenedAt: string;
 }
 
+// Mirrors AppSettings in src-tauri/src/settings.rs (app-level, not project data).
+export type Theme = "system" | "light" | "dark";
+
+export interface AppSettings {
+  theme: Theme;
+  editorFontSize: number;
+  editorLineHeight: number;
+  confirmDeleteExcerpt: boolean;
+}
+
 export type DocumentKind = "text" | "image" | "video";
 
 export interface NewDocument {

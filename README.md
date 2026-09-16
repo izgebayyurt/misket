@@ -38,6 +38,8 @@ keyboard-friendly interface without a subscription.
 | Excerpt browser                                        | `Ctrl`/`⌘` + `E`                              |
 | Import documents                                       | `Ctrl`/`⌘` + `I`                              |
 | Undo / redo                                            | `Ctrl`/`⌘` + `Z` / `Shift` + `Ctrl`/`⌘` + `Z` |
+| Settings (theme, text size, confirm-delete)            | `Ctrl`/`⌘` + `,`                              |
+| Keyboard shortcuts reference                           | `Ctrl`/`⌘` + `/`                              |
 
 ## Install
 

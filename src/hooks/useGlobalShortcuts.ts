@@ -36,6 +36,14 @@ export function useGlobalShortcuts() {
           e.preventDefault();
           ws.setPaletteOpen(true);
           return;
+        case "settings":
+          e.preventDefault();
+          ws.setSettingsOpen(true);
+          return;
+        case "shortcutsHelp":
+          e.preventDefault();
+          ws.setShortcutsHelpOpen(true);
+          return;
         case "undo":
           e.preventDefault();
           void useUndoStore.getState().undo();
