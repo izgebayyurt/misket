@@ -14,9 +14,14 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from "@/components/ui/context-menu";
+import {
+  contextMenuPrimitives,
+  dropdownMenuPrimitives,
+  type MenuPrimitives,
+} from "@/components/ui/menu";
 import { ColorDot } from "./ColorSwatch";
 import { CodeDialog } from "./CodeDialog";
 import { DeleteCodeDialog } from "./DeleteCodeDialog";
@@ -330,104 +335,130 @@ function CodeRow(p: RowProps) {
   }
 
   return (
-    <li
-      role="treeitem"
-      aria-selected={p.selected}
-      aria-expanded={children.length ? !p.collapsed : undefined}
-      aria-level={depth + 1}
-      tabIndex={p.selected ? 0 : -1}
-      data-code-id={code.id}
-      data-testid="code-item"
-      draggable={!p.renaming}
-      className={cn(
-        "group relative flex cursor-default items-center gap-1.5 py-1 pr-1 text-sm outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus",
-        p.selected && "bg-muted",
-        p.dragging && "opacity-40",
-        p.dropTarget === "inside" && "ring-2 ring-inset ring-accent",
-      )}
-      style={{ paddingLeft: 8 + depth * 14 }}
-      onClick={p.onSelect}
-      onDoubleClick={() => p.onAction("rename")}
-      onKeyDown={p.onKeyDown}
-      onDragStart={(e) => {
-        e.dataTransfer.effectAllowed = "move";
-        e.dataTransfer.setData("text/plain", code.id);
-        p.onDragStart();
-      }}
-      onDragEnd={p.onDragEnd}
-      onDragOver={(e) => {
-        e.preventDefault();
-        const rect = e.currentTarget.getBoundingClientRect();
-        const y = (e.clientY - rect.top) / rect.height;
-        p.onDragOver(y < 0.25 ? "before" : y > 0.75 ? "after" : "inside");
-      }}
-      onDrop={(e) => {
-        e.preventDefault();
-        p.onDrop();
-      }}
-    >
-      {p.dropTarget === "before" ? <DropLine top /> : null}
-      {p.dropTarget === "after" ? <DropLine /> : null}
-      <button
-        type="button"
-        className={cn(
-          "rounded p-0.5 text-fg-muted hover:bg-border",
-          !children.length && "invisible",
-        )}
-        onClick={(e) => {
-          e.stopPropagation();
-          p.onToggle();
-        }}
-        tabIndex={-1}
-        aria-label={p.collapsed ? "Expand" : "Collapse"}
-      >
-        {p.collapsed ? <ChevronRight className="size-3.5" /> : <ChevronDown className="size-3.5" />}
-      </button>
-      <ColorDot color={code.color} />
-      {p.renaming ? (
-        <RenameInput initial={code.name} onCommit={commitRename} onCancel={p.onRenameDone} />
-      ) : (
-        <span className="min-w-0 flex-1 truncate">{code.name}</span>
-      )}
-      {code.shortcut ? (
-        <kbd className="rounded border border-border bg-panel px-1 font-mono text-[10px] text-fg-muted">
-          {code.shortcut}
-        </kbd>
-      ) : null}
-      <span className="w-6 text-right text-xs tabular-nums text-fg-muted">
-        {code.excerptCount || ""}
-      </span>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
+    <ContextMenu>
+      <ContextMenuTrigger asChild>
+        <li
+          role="treeitem"
+          aria-selected={p.selected}
+          aria-expanded={children.length ? !p.collapsed : undefined}
+          aria-level={depth + 1}
+          tabIndex={p.selected ? 0 : -1}
+          data-code-id={code.id}
+          data-testid="code-item"
+          draggable={!p.renaming}
+          className={cn(
+            "group relative flex cursor-default items-center gap-1.5 py-1 pr-1 text-sm outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus",
+            p.selected && "bg-muted",
+            p.dragging && "opacity-40",
+            p.dropTarget === "inside" && "ring-2 ring-inset ring-accent",
+          )}
+          style={{ paddingLeft: 8 + depth * 14 }}
+          onClick={p.onSelect}
+          onDoubleClick={() => p.onAction("rename")}
+          onKeyDown={p.onKeyDown}
+          onDragStart={(e) => {
+            e.dataTransfer.effectAllowed = "move";
+            e.dataTransfer.setData("text/plain", code.id);
+            p.onDragStart();
+          }}
+          onDragEnd={p.onDragEnd}
+          onDragOver={(e) => {
+            e.preventDefault();
+            const rect = e.currentTarget.getBoundingClientRect();
+            const y = (e.clientY - rect.top) / rect.height;
+            p.onDragOver(y < 0.25 ? "before" : y > 0.75 ? "after" : "inside");
+          }}
+          onDrop={(e) => {
+            e.preventDefault();
+            p.onDrop();
+          }}
+        >
+          {p.dropTarget === "before" ? <DropLine top /> : null}
+          {p.dropTarget === "after" ? <DropLine /> : null}
           <button
             type="button"
-            className="rounded p-0.5 text-fg-muted opacity-0 hover:bg-border focus-visible:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100"
-            aria-label="Code actions"
-            onClick={(e) => e.stopPropagation()}
+            className={cn(
+              "rounded p-0.5 text-fg-muted hover:bg-border",
+              !children.length && "invisible",
+            )}
+            onClick={(e) => {
+              e.stopPropagation();
+              p.onToggle();
+            }}
             tabIndex={-1}
+            aria-label={p.collapsed ? "Expand" : "Collapse"}
           >
-            <MoreHorizontal className="size-4" />
+            {p.collapsed ? (
+              <ChevronRight className="size-3.5" />
+            ) : (
+              <ChevronDown className="size-3.5" />
+            )}
           </button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" onCloseAutoFocus={(e) => e.preventDefault()}>
-          <DropdownMenuItem onSelect={() => p.onAction("addChild")}>New sub-code</DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => p.onAction("rename")}>Rename</DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => p.onAction("edit")}>Edit…</DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => p.onAction("merge")}>Merge into…</DropdownMenuItem>
-          <DropdownMenuItem
-            onSelect={() => p.onAction("moveExcerpts")}
-            disabled={code.excerptCount === 0}
-          >
-            Move excerpts to…
-          </DropdownMenuItem>
-          <AddToSetMenu kind="code" memberId={code.id} memberLabel={code.name} />
-          <DropdownMenuSeparator />
-          <DropdownMenuItem danger onSelect={() => p.onAction("delete")}>
-            Delete…
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-    </li>
+          <ColorDot color={code.color} />
+          {p.renaming ? (
+            <RenameInput initial={code.name} onCommit={commitRename} onCancel={p.onRenameDone} />
+          ) : (
+            <span className="min-w-0 flex-1 truncate">{code.name}</span>
+          )}
+          {code.shortcut ? (
+            <kbd className="rounded border border-border bg-panel px-1 font-mono text-[10px] text-fg-muted">
+              {code.shortcut}
+            </kbd>
+          ) : null}
+          <span className="w-6 text-right text-xs tabular-nums text-fg-muted">
+            {code.excerptCount || ""}
+          </span>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="rounded p-0.5 text-fg-muted opacity-0 hover:bg-border focus-visible:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100"
+                aria-label="Code actions"
+                onClick={(e) => e.stopPropagation()}
+                tabIndex={-1}
+              >
+                <MoreHorizontal className="size-4" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" onCloseAutoFocus={(e) => e.preventDefault()}>
+              <CodeRowMenuItems code={code} onAction={p.onAction} menu={dropdownMenuPrimitives} />
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </li>
+      </ContextMenuTrigger>
+      <ContextMenuContent onCloseAutoFocus={(e) => e.preventDefault()}>
+        <CodeRowMenuItems code={code} onAction={p.onAction} menu={contextMenuPrimitives} />
+      </ContextMenuContent>
+    </ContextMenu>
+  );
+}
+
+/** The row's action list, shared by its "…" button menu and its right-click menu. */
+function CodeRowMenuItems({
+  code,
+  onAction,
+  menu,
+}: {
+  code: Code;
+  onAction: RowProps["onAction"];
+  menu: MenuPrimitives;
+}) {
+  const { Item, Separator } = menu;
+  return (
+    <>
+      <Item onSelect={() => onAction("addChild")}>New sub-code</Item>
+      <Item onSelect={() => onAction("rename")}>Rename</Item>
+      <Item onSelect={() => onAction("edit")}>Edit…</Item>
+      <Item onSelect={() => onAction("merge")}>Merge into…</Item>
+      <Item onSelect={() => onAction("moveExcerpts")} disabled={code.excerptCount === 0}>
+        Move excerpts to…
+      </Item>
+      <AddToSetMenu kind="code" memberId={code.id} memberLabel={code.name} menu={menu} />
+      <Separator />
+      <Item danger onSelect={() => onAction("delete")}>
+        Delete…
+      </Item>
+    </>
   );
 }
 

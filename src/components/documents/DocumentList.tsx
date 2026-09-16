@@ -17,6 +17,12 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from "@/components/ui/context-menu";
+import {
+  contextMenuPrimitives,
+  dropdownMenuPrimitives,
+  type MenuPrimitives,
+} from "@/components/ui/menu";
 import { Dialog, DialogContent, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -86,53 +92,66 @@ export function DocumentList() {
           const active = view.kind === "document" && view.documentId === d.id;
           return (
             <li key={d.id} className="group">
-              <div
-                className={cn(
-                  "flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-muted",
-                  active && "bg-muted font-medium",
-                )}
-              >
-                <button
-                  className="flex min-w-0 flex-1 items-center gap-2 text-left"
-                  onClick={(e) => {
-                    e.currentTarget.blur();
-                    openDocument(d.id);
-                  }}
-                  data-testid="document-item"
-                >
-                  {d.kind === "image" ? (
-                    <ImageIcon className="size-4 shrink-0 text-fg-muted" />
-                  ) : (
-                    <FileText className="size-4 shrink-0 text-fg-muted" />
-                  )}
-                  <span className="truncate">{d.name}</span>
-                  {d.sourceFormat ? (
-                    <span className="shrink-0 rounded border border-border px-1 text-[10px] uppercase text-fg-muted">
-                      {d.sourceFormat}
-                    </span>
-                  ) : null}
-                  <span className="ml-auto shrink-0 text-xs text-fg-muted">
-                    {d.excerptCount || ""}
-                  </span>
-                </button>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
+              <ContextMenu>
+                <ContextMenuTrigger asChild>
+                  <div
+                    className={cn(
+                      "flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-muted",
+                      active && "bg-muted font-medium",
+                    )}
+                  >
                     <button
-                      className="rounded p-0.5 text-fg-muted opacity-0 hover:bg-border group-hover:opacity-100 data-[state=open]:opacity-100"
-                      aria-label="Document actions"
+                      className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                      onClick={(e) => {
+                        e.currentTarget.blur();
+                        openDocument(d.id);
+                      }}
+                      data-testid="document-item"
                     >
-                      <MoreHorizontal className="size-4" />
+                      {d.kind === "image" ? (
+                        <ImageIcon className="size-4 shrink-0 text-fg-muted" />
+                      ) : (
+                        <FileText className="size-4 shrink-0 text-fg-muted" />
+                      )}
+                      <span className="truncate">{d.name}</span>
+                      {d.sourceFormat ? (
+                        <span className="shrink-0 rounded border border-border px-1 text-[10px] uppercase text-fg-muted">
+                          {d.sourceFormat}
+                        </span>
+                      ) : null}
+                      <span className="ml-auto shrink-0 text-xs text-fg-muted">
+                        {d.excerptCount || ""}
+                      </span>
                     </button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onSelect={() => setRenaming(d)}>Rename…</DropdownMenuItem>
-                    <AddToSetMenu kind="document" memberId={d.id} memberLabel={d.name} />
-                    <DropdownMenuItem danger onSelect={() => setDeleting(d)}>
-                      Delete…
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button
+                          className="rounded p-0.5 text-fg-muted opacity-0 hover:bg-border group-hover:opacity-100 data-[state=open]:opacity-100"
+                          aria-label="Document actions"
+                        >
+                          <MoreHorizontal className="size-4" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DocumentRowMenuItems
+                          doc={d}
+                          onRename={() => setRenaming(d)}
+                          onDelete={() => setDeleting(d)}
+                          menu={dropdownMenuPrimitives}
+                        />
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                </ContextMenuTrigger>
+                <ContextMenuContent>
+                  <DocumentRowMenuItems
+                    doc={d}
+                    onRename={() => setRenaming(d)}
+                    onDelete={() => setDeleting(d)}
+                    menu={contextMenuPrimitives}
+                  />
+                </ContextMenuContent>
+              </ContextMenu>
             </li>
           );
         })}
@@ -142,6 +161,30 @@ export function DocumentList() {
       {deleting ? <DeleteDialog doc={deleting} onClose={() => setDeleting(null)} /> : null}
       {folder ? <ImportFolderDialog dir={folder} onClose={() => setFolder(null)} /> : null}
     </div>
+  );
+}
+
+/** A document row's action list, shared by its "…" button menu and its right-click menu. */
+function DocumentRowMenuItems({
+  doc,
+  onRename,
+  onDelete,
+  menu,
+}: {
+  doc: DocumentSummary;
+  onRename: () => void;
+  onDelete: () => void;
+  menu: MenuPrimitives;
+}) {
+  const { Item } = menu;
+  return (
+    <>
+      <Item onSelect={onRename}>Rename…</Item>
+      <AddToSetMenu kind="document" memberId={doc.id} memberLabel={doc.name} menu={menu} />
+      <Item danger onSelect={onDelete}>
+        Delete…
+      </Item>
+    </>
   );
 }
 
