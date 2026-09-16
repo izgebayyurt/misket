@@ -9,7 +9,7 @@ const MIGRATIONS: &[(i64, &str)] = &[
     (2, include_str!("migrations/0002_descriptors.sql")),
     (3, include_str!("migrations/0003_media_blobs.sql")),
     (4, include_str!("migrations/0004_sets.sql")),
-    (6, include_str!("migrations/0006_activity_log.sql")),
+    (5, include_str!("migrations/0005_activity_log.sql")),
 ];
 
 pub fn latest_version() -> i64 {

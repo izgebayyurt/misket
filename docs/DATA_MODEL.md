@@ -167,7 +167,7 @@ them back instead of failing on the primary key.
 
 ## The activity log
 
-`activity_log` (schema 6) records who changed what, and when. It is a table in
+`activity_log` (schema 5) records who changed what, and when. It is a table in
 the project file rather than a sidecar, so the trail is copied by
 `backup::save_copy`, written into every timestamped backup, and restored with
 the data it describes.

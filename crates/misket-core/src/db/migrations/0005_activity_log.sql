@@ -1,4 +1,4 @@
--- Misket project schema, version 6: the coding activity log.
+-- Misket project schema, version 5: the coding activity log.
 -- Applied inside a transaction by db::migrate().
 
 -- One row per domain write (a code created, an excerpt recoded, a memo
