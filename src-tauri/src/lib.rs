@@ -3,11 +3,19 @@ mod recent;
 mod settings;
 mod state;
 
+use misket_core::db::documents;
 use state::AppState;
 use tauri::{Emitter, Manager};
 
 /// Event name for "open this project file" requests arriving while running.
 pub const OPEN_FILE_EVENT: &str = "misket://open-file";
+
+/// Custom protocol that serves the media bytes stored in the open project.
+///
+/// The webview reaches it at `misket-media://localhost/document/<id>` on
+/// Linux and macOS and at `http://misket-media.localhost/document/<id>` on
+/// Windows and Android; `mediaUrl()` in `src/api/media.ts` builds both.
+pub const MEDIA_PROTOCOL: &str = "misket-media";
 
 fn is_project_path(p: &str) -> bool {
     std::path::Path::new(p)
@@ -26,11 +34,55 @@ fn request_open(app: &tauri::AppHandle, path: String) {
     let _ = app.emit(OPEN_FILE_EVENT, path);
 }
 
+/// Answer one `misket-media://` request. Media is immutable once imported and
+/// keyed by a UUID, so the response can be cached for as long as the webview
+/// lives.
+fn media_response<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+    path: &str,
+) -> tauri::http::Response<Vec<u8>> {
+    use tauri::http::{header, Response, StatusCode};
+
+    let fail = |status: StatusCode, message: String| {
+        Response::builder()
+            .status(status)
+            .header(header::CONTENT_TYPE, "text/plain; charset=utf-8")
+            .body(message.into_bytes())
+            .expect("static response")
+    };
+    let Some(id) = path.strip_prefix("/document/").filter(|id| !id.is_empty()) else {
+        return fail(
+            StatusCode::BAD_REQUEST,
+            format!("expected /document/<id>, got {path}"),
+        );
+    };
+    let state = app.state::<AppState>();
+    match state.with_project(|p| documents::get_media(&p.conn, id)) {
+        Ok((mime, bytes)) => Response::builder()
+            .header(header::CONTENT_TYPE, mime)
+            .header(header::CONTENT_LENGTH, bytes.len())
+            .header(
+                header::CACHE_CONTROL,
+                "private, max-age=31536000, immutable",
+            )
+            .header(header::ACCESS_CONTROL_ALLOW_ORIGIN, "*")
+            .body(bytes)
+            .expect("media response"),
+        Err(e) => fail(StatusCode::NOT_FOUND, e.to_string()),
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(AppState::default())
+        .register_asynchronous_uri_scheme_protocol(MEDIA_PROTOCOL, |ctx, request, responder| {
+            // Reading the blob locks the project, so answer off the UI thread.
+            let app = ctx.app_handle().clone();
+            let path = request.uri().path().to_string();
+            std::thread::spawn(move || responder.respond(media_response(&app, &path)));
+        })
         .setup(|app| {
             // Windows and Linux pass a double-clicked file as the first argument.
             if let Some(arg) = std::env::args().nth(1) {
@@ -51,6 +103,7 @@ pub fn run() {
             commands::project::write_text_file,
             commands::project::take_pending_open_path,
             commands::documents::create_document,
+            commands::documents::create_image_document,
             commands::documents::list_documents,
             commands::documents::get_document,
             commands::documents::rename_document,

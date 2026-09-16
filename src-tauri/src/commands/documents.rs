@@ -1,5 +1,5 @@
 use misket_core::db::documents;
-use misket_core::models::{Document, DocumentSummary, NewDocument};
+use misket_core::models::{Document, DocumentSummary, NewDocument, NewImageDocument};
 use misket_core::Result;
 use tauri::State;
 
@@ -8,6 +8,17 @@ use crate::state::AppState;
 #[tauri::command]
 pub fn create_document(state: State<'_, AppState>, input: NewDocument) -> Result<Document> {
     state.with_project(|p| documents::create(&p.conn, input))
+}
+
+/// Import an image. The bytes are copied into the project file; when the
+/// frontend does not send them they are read from `sourcePath`, which avoids
+/// pushing several megabytes back through the IPC bridge.
+#[tauri::command]
+pub fn create_image_document(
+    state: State<'_, AppState>,
+    input: NewImageDocument,
+) -> Result<Document> {
+    state.with_project(|p| documents::create_image(&p.conn, input))
 }
 
 #[tauri::command]
