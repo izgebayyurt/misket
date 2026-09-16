@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { Query } from "@/api/types";
 import {
   codePickCount,
   documentPickCount,
@@ -7,6 +8,15 @@ import {
   isFiltered,
   toFilter,
 } from "./excerptFilter";
+
+const QUERY: Query = {
+  op: "near",
+  terms: [
+    { codeId: "c1", includeDescendants: true },
+    { codeId: "c2", includeDescendants: false },
+  ],
+  within: { kind: "chars", n: 50 },
+};
 
 describe("filterState", () => {
   it("fills in the browser's defaults for a missing filter", () => {
@@ -26,6 +36,7 @@ describe("filterState", () => {
       uncodedOnly: true,
       overlapsCodeId: "c9",
       descriptors: [{ fieldId: "f", op: "eq", values: ["x"] }],
+      query: QUERY,
       limit: 10,
     });
     expect(state).toEqual({
@@ -38,6 +49,7 @@ describe("filterState", () => {
       uncodedOnly: true,
       overlapsCodeId: "c9",
       descriptors: [{ fieldId: "f", op: "eq", values: ["x"] }],
+      query: QUERY,
     });
   });
 
@@ -65,6 +77,7 @@ describe("toFilter", () => {
       uncodedOnly: false,
       overlapsCodeId: null,
       descriptors: null,
+      query: null,
       limit: 200,
       offset: 0,
     });
@@ -78,6 +91,13 @@ describe("toFilter", () => {
     expect(f.codeSetIds).toEqual(["s1", "s2"]);
     expect(f.limit).toBe(50);
     expect(f.offset).toBe(50);
+    expect(filterState(f)).toEqual(state);
+  });
+
+  it("carries the query object through unchanged", () => {
+    const state = { ...emptyFilterState, query: QUERY };
+    const f = toFilter(state, 50);
+    expect(f.query).toEqual(QUERY);
     expect(filterState(f)).toEqual(state);
   });
 
@@ -115,6 +135,7 @@ describe("counts and isFiltered", () => {
       { uncodedOnly: true },
       { overlapsCodeId: "c" },
       { descriptors: [{ fieldId: "f", op: "empty" as const, values: [] }] },
+      { query: QUERY },
     ]) {
       expect(isFiltered({ ...emptyFilterState, ...patch })).toBe(true);
     }

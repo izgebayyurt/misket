@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import * as api from "@/api/analysis";
+import type { CrosstabRequest } from "@/api/types";
 import { keys } from "./keys";
 
 /**
@@ -29,4 +30,17 @@ export function useCoOccurrence(documentIds: string[], documentSetIds: string[] 
 /** Excerpt counts per document and code (direct tags only). */
 export function useCodeByDocument() {
   return useQuery({ queryKey: keys.codeByDocument, queryFn: api.codeByDocument });
+}
+
+/**
+ * The code-by-descriptor cross-tab. Disabled until a field is picked, since
+ * there is nothing to cross-tabulate against without one.
+ */
+export function useCodeByDescriptor(request: CrosstabRequest | null) {
+  return useQuery({
+    queryKey: keys.codeByDescriptor(request ?? { fieldId: "" }),
+    queryFn: () => api.codeByDescriptor(request!),
+    enabled: !!request?.fieldId,
+    placeholderData: (prev) => prev,
+  });
 }

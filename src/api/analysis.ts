@@ -1,5 +1,11 @@
 import { invoke } from "./client";
-import type { CodeByDocument, CodeFrequency, CoOccurrence } from "./types";
+import type {
+  CodeByDescriptor,
+  CodeByDocument,
+  CodeFrequency,
+  CoOccurrence,
+  CrosstabRequest,
+} from "./types";
 
 /**
  * `documentIds` null or empty means "every document". `documentSetIds` is
@@ -17,3 +23,7 @@ export const coOccurrence = (documentIds?: string[] | null, documentSetIds?: str
     documentSetIds: documentSetIds ?? null,
   });
 export const codeByDocument = () => invoke<CodeByDocument>("code_by_document");
+
+/** Codes against one descriptor field's values (the mixed-methods cross-tab). */
+export const codeByDescriptor = (request: CrosstabRequest) =>
+  invoke<CodeByDescriptor>("code_by_descriptor", { request });

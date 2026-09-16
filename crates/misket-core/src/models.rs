@@ -344,6 +344,53 @@ pub struct MergeResult {
     pub added_code_ids: Vec<String>,
 }
 
+/// One code in a [`Query`], with the same "include sub-codes" choice the
+/// rest of the browser offers.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct CodeRef {
+    pub code_id: String,
+    #[serde(default = "default_true")]
+    pub include_descendants: bool,
+}
+
+/// A [`Query`] operand: a code, or a nested query.
+///
+/// Untagged, because the two are told apart by their fields: a code has
+/// `codeId`, a group has `op`.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(untagged)]
+pub enum QueryTerm {
+    Code(CodeRef),
+    Group(Box<Query>),
+}
+
+/// How close `near` counts as near.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum Within {
+    /// The same paragraph, paragraphs being the document text split on `\n`.
+    Paragraph,
+    /// At most `n` code points apart.
+    Chars { n: i64 },
+}
+
+/// A Boolean/proximity retrieval expression over coded excerpts.
+///
+/// `op` is `and`, `or`, `not` or `near`; `within` only applies to `near` and
+/// defaults to the same paragraph. See
+/// [`crate::db::query_expr`] for the semantics, which are "co-located":
+/// an excerpt satisfies a term when it carries the code itself *or* overlaps
+/// an excerpt that does.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Query {
+    pub op: String,
+    pub terms: Vec<QueryTerm>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub within: Option<Within>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct ExcerptFilter {
@@ -376,6 +423,12 @@ pub struct ExcerptFilter {
     /// Descriptor conditions, ANDed together.
     #[serde(default)]
     pub descriptors: Option<Vec<DescriptorFilter>>,
+    /// A Boolean/proximity expression over codes ("A and B", "A not near B").
+    /// Unlike every other field it cannot be expressed in SQL, so it is
+    /// applied in Rust to the excerpts the rest of the filter leaves, before
+    /// paging. Text excerpts only.
+    #[serde(default)]
+    pub query: Option<Query>,
     #[serde(default = "default_limit")]
     pub limit: i64,
     #[serde(default)]
@@ -401,6 +454,7 @@ impl Default for ExcerptFilter {
             uncoded_only: false,
             overlaps_code_id: None,
             descriptors: None,
+            query: None,
             limit: default_limit(),
             offset: 0,
         }
@@ -512,6 +566,87 @@ pub struct CodeByDocument {
     pub document_ids: Vec<String>,
     pub code_ids: Vec<String>,
     pub cells: Vec<(String, String, i64)>,
+}
+
+/// What a code-by-descriptor cross-tab should show. One struct rather than a
+/// row of positional arguments, because the frontend sends it as one object
+/// and it will grow (normalized percentages, a second field) before long.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct CrosstabRequest {
+    pub field_id: String,
+    /// The codes to make rows from; every code when absent or empty.
+    #[serde(default)]
+    pub code_ids: Option<Vec<String>>,
+    /// Count a code's descendants towards it, de-duplicated per excerpt.
+    #[serde(default = "default_true")]
+    pub include_descendants: bool,
+    #[serde(default)]
+    pub document_ids: Option<Vec<String>>,
+    /// Document sets; unioned into `document_ids`, as everywhere else.
+    #[serde(default)]
+    pub document_set_ids: Option<Vec<String>>,
+    /// Number fields only: how many equal-width bins to cut the range into
+    /// (default [`crate::db::analysis::DEFAULT_NUMBER_BINS`]).
+    #[serde(default)]
+    pub bins: Option<i64>,
+    /// What a cell counts: `excerpts` (the default) or `documents`.
+    #[serde(default)]
+    pub mode: Option<String>,
+}
+
+impl Default for CrosstabRequest {
+    fn default() -> Self {
+        Self {
+            field_id: String::new(),
+            code_ids: None,
+            include_descendants: true,
+            document_ids: None,
+            document_set_ids: None,
+            bins: None,
+            mode: None,
+        }
+    }
+}
+
+/// One column of the code-by-descriptor cross-tab: a descriptor value, a bin
+/// of a number field or a month of a date field, plus the descriptor
+/// condition that reproduces it in the excerpt browser.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct CrosstabColumn {
+    /// What the column header shows: the value, `"18 – 30.5"`, `"2026-09"`
+    /// or `"(no value)"`.
+    pub label: String,
+    /// `eq`, `between` or `empty` — a [`DescriptorFilter`] operator, so a
+    /// cell click can open the excerpt browser on exactly this column.
+    pub op: String,
+    pub values: Vec<String>,
+}
+
+/// One row of the code-by-descriptor cross-tab: a code and one count per
+/// column, in `columns` order.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct CrosstabRow {
+    pub code_id: String,
+    pub cells: Vec<i64>,
+}
+
+/// Codes against the values of one descriptor field. See
+/// [`crate::db::analysis::code_by_descriptor`] for how the columns are built
+/// and what a cell counts.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct CodeByDescriptor {
+    pub field: DescriptorField,
+    pub columns: Vec<CrosstabColumn>,
+    pub rows: Vec<CrosstabRow>,
+    /// How many documents in scope fall in each column, whether or not
+    /// anything in them is coded; the denominator for a column.
+    pub documents_per_column: Vec<i64>,
+    /// `excerpts` or `documents`, echoing what the cells count.
+    pub mode: String,
 }
 
 // -------------------------------------------------------------- descriptors

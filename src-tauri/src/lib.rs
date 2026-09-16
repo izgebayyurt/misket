@@ -157,6 +157,7 @@ pub fn run() {
             commands::framework::restore_framework_matrix,
             commands::framework::set_framework_cell,
             commands::framework::export_framework_csv,
+            commands::analysis::code_by_descriptor,
             commands::search::search_project,
             commands::sets::list_sets,
             commands::sets::create_set,

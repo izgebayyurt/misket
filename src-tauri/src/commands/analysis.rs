@@ -1,5 +1,7 @@
 use misket_core::db::analysis;
-use misket_core::models::{CoOccurrence, CodeByDocument, CodeFrequency};
+use misket_core::models::{
+    CoOccurrence, CodeByDescriptor, CodeByDocument, CodeFrequency, CrosstabRequest,
+};
 use misket_core::Result;
 use tauri::State;
 
@@ -38,4 +40,14 @@ pub fn co_occurrence(
 #[tauri::command]
 pub fn code_by_document(state: State<'_, AppState>) -> Result<CodeByDocument> {
     state.with_project(|p| analysis::code_by_document(&p.conn))
+}
+
+/// Codes against one descriptor field's values; see
+/// `misket_core::db::analysis::code_by_descriptor`.
+#[tauri::command]
+pub fn code_by_descriptor(
+    state: State<'_, AppState>,
+    request: CrosstabRequest,
+) -> Result<CodeByDescriptor> {
+    state.with_project(|p| analysis::code_by_descriptor(&p.conn, &request))
 }

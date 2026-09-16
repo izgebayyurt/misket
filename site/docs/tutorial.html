@@ -6,7 +6,7 @@
     <title>Coding tutorial</title>
     <meta
       name="description"
-      content="A walk-through of coding a project in Misket: importing documents, building a codebook, coding text, adjusting boundaries, filtering excerpts, memos, analysis and export."
+      content="A walk-through of coding a project in Misket: importing documents, building a codebook, coding text, adjusting boundaries, filtering excerpts, Boolean and proximity queries, memos, analysis and export."
     />
     <link rel="stylesheet" href="../style.css" />
   </head>
@@ -44,6 +44,7 @@
           <li><a href="#orientation">Find your place in a long transcript</a></li>
           <li><a href="#boundaries">Adjust boundaries</a></li>
           <li><a href="#browser">Excerpt browser and filters</a></li>
+          <li><a href="#query">Boolean and proximity queries</a></li>
           <li><a href="#memos">Memos</a></li>
           <li><a href="#analysis">Analysis views</a></li>
           <li><a href="#framework">Framework matrices</a></li>
@@ -165,8 +166,9 @@
         <li><strong>Uncoded only</strong> — find passages nobody has coded yet;</li>
         <li>
           <strong>Descriptors</strong> — document attributes such as "Age is more than 30" or "Site
-          is any of North, South".
+          is any of North, South";
         </li>
+        <li><strong>Query</strong> — a Boolean or proximity expression over codes (see below).</li>
       </ul>
       <p>
         Clicking a row jumps back to that excerpt in context. Tick the checkboxes
@@ -178,6 +180,33 @@
         Descriptors themselves — document attributes such as site, interview wave or age group — are
         defined and assigned from the descriptors panel, either per document or in a table of every
         document at once. Fields can be text, number, choice or date.
+      </p>
+
+      <h2 id="query">Boolean and proximity queries</h2>
+      <p>
+        The <strong>Query</strong> chip builds a retrieval expression over codes: pick an operator,
+        then a code per row. Add a <em>group</em> row to nest one level, so you can ask for "Access
+        and (Barriers or Cost)".
+      </p>
+      <ul>
+        <li><strong>and</strong> — both codes, on the same or overlapping passages;</li>
+        <li><strong>or</strong> — either code;</li>
+        <li><strong>not</strong> — the first code, where the second does not overlap it;</li>
+        <li>
+          <strong>near</strong> — the first code close to the second, either in the same paragraph
+          or within a number of characters you choose.
+        </li>
+      </ul>
+      <p>
+        Codes count as together when their excerpts <em>overlap</em>, not only when one excerpt
+        carries both — two coders rarely draw exactly the same range, and "A and B" would find
+        almost nothing if they had to. An excerpt carrying both codes matches "A and B" and "A near
+        B", and is excluded from "A not B".
+      </p>
+      <p>
+        Save a query with the rest of the filter under a name ("Access without cost talk") and it
+        reappears in the <strong>Saved</strong> menu, spelled out underneath so you can tell two
+        apart at a glance.
       </p>
 
       <h2 id="memos">Memos</h2>
@@ -212,7 +241,15 @@
         </li>
         <li>
           a <strong>code-by-document heatmap</strong> showing which documents carry which codes and
-          how densely.
+          how densely;
+        </li>
+        <li>
+          a <strong>code-by-descriptor cross-tab</strong> ("By descriptor") putting codes against
+          the values of any document attribute — one column per site or interview wave, automatic
+          bins for a number field, one column per month for a date field, and a
+          <em>(no value)</em> column for the documents you have not filled in yet. Choose whether a
+          cell counts excerpts or documents; the <em>n</em> under each column header is how many
+          documents fall in it, so an uneven group is visible rather than implied.
         </li>
       </ul>
       <p>

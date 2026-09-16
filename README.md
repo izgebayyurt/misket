@@ -62,10 +62,18 @@ keyboard-friendly interface without a subscription.
   with…" codes every one of their turns (the spoken text, not the label) with
   one chosen code. Detection is conservative — a label only counts once it
   recurs at least twice in the document.
+- **Query**: build Boolean and proximity retrievals in the browser — "Access
+  and Barriers", "Access not Barriers", "Access near Barriers in the same
+  paragraph" or within N characters — with one level of grouping, and save
+  them with the rest of the filter. Codes count as together when their
+  excerpts overlap, not only when one excerpt carries both.
 - **Analyse**: a code frequency table (own counts and counts with sub-codes,
   per document), a code co-occurrence matrix showing which codes overlap on the
-  same text, and a code-by-document heatmap. Every cell clicks through to the
-  matching excerpts, and each view exports to CSV.
+  same text, a code-by-document heatmap, and a code-by-descriptor cross-tab
+  putting codes against the values of any document attribute — sites, waves,
+  age bands binned automatically, dates by month — counting excerpts or
+  documents. Every cell clicks through to the matching excerpts, and each view
+  exports to CSV.
 - **Framework matrices**: a grid of cases by themes — a row per document, per
   document in a set, or per value of a descriptor ("Site", "Wave"), and a
   column per code or per code in a set — where you write a short summary in

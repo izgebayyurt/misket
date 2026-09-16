@@ -93,6 +93,8 @@ export function ExcerptBrowser() {
         onOverlapsCodeId={(overlapsCodeId) => update({ overlapsCodeId })}
         descriptors={state.descriptors}
         onDescriptors={(descriptors) => update({ descriptors })}
+        query={state.query}
+        onQuery={(query) => update({ query })}
         filter={filter}
         onApplyFilter={applyFilter}
         total={data?.total ?? 0}

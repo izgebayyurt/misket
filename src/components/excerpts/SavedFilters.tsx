@@ -1,7 +1,10 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Bookmark, ChevronDown, X } from "lucide-react";
 import type { ExcerptFilter, SavedFilter } from "@/api/types";
 import { useDeleteSavedFilter, useSaveFilter, useSavedFilters } from "@/queries/sets";
+import { useCodeTree } from "@/queries/codes";
+import { flattenTree } from "@/core/codeTree";
+import { describeQuery } from "@/core/query";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -30,6 +33,13 @@ export function SavedFilters({
   const { data: saved } = useSavedFilters();
   const [naming, setNaming] = useState(false);
   const del = useDeleteSavedFilter();
+  // A saved query is the one part of a filter a name rarely explains, so the
+  // list spells it out under the name.
+  const tree = useCodeTree();
+  const codeName = useMemo(() => {
+    const byId = new Map(flattenTree(tree).map((n) => [n.code.id, n.code.name]));
+    return (id: string) => byId.get(id) ?? "";
+  }, [tree]);
 
   return (
     <>
@@ -56,7 +66,17 @@ export function SavedFilters({
               className="justify-between"
               data-testid="saved-filter-item"
             >
-              <span className="min-w-0 flex-1 truncate">{f.name}</span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate">{f.name}</span>
+                {f.filter.query ? (
+                  <span
+                    className="block truncate text-xs text-fg-muted"
+                    data-testid="saved-filter-query"
+                  >
+                    {describeQuery(f.filter.query, codeName)}
+                  </span>
+                ) : null}
+              </span>
               <button
                 type="button"
                 className="rounded p-0.5 text-fg-muted hover:bg-border"
@@ -106,7 +126,7 @@ function NameDialog({
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent
         title="Save filter"
-        description="Stores the code, document, set, descriptor and uncoded settings as they are now."
+        description="Stores the code, document, set, descriptor, query and uncoded settings as they are now."
       >
         <form
           onSubmit={async (e) => {
