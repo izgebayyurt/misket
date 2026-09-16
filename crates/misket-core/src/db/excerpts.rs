@@ -344,6 +344,8 @@ pub fn apply_codes(conn: &Connection, input: ApplyCodesInput) -> Result<ApplyRes
                 "codeIds": added,
                 "codeNames": names,
             }),
+            None,
+            None,
         )?;
     }
     tx.commit()?;
@@ -382,6 +384,8 @@ pub fn add_codes(conn: &Connection, id: &str, code_ids: &[String]) -> Result<Exc
             d["codeNames"] = json!(names);
             d
         },
+        None,
+        None,
     )?;
     tx.commit()?;
     get(conn, id)
@@ -411,6 +415,8 @@ pub fn remove_code(conn: &Connection, id: &str, code_id: &str) -> Result<Excerpt
             d["codeNames"] = json!([name]);
             d
         },
+        None,
+        None,
     )?;
     tx.commit()?;
     get(conn, id)
@@ -434,6 +440,8 @@ pub fn delete(conn: &Connection, id: &str) -> Result<ExcerptSnapshot> {
             d["codeNames"] = json!(code_names(&tx, &excerpt.code_ids));
             d
         },
+        None,
+        None,
     )?;
     tx.commit()?;
     Ok(ExcerptSnapshot { excerpt, memos })
@@ -503,6 +511,8 @@ pub fn restore(conn: &Connection, snapshot: &ExcerptSnapshot) -> Result<ExcerptW
             d["codeNames"] = json!(code_names(&tx, &e.code_ids));
             d
         },
+        None,
+        None,
     )?;
     tx.commit()?;
     get(conn, &e.id)
@@ -603,6 +613,8 @@ pub fn update_range(
             d["snapshot"] = activity::change(excerpt.snapshot.clone(), after.snapshot.clone());
             d
         },
+        None,
+        None,
     )?;
     tx.commit()?;
     get(conn, id)
@@ -673,6 +685,8 @@ pub fn split(conn: &Connection, id: &str, at: i64) -> Result<(ExcerptWithCodes, 
         Some(id),
         &summary,
         detail.clone(),
+        None,
+        None,
     )?;
     activity::record(
         &tx,
@@ -681,6 +695,8 @@ pub fn split(conn: &Connection, id: &str, at: i64) -> Result<(ExcerptWithCodes, 
         Some(&right_id),
         &summary,
         detail,
+        None,
+        None,
     )?;
     tx.commit()?;
     Ok((get(conn, id)?, get(conn, &right_id)?))
@@ -778,6 +794,8 @@ pub fn merge_adjacent(conn: &Connection, left_id: &str, right_id: &str) -> Resul
         Some(left_id),
         &summary,
         detail.clone(),
+        None,
+        None,
     )?;
     activity::record(
         &tx,
@@ -786,6 +804,8 @@ pub fn merge_adjacent(conn: &Connection, left_id: &str, right_id: &str) -> Resul
         Some(right_id),
         &summary,
         detail,
+        None,
+        None,
     )?;
     tx.commit()?;
     Ok(MergeResult {

@@ -34,6 +34,8 @@ pub fn log_undo(state: State<'_, AppState>, redo: bool, label: String) -> Result
             None,
             format!("{} {label}", if redo { "Redid" } else { "Undid" }),
             serde_json::json!({ "label": label }),
+            None,
+            None,
         )
     })
 }

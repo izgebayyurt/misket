@@ -71,6 +71,8 @@ pub fn delete_many(conn: &Connection, ids: &[String]) -> Result<Vec<ExcerptSnaps
             None,
             format!("Deleted {} excerpts", ids.len()),
             json!({ "excerptIds": ids, "count": ids.len() }),
+            None,
+            None,
         )?;
     }
     tx.commit()?;
@@ -152,6 +154,8 @@ fn log_bulk_codes(
                 .map(|(e, _)| e.clone())
                 .collect::<Vec<_>>(),
         }),
+        None,
+        None,
     )
 }
 
@@ -265,6 +269,8 @@ pub fn retag_code(conn: &Connection, from_code_id: &str, to_code_id: &str) -> Re
             "moved": report.moved,
             "alreadyHad": report.already_had,
         }),
+        None,
+        None,
     )?;
     tx.commit()?;
     Ok(report)
@@ -363,6 +369,8 @@ pub fn auto_code(conn: &Connection, hits: &[AutoCodeHit], code_id: &str) -> Resu
             "reused": report.reused_excerpt_ids,
             "alreadyCoded": report.already_coded,
         }),
+        None,
+        None,
     )?;
     tx.commit()?;
     Ok(report)

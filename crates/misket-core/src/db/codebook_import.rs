@@ -341,6 +341,8 @@ pub fn import_codebook(
             "matched": report.matched,
             "skippedShortcuts": report.skipped_shortcuts,
         }),
+        None,
+        None,
     )?;
     tx.commit()?;
     Ok(report)

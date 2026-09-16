@@ -1,9 +1,11 @@
-//! The activity log: an append-only record of who changed what, when.
+//! The activity log: a readable view of the history tree.
 //!
 //! Every domain function that writes calls [`record`] inside its own
 //! transaction, so an entry can never outlive — or be lost by — the change it
-//! describes. The log lives in the project file itself, which means it is
-//! copied, backed up and restored together with the data.
+//! describes. Since schema 8 the entries *are* the nodes of the undo tree
+//! (`db::history`): this module is the thin facade the activity feed and the
+//! inspectors read them through, and the place a domain function hands over
+//! the forward and inverse payloads that make its write undoable.
 //!
 //! Misket has no user accounts, so the actor is a plain string: the name set
 //! in the app's settings, or failing that the OS user name. The Tauri layer
@@ -13,7 +15,7 @@
 use rusqlite::{params, Connection, Row};
 use serde_json::{json, Value};
 
-use super::util;
+use super::history;
 use crate::error::Result;
 use crate::models::{ActivityEntry, ActivityFilter, ActivityPage};
 
@@ -41,7 +43,9 @@ pub fn actor(conn: &Connection) -> String {
     .unwrap_or_default()
 }
 
-/// Append one entry. `detail` is stored verbatim as `detail_json`.
+/// Append one entry under the current head. `detail` is stored verbatim as
+/// `detail_json`; `forward` and `inverse` are the replay payloads.
+#[allow(clippy::too_many_arguments)]
 pub fn log(
     conn: &Connection,
     actor: &str,
@@ -50,25 +54,28 @@ pub fn log(
     target_id: Option<&str>,
     summary: &str,
     detail: &Value,
+    forward: Option<Value>,
+    inverse: Option<Value>,
 ) -> Result<i64> {
-    conn.execute(
-        "INSERT INTO activity_log (at, actor, kind, target_kind, target_id, summary, detail_json)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-        params![
-            util::now(),
-            actor,
-            kind,
-            target_kind,
-            target_id,
-            summary,
-            detail.to_string()
-        ],
-    )?;
-    Ok(conn.last_insert_rowid())
+    history::record(
+        conn,
+        actor,
+        kind,
+        target_kind,
+        target_id,
+        summary,
+        detail,
+        forward,
+        inverse,
+    )
 }
 
 /// [`log`], with the actor taken from the connection. This is what the domain
 /// functions call: one line, no extra parameter to thread through.
+///
+/// A write that passes `None` for both payloads is recorded but not undoable.
+/// New domain writes are expected to supply both.
+#[allow(clippy::too_many_arguments)]
 pub fn record(
     conn: &Connection,
     kind: &str,
@@ -76,6 +83,8 @@ pub fn record(
     target_id: Option<&str>,
     summary: impl AsRef<str>,
     detail: Value,
+    forward: Option<Value>,
+    inverse: Option<Value>,
 ) -> Result<()> {
     log(
         conn,
@@ -85,6 +94,8 @@ pub fn record(
         target_id,
         summary.as_ref(),
         &detail,
+        forward,
+        inverse,
     )?;
     Ok(())
 }
@@ -121,32 +132,41 @@ pub fn elide(s: &str, max: usize) -> String {
     out.replace('\n', " ")
 }
 
-fn from_row(r: &Row) -> rusqlite::Result<ActivityEntry> {
-    let detail_json: String = r.get(7)?;
-    Ok(ActivityEntry {
-        id: r.get(0)?,
-        at: r.get(1)?,
-        actor: r.get(2)?,
-        kind: r.get(3)?,
-        target_kind: r.get(4)?,
-        target_id: r.get(5)?,
-        summary: r.get(6)?,
-        // A payload written by a newer build (or hand-edited) reads back as
-        // an empty object rather than making the whole list unreadable.
-        detail: serde_json::from_str(&detail_json).unwrap_or_else(|_| json!({})),
-    })
-}
+const COLUMNS: &str = "id, parent_id, at, actor, kind, target_kind, target_id, summary,
+     detail_json, inverse_json IS NOT NULL, branch_name";
 
-const COLUMNS: &str = "id, at, actor, kind, target_kind, target_id, summary, detail_json";
+fn from_row(head: Option<i64>) -> impl Fn(&Row) -> rusqlite::Result<ActivityEntry> {
+    move |r| {
+        let detail_json: String = r.get(8)?;
+        let id: i64 = r.get(0)?;
+        Ok(ActivityEntry {
+            id,
+            parent_id: r.get(1)?,
+            at: r.get(2)?,
+            actor: r.get(3)?,
+            kind: r.get(4)?,
+            target_kind: r.get(5)?,
+            target_id: r.get(6)?,
+            summary: r.get(7)?,
+            // A payload written by a newer build (or hand-edited) reads back
+            // as an empty object rather than making the whole list unreadable.
+            detail: serde_json::from_str(&detail_json).unwrap_or_else(|_| json!({})),
+            undoable: r.get(9)?,
+            branch_name: r.get(10)?,
+            is_head: head == Some(id),
+        })
+    }
+}
 
 /// Newest first, paged. `total` ignores `limit`/`offset`; `kinds` lists every
 /// kind in the whole log so the UI can build its filter from one call.
 ///
-/// Ordering is by `id`, not by `at`: the log is append-only, so the rowid is
-/// the write order, while `at` is a string whose fractional seconds are
-/// trimmed (`…:00Z` sorts after `…:00.5Z`) and would put two entries from the
-/// same second in the wrong order.
+/// Ordering is by `id`, not by `at`: nodes are appended, so the rowid is the
+/// write order, while `at` is a string whose fractional seconds are trimmed
+/// (`…:00Z` sorts after `…:00.5Z`) and would put two entries from the same
+/// second in the wrong order.
 pub fn list(conn: &Connection, filter: &ActivityFilter) -> Result<ActivityPage> {
+    let head = history::head(conn)?;
     let mut where_sql = String::from(" WHERE 1 = 1");
     let mut args: Vec<Box<dyn rusqlite::ToSql>> = vec![];
     if let Some(tk) = &filter.target_kind {
@@ -170,7 +190,7 @@ pub fn list(conn: &Connection, filter: &ActivityFilter) -> Result<ActivityPage> 
     }
 
     let total: i64 = conn.query_row(
-        &format!("SELECT count(*) FROM activity_log{where_sql}"),
+        &format!("SELECT count(*) FROM history{where_sql}"),
         rusqlite::params_from_iter(args.iter()),
         |r| r.get(0),
     )?;
@@ -178,14 +198,14 @@ pub fn list(conn: &Connection, filter: &ActivityFilter) -> Result<ActivityPage> 
     let limit = filter.limit.clamp(0, 10_000);
     let offset = filter.offset.max(0);
     let mut stmt = conn.prepare(&format!(
-        "SELECT {COLUMNS} FROM activity_log{where_sql}
+        "SELECT {COLUMNS} FROM history{where_sql}
          ORDER BY id DESC LIMIT {limit} OFFSET {offset}"
     ))?;
     let entries: Vec<ActivityEntry> = stmt
-        .query_map(rusqlite::params_from_iter(args.iter()), from_row)?
+        .query_map(rusqlite::params_from_iter(args.iter()), from_row(head))?
         .collect::<rusqlite::Result<_>>()?;
 
-    let mut stmt = conn.prepare("SELECT DISTINCT kind FROM activity_log ORDER BY kind")?;
+    let mut stmt = conn.prepare("SELECT DISTINCT kind FROM history ORDER BY kind")?;
     let kinds: Vec<String> = stmt
         .query_map([], |r| r.get(0))?
         .collect::<rusqlite::Result<_>>()?;
@@ -199,20 +219,22 @@ pub fn list(conn: &Connection, filter: &ActivityFilter) -> Result<ActivityPage> 
 
 /// The whole log, oldest first and unpaged — what the exports write.
 pub fn all(conn: &Connection) -> Result<Vec<ActivityEntry>> {
-    let mut stmt = conn.prepare(&format!("SELECT {COLUMNS} FROM activity_log ORDER BY id"))?;
-    let rows = stmt.query_map([], from_row)?;
+    let head = history::head(conn)?;
+    let mut stmt = conn.prepare(&format!("SELECT {COLUMNS} FROM history ORDER BY id"))?;
+    let rows = stmt.query_map([], from_row(head))?;
     Ok(rows.collect::<rusqlite::Result<_>>()?)
 }
 
 /// Everything that happened to one target, oldest first — a timeline. Ordered
 /// by `id` for the same reason as [`list`].
-fn history(conn: &Connection, target_kind: &str, target_id: &str) -> Result<Vec<ActivityEntry>> {
+fn history_of(conn: &Connection, target_kind: &str, target_id: &str) -> Result<Vec<ActivityEntry>> {
+    let head = history::head(conn)?;
     let mut stmt = conn.prepare(&format!(
-        "SELECT {COLUMNS} FROM activity_log
+        "SELECT {COLUMNS} FROM history
           WHERE target_kind = ?1 AND target_id = ?2
           ORDER BY id"
     ))?;
-    let rows = stmt.query_map(params![target_kind, target_id], from_row)?;
+    let rows = stmt.query_map(params![target_kind, target_id], from_row(head))?;
     Ok(rows.collect::<rusqlite::Result<_>>()?)
 }
 
@@ -220,13 +242,13 @@ fn history(conn: &Connection, target_kind: &str, target_id: &str) -> Result<Vec<
 /// another code, given or denied a shortcut, deleted. Survives the code's
 /// deletion, because the log keeps the id rather than a foreign key.
 pub fn code_history(conn: &Connection, code_id: &str) -> Result<Vec<ActivityEntry>> {
-    history(conn, "code", code_id)
+    history_of(conn, "code", code_id)
 }
 
 /// The same for one excerpt: coded, recoded, adjusted, split, merged,
 /// deleted, restored.
 pub fn excerpt_history(conn: &Connection, excerpt_id: &str) -> Result<Vec<ActivityEntry>> {
-    history(conn, "excerpt", excerpt_id)
+    history_of(conn, "excerpt", excerpt_id)
 }
 
 #[cfg(test)]
@@ -265,6 +287,8 @@ mod tests {
             Some("c1"),
             "Created code \"A\"",
             json!({ "name": "A" }),
+            None,
+            None,
         )
         .unwrap();
         record(
@@ -274,6 +298,8 @@ mod tests {
             Some("e1"),
             "Coded an excerpt",
             json!({}),
+            None,
+            None,
         )
         .unwrap();
 
@@ -335,7 +361,7 @@ mod tests {
         let p = OpenProject::in_memory("t").unwrap();
         p.conn
             .execute(
-                "INSERT INTO activity_log (at, actor, kind, target_kind, target_id, summary, detail_json)
+                "INSERT INTO history (at, actor, kind, target_kind, target_id, summary, detail_json)
                  VALUES ('2024-01-01T00:00:00Z', '', 'k', 'project', NULL, 's', 'not json')",
                 [],
             )
@@ -353,7 +379,7 @@ mod tests {
     };
 
     fn entries(conn: &Connection) -> i64 {
-        conn.query_row("SELECT count(*) FROM activity_log", [], |r| r.get(0))
+        conn.query_row("SELECT count(*) FROM history", [], |r| r.get(0))
             .unwrap()
     }
 

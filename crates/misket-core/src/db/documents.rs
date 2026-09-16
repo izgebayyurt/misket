@@ -104,6 +104,8 @@ fn log_import(conn: &Connection, doc: &DocumentSummary) -> Result<()> {
             "sourcePath": doc.source_path,
             "textLength": doc.text_length,
         }),
+        None,
+        None,
     )
 }
 
@@ -266,6 +268,8 @@ pub fn rename(conn: &Connection, id: &str, name: &str) -> Result<DocumentSummary
             Some(id),
             format!("Renamed document \"{}\" to \"{name}\"", before.name),
             json!({ "name": activity::change(before.name.clone(), name.to_string()) }),
+            None,
+            None,
         )?;
     }
     get_summary(conn, id)
@@ -309,6 +313,8 @@ pub fn delete(conn: &Connection, id: &str) -> Result<()> {
             "documentKind": doc.kind,
             "excerptCount": doc.excerpt_count,
         }),
+        None,
+        None,
     )?;
     tx.commit()?;
     Ok(())

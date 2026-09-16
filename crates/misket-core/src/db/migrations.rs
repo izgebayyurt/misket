@@ -12,6 +12,7 @@ const MIGRATIONS: &[(i64, &str)] = &[
     (5, include_str!("migrations/0005_activity_log.sql")),
     (6, include_str!("migrations/0006_framework.sql")),
     (7, include_str!("migrations/0007_code_definitions.sql")),
+    (8, include_str!("migrations/0008_history.sql")),
 ];
 
 pub fn latest_version() -> i64 {
@@ -74,18 +75,143 @@ mod tests {
     }
 
     #[test]
-    fn activity_log_table_and_indexes_exist() {
+    fn history_tables_and_indexes_exist_and_activity_log_is_gone() {
         let conn = Connection::open_in_memory().unwrap();
         migrate(&conn).unwrap();
         let n: i64 = conn
             .query_row(
                 "SELECT count(*) FROM sqlite_master
-                 WHERE name IN ('activity_log','activity_log_at_idx','activity_log_target_idx')",
+                 WHERE name IN ('history','history_blobs','history_parent_idx',
+                                'history_at_idx','history_target_idx')",
                 [],
                 |r| r.get(0),
             )
             .unwrap();
-        assert_eq!(n, 3);
+        assert_eq!(n, 5);
+        let gone: i64 = conn
+            .query_row(
+                "SELECT count(*) FROM sqlite_master WHERE name = 'activity_log'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(gone, 0);
+        // Blobs go with their node.
+        conn.execute_batch(
+            "PRAGMA foreign_keys = ON;
+             INSERT INTO history (id, at, kind, target_kind, summary)
+               VALUES (1, 't', 'k', 'project', 's');
+             INSERT INTO history_blobs (node_id, name, bytes) VALUES (1, 'text', x'00');
+             DELETE FROM history WHERE id = 1;",
+        )
+        .unwrap();
+        let left: i64 = conn
+            .query_row("SELECT count(*) FROM history_blobs", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(left, 0);
+    }
+
+    /// The upgrade to 8 has to carry an existing log across: same ids, same
+    /// order, chained parent to child, head on the last one, and no payloads
+    /// (those entries were written before inverses were recorded).
+    #[test]
+    fn upgrading_copies_the_activity_log_into_a_linear_chain() {
+        let conn = Connection::open_in_memory().unwrap();
+        // Stop at 7, where `activity_log` is still the log.
+        for (version, sql) in MIGRATIONS.iter().filter(|(v, _)| *v <= 7) {
+            conn.execute_batch(sql).unwrap();
+            conn.execute_batch(&format!("PRAGMA user_version = {version}"))
+                .unwrap();
+        }
+        for (i, kind) in ["code.created", "code.updated", "excerpt.created"]
+            .iter()
+            .enumerate()
+        {
+            conn.execute(
+                "INSERT INTO activity_log (at, actor, kind, target_kind, target_id, summary, detail_json)
+                 VALUES (?1, 'Ada', ?2, 'code', 'c1', ?3, '{\"n\":1}')",
+                rusqlite::params![format!("2024-01-0{}T00:00:00Z", i + 1), kind, format!("s{i}")],
+            )
+            .unwrap();
+        }
+        migrate(&conn).unwrap();
+
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, parent_id, kind, actor, summary, detail_json,
+                        forward_json, inverse_json, preferred_child
+                 FROM history ORDER BY id",
+            )
+            .unwrap();
+        type Row = (
+            i64,
+            Option<i64>,
+            String,
+            String,
+            String,
+            String,
+            Option<String>,
+            Option<String>,
+            Option<i64>,
+        );
+        let rows: Vec<Row> = stmt
+            .query_map([], |r| {
+                Ok((
+                    r.get(0)?,
+                    r.get(1)?,
+                    r.get(2)?,
+                    r.get(3)?,
+                    r.get(4)?,
+                    r.get(5)?,
+                    r.get(6)?,
+                    r.get(7)?,
+                    r.get(8)?,
+                ))
+            })
+            .unwrap()
+            .collect::<rusqlite::Result<_>>()
+            .unwrap();
+        assert_eq!(rows.len(), 3);
+        assert_eq!(
+            rows.iter().map(|r| r.2.as_str()).collect::<Vec<_>>(),
+            vec!["code.created", "code.updated", "excerpt.created"]
+        );
+        assert_eq!(rows.iter().map(|r| r.0).collect::<Vec<_>>(), vec![1, 2, 3]);
+        assert_eq!(
+            rows.iter().map(|r| r.1).collect::<Vec<_>>(),
+            vec![None, Some(1), Some(2)]
+        );
+        assert_eq!(
+            rows.iter().map(|r| r.8).collect::<Vec<_>>(),
+            vec![Some(2), Some(3), None]
+        );
+        assert!(rows.iter().all(|r| r.3 == "Ada" && r.5 == "{\"n\":1}"));
+        // Nothing copied is undoable.
+        assert!(rows.iter().all(|r| r.6.is_none() && r.7.is_none()));
+
+        let head: String = conn
+            .query_row(
+                "SELECT value FROM project_meta WHERE key = 'history_head'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(head, "3");
+    }
+
+    /// A project with nothing in its log still gets a head pointer, empty.
+    #[test]
+    fn upgrading_an_empty_log_leaves_the_head_before_the_first_node() {
+        let conn = Connection::open_in_memory().unwrap();
+        migrate(&conn).unwrap();
+        let head: String = conn
+            .query_row(
+                "SELECT value FROM project_meta WHERE key = 'history_head'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(head, "");
     }
 
     #[test]

@@ -219,6 +219,8 @@ pub fn create_field(conn: &Connection, input: NewDescriptorField) -> Result<Desc
             field.name, field.kind
         ),
         json!({ "name": field.name, "kind": field.kind, "options": field.options }),
+        None,
+        None,
     )?;
     Ok(field)
 }
@@ -322,6 +324,8 @@ pub fn update_field(
             Some(&after.id),
             summary,
             Value::Object(detail),
+            None,
+            None,
         )?;
     }
     Ok(after)
@@ -345,6 +349,8 @@ pub fn delete_field(conn: &Connection, id: &str) -> Result<DescriptorField> {
             "options": field.options,
             "valueCount": field.value_count,
         }),
+        None,
+        None,
     )?;
     tx.commit()?;
     Ok(field)
@@ -473,6 +479,8 @@ fn log_value(
             "fieldName": field.name,
             "value": activity::change(before.map(String::from), after.map(String::from)),
         }),
+        None,
+        None,
     )
 }
 

@@ -9,7 +9,7 @@ use crate::models::{Memo, MemoTarget};
 
 const COLUMNS: &str = "id, document_id, code_id, excerpt_id, title, body, created_at, updated_at";
 
-fn from_row(r: &Row) -> rusqlite::Result<Memo> {
+pub(super) fn from_row(r: &Row) -> rusqlite::Result<Memo> {
     Ok(Memo {
         id: r.get(0)?,
         document_id: r.get(1)?,
@@ -113,6 +113,8 @@ fn log_memo(conn: &Connection, kind: &str, verb: &str, memo: &Memo) -> Result<()
             "codeId": memo.code_id,
             "excerptId": memo.excerpt_id,
         }),
+        None,
+        None,
     )
 }
 

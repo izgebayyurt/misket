@@ -840,6 +840,8 @@ pub struct BackupInfo {
 #[serde(rename_all = "camelCase")]
 pub struct ActivityEntry {
     pub id: i64,
+    /// The node this one follows in the history tree; `None` for a root.
+    pub parent_id: Option<i64>,
     pub at: String,
     pub actor: String,
     /// A dotted verb: `code.created`, `excerpt.split`, `undo`, …
@@ -850,6 +852,13 @@ pub struct ActivityEntry {
     pub target_id: Option<String>,
     pub summary: String,
     pub detail: serde_json::Value,
+    /// Whether this step carries an inverse payload. Entries written before
+    /// history existed, and kinds no inverse has been written for, do not.
+    pub undoable: bool,
+    /// The name "fork here" gave this node, if any.
+    pub branch_name: Option<String>,
+    /// Whether this is the node undo would take back next.
+    pub is_head: bool,
 }
 
 /// What `db::activity::list` should return. Every field narrows the result;
@@ -899,6 +908,127 @@ pub struct ActivityPage {
     /// Every `kind` present in the log, sorted, so the UI can offer a filter
     /// without a second round trip.
     pub kinds: Vec<String>,
+}
+
+// ------------------------------------------------------------------ history
+
+/// One operation in the undo tree, with the payloads that replay it.
+///
+/// `forward` and `inverse` are self-contained JSON carrying the original ids,
+/// so a node can be applied in either direction long after the closure that
+/// produced it is gone. `None` means the step cannot be replayed that way.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct HistoryNode {
+    pub id: i64,
+    pub parent_id: Option<i64>,
+    pub at: String,
+    pub actor: String,
+    pub kind: String,
+    pub target_kind: String,
+    pub target_id: Option<String>,
+    pub summary: String,
+    pub detail: serde_json::Value,
+    pub forward: Option<serde_json::Value>,
+    pub inverse: Option<serde_json::Value>,
+    pub branch_name: Option<String>,
+    pub preferred_child: Option<i64>,
+}
+
+/// A node as the history view draws it: no payloads, but the shape of the
+/// tree around it.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct HistoryNodeSummary {
+    pub id: i64,
+    pub parent_id: Option<i64>,
+    pub at: String,
+    pub actor: String,
+    pub kind: String,
+    pub summary: String,
+    pub branch_name: Option<String>,
+    pub undoable: bool,
+    pub is_head: bool,
+    /// Oldest first; more than one means the tree branches here.
+    pub children: Vec<i64>,
+}
+
+/// What [`crate::db::history::compact_before`] threw away.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct CompactReport {
+    pub dropped_nodes: i64,
+    /// The names of the forks that went with them, so the confirmation can
+    /// say what is being lost.
+    pub dropped_branches: Vec<String>,
+}
+
+/// A code exactly as it sits in the table, so it can be put back with its own
+/// id, place and timestamps. `example_excerpt_id` is not here: it lives in
+/// [`CodeTreeSnapshot::example_refs`], because it can only be restored once
+/// the excerpt it points at is known to exist.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct CodeRow {
+    pub id: String,
+    pub parent_id: Option<String>,
+    pub name: String,
+    pub color: String,
+    pub description: String,
+    pub inclusion: String,
+    pub exclusion: String,
+    pub shortcut: Option<String>,
+    pub sort_order: i64,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+/// The order of one group of siblings, so a restore lands a code back between
+/// the same two neighbours rather than wherever a renumber puts it.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct SiblingGroup {
+    pub parent_id: Option<String>,
+    pub ids: Vec<String>,
+}
+
+/// One `excerpt_codes` row.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct TagRow {
+    pub excerpt_id: String,
+    pub code_id: String,
+    pub created_at: String,
+}
+
+/// One `framework_cells` row.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct FrameworkCellRow {
+    pub matrix_id: String,
+    pub row_key: String,
+    pub code_id: String,
+    pub summary: String,
+    pub updated_at: String,
+}
+
+/// Everything deleting a branch of the codebook would take with it: the code
+/// rows themselves, where they sat among their siblings, the excerpts they
+/// tagged, their memos, the sets and framework cells that named them, and the
+/// example excerpts they pointed at.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct CodeTreeSnapshot {
+    /// Parents before children, so the foreign key holds on the way back in.
+    pub codes: Vec<CodeRow>,
+    pub sibling_order: Vec<SiblingGroup>,
+    pub excerpt_codes: Vec<TagRow>,
+    pub memos: Vec<Memo>,
+    /// `(setId, codeId)`.
+    pub set_members: Vec<(String, String)>,
+    pub framework_cells: Vec<FrameworkCellRow>,
+    /// `(codeId, excerptId)`.
+    pub example_refs: Vec<(String, String)>,
 }
 
 // ------------------------------------------------------------------- search

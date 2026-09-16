@@ -135,6 +135,8 @@ pub fn create_set(
         Some(&id),
         format!("Created {kind} set \"{name}\""),
         json!({ "kind": kind, "name": name, "memberIds": member_ids }),
+        None,
+        None,
     )?;
     tx.commit()?;
     get_set(conn, &id)
@@ -162,6 +164,8 @@ pub fn rename_set(conn: &Connection, id: &str, name: &str) -> Result<SetInfo> {
                 "kind": current.kind,
                 "name": activity::change(current.name.clone(), name.to_string()),
             }),
+            None,
+            None,
         )?;
     }
     get_set(conn, id)
@@ -181,6 +185,8 @@ pub fn delete_set(conn: &Connection, id: &str) -> Result<SetWithMembers> {
         Some(id),
         format!("Deleted {} set \"{}\"", set.kind, set.name),
         json!({ "kind": set.kind, "name": set.name, "memberIds": member_ids }),
+        None,
+        None,
     )?;
     tx.commit()?;
     Ok(SetWithMembers { set, member_ids })
@@ -240,6 +246,8 @@ pub fn set_set_members(
             if member_ids.len() == 1 { "" } else { "s" }
         ),
         json!({ "kind": set.kind, "name": set.name, "memberIds": member_ids }),
+        None,
+        None,
     )?;
     tx.commit()?;
     set_members(conn, set_id)
@@ -286,6 +294,8 @@ fn log_membership(conn: &Connection, set: &SetInfo, verb: &str, member_id: &str)
             "memberName": member_name,
             "change": verb.to_lowercase(),
         }),
+        None,
+        None,
     )
 }
 
@@ -321,6 +331,8 @@ pub fn remove_from_set(conn: &Connection, set_id: &str, member_id: &str) -> Resu
             "memberName": member_name,
             "change": "removed",
         }),
+        None,
+        None,
     )?;
     tx.commit()?;
     set_members(conn, set_id)
@@ -451,6 +463,8 @@ pub fn save_filter(conn: &Connection, name: &str, filter: &ExcerptFilter) -> Res
         Some(&id),
         format!("Saved filter \"{name}\""),
         json!({ "name": name, "filter": filter }),
+        None,
+        None,
     )?;
     get_saved_filter(conn, &id)
 }
@@ -466,6 +480,8 @@ pub fn delete_saved_filter(conn: &Connection, id: &str) -> Result<SavedFilter> {
         Some(id),
         format!("Deleted filter \"{}\"", saved.name),
         json!({ "name": saved.name, "filter": saved.filter }),
+        None,
+        None,
     )?;
     tx.commit()?;
     Ok(saved)
