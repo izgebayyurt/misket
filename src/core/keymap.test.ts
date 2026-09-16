@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { LABELS, matchAction, SHORTCUTS, type Action } from "./keymap";
+import {
+  describe as describeShortcut,
+  LABELS,
+  matchAction,
+  SHORTCUTS,
+  type Action,
+} from "./keymap";
 
 function ev(init: Partial<KeyboardEvent> & { key: string }, target?: EventTarget): KeyboardEvent {
   const e = new KeyboardEvent("keydown", { ...init, bubbles: true });
@@ -42,6 +48,62 @@ describe("keymap", () => {
     expect(matchAction(ev({ key: "/", ctrlKey: true }))).toBe("shortcutsHelp");
     expect(matchAction(ev({ key: ",", ctrlKey: true }, input))).toBe("settings");
     expect(matchAction(ev({ key: "/", ctrlKey: true }, input))).toBe("shortcutsHelp");
+  });
+
+  it("maps the excerpt boundary shortcuts without clashing (non-mac)", () => {
+    expect(matchAction(ev({ key: "ArrowLeft", altKey: true }))).toBe("excerptEndLeft");
+    expect(matchAction(ev({ key: "ArrowRight", altKey: true }))).toBe("excerptEndRight");
+    expect(matchAction(ev({ key: "ArrowLeft", ctrlKey: true, shiftKey: true }))).toBe(
+      "excerptEndLeftChar",
+    );
+    expect(matchAction(ev({ key: "ArrowRight", ctrlKey: true, shiftKey: true }))).toBe(
+      "excerptEndRightChar",
+    );
+    expect(matchAction(ev({ key: "ArrowLeft", ctrlKey: true, altKey: true }))).toBe(
+      "excerptStartLeft",
+    );
+    expect(matchAction(ev({ key: "ArrowRight", ctrlKey: true, altKey: true }))).toBe(
+      "excerptStartRight",
+    );
+    expect(matchAction(ev({ key: "ArrowLeft", ctrlKey: true, altKey: true, shiftKey: true }))).toBe(
+      "excerptStartLeftChar",
+    );
+    expect(
+      matchAction(ev({ key: "ArrowRight", ctrlKey: true, altKey: true, shiftKey: true })),
+    ).toBe("excerptStartRightChar");
+    // The pre-existing selection shortcut keeps Alt+Shift+Arrow.
+    expect(matchAction(ev({ key: "ArrowLeft", altKey: true, shiftKey: true }))).toBe(
+      "extendSelectionLeft",
+    );
+    // Plain arrows stay with the browser.
+    expect(matchAction(ev({ key: "ArrowLeft" }))).toBeNull();
+    expect(matchAction(ev({ key: "ArrowRight", shiftKey: true }))).toBeNull();
+  });
+
+  it("keeps split and merge clear of the memo shortcut", () => {
+    expect(matchAction(ev({ key: "s", ctrlKey: true, shiftKey: true }))).toBe("splitExcerpt");
+    expect(matchAction(ev({ key: "m", ctrlKey: true, shiftKey: true }))).toBe("mergeExcerpt");
+    expect(matchAction(ev({ key: "m", ctrlKey: true }))).toBe("newMemo");
+    // Neither fires while typing in a field.
+    const input = document.createElement("input");
+    expect(matchAction(ev({ key: "s", ctrlKey: true, shiftKey: true }, input))).toBeNull();
+    expect(matchAction(ev({ key: "m", ctrlKey: true, shiftKey: true }, input))).toBeNull();
+  });
+
+  it("never binds the same chord to two actions", () => {
+    const seen = new Map<string, Action>();
+    for (const [action, s] of Object.entries(SHORTCUTS) as [Action, (typeof SHORTCUTS)[Action]][]) {
+      const chord = [s.mod ? "mod" : "", s.shift ? "shift" : "", s.alt ? "alt" : "", s.key].join(
+        "+",
+      );
+      expect(seen.get(chord), `${chord} is bound twice`).toBeUndefined();
+      seen.set(chord, action);
+    }
+  });
+
+  it("describes arrow shortcuts with glyphs", () => {
+    expect(describeShortcut("excerptEndLeft")).toContain("←");
+    expect(describeShortcut("excerptEndRight")).toContain("→");
   });
 
   it("gives every action a non-empty label", () => {

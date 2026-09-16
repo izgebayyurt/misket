@@ -11,3 +11,6 @@ export const renameDocument = (id: string, name: string) =>
   invoke<DocumentSummary>("rename_document", { id, name });
 export const reorderDocuments = (ids: string[]) => invoke<void>("reorder_documents", { ids });
 export const deleteDocument = (id: string) => invoke<void>("delete_document", { id });
+/** Importable files inside a folder, sorted by name. */
+export const listImportableFiles = (dir: string, recursive: boolean) =>
+  invoke<string[]>("list_importable_files", { dir, recursive });

@@ -4,6 +4,9 @@ import type { ProjectInfo, RecentProject } from "./types";
 
 export const createProject = (path: string, name: string) =>
   invoke<ProjectInfo>("create_project", { path, name });
+/** Create the bundled sample project and open it, defaulting to the documents folder. */
+export const createSampleProject = (dir?: string) =>
+  invoke<ProjectInfo>("create_sample_project", { dir });
 export const openProject = (path: string) => invoke<ProjectInfo>("open_project", { path });
 export const closeProject = () => invoke<void>("close_project");
 export const getProjectInfo = () => invoke<ProjectInfo | null>("get_project_info");

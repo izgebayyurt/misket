@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { csvField, matrixCsv, toCsv } from "./csv";
+import { csvField, matrixCsv, parseCsv, toCsv } from "./csv";
 
 describe("csv", () => {
   it("quotes only what needs quoting", () => {
@@ -28,5 +28,36 @@ describe("csv", () => {
       ],
     );
     expect(csv).toBe('Code,Alpha,"Beta, again"\r\nAlpha,2,0\r\n"Beta, again",0,3\r\n');
+  });
+
+  it("parses plain rows with CRLF or LF endings", () => {
+    expect(parseCsv("a,b\r\nc,d\r\n")).toEqual([
+      ["a", "b"],
+      ["c", "d"],
+    ]);
+    expect(parseCsv("a,b\nc,d")).toEqual([
+      ["a", "b"],
+      ["c", "d"],
+    ]);
+  });
+
+  it("parses quoted fields with embedded commas, quotes and newlines", () => {
+    expect(parseCsv('"a,b",c\n')).toEqual([["a,b", "c"]]);
+    expect(parseCsv('"say ""hi""",c\n')).toEqual([['say "hi"', "c"]]);
+    expect(parseCsv('"two\nlines",c\n')).toEqual([["two\nlines", "c"]]);
+  });
+
+  it("round-trips through toCsv", () => {
+    const rows = [
+      ["name", "parent"],
+      ["Alpha", ""],
+      ["Beta, again", "Alpha"],
+    ];
+    expect(parseCsv(toCsv(rows))).toEqual(rows);
+  });
+
+  it("returns no rows for empty input, one empty row for a blank line", () => {
+    expect(parseCsv("")).toEqual([]);
+    expect(parseCsv("\n")).toEqual([[""]]);
   });
 });

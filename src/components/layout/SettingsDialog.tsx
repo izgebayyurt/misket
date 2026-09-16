@@ -93,6 +93,29 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
               Confirm before deleting an excerpt
             </label>
           </section>
+
+          <section>
+            <div className="mb-1.5 flex items-center justify-between">
+              <label
+                htmlFor="settings-keep-backups"
+                className="text-xs font-semibold uppercase tracking-wide text-fg-muted"
+              >
+                Backups to keep
+              </label>
+              <span className="text-sm text-fg-muted">{settings.keepBackups}</span>
+            </div>
+            <input
+              id="settings-keep-backups"
+              type="range"
+              min={1}
+              max={100}
+              step={1}
+              value={settings.keepBackups}
+              onChange={(e) => update({ keepBackups: Number(e.target.value) })}
+              className="w-full"
+              style={{ accentColor: "var(--accent)" }}
+            />
+          </section>
         </div>
       </DialogContent>
     </Dialog>

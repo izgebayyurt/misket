@@ -15,6 +15,18 @@ export type View =
 export type SidebarTab = "documents" | "codes";
 
 /**
+ * What the code palette should do with the code the user picks. Without one
+ * it codes the pending selection or the focused excerpt, as usual; with one it
+ * is a plain code picker (bulk "Add code…"), which keeps `>name` and the
+ * filtering behaviour without a second implementation of the palette.
+ */
+export interface PaletteTarget {
+  /** Shown in the palette instead of "Code selection". */
+  label: string;
+  onPick: (codeId: string) => void | Promise<void>;
+}
+
+/**
  * What the palette and the code hotkeys will code next: a text selection in
  * code point offsets, or a rectangle drawn on an image (fractions, 0..1).
  */
@@ -29,6 +41,7 @@ interface WorkspaceState {
   pendingSelection: PendingSelection | null;
   focusedExcerptId: string | null;
   paletteOpen: boolean;
+  paletteTarget: PaletteTarget | null;
   settingsOpen: boolean;
   shortcutsHelpOpen: boolean;
   setView: (view: View) => void;
@@ -40,6 +53,8 @@ interface WorkspaceState {
   setPendingSelection: (sel: PendingSelection | null) => void;
   setFocusedExcerptId: (id: string | null) => void;
   setPaletteOpen: (open: boolean) => void;
+  /** Open the palette as a code picker rather than as a coding action. */
+  openCodePicker: (target: PaletteTarget) => void;
   setSettingsOpen: (open: boolean) => void;
   setShortcutsHelpOpen: (open: boolean) => void;
   reset: () => void;
@@ -52,6 +67,7 @@ const initial = {
   pendingSelection: null,
   focusedExcerptId: null,
   paletteOpen: false,
+  paletteTarget: null as PaletteTarget | null,
   settingsOpen: false,
   shortcutsHelpOpen: false,
 };
@@ -77,7 +93,9 @@ export const useWorkspace = create<WorkspaceState>((set) => ({
     set(pendingSelection ? { pendingSelection, focusedExcerptId: null } : { pendingSelection }),
   setFocusedExcerptId: (focusedExcerptId) =>
     set(focusedExcerptId ? { focusedExcerptId, pendingSelection: null } : { focusedExcerptId }),
-  setPaletteOpen: (paletteOpen) => set({ paletteOpen }),
+  setPaletteOpen: (paletteOpen) =>
+    set(paletteOpen ? { paletteOpen } : { paletteOpen, paletteTarget: null }),
+  openCodePicker: (paletteTarget) => set({ paletteTarget, paletteOpen: true }),
   setSettingsOpen: (settingsOpen) => set({ settingsOpen }),
   setShortcutsHelpOpen: (shortcutsHelpOpen) => set({ shortcutsHelpOpen }),
   reset: () => set({ ...initial }),

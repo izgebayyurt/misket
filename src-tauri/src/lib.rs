@@ -1,3 +1,4 @@
+mod backup_guard;
 mod commands;
 mod recent;
 mod settings;
@@ -94,6 +95,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::project::create_project,
+            commands::project::create_sample_project,
             commands::project::open_project,
             commands::project::close_project,
             commands::project::get_project_info,
@@ -109,6 +111,7 @@ pub fn run() {
             commands::documents::rename_document,
             commands::documents::reorder_documents,
             commands::documents::delete_document,
+            commands::documents::list_importable_files,
             commands::codes::list_codes,
             commands::codes::create_code,
             commands::codes::update_code,
@@ -132,6 +135,13 @@ pub fn run() {
             commands::excerpts::delete_excerpt,
             commands::excerpts::restore_excerpt,
             commands::excerpts::query_excerpts,
+            commands::excerpts::update_excerpt_range,
+            commands::excerpts::split_excerpt,
+            commands::excerpts::merge_excerpts,
+            commands::excerpts::delete_excerpts,
+            commands::excerpts::add_codes_to_excerpts,
+            commands::excerpts::remove_codes_from_excerpts,
+            commands::excerpts::retag_code,
             commands::analysis::code_frequencies,
             commands::analysis::co_occurrence,
             commands::analysis::code_by_document,
@@ -144,9 +154,14 @@ pub fn run() {
             commands::export::export_codebook_csv,
             commands::export::export_excerpts_csv,
             commands::export::export_project_json,
+            commands::export::export_codebook_json,
+            commands::codebook::import_codebook,
             commands::e2e::get_e2e_config,
             commands::settings::get_settings,
             commands::settings::set_settings,
+            commands::backup::save_project_copy,
+            commands::backup::list_backups,
+            commands::backup::restore_backup,
         ])
         .build(tauri::generate_context!())
         .expect("error while building Misket");

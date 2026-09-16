@@ -8,6 +8,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   editorFontSize: 17,
   editorLineHeight: 1.7,
   confirmDeleteExcerpt: false,
+  keepBackups: 20,
 };
 
 const SAVE_DEBOUNCE_MS = 400;

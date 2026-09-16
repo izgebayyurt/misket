@@ -12,24 +12,37 @@ keyboard-friendly interface without a subscription.
 ## What it does today
 
 - **Import** plain text, Markdown, Word (`.docx`), PDF (text only) and image
-  (PNG, JPEG, WebP) documents.
+  (PNG, JPEG, WebP) documents, one at a time or a whole folder at once
+  ("Import folder…", optionally including subfolders).
   If a file has blank-line gaps, trailing spaces or other likely-accidental
   whitespace, Misket offers to tidy it up before import (document text is
   immutable once imported). Check "Remember my choice" in that dialog to skip
   it on future imports; its "Ask again on import" link resets that.
 - **Build a codebook**: nested codes with colors, descriptions, single-key
-  hotkeys, drag-and-drop reordering, merge and delete with impact preview.
+  hotkeys, drag-and-drop reordering, merge and delete with impact preview, and
+  "Move excerpts to…" to hand one code's excerpts to another without losing
+  either code. Import a codebook (JSON or CSV) exported from another Misket
+  project to reuse it: merge it into the current codebook by matching code
+  names, or add it fresh under a chosen code.
 - **Code excerpts**: select text, press `Ctrl`/`⌘`+`K` and pick a code (type
-  `>name` to create one on the spot), or press a code's hotkey. Overlapping
-  excerpts are drawn as stacked colored lanes.
+  `>name` to create one on the spot), or press a code's hotkey. The picker
+  shows each code's description and, for nested codes, its full path.
+  Overlapping excerpts are drawn as stacked colored lanes.
 - **Code image regions**: an image opens in a pan-and-zoom viewer (scroll to
   zoom, `Alt`-drag to pan, `0` to fit). Drag a rectangle over it and code it
   with the same palette and hotkeys; regions are drawn in their code's colour,
   `Tab` cycles them, and the excerpt browser shows a thumbnail of each one.
   The image is copied into the project file, so a `.misket` stays
   self-contained.
+- **Adjust what is coded**: move a text excerpt's start or end by a word or a
+  character from the keyboard, drag the grips at either end, split an excerpt
+  at the cursor, or merge it with a touching neighbour (codes and memos are
+  combined). All of it is undoable.
 - **Browse excerpts** across the project, filtered by code (with sub-codes),
   document, or uncoded only, and jump back to any of them in context.
+  Tick the checkboxes (`Shift`+click for a range, or "Select all N loaded") to
+  add a code to, remove a code from, or delete many excerpts at once; `Escape`
+  clears the selection and undo reverses the whole batch.
 - **Analyse**: a code frequency table (own counts and counts with sub-codes,
   per document), a code co-occurrence matrix showing which codes overlap on the
   same text, and a code-by-document heatmap. Every cell clicks through to the
@@ -40,7 +53,8 @@ keyboard-friendly interface without a subscription.
   "Site is any of North, South").
 - **Memos** on documents, codes, excerpts and the project.
 - **Undo/redo** for every coding and codebook action.
-- **Export** the codebook and excerpts as CSV, or the whole project as JSON.
+- **Export** the codebook as CSV or a reusable JSON file, excerpts as CSV, or
+  the whole project as JSON.
 
 ![Excerpt browser](docs/screenshots/browser.png)
 
@@ -54,6 +68,13 @@ keyboard-friendly interface without a subscription.
 | Next / previous excerpt                                | `Tab` / `Shift`+`Tab`                         |
 | Edit the focused excerpt                               | `Enter`                                       |
 | Delete the focused excerpt                             | `Backspace`                                   |
+| Move the excerpt's **end** by a word                   | `Alt` + `←` / `→`                             |
+| Move the excerpt's **end** by a character              | `Ctrl`/`⌘` + `Shift` + `←` / `→`              |
+| Move the excerpt's **start** by a word                 | `Ctrl`/`⌘` + `Alt` + `←` / `→`                |
+| Move the excerpt's **start** by a character            | `Ctrl`/`⌘` + `Alt` + `Shift` + `←` / `→`      |
+| Split the focused excerpt at the cursor                | `Ctrl`/`⌘` + `Shift` + `S`                    |
+| Merge the focused excerpt with its neighbour           | `Ctrl`/`⌘` + `Shift` + `M`                    |
+| Extend the selection by a word                         | `Alt` + `Shift` + `←` / `→`                   |
 | New memo on the current document, code or excerpt      | `Ctrl`/`⌘` + `M`                              |
 | Excerpt browser                                        | `Ctrl`/`⌘` + `E`                              |
 | Analysis views                                         | `Shift` + `Ctrl`/`⌘` + `A`                    |
@@ -64,6 +85,13 @@ keyboard-friendly interface without a subscription.
 | Settings (theme, text size, confirm-delete)            | `Ctrl`/`⌘` + `,`                              |
 | Keyboard shortcuts reference                           | `Ctrl`/`⌘` + `/`                              |
 
+`Alt` + arrows move the focused excerpt's **end** edge; adding `Ctrl`/`⌘`
+moves the **start** edge instead, and adding `Shift` steps by one character
+rather than one word. The end edge's character step is the one exception to
+that rule — it drops `Alt`, because `Alt` + `Shift` + arrows already extends
+the selection. You can also drag the round grips at either end of the focused
+excerpt; every adjustment, split and merge is undoable.
+
 ## Install
 
 Builds for macOS, Windows and Linux are published on the
@@ -71,8 +99,22 @@ Builds for macOS, Windows and Linux are published on the
 code-signed yet: macOS will ask you to allow the app under System Settings >
 Privacy & Security, and Windows SmartScreen will show a warning the first time.
 
-Your project is a `.misket` file (a SQLite database). Back it up like any other
-file.
+## Your data
+
+Your project is a `.misket` file (a SQLite database) on your own disk; nothing
+leaves your computer. Before a destructive change — deleting a document,
+deleting a code that has excerpts, merging one code into another, or importing
+a codebook — Misket
+writes a timestamped copy into a `<project name>.backups/` folder next to the
+project file, and keeps the newest 20 (configurable in Settings). Use
+**Backups…** in the status bar to browse them, see their size and reason, and
+restore one (which first backs up the current state too, so restoring is
+itself never destructive). Use **Export > Save a copy as…** at any time for a
+manual snapshot. None of this replaces your own backup discipline for
+anything that matters.
+
+No project yet? Click "Try Misket with sample data" on the start screen for a
+ready-made study to explore.
 
 ## Development
 

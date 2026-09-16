@@ -129,7 +129,18 @@ export function useImportFiles() {
     await importPaths(Array.isArray(picked) ? picked : [picked]);
   }, [importPaths]);
 
-  return { importPaths, pickAndImport, isPending: create.isPending || createImage.isPending };
+  /** Ask for a folder; the caller then lists and imports what is inside it. */
+  const pickFolder = useCallback(async () => {
+    const picked = await open({ multiple: false, directory: true });
+    return typeof picked === "string" ? picked : null;
+  }, []);
+
+  return {
+    importPaths,
+    pickAndImport,
+    pickFolder,
+    isPending: create.isPending || createImage.isPending,
+  };
 }
 
 /**

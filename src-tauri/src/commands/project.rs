@@ -1,14 +1,18 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use misket_core::db::OpenProject;
 use misket_core::models::{ProjectInfo, RecentProject};
 use misket_core::{AppError, Result};
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Manager, State};
 
 use crate::recent;
 use crate::state::AppState;
 
-fn install(state: &AppState, app: &AppHandle, project: OpenProject) -> Result<ProjectInfo> {
+pub(crate) fn install(
+    state: &AppState,
+    app: &AppHandle,
+    project: OpenProject,
+) -> Result<ProjectInfo> {
     let info = project.info()?;
     recent::touch(app, &info.path, &info.name)?;
     let mut guard = state
@@ -38,6 +42,48 @@ pub fn open_project(
     path: String,
 ) -> Result<ProjectInfo> {
     let project = OpenProject::open(Path::new(&path))?;
+    install(&state, &app, project)
+}
+
+/// Find a free `Misket sample.misket` (or `Misket sample (2).misket`, …) name
+/// in `dir`, so trying the sample more than once never overwrites an earlier
+/// copy.
+fn unique_sample_path(dir: &Path) -> PathBuf {
+    let candidate = dir.join("Misket sample.misket");
+    if !candidate.exists() {
+        return candidate;
+    }
+    let mut n = 2;
+    loop {
+        let candidate = dir.join(format!("Misket sample ({n}).misket"));
+        if !candidate.exists() {
+            return candidate;
+        }
+        n += 1;
+    }
+}
+
+/// Create the bundled sample project ("Try Misket with sample data") and open
+/// it. Defaults to the user's documents folder (falling back to the app's
+/// data folder), or `dir` when given.
+#[tauri::command]
+pub fn create_sample_project(
+    state: State<'_, AppState>,
+    app: AppHandle,
+    dir: Option<String>,
+) -> Result<ProjectInfo> {
+    let base = match dir {
+        Some(d) => PathBuf::from(d),
+        None => app
+            .path()
+            .document_dir()
+            .or_else(|_| app.path().app_data_dir())
+            .map_err(|e| AppError::Io(e.to_string()))?,
+    };
+    std::fs::create_dir_all(&base)?;
+    let path = unique_sample_path(&base);
+    misket_core::sample::create_sample_project(&path)?;
+    let project = OpenProject::open(&path)?;
     install(&state, &app, project)
 }
 

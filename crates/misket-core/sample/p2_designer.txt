@@ -1,0 +1,27 @@
+Interviewer: To start, could you tell me a bit about your remote setup and how long you've been doing this?
+
+P2: Sure. I've been fully remote for about five years - I actually left an agency job specifically to go remote, so for me it was very much a choice, not something that happened to me. I have a proper desk in a spare room now, door that closes and everything. It took me a couple of years to get that space set up properly, though. At first I was on the sofa, laptop on my knees, and that was a disaster for my back and honestly for my head too, because the sofa is also where I relax, so work kept leaking into "not work" time and vice versa.
+
+Interviewer: So the physical space made a difference?
+
+P2: Huge difference. Having a door I can close is - it sounds almost silly how much that matters, but when that door's shut, I'm at work, and when I walk out, I'm done, in a way that just wasn't true before. It's a small ritual, closing the door, but it does the job that walking out of an office building used to do.
+
+Interviewer: What about connecting with your team? How does that work day to day?
+
+P2: We've built in some rituals over the years that genuinely help. There's a fifteen-minute virtual coffee twice a week, totally optional, no agenda, and honestly it's some of my favorite time in the week. And once a year the whole design team flies somewhere for three days, in person, and that trip does more for how connected I feel than probably the other three hundred and sixty-two days combined. I look forward to it embarrassingly much.
+
+Interviewer: Is there anything about connection that still feels hard, even with those rituals?
+
+P2: Yeah - I miss the, um, the accidental stuff. Someone sketching an idea on a whiteboard and three people wandering over. That doesn't happen on a video call, it just doesn't, because you have to already know something's worth looking at before you'll open a call for it. So I think we lose some ideas that would have happened by accident in an office. We try to compensate with a shared Figma board people can just poke around in, but it's not the same as physically walking past it.
+
+Interviewer: You mentioned earlier you have a lot of independence in how you work. Can you talk about that?
+
+P2: This is honestly the best part for me. I get a brief, a deadline, and then how I get there is up to me. If I want to go for a run at eleven in the morning because that's when my brain wants a break, I do that, and I make the time back up in the evening or whenever. Nobody's watching a calendar to see if I was "at my desk" from nine to five. That kind of autonomy is - it's actually why I stay in this job, if I'm being honest, more than the pay.
+
+Interviewer: Has that always been the case, or has it shifted?
+
+P2: It shifted a bit, actually, when we got a new manager last year. He came from a much more traditional office culture, and for a few months he wanted daily written status updates, like, "what did you do yesterday, what are you doing today." It felt like he didn't trust that work was happening unless he could see receipts for it. That was a rough patch. It got better once the work itself started speaking for him - deadlines were hit, designs were good - and I think he relaxed once he saw the results were there without the check-ins. But for a while it did feel like autonomy I'd had for years was suddenly being questioned, and that stung more than I expected.
+
+Interviewer: That's a good example, thank you. Anything else you'd want people to understand about remote work that doesn't come up often?
+
+P2: I think people assume remote means isolated and lazy, or free and easy, like it's one or the other. It's neither, really, it's just a different shape. You have to build the structure yourself instead of it being built into a building and a commute. Some days that structure is great. Some days I have to remind myself, at four in the afternoon, that I am in fact allowed to stop.

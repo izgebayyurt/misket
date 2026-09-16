@@ -93,6 +93,27 @@ kind compares as text, which is also the right order for ISO dates. Because
 `neq` and `empty` are `NOT EXISTS`, documents with no value for the field match
 them.
 
+## Adjusting excerpts
+
+Three operations in `db::excerpts` refine an existing text excerpt, each in one
+transaction and each invertible from the frontend's undo stack:
+
+| Operation        | Effect                                                                                                                                                            | Inverse                                                                                     |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `update_range`   | moves `start_pos`/`end_pos`, recomputes `snapshot` from the document text and bumps `updated_at`; codes and memos are untouched                                   | `update_range` back to the old offsets                                                      |
+| `split`          | cuts `[start, end)` at a code point into `[start, at)` and `[at, end)`; the left half keeps the id and the memos, the right half copies the codes                 | `merge_adjacent` of the two halves                                                          |
+| `merge_adjacent` | folds two touching or overlapping excerpts into `[min start, max end)` with the union of their codes; the right one is deleted and its memos move to the survivor | undo the added codes, `update_range` the survivor back, then `restore` the removed snapshot |
+
+Ranges are still validated against `documents.text_length` in code points, and
+a range another text excerpt already occupies exactly is a `Conflict`, because
+`excerpts_text_range_uq` allows one text excerpt per exact range. Two excerpts
+count as mergeable when they touch or overlap (`left.start <= right.end AND
+right.start <= left.end`).
+
+Because a merge re-points memos to the survivor rather than deleting them,
+`restore` upserts memos (`ON CONFLICT(id) DO UPDATE`) so undoing a merge moves
+them back instead of failing on the primary key.
+
 ## Queries worth knowing
 
 - Descendants of a code use a recursive CTE, not a materialized path:
@@ -115,6 +136,8 @@ them.
 ## Exports
 
 - Codebook CSV: `id, path, name, parent_id, color, description, shortcut, excerpt_count`
+- Codebook JSON: `{ format: "misket-codebook", version: 1, codes: [{ id, parentId, name, color, description, shortcut, sortOrder }] }`,
+  codes listed parents-before-children (depth-first in path order, like the CSV)
 - Excerpts CSV: `excerpt_id, document, start, end, geometry, text, codes, memo_count, created_at`
   (codes are full paths separated by `; `), then one column per descriptor
   field, named after the field, holding the excerpt's document's value.
@@ -123,3 +146,24 @@ them.
 - Project JSON: `{ format: "misket-project", formatVersion: 1, meta, documents, codes, excerpts, memos, descriptorFields, descriptorValues }`.
   Image bytes are not included: the JSON stays a readable text export, and the
   `.misket` file remains the thing that holds the media.
+
+## Codebook import
+
+`db::codebook_import::import_codebook` (`crates/misket-core/src/db/codebook_import.rs`)
+reads either a codebook JSON export or CSV with header
+`name, parent, color, description, shortcut` (`parent` is a full path with
+`/` separators, matching the CSV export above), reducing both to a flat
+list of full name paths. One transaction:
+
+- `merge` matches existing codes by full path, case-insensitively. A matched
+  code only gets its `description`/`color`/`shortcut` filled in where they
+  are empty — never overwritten. Codes with no match are created under the
+  matched parent (or at the root).
+- `add-under` grafts every imported code fresh under a given parent (or the
+  root), without matching against the existing codebook at all.
+
+A color is imported only if it is a valid `#rrggbb` string; otherwise the
+code gets the same next-in-palette default as a code created with no color.
+A shortcut is imported only if it is free; if it is already taken (or
+otherwise invalid), it is dropped and the code's path is added to the
+report's `skippedShortcuts` instead of failing the import.

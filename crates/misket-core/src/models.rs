@@ -164,6 +164,60 @@ pub struct CodeImpact {
     pub excerpt_count: i64,
 }
 
+// ------------------------------------------------------------ codebook i/o
+
+/// One code in a `misket-codebook` JSON export (see `db::export::codebook_json`).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct CodebookJsonCode {
+    pub id: String,
+    pub parent_id: Option<String>,
+    pub name: String,
+    pub color: String,
+    #[serde(default)]
+    pub description: String,
+    #[serde(default)]
+    pub shortcut: Option<String>,
+    #[serde(default)]
+    pub sort_order: i64,
+}
+
+/// What `db::codebook_import::import_codebook` should read: either the
+/// parsed contents of a `misket-codebook` JSON file, or raw CSV text with
+/// header `name,parent,color,description,shortcut` (`parent` is a full path
+/// with ` / ` separators, the same convention as the codebook CSV export).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum CodebookImport {
+    #[serde(rename = "json")]
+    Json { codes: Vec<CodebookJsonCode> },
+    #[serde(rename = "csv")]
+    Csv { text: String },
+}
+
+/// `Merge` matches existing codes by full name path (case-insensitively) and
+/// only fills empty fields; `AddUnder` creates everything fresh under
+/// `parent_id` (root-level if `None`), without matching.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum ImportMode {
+    #[serde(rename = "merge")]
+    Merge,
+    #[serde(rename = "add-under")]
+    AddUnder {
+        #[serde(default)]
+        parent_id: Option<String>,
+    },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ImportReport {
+    pub created: i64,
+    pub matched: i64,
+    pub skipped_shortcuts: Vec<String>,
+}
+
 // ----------------------------------------------------------------- excerpts
 
 /// A normalized rectangle on an image document: fractions of the image's
@@ -239,6 +293,28 @@ pub struct ExcerptSnapshot {
     pub memos: Vec<Memo>,
 }
 
+/// The two halves left by [`crate::db::excerpts::split`]; `left` keeps the original id.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct SplitResult {
+    pub left: ExcerptWithCodes,
+    pub right: ExcerptWithCodes,
+}
+
+/// The outcome of [`crate::db::excerpts::merge_adjacent`], with everything the
+/// frontend needs to invert it: the survivor as it is now, a snapshot of the
+/// excerpt that was removed, the survivor's range before the merge and the
+/// codes the merge added to it.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct MergeResult {
+    pub excerpt: ExcerptWithCodes,
+    pub removed: ExcerptSnapshot,
+    pub previous_start_pos: i64,
+    pub previous_end_pos: i64,
+    pub added_code_ids: Vec<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct ExcerptFilter {
@@ -299,6 +375,32 @@ pub struct ExcerptRow {
 pub struct ExcerptPage {
     pub rows: Vec<ExcerptRow>,
     pub total: i64,
+}
+
+// ------------------------------------------------------- bulk operations
+
+/// What a bulk code change actually did.
+///
+/// `affected` counts the excerpts that really changed; `pairs` holds every
+/// `(excerptId, codeId)` tag that was inserted (by `add_codes_many`) or
+/// deleted (by `remove_codes_many`), skipping the ones that were already in
+/// the wanted state. Undo is the opposite operation over exactly those pairs.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct BulkCodeReport {
+    pub affected: i64,
+    pub pairs: Vec<(String, String)>,
+}
+
+/// Moving every excerpt from one code to another.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct RetagReport {
+    /// Excerpts that gained the target code and lost the source code.
+    pub moved: Vec<String>,
+    /// Excerpts that already carried the target code, so they only lost the
+    /// source. Undo must not take the target away from these.
+    pub already_had: Vec<String>,
 }
 
 // ----------------------------------------------------------------- analysis
@@ -440,6 +542,19 @@ pub struct Memo {
     pub body: String,
     pub created_at: String,
     pub updated_at: String,
+}
+
+// ------------------------------------------------------------------- backups
+
+/// One timestamped backup file next to the project.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct BackupInfo {
+    pub path: String,
+    /// RFC 3339 UTC, derived from the timestamp encoded in the file name.
+    pub created_at: String,
+    pub reason: String,
+    pub size_bytes: u64,
 }
 
 // ------------------------------------------------------------------- search

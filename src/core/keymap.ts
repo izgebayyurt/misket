@@ -32,6 +32,16 @@ export type Action =
   | "deleteExcerpt"
   | "extendSelectionLeft"
   | "extendSelectionRight"
+  | "excerptEndLeft"
+  | "excerptEndRight"
+  | "excerptEndLeftChar"
+  | "excerptEndRightChar"
+  | "excerptStartLeft"
+  | "excerptStartRight"
+  | "excerptStartLeftChar"
+  | "excerptStartRightChar"
+  | "splitExcerpt"
+  | "mergeExcerpt"
   | "escape";
 
 export interface Shortcut {
@@ -65,6 +75,20 @@ export const SHORTCUTS: Record<Action, Shortcut> = {
   deleteExcerpt: { key: "Backspace" },
   extendSelectionLeft: { key: "ArrowLeft", alt: true, shift: true },
   extendSelectionRight: { key: "ArrowRight", alt: true, shift: true },
+  // Excerpt boundaries. `Alt` + arrows move the end edge, `Ctrl`/`⌘` picks
+  // the start edge instead, and `Shift` steps by one character rather than
+  // one word. The end edge's character step is the one exception: it drops
+  // `Alt`, because `Alt`+`Shift`+arrows already extends the selection.
+  excerptEndLeft: { key: "ArrowLeft", alt: true },
+  excerptEndRight: { key: "ArrowRight", alt: true },
+  excerptEndLeftChar: { key: "ArrowLeft", mod: true, shift: true },
+  excerptEndRightChar: { key: "ArrowRight", mod: true, shift: true },
+  excerptStartLeft: { key: "ArrowLeft", mod: true, alt: true },
+  excerptStartRight: { key: "ArrowRight", mod: true, alt: true },
+  excerptStartLeftChar: { key: "ArrowLeft", mod: true, alt: true, shift: true },
+  excerptStartRightChar: { key: "ArrowRight", mod: true, alt: true, shift: true },
+  splitExcerpt: { key: "s", mod: true, shift: true },
+  mergeExcerpt: { key: "m", mod: true, shift: true },
   escape: { key: "Escape", global: true },
 };
 
@@ -89,13 +113,21 @@ export function matchAction(e: KeyboardEvent): Action | null {
   return null;
 }
 
+/** Arrow keys read better as glyphs than as their DOM key names. */
+const KEY_GLYPHS: Record<string, string> = {
+  ArrowLeft: "←",
+  ArrowRight: "→",
+  ArrowUp: "↑",
+  ArrowDown: "↓",
+};
+
 export function describe(action: Action): string {
   const s = SHORTCUTS[action];
   const parts: string[] = [];
   if (s.mod) parts.push(modLabel);
   if (s.shift) parts.push("⇧");
   if (s.alt) parts.push(isMac ? "⌥" : "Alt+");
-  parts.push(s.key.length === 1 ? s.key.toUpperCase() : s.key);
+  parts.push(KEY_GLYPHS[s.key] ?? (s.key.length === 1 ? s.key.toUpperCase() : s.key));
   return parts.join("");
 }
 
@@ -122,6 +154,16 @@ export const LABELS: Record<Action, string> = {
   deleteExcerpt: "Delete focused excerpt",
   extendSelectionLeft: "Extend selection left",
   extendSelectionRight: "Extend selection right",
+  excerptEndLeft: "Move excerpt end left by a word",
+  excerptEndRight: "Move excerpt end right by a word",
+  excerptEndLeftChar: "Move excerpt end left by a character",
+  excerptEndRightChar: "Move excerpt end right by a character",
+  excerptStartLeft: "Move excerpt start left by a word",
+  excerptStartRight: "Move excerpt start right by a word",
+  excerptStartLeftChar: "Move excerpt start left by a character",
+  excerptStartRightChar: "Move excerpt start right by a character",
+  splitExcerpt: "Split excerpt at the cursor",
+  mergeExcerpt: "Merge excerpt with its neighbour",
   escape: "Cancel / close",
 };
 

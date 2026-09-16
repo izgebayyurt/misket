@@ -5,11 +5,13 @@ import { useUndoStore } from "@/state/undoStore";
 import { useWorkspace } from "@/state/workspace";
 import { ExportMenu } from "./ExportMenu";
 import { AboutDialog } from "./AboutDialog";
+import { BackupsDialog } from "./BackupsDialog";
 
 export function StatusBar({ project }: { project: ProjectInfo }) {
   const close = useCloseProject();
   const lastLabel = useUndoStore((s) => s.past[s.past.length - 1]?.label);
   const [about, setAbout] = useState(false);
+  const [backups, setBackups] = useState(false);
   const setSettingsOpen = useWorkspace((s) => s.setSettingsOpen);
   const setShortcutsHelpOpen = useWorkspace((s) => s.setShortcutsHelpOpen);
   return (
@@ -29,6 +31,9 @@ export function StatusBar({ project }: { project: ProjectInfo }) {
       >
         ?
       </button>
+      <button className="hover:text-fg" onClick={() => setBackups(true)}>
+        Backups…
+      </button>
       <button className="hover:text-fg" onClick={() => setSettingsOpen(true)}>
         Settings
       </button>
@@ -39,6 +44,7 @@ export function StatusBar({ project }: { project: ProjectInfo }) {
         Close project
       </button>
       {about ? <AboutDialog onClose={() => setAbout(false)} /> : null}
+      {backups ? <BackupsDialog onClose={() => setBackups(false)} /> : null}
     </footer>
   );
 }

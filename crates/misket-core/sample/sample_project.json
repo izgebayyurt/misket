@@ -1,0 +1,234 @@
+{
+  "name": "Misket sample: Remote work and wellbeing",
+  "documents": [
+    {
+      "key": "p1",
+      "name": "P1 — software engineer",
+      "file": "p1_engineer.txt",
+      "descriptors": { "role": "Engineer", "years_remote": "3" }
+    },
+    {
+      "key": "p2",
+      "name": "P2 — product designer",
+      "file": "p2_designer.txt",
+      "descriptors": { "role": "Designer", "years_remote": "5" }
+    },
+    {
+      "key": "p3",
+      "name": "P3 — engineering manager",
+      "file": "p3_manager.txt",
+      "descriptors": { "role": "Manager", "years_remote": "2" }
+    }
+  ],
+  "descriptorFields": [
+    {
+      "key": "role",
+      "name": "Role",
+      "kind": "choice",
+      "options": ["Engineer", "Designer", "Manager"]
+    },
+    {
+      "key": "years_remote",
+      "name": "Years remote",
+      "kind": "number"
+    }
+  ],
+  "codes": [
+    {
+      "key": "boundaries",
+      "name": "Boundaries",
+      "color": "#D9534F",
+      "description": "Where work starts and stops, in time, space or attention.",
+      "children": [
+        {
+          "key": "time",
+          "name": "Time",
+          "color": "#E9807D",
+          "description": "Work bleeding into evenings, weekends or otherwise blurring the workday's edges."
+        },
+        {
+          "key": "space",
+          "name": "Space",
+          "color": "#C77D3C",
+          "description": "A physical place (or the lack of one) that marks 'at work' versus 'at home'."
+        },
+        {
+          "key": "notifications",
+          "name": "Notifications",
+          "color": "#B05C8A",
+          "description": "Pings, messages and alerts that reach across the boundary uninvited."
+        }
+      ]
+    },
+    {
+      "key": "connection",
+      "name": "Connection",
+      "color": "#5CB85C",
+      "description": "How people stay (or fail to stay) socially linked to their team.",
+      "children": [
+        {
+          "key": "isolation",
+          "name": "Isolation",
+          "color": "#8AA63B",
+          "description": "Feeling cut off, lonely, or short on ordinary human contact."
+        },
+        {
+          "key": "team_rituals",
+          "name": "Team rituals",
+          "color": "#2E8B8B",
+          "description": "Recurring practices — coffee chats, check-ins, offsites — that manufacture connection on purpose."
+        }
+      ]
+    },
+    {
+      "key": "autonomy",
+      "name": "Autonomy",
+      "color": "#5BC0DE",
+      "description": "Control over how, when and where the work gets done.",
+      "children": [
+        {
+          "key": "flexibility",
+          "name": "Flexibility",
+          "color": "#4A6FA5",
+          "description": "Choosing one's own hours, pace or working pattern."
+        },
+        {
+          "key": "trust",
+          "name": "Trust",
+          "color": "#8E6BBF",
+          "description": "Being judged on output rather than visible presence, or the lack of that trust."
+        }
+      ]
+    }
+  ],
+  "excerpts": [
+    {
+      "document": "p1",
+      "quote": "at nine o'clock I'll think, oh, let me just check if that build passed",
+      "codes": ["time"]
+    },
+    {
+      "document": "p1",
+      "quote": "there's no walk to the car that used to sort of reset my brain",
+      "codes": ["time"]
+    },
+    {
+      "document": "p1",
+      "quote": "I turned off Slack notifications after seven",
+      "codes": ["notifications"]
+    },
+    {
+      "document": "p1",
+      "quote": "she doesn't message after hours unless it's genuinely on fire, and when it is on fire she says so explicitly",
+      "codes": ["trust"]
+    },
+    { "document": "p1", "quote": "she doesn't message after hours", "codes": ["notifications"] },
+    {
+      "document": "p1",
+      "quote": "Nobody's tracking my hours. It's outcomes.",
+      "codes": ["trust", "flexibility"]
+    },
+    {
+      "document": "p1",
+      "quote": "I go days sometimes where the only conversation I have is in a pull request comment",
+      "codes": ["isolation"]
+    },
+    {
+      "document": "p1",
+      "quote": "There have been stretches where I've felt pretty isolated, especially in winter when I'm also not going anywhere else",
+      "codes": ["isolation"]
+    },
+    {
+      "document": "p1",
+      "quote": "We do have a virtual watercooler channel, people post memes and dog photos and whatever",
+      "codes": ["team_rituals"]
+    },
+
+    {
+      "document": "p2",
+      "quote": "Having a door I can close is - it sounds almost silly how much that matters",
+      "codes": ["space"]
+    },
+    {
+      "document": "p2",
+      "quote": "when that door's shut, I'm at work, and when I walk out, I'm done, in a way that just wasn't true before",
+      "codes": ["space"]
+    },
+    { "document": "p2", "quote": "door's shut, I'm at work", "codes": ["time"] },
+    {
+      "document": "p2",
+      "quote": "There's a fifteen-minute virtual coffee twice a week, totally optional, no agenda",
+      "codes": ["team_rituals"]
+    },
+    {
+      "document": "p2",
+      "quote": "once a year the whole design team flies somewhere for three days, in person",
+      "codes": ["team_rituals"]
+    },
+    {
+      "document": "p2",
+      "quote": "I miss the, um, the accidental stuff. Someone sketching an idea on a whiteboard and three people wandering over",
+      "codes": ["isolation"]
+    },
+    {
+      "document": "p2",
+      "quote": "I get a brief, a deadline, and then how I get there is up to me",
+      "codes": ["flexibility"]
+    },
+    {
+      "document": "p2",
+      "quote": "If I want to go for a run at eleven in the morning because that's when my brain wants a break, I do that",
+      "codes": ["flexibility"]
+    },
+    { "document": "p2", "quote": "he wanted daily written status updates", "codes": ["trust"] },
+
+    {
+      "document": "p3",
+      "quote": "the fear of missing that someone is isolated or burning out",
+      "codes": ["isolation"]
+    },
+    {
+      "document": "p3",
+      "quote": "We do a weekly one-on-one with everyone, no exceptions",
+      "codes": ["team_rituals"]
+    },
+    {
+      "document": "p3",
+      "quote": "I caught myself glancing at whether people's calendars showed them",
+      "codes": ["trust"]
+    },
+    {
+      "document": "p3",
+      "quote": "I don't need to know they were at their desk from nine to five",
+      "codes": ["trust"]
+    },
+    {
+      "document": "p3",
+      "quote": "we protect two overlapping hours a day where everyone's expected to be reachable, and outside that, people's time is genuinely their own",
+      "codes": ["flexibility"]
+    },
+    {
+      "document": "p3",
+      "quote": "I end up doing an early call with the folks who start their day when I'm ending mine",
+      "codes": ["time"]
+    },
+    {
+      "document": "p3",
+      "quote": "the point isn't the update, it's the fifteen minutes of just checking in as a person",
+      "codes": ["team_rituals"]
+    }
+  ],
+  "memos": [
+    {
+      "target": "project",
+      "title": "About this sample",
+      "body": "This is a synthetic project so you can try Misket without importing your own data first. Three fictional interviews explore a made-up study, 'Remote work and wellbeing', with a small codebook, about two dozen pre-coded excerpts, two descriptor fields (Role, Years remote) and this memo. Delete it, recode it, or just poke around — nothing here is real research."
+    },
+    {
+      "target": "code",
+      "code": "boundaries",
+      "title": "Coding note",
+      "body": "Boundaries covers where the workday visibly starts or stops: a closed door, a shut laptop, a notification arriving off-hours. It is distinct from Autonomy, which is about who decides those hours, not where the line falls."
+    }
+  ]
+}

@@ -7,6 +7,16 @@ export function useDocuments() {
   return useQuery({ queryKey: keys.documents, queryFn: api.listDocuments });
 }
 
+/** Importable files inside a folder; re-queried when "include subfolders" flips. */
+export function useImportableFiles(dir: string, recursive: boolean) {
+  return useQuery({
+    queryKey: keys.importableFiles(dir, recursive),
+    queryFn: () => api.listImportableFiles(dir, recursive),
+    staleTime: 0,
+    gcTime: 0,
+  });
+}
+
 export function useDocument(id: string | null) {
   return useQuery({
     queryKey: keys.document(id ?? ""),

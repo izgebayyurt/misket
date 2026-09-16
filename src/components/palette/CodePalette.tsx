@@ -12,6 +12,10 @@ import { useDocumentExcerpts } from "@/queries/excerpts";
 /**
  * The coding palette: pick a code to apply to the pending selection or the
  * focused excerpt. `>name` creates a new code and applies it.
+ *
+ * With a `paletteTarget` set (`openCodePicker`) it is a plain code picker
+ * instead, handing the chosen code to the caller — that is how the excerpt
+ * browser's bulk "Add code…" reuses it.
  */
 export function CodePalette() {
   const open = useWorkspace((s) => s.paletteOpen);
@@ -26,7 +30,7 @@ export function CodePalette() {
           aria-describedby={undefined}
           data-testid="code-palette"
         >
-          <DialogPrimitive.Title className="sr-only">Apply a code</DialogPrimitive.Title>
+          <DialogPrimitive.Title className="sr-only">Pick a code</DialogPrimitive.Title>
           {open ? <PaletteBody close={() => setOpen(false)} /> : null}
         </DialogPrimitive.Content>
       </DialogPrimitive.Portal>
@@ -36,6 +40,7 @@ export function CodePalette() {
 
 /** Mounted only while open, so the query resets on every open. */
 function PaletteBody({ close }: { close: () => void }) {
+  const picker = useWorkspace((s) => s.paletteTarget);
   const pending = useWorkspace((s) => s.pendingSelection);
   const focusedId = useWorkspace((s) => s.focusedExcerptId);
   const setFocusedId = useWorkspace((s) => s.setFocusedExcerptId);
@@ -50,14 +55,24 @@ function PaletteBody({ close }: { close: () => void }) {
   const createCode = useCreateCode();
   const [query, setQuery] = useState("");
 
-  const focused = focusedId ? excerpts?.find((e) => e.id === focusedId) : undefined;
-  const target = pending ? "selection" : focused ? "excerpt" : null;
+  const focused = focusedId && !picker ? excerpts?.find((e) => e.id === focusedId) : undefined;
+  const target = picker
+    ? picker.label
+    : pending
+      ? pending.kind === "image"
+        ? "Code region"
+        : "Code selection"
+      : focused
+        ? "Add to excerpt"
+        : "No target";
   const items = useMemo(() => flattenTree(tree), [tree]);
   const creating = query.startsWith(">") && query.slice(1).trim().length > 0;
 
   async function apply(codeId: string, keepOpen: boolean) {
     try {
-      if (pending && documentId) {
+      if (picker) {
+        await picker.onPick(codeId);
+      } else if (pending && documentId) {
         const r = await applyCodes.mutateAsync(
           pending.kind === "image"
             ? {
@@ -105,7 +120,7 @@ function PaletteBody({ close }: { close: () => void }) {
 
   return (
     <Command
-      label="Apply a code"
+      label={picker ? picker.label : "Apply a code"}
       shouldFilter={!creating}
       onKeyDown={(e) => {
         if (e.key === "Enter" && creating) {
@@ -115,15 +130,7 @@ function PaletteBody({ close }: { close: () => void }) {
       }}
     >
       <div className="flex items-center gap-2 border-b border-border px-3">
-        <span className="text-xs text-fg-muted">
-          {target === "selection"
-            ? pending?.kind === "image"
-              ? "Code region"
-              : "Code selection"
-            : target === "excerpt"
-              ? "Add to excerpt"
-              : "No target"}
-        </span>
+        <span className="text-xs text-fg-muted">{target}</span>
         <Command.Input
           autoFocus
           value={query}
@@ -151,7 +158,7 @@ function PaletteBody({ close }: { close: () => void }) {
                 : "No matching code. Type >name to create it."}
             </Command.Empty>
             {items.map((n) => {
-              const applied = focused?.codeIds.includes(n.code.id) && !pending;
+              const applied = !picker && !pending && focused?.codeIds.includes(n.code.id);
               return (
                 <Command.Item
                   key={n.code.id}
@@ -164,11 +171,18 @@ function PaletteBody({ close }: { close: () => void }) {
                   data-testid="palette-item"
                 >
                   <ColorDot color={n.code.color} />
-                  <span className="min-w-0 flex-1 truncate" style={{ paddingLeft: n.depth * 10 }}>
-                    {n.code.name}
-                    {n.code.parentId ? (
-                      <span className="ml-2 text-xs text-fg-muted">
-                        {pathOf(tree, n.code.parentId)}
+                  <span className="min-w-0 flex-1" style={{ paddingLeft: n.depth * 10 }}>
+                    <span className="flex items-baseline gap-2">
+                      <span className="truncate">{n.code.name}</span>
+                      {n.code.parentId ? (
+                        <span className="truncate text-xs text-fg-muted">
+                          {pathOf(tree, n.code.parentId)}
+                        </span>
+                      ) : null}
+                    </span>
+                    {n.code.description ? (
+                      <span className="block truncate text-xs text-fg-muted">
+                        {n.code.description}
                       </span>
                     ) : null}
                   </span>
@@ -185,8 +199,8 @@ function PaletteBody({ close }: { close: () => void }) {
         )}
       </Command.List>
       <div className="flex gap-3 border-t border-border px-3 py-1.5 text-[11px] text-fg-muted">
-        <span>↵ apply</span>
-        <span>⇧↵ apply and keep open</span>
+        <span>↵ {picker ? "pick" : "apply"}</span>
+        <span>⇧↵ {picker ? "pick" : "apply"} and keep open</span>
         <span>&gt;name creates</span>
         <span>esc close</span>
       </div>

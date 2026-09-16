@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { open, save } from "@tauri-apps/plugin-dialog";
-import { FolderOpen, Plus, X } from "lucide-react";
+import { FolderOpen, Loader2, Plus, Sparkles, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import {
   useCreateProject,
+  useCreateSampleProject,
   useOpenProject,
   useRecentProjects,
   useRemoveRecent,
@@ -19,6 +20,7 @@ export function StartScreen() {
   const recent = useRecentProjects();
   const openProject = useOpenProject();
   const createProject = useCreateProject();
+  const createSample = useCreateSampleProject();
   const removeRecent = useRemoveRecent();
   const [newName, setNewName] = useState("");
   const [creating, setCreating] = useState(false);
@@ -60,6 +62,14 @@ export function StartScreen() {
     }
   }
 
+  async function handleTrySample() {
+    try {
+      await createSample.mutateAsync();
+    } catch (e) {
+      toast.error(e);
+    }
+  }
+
   return (
     <div className="flex h-full items-center justify-center">
       <div className="w-[560px] max-w-[90vw]">
@@ -68,12 +78,26 @@ export function StartScreen() {
           <p className="mt-1 text-fg-muted">Qualitative coding, on your own machine.</p>
         </div>
 
-        <div className="mb-8 flex gap-2">
+        <div className="mb-4 flex gap-2">
           <Button size="lg" onClick={() => setCreating(true)} data-testid="new-project">
             <Plus /> New project
           </Button>
           <Button size="lg" variant="outline" onClick={handleOpen} data-testid="open-project">
             <FolderOpen /> Open…
+          </Button>
+        </div>
+
+        <div className="mb-8">
+          <Button
+            variant="ghost"
+            onClick={handleTrySample}
+            disabled={createSample.isPending}
+            data-testid="try-sample"
+          >
+            {createSample.isPending ? <Loader2 className="animate-spin" /> : <Sparkles />}
+            {createSample.isPending
+              ? "Setting up the sample project…"
+              : "Try Misket with sample data"}
           </Button>
         </div>
 

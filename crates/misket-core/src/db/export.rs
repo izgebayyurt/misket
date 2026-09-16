@@ -9,11 +9,11 @@ use serde::Serialize;
 use super::{codes, descriptors, documents, excerpts, memos};
 use crate::error::Result;
 use crate::models::{
-    Code, DescriptorField, DescriptorValue, ExcerptFilter, ExcerptWithCodes, Memo,
+    Code, CodebookJsonCode, DescriptorField, DescriptorValue, ExcerptFilter, ExcerptWithCodes, Memo,
 };
 
 /// Full code path ("Parent / Child") for every code.
-fn code_paths(all: &[Code]) -> HashMap<String, String> {
+pub(crate) fn code_paths(all: &[Code]) -> HashMap<String, String> {
     let by_id: HashMap<&str, &Code> = all.iter().map(|c| (c.id.as_str(), c)).collect();
     let mut out = HashMap::new();
     for c in all {
@@ -69,6 +69,41 @@ pub fn codebook_csv<W: Write>(conn: &Connection, w: W) -> Result<()> {
         ])?;
     }
     wtr.flush()?;
+    Ok(())
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct CodebookJsonDoc {
+    format: &'static str,
+    version: u32,
+    codes: Vec<CodebookJsonCode>,
+}
+
+/// Self-contained codebook export: parents precede children (depth-first in
+/// path order, like `codebook_csv`), reusable with `codebook_import::import_codebook`.
+pub fn codebook_json<W: Write>(conn: &Connection, w: W) -> Result<()> {
+    let all = codes::list(conn)?;
+    let paths = code_paths(&all);
+    let mut sorted = all;
+    sorted.sort_by(|a, b| paths[&a.id].cmp(&paths[&b.id]));
+    let out = CodebookJsonDoc {
+        format: "misket-codebook",
+        version: 1,
+        codes: sorted
+            .into_iter()
+            .map(|c| CodebookJsonCode {
+                id: c.id,
+                parent_id: c.parent_id,
+                name: c.name,
+                color: c.color,
+                description: c.description,
+                shortcut: c.shortcut,
+                sort_order: c.sort_order,
+            })
+            .collect(),
+    };
+    serde_json::to_writer_pretty(w, &out)?;
     Ok(())
 }
 
@@ -253,6 +288,24 @@ mod tests {
         assert!(lines[1].contains(",Greeting,Greeting,,#"));
         assert!(lines[2].contains("\"Greeting / Formal, sort of\",\"Formal, sort of\","));
         assert!(lines[1].ends_with(",1"));
+    }
+
+    #[test]
+    fn codebook_json_is_self_contained_and_parent_first() {
+        let p = populated();
+        let mut buf = vec![];
+        codebook_json(&p.conn, &mut buf).unwrap();
+        let v: serde_json::Value = serde_json::from_slice(&buf).unwrap();
+        assert_eq!(v["format"], "misket-codebook");
+        assert_eq!(v["version"], 1);
+        let codes = v["codes"].as_array().unwrap();
+        assert_eq!(codes.len(), 2);
+        // "Greeting" precedes "Greeting / Formal, sort of" (parent before child).
+        assert_eq!(codes[0]["name"], "Greeting");
+        assert!(codes[0]["parentId"].is_null());
+        assert_eq!(codes[1]["name"], "Formal, sort of");
+        assert_eq!(codes[1]["parentId"], codes[0]["id"]);
+        assert!(codes[0]["color"].as_str().unwrap().starts_with('#'));
     }
 
     #[test]

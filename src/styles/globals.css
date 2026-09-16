@@ -152,6 +152,42 @@ textarea {
   }
 }
 
+/* Drag grips on the focused excerpt's edges. They are positioned in the
+   scroll container, not inside .doc-text, whose only children may be
+   span[data-s] elements wrapping a single text node. */
+.excerpt-handle {
+  position: absolute;
+  z-index: 15;
+  width: 9px;
+  margin-left: -4.5px;
+  cursor: col-resize;
+  touch-action: none;
+  user-select: none;
+  border-radius: 3px;
+  background:
+    linear-gradient(var(--focus), var(--focus)) center / 3px 100% no-repeat,
+    transparent;
+}
+
+.excerpt-handle::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: -4px;
+  width: 9px;
+  height: 9px;
+  margin-left: -4.5px;
+  border-radius: 50%;
+  background: var(--focus);
+}
+
+.excerpt-handle:hover,
+.excerpt-handle.active {
+  background:
+    linear-gradient(var(--focus), var(--focus)) center / 5px 100% no-repeat,
+    transparent;
+}
+
 .doc-text ::selection {
   background: color-mix(in srgb, var(--accent) 30%, transparent);
 }

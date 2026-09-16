@@ -32,6 +32,8 @@ export interface AppSettings {
   editorFontSize: number;
   editorLineHeight: number;
   confirmDeleteExcerpt: boolean;
+  /** How many timestamped backups to keep per project. */
+  keepBackups: number;
 }
 
 export type DocumentKind = "text" | "image" | "video";
@@ -124,6 +126,16 @@ export interface DeleteCodeReport {
 export interface CodeImpact {
   descendantCount: number;
   excerptCount: number;
+}
+
+/** `merge` matches existing codes by full name path; `add-under` grafts
+ * everything fresh under `parentId` (root if omitted/null), unmatched. */
+export type CodebookImportMode = "merge" | "add-under";
+
+export interface ImportReport {
+  created: number;
+  matched: number;
+  skippedShortcuts: string[];
 }
 
 export type ExcerptKind = "text" | "image_region" | "video_range";
@@ -250,6 +262,25 @@ export interface ExcerptSnapshot {
   memos: Memo[];
 }
 
+/** The two halves left by `split_excerpt`; `left` keeps the original id. */
+export interface SplitResult {
+  left: ExcerptWithCodes;
+  right: ExcerptWithCodes;
+}
+
+/**
+ * The outcome of `merge_excerpts`, with everything needed to invert it: the
+ * surviving excerpt, a snapshot of the one that was removed, the survivor's
+ * range before the merge and the codes the merge added to it.
+ */
+export interface MergeResult {
+  excerpt: ExcerptWithCodes;
+  removed: ExcerptSnapshot;
+  previousStartPos: number;
+  previousEndPos: number;
+  addedCodeIds: string[];
+}
+
 export interface ExcerptFilter {
   codeIds?: string[] | null;
   includeDescendants?: boolean;
@@ -261,6 +292,27 @@ export interface ExcerptFilter {
   descriptors?: DescriptorFilter[] | null;
   limit?: number;
   offset?: number;
+}
+
+/** `[excerptId, codeId]`. */
+export type ExcerptCodePair = [string, string];
+
+/**
+ * What a bulk code change actually did. `affected` counts the excerpts that
+ * really changed; `pairs` holds every tag inserted (by `addCodesToExcerpts`)
+ * or deleted (by `removeCodesFromExcerpts`), which is exactly what undo has
+ * to reverse.
+ */
+export interface BulkCodeReport {
+  affected: number;
+  pairs: ExcerptCodePair[];
+}
+
+export interface RetagReport {
+  /** Excerpts that gained the target code and lost the source code. */
+  moved: string[];
+  /** Excerpts that already carried the target, so they only lost the source. */
+  alreadyHad: string[];
 }
 
 export interface ExcerptRow extends ExcerptWithCodes {
@@ -311,4 +363,14 @@ export interface SearchHit {
   endPos: number;
   contextBefore: string;
   contextAfter: string;
+}
+
+// ------------------------------------------------------------------ backups
+
+export interface BackupInfo {
+  path: string;
+  /** RFC 3339 UTC. */
+  createdAt: string;
+  reason: string;
+  sizeBytes: number;
 }
