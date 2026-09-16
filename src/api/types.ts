@@ -417,6 +417,45 @@ export interface CodeByDocument {
   cells: MatrixCell[];
 }
 
+/** One column of the code-by-descriptor cross-tab. */
+export interface CrosstabColumn {
+  /** The header: a value, `"18 – 30.5"`, `"2026-09"` or `"(no value)"`. */
+  label: string;
+  /** The `DescriptorFilter` operator that reproduces this column. */
+  op: DescriptorOp;
+  values: string[];
+}
+
+export interface CrosstabRow {
+  codeId: string;
+  /** One count per column, in `columns` order. */
+  cells: number[];
+}
+
+/** What a cell counts: excerpts (the default) or distinct documents. */
+export type CrosstabMode = "excerpts" | "documents";
+
+export interface CrosstabRequest {
+  fieldId: string;
+  /** Rows; every code when absent or empty. */
+  codeIds?: string[] | null;
+  includeDescendants?: boolean;
+  documentIds?: string[] | null;
+  documentSetIds?: string[] | null;
+  /** Number fields only: equal-width bins between min and max (default 4). */
+  bins?: number | null;
+  mode?: CrosstabMode | null;
+}
+
+export interface CodeByDescriptor {
+  field: DescriptorField;
+  columns: CrosstabColumn[];
+  rows: CrosstabRow[];
+  /** Documents in scope per column, whether or not anything in them is coded. */
+  documentsPerColumn: number[];
+  mode: CrosstabMode;
+}
+
 export interface SearchHit {
   documentId: string;
   documentName: string;
