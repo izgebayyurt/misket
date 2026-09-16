@@ -21,6 +21,7 @@ export function useInvalidateCodes() {
     qc.invalidateQueries({ queryKey: keys.codes });
     qc.invalidateQueries({ queryKey: keys.analysis });
     qc.invalidateQueries({ queryKey: keys.project });
+    qc.invalidateQueries({ queryKey: keys.stats });
   };
 }
 

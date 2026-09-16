@@ -29,6 +29,7 @@ function useInvalidateMemos() {
   return (target: MemoTarget) => {
     qc.invalidateQueries({ queryKey: keys.memos(normalizeTarget(target)) });
     qc.invalidateQueries({ queryKey: keys.project });
+    qc.invalidateQueries({ queryKey: keys.stats });
     if (target.excerptId) {
       qc.invalidateQueries({ queryKey: keys.excerpt(target.excerptId) });
       qc.invalidateQueries({ queryKey: ["excerpts"] });

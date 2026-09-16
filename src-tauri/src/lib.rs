@@ -47,6 +47,8 @@ pub fn run() {
             commands::project::open_project,
             commands::project::close_project,
             commands::project::get_project_info,
+            commands::project::rename_project,
+            commands::project::get_project_stats,
             commands::project::list_recent_projects,
             commands::project::remove_recent_project,
             commands::project::read_source_file,

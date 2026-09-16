@@ -29,6 +29,7 @@ describe("keymap", () => {
     expect(matchAction(ev({ key: "ArrowRight", shiftKey: true }))).toBeNull();
     expect(matchAction(ev({ key: "f", ctrlKey: true }))).toBe("find");
     expect(matchAction(ev({ key: "f", ctrlKey: true, shiftKey: true }))).toBe("findInProject");
+    expect(matchAction(ev({ key: "h", ctrlKey: true, shiftKey: true }))).toBe("overview");
   });
 
   it("only fires global shortcuts inside text fields", () => {
@@ -40,6 +41,7 @@ describe("keymap", () => {
     expect(matchAction(ev({ key: "f", ctrlKey: true, shiftKey: true }, input))).toBe(
       "findInProject",
     );
+    expect(matchAction(ev({ key: "h", ctrlKey: true, shiftKey: true }, input))).toBe("overview");
   });
 
   it("matches the settings and shortcuts-help shortcuts, even in a text field", () => {

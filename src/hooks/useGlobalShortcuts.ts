@@ -20,6 +20,10 @@ export function useGlobalShortcuts() {
           e.preventDefault();
           void pickAndImport();
           return;
+        case "overview":
+          e.preventDefault();
+          ws.setView({ kind: "overview" });
+          return;
         case "excerptBrowser":
           e.preventDefault();
           ws.openExcerpts();

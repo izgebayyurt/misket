@@ -10,6 +10,9 @@ export type View =
   | { kind: "analysis"; tab: AnalysisTab }
   | { kind: "search" }
   | { kind: "descriptorTable" }
+  /** The project's home screen; the default view when a project opens. */
+  | { kind: "overview" }
+  /** Nothing to show (e.g. the open document was just deleted). */
   | { kind: "empty" };
 
 export type SidebarTab = "documents" | "codes";
@@ -60,7 +63,7 @@ interface WorkspaceState {
 }
 
 const initial = {
-  view: { kind: "empty" } as View,
+  view: { kind: "overview" } as View,
   sidebarTab: "documents" as SidebarTab,
   selectedCodeId: null,
   pendingSelection: null,

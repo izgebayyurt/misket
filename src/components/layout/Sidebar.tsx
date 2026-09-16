@@ -7,7 +7,7 @@ import { DocumentList } from "@/components/documents/DocumentList";
 import { CodeTree } from "@/components/codebook/CodeTree";
 import { Button } from "@/components/ui/button";
 import { DescriptorsDialog } from "@/components/descriptors/DescriptorsDialog";
-import { BarChart3, List, Search, Settings2, Tags } from "lucide-react";
+import { BarChart3, Home, List, Search, Settings2, Tags } from "lucide-react";
 
 export function Sidebar({ project }: { project: ProjectInfo }) {
   const tab = useWorkspace((s) => s.sidebarTab);
@@ -41,6 +41,15 @@ export function Sidebar({ project }: { project: ProjectInfo }) {
         {tab === "documents" ? <DocumentList /> : <CodeTree />}
       </div>
       <div className="space-y-1 border-t border-border p-2">
+        <Button
+          variant={view.kind === "overview" ? "secondary" : "ghost"}
+          className="w-full justify-start"
+          onClick={() => setView({ kind: "overview" })}
+          data-testid="open-overview"
+        >
+          <Home /> Overview
+          <span className="ml-auto text-xs text-fg-muted">{describe("overview")}</span>
+        </Button>
         {tab === "documents" ? (
           <div className="flex gap-1">
             <Button

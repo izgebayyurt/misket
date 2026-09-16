@@ -7,6 +7,7 @@ const GROUPS: { title: string; actions: Action[] }[] = [
   {
     title: "Navigation",
     actions: [
+      "overview",
       "find",
       "findInProject",
       "excerptBrowser",

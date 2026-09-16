@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 
-use misket_core::db::OpenProject;
-use misket_core::models::{ProjectInfo, RecentProject};
+use misket_core::db::{stats, OpenProject};
+use misket_core::models::{ProjectInfo, ProjectStats, RecentProject};
 use misket_core::{AppError, Result};
 use tauri::{AppHandle, Manager, State};
 
@@ -104,6 +104,23 @@ pub fn get_project_info(state: State<'_, AppState>) -> Result<Option<ProjectInfo
         Err(AppError::NoProjectOpen) => Ok(None),
         Err(e) => Err(e),
     }
+}
+
+/// Rename the open project and refresh its entry in the recent list.
+#[tauri::command]
+pub fn rename_project(
+    state: State<'_, AppState>,
+    app: AppHandle,
+    name: String,
+) -> Result<ProjectInfo> {
+    let info = state.with_project(|p| p.rename(&name))?;
+    recent::touch(&app, &info.path, &info.name)?;
+    Ok(info)
+}
+
+#[tauri::command]
+pub fn get_project_stats(state: State<'_, AppState>) -> Result<ProjectStats> {
+    state.with_project(|p| stats::project_stats(&p.conn))
 }
 
 #[tauri::command]
