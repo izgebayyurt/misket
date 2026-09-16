@@ -55,6 +55,8 @@ export interface AppSettings {
   confirmDeleteExcerpt: boolean;
   /** How many timestamped backups to keep per project. */
   keepBackups: number;
+  /** Show a paragraph number in the document view's left gutter. */
+  showParagraphNumbers: boolean;
 }
 
 export type DocumentKind = "text" | "image" | "video";

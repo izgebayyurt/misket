@@ -70,6 +70,7 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
   const [findQuery, setFindQuery] = useState("");
   const [findIndex, setFindIndex] = useState(0);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const showParagraphNumbers = useSettings((s) => s.settings.showParagraphNumbers);
 
   const text = doc?.text ?? "";
   const offsetMap = useMemo(() => buildOffsetMap(text), [text]);
@@ -709,9 +710,16 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
         />
       ) : null}
       <div ref={scrollRef} className="relative min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-3xl px-10 py-10">
+        <div
+          className={cn("mx-auto max-w-3xl py-10 pr-10", showParagraphNumbers ? "pl-20" : "pl-10")}
+        >
           <h1 className="mb-6 font-serif text-2xl font-medium">{doc.name}</h1>
-          <div ref={rootRef} tabIndex={-1} className="doc-text" data-testid="doc-text">
+          <div
+            ref={rootRef}
+            tabIndex={-1}
+            className={cn("doc-text", showParagraphNumbers && "with-para-numbers")}
+            data-testid="doc-text"
+          >
             {paragraphs.map((p) => (
               <Paragraph
                 key={p.start}
@@ -864,8 +872,10 @@ const Paragraph = memo(function Paragraph(p: ParagraphProps) {
     [p.start, p.end, p.excerpts],
   );
   if (p.text.length === 0) {
+    // Blank lines carry no paragraph number, so the gutter counts paragraphs
+    // rather than lines (see `.doc-text.with-para-numbers` in globals.css).
     return (
-      <p data-p={p.start}>
+      <p data-p={p.start} className="blank">
         <br />
       </p>
     );

@@ -28,6 +28,10 @@ fn default_keep_backups() -> u32 {
     20
 }
 
+fn default_true() -> bool {
+    true
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct AppSettings {
@@ -42,6 +46,9 @@ pub struct AppSettings {
     /// How many timestamped backups to keep per project.
     #[serde(default = "default_keep_backups")]
     pub keep_backups: u32,
+    /// Show a paragraph number in the document view's left gutter.
+    #[serde(default = "default_true")]
+    pub show_paragraph_numbers: bool,
 }
 
 impl Default for AppSettings {
@@ -52,6 +59,7 @@ impl Default for AppSettings {
             editor_line_height: default_line_height(),
             confirm_delete_excerpt: false,
             keep_backups: default_keep_backups(),
+            show_paragraph_numbers: default_true(),
         }
     }
 }
@@ -110,6 +118,7 @@ mod tests {
             editor_line_height: 1.9,
             confirm_delete_excerpt: true,
             keep_backups: 5,
+            show_paragraph_numbers: false,
         };
         write(&path, &settings).unwrap();
         assert_eq!(read(&path).unwrap(), settings);
@@ -134,5 +143,6 @@ mod tests {
         assert_eq!(settings.editor_line_height, default_line_height());
         assert!(!settings.confirm_delete_excerpt);
         assert_eq!(settings.keep_backups, default_keep_backups());
+        assert!(settings.show_paragraph_numbers);
     }
 }
