@@ -18,3 +18,7 @@ export async function readSourceFile(path: string): Promise<Uint8Array> {
   const buf = await tauriInvoke<ArrayBuffer>("read_source_file", { path });
   return new Uint8Array(buf);
 }
+
+/** Write text to a path the user picked in the save dialog (CSV exports). */
+export const writeTextFile = (path: string, contents: string) =>
+  invoke<void>("write_text_file", { path, contents });

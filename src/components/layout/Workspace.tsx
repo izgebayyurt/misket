@@ -8,6 +8,7 @@ import { DocumentView } from "@/components/document-view/DocumentView";
 import { useWorkspace } from "@/state/workspace";
 import { useGlobalShortcuts } from "@/hooks/useGlobalShortcuts";
 import { ExcerptBrowser } from "@/components/excerpts/ExcerptBrowser";
+import { AnalysisView } from "@/components/analysis/AnalysisView";
 import { CodePalette } from "@/components/palette/CodePalette";
 import { ImportDropzone } from "@/components/documents/ImportDropzone";
 
@@ -33,7 +34,11 @@ export function Workspace({ project }: { project: ProjectInfo }) {
               focusExcerptId={view.focusExcerptId}
             />
           ) : view.kind === "excerpts" ? (
-            <ExcerptBrowser />
+            // Remount when the analysis views hand over a new filter, which
+            // the browser only reads on mount.
+            <ExcerptBrowser key={JSON.stringify(view.initialFilter ?? null)} />
+          ) : view.kind === "analysis" ? (
+            <AnalysisView tab={view.tab} />
           ) : (
             <EmptyState />
           )}

@@ -86,3 +86,11 @@ pub fn read_source_file(path: String) -> Result<tauri::ipc::Response> {
     let bytes = std::fs::read(&path)?;
     Ok(tauri::ipc::Response::new(bytes))
 }
+
+/// Write text the frontend produced (a CSV export) to a path the user picked
+/// in the save dialog, so the webview never needs filesystem permissions.
+#[tauri::command]
+pub fn write_text_file(path: String, contents: String) -> Result<()> {
+    std::fs::write(&path, contents)?;
+    Ok(())
+}

@@ -36,6 +36,7 @@ export function useInvalidateExcerpts() {
     else qc.invalidateQueries({ queryKey: ["excerpts"] });
     if (excerptId) qc.invalidateQueries({ queryKey: keys.excerpt(excerptId) });
     qc.invalidateQueries({ queryKey: keys.excerptQueries });
+    qc.invalidateQueries({ queryKey: keys.analysis });
     qc.invalidateQueries({ queryKey: keys.codes });
     qc.invalidateQueries({ queryKey: keys.documents });
     qc.invalidateQueries({ queryKey: keys.project });

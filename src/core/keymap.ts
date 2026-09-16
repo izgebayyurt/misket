@@ -15,6 +15,7 @@ export type Action =
   | "newProject"
   | "import"
   | "excerptBrowser"
+  | "analysis"
   | "tabDocuments"
   | "tabCodes"
   | "newMemo"
@@ -43,6 +44,7 @@ export const SHORTCUTS: Record<Action, Shortcut> = {
   newProject: { key: "n", mod: true, global: true },
   import: { key: "i", mod: true, global: true },
   excerptBrowser: { key: "e", mod: true, global: true },
+  analysis: { key: "a", mod: true, shift: true, global: true },
   tabDocuments: { key: "1", mod: true, global: true },
   tabCodes: { key: "2", mod: true, global: true },
   newMemo: { key: "m", mod: true, global: true },

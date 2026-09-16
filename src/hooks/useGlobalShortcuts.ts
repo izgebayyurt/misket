@@ -22,7 +22,11 @@ export function useGlobalShortcuts() {
           return;
         case "excerptBrowser":
           e.preventDefault();
-          ws.setView({ kind: "excerpts" });
+          ws.openExcerpts();
+          return;
+        case "analysis":
+          e.preventDefault();
+          ws.setView({ kind: "analysis", tab: "frequencies" });
           return;
         case "tabDocuments":
           e.preventDefault();

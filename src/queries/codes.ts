@@ -19,6 +19,7 @@ export function useInvalidateCodes() {
   const qc = useQueryClient();
   return () => {
     qc.invalidateQueries({ queryKey: keys.codes });
+    qc.invalidateQueries({ queryKey: keys.analysis });
     qc.invalidateQueries({ queryKey: keys.project });
   };
 }

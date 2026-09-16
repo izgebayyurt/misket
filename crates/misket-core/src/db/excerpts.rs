@@ -272,16 +272,31 @@ pub fn query(conn: &Connection, filter: &ExcerptFilter) -> Result<ExcerptPage> {
 
     if let Some(code_ids) = &filter.code_ids {
         if !code_ids.is_empty() {
-            let ids = if filter.include_descendants {
-                codes::descendant_ids(conn, code_ids)?
+            // Any of the listed codes by default; with `require_all_codes`
+            // every one of them must be present, each still standing for its
+            // whole subtree when descendants are included.
+            let groups: Vec<Vec<String>> = if filter.require_all_codes {
+                code_ids.iter().map(|id| vec![id.clone()]).collect()
             } else {
-                code_ids.clone()
+                vec![code_ids.clone()]
             };
-            let ph = ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
-            where_clauses.push(format!(
-                "e.id IN (SELECT excerpt_id FROM excerpt_codes WHERE code_id IN ({ph}))"
-            ));
-            args.extend(ids.into_iter().map(rusqlite::types::Value::from));
+            for group in groups {
+                let ids = if filter.include_descendants {
+                    codes::descendant_ids(conn, &group)?
+                } else {
+                    group
+                };
+                if ids.is_empty() {
+                    // Only unknown code ids: nothing can match.
+                    where_clauses.push("0 = 1".into());
+                    continue;
+                }
+                let ph = ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+                where_clauses.push(format!(
+                    "e.id IN (SELECT excerpt_id FROM excerpt_codes WHERE code_id IN ({ph}))"
+                ));
+                args.extend(ids.into_iter().map(rusqlite::types::Value::from));
+            }
         }
     }
     if let Some(doc_ids) = &filter.document_ids {
@@ -496,6 +511,53 @@ mod tests {
         )
         .unwrap();
         assert_eq!(by_a_only.total, 1);
+        // require_all_codes: the excerpt must carry every listed code.
+        let both = query(
+            &p.conn,
+            &ExcerptFilter {
+                code_ids: Some(vec![a.clone(), b.clone()]),
+                require_all_codes: true,
+                include_descendants: false,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(both.total, 0);
+        add_codes(&p.conn, &e2, std::slice::from_ref(&a)).unwrap();
+        let both = query(
+            &p.conn,
+            &ExcerptFilter {
+                code_ids: Some(vec![a.clone(), b.clone()]),
+                require_all_codes: true,
+                include_descendants: false,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(both.total, 1);
+        assert_eq!(both.rows[0].excerpt.id, e2);
+        // A stands for its subtree, so "A and B" still matches via B ⊂ A.
+        let with_sub = query(
+            &p.conn,
+            &ExcerptFilter {
+                code_ids: Some(vec![a.clone(), b.clone()]),
+                require_all_codes: true,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(with_sub.total, 1);
+        let unknown = query(
+            &p.conn,
+            &ExcerptFilter {
+                code_ids: Some(vec![a.clone(), "nope".into()]),
+                require_all_codes: true,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(unknown.total, 0);
+
         let uncoded = query(
             &p.conn,
             &ExcerptFilter {

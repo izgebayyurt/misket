@@ -1,18 +1,16 @@
-import { useState } from "react";
-import { ChevronDown, X } from "lucide-react";
 import { useCodeTree } from "@/queries/codes";
 import { useDocuments } from "@/queries/documents";
 import { flattenTree, pathOf } from "@/core/codeTree";
 import { ColorDot } from "@/components/codebook/ColorSwatch";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Input } from "@/components/ui/input";
-import { cn } from "@/lib/utils";
+import { FilterPicker } from "@/components/ui/filter-picker";
 
 interface Props {
   codeIds: string[];
   onCodeIds: (v: string[]) => void;
   includeDescendants: boolean;
   onIncludeDescendants: (v: boolean) => void;
+  requireAllCodes: boolean;
+  onRequireAllCodes: (v: boolean) => void;
   documentIds: string[];
   onDocumentIds: (v: string[]) => void;
   uncodedOnly: boolean;
@@ -48,6 +46,15 @@ export function ExcerptFilters(p: Props) {
                 onChange={(e) => p.onIncludeDescendants(e.target.checked)}
               />
               Include sub-codes
+            </label>
+            <label className="mb-1 flex items-center gap-2 px-2 py-1 text-xs text-fg-muted">
+              <input
+                type="checkbox"
+                checked={p.requireAllCodes}
+                onChange={(e) => p.onRequireAllCodes(e.target.checked)}
+                data-testid="filter-require-all"
+              />
+              Match all selected codes
             </label>
             {flattenTree(tree)
               .filter((n) => pathOf(tree, n.code.id).toLowerCase().includes(query.toLowerCase()))
@@ -99,6 +106,11 @@ export function ExcerptFilters(p: Props) {
           </>
         )}
       </FilterPicker>
+      {p.codeIds.length > 1 ? (
+        <span className="text-xs text-fg-muted" data-testid="code-match-mode">
+          {p.requireAllCodes ? "all of" : "any of"}
+        </span>
+      ) : null}
       <label className="flex items-center gap-1.5 text-xs">
         <input
           type="checkbox"
@@ -110,57 +122,6 @@ export function ExcerptFilters(p: Props) {
       <span className="ml-auto text-xs text-fg-muted" data-testid="excerpt-total">
         {p.total} excerpt{p.total === 1 ? "" : "s"}
       </span>
-    </div>
-  );
-}
-
-function FilterPicker({
-  label,
-  active,
-  onClear,
-  children,
-  testId,
-}: {
-  label: string;
-  active: boolean;
-  onClear: () => void;
-  children: (query: string) => React.ReactNode;
-  testId: string;
-}) {
-  const [query, setQuery] = useState("");
-  return (
-    <div className="flex items-center">
-      <Popover>
-        <PopoverTrigger asChild>
-          <button
-            className={cn(
-              "flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs hover:bg-muted",
-              active && "border-accent bg-accent/10 text-fg",
-            )}
-            data-testid={testId}
-          >
-            {label} <ChevronDown className="size-3" />
-          </button>
-        </PopoverTrigger>
-        <PopoverContent className="w-72 p-1">
-          <Input
-            placeholder="Filter"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            className="mb-1 h-7 text-xs"
-          />
-          <div className="max-h-64 overflow-y-auto text-sm">{children(query)}</div>
-        </PopoverContent>
-      </Popover>
-      {active ? (
-        <button
-          className="ml-0.5 rounded p-0.5 text-fg-muted hover:bg-muted"
-          onClick={onClear}
-          aria-label="Clear"
-        >
-          <X className="size-3" />
-        </button>
-      ) : null}
     </div>
   );
 }

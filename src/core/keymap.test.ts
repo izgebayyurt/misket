@@ -15,6 +15,8 @@ describe("keymap", () => {
     expect(matchAction(ev({ key: "Tab" }))).toBe("nextExcerpt");
     expect(matchAction(ev({ key: "Tab", shiftKey: true }))).toBe("prevExcerpt");
     expect(matchAction(ev({ key: "k" }))).toBeNull();
+    expect(matchAction(ev({ key: "A", ctrlKey: true, shiftKey: true }))).toBe("analysis");
+    expect(matchAction(ev({ key: "a", ctrlKey: true }))).toBeNull(); // select all stays free
     expect(matchAction(ev({ key: "ArrowRight", altKey: true, shiftKey: true }))).toBe(
       "extendSelectionRight",
     );

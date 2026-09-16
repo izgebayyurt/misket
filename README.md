@@ -23,6 +23,10 @@ keyboard-friendly interface without a subscription.
   excerpts are drawn as stacked colored lanes.
 - **Browse excerpts** across the project, filtered by code (with sub-codes),
   document, or uncoded only, and jump back to any of them in context.
+- **Analyse**: a code frequency table (own counts and counts with sub-codes,
+  per document), a code co-occurrence matrix showing which codes overlap on the
+  same text, and a code-by-document heatmap. Every cell clicks through to the
+  matching excerpts, and each view exports to CSV.
 - **Memos** on documents, codes, excerpts and the project.
 - **Undo/redo** for every coding and codebook action.
 - **Export** the codebook and excerpts as CSV, or the whole project as JSON.
@@ -40,6 +44,7 @@ keyboard-friendly interface without a subscription.
 | Delete the focused excerpt                             | `Backspace`                                   |
 | New memo on the current document, code or excerpt      | `Ctrl`/`⌘` + `M`                              |
 | Excerpt browser                                        | `Ctrl`/`⌘` + `E`                              |
+| Analysis views                                         | `Shift` + `Ctrl`/`⌘` + `A`                    |
 | Import documents                                       | `Ctrl`/`⌘` + `I`                              |
 | Undo / redo                                            | `Ctrl`/`⌘` + `Z` / `Shift` + `Ctrl`/`⌘` + `Z` |
 

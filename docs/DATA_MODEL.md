@@ -36,6 +36,11 @@ identity (undo) and so exports are stable.
   when a code is moved.
 - Excerpt context in the browser is computed in SQL with `substr()`, which
   counts code points, matching the stored offsets.
+- The analysis views (`db/analysis.rs`) read `excerpt_codes` joined to
+  `excerpts`: frequencies expand each code with the same recursive CTE and
+  de-duplicate excerpts, and co-occurrence pairs text excerpts in one document
+  whose ranges overlap (`a.start < b.end AND b.start < a.end`), counting each
+  pair of excerpts once per pair of codes.
 
 ## Exports
 
