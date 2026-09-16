@@ -28,12 +28,21 @@ DropdownMenuSubTrigger.displayName = "DropdownMenuSubTrigger";
 export const DropdownMenuContent = React.forwardRef<
   React.ElementRef<typeof DropdownMenuPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Content>
->(({ className, sideOffset = 4, ...props }, ref) => (
+>(({ className, sideOffset = 4, onCloseAutoFocus, ...props }, ref) => (
   <DropdownMenuPrimitive.Portal>
     <DropdownMenuPrimitive.Content
       ref={ref}
       sideOffset={sideOffset}
       onEscapeKeyDown={(e) => e.stopPropagation()}
+      // Radix's default is to return focus to the trigger. Blur it instead,
+      // so focus falls back to the document root: global shortcuts like
+      // undo/redo must work right after a menu action (delete, rename, add
+      // to set…), not only once the user clicks elsewhere (issue #37).
+      onCloseAutoFocus={(e) => {
+        onCloseAutoFocus?.(e);
+        e.preventDefault();
+        (document.activeElement as HTMLElement | null)?.blur?.();
+      }}
       className={cn(
         "z-50 min-w-[10rem] rounded-md border border-border bg-panel p-1 shadow-lg",
         className,

@@ -129,7 +129,7 @@ export function SetsSection({
                     <MoreHorizontal className="size-4" />
                   </button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" onCloseAutoFocus={(e) => e.preventDefault()}>
+                <DropdownMenuContent align="end">
                   <DropdownMenuItem onSelect={() => setRenamingId(s.id)}>Rename</DropdownMenuItem>
                   <DropdownMenuItem onSelect={() => setDialog({ set: s })}>
                     Edit members…
