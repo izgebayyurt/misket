@@ -13,10 +13,14 @@ import { Input } from "@/components/ui/input";
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from "@/components/ui/context-menu";
+import {
+  contextMenuPrimitives,
+  dropdownMenuPrimitives,
+  type MenuPrimitives,
+} from "@/components/ui/menu";
 import { cn } from "@/lib/utils";
 import { toast } from "@/state/toasts";
 import { SetDialog, type MemberOption } from "./SetDialog";
@@ -76,88 +80,123 @@ export function SetsSection({
         </p>
       ) : null}
       <ul className="pb-2">
-        {sets?.map((s) => (
-          <li key={s.id}>
-            <div className="group flex items-center gap-1 px-1 py-1 text-sm hover:bg-muted">
-              <button
-                type="button"
-                className="rounded p-0.5 text-fg-muted hover:bg-border"
-                onClick={() => toggle(s.id)}
-                aria-label={expanded.has(s.id) ? "Collapse" : "Expand"}
-                aria-expanded={expanded.has(s.id)}
-              >
-                {expanded.has(s.id) ? (
-                  <ChevronDown className="size-3.5" />
-                ) : (
-                  <ChevronRight className="size-3.5" />
-                )}
-              </button>
-              {renamingId === s.id ? (
-                <RenameInput
-                  initial={s.name}
-                  onCancel={() => setRenamingId(null)}
-                  onCommit={async (name) => {
-                    setRenamingId(null);
-                    try {
-                      await rename.mutateAsync({ id: s.id, name, previous: s.name });
-                    } catch (e) {
-                      toast.error(e);
-                    }
-                  }}
-                />
-              ) : (
-                <button
-                  type="button"
-                  className="min-w-0 flex-1 truncate text-left"
-                  onClick={() => onOpen(s)}
-                  title={`Show excerpts in "${s.name}"`}
-                  data-testid="set-item"
-                >
-                  {s.name}
-                </button>
-              )}
-              <span className="w-6 shrink-0 text-right text-xs tabular-nums text-fg-muted">
-                {s.memberCount || ""}
-              </span>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button
-                    type="button"
-                    className="rounded p-0.5 text-fg-muted opacity-0 hover:bg-border focus-visible:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100"
-                    aria-label="Set actions"
-                  >
-                    <MoreHorizontal className="size-4" />
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" onCloseAutoFocus={(e) => e.preventDefault()}>
-                  <DropdownMenuItem onSelect={() => setRenamingId(s.id)}>Rename</DropdownMenuItem>
-                  <DropdownMenuItem onSelect={() => setDialog({ set: s })}>
-                    Edit members…
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    danger
-                    onSelect={async () => {
-                      try {
-                        await remove.mutateAsync(s);
-                      } catch (e) {
-                        toast.error(e);
-                      }
-                    }}
-                  >
-                    Delete
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-            {expanded.has(s.id) ? <Members set={s} options={options} /> : null}
-          </li>
-        ))}
+        {sets?.map((s) => {
+          const onDelete = async () => {
+            try {
+              await remove.mutateAsync(s);
+            } catch (e) {
+              toast.error(e);
+            }
+          };
+          return (
+            <li key={s.id}>
+              <ContextMenu>
+                <ContextMenuTrigger asChild>
+                  <div className="group flex items-center gap-1 px-1 py-1 text-sm hover:bg-muted">
+                    <button
+                      type="button"
+                      className="rounded p-0.5 text-fg-muted hover:bg-border"
+                      onClick={() => toggle(s.id)}
+                      aria-label={expanded.has(s.id) ? "Collapse" : "Expand"}
+                      aria-expanded={expanded.has(s.id)}
+                    >
+                      {expanded.has(s.id) ? (
+                        <ChevronDown className="size-3.5" />
+                      ) : (
+                        <ChevronRight className="size-3.5" />
+                      )}
+                    </button>
+                    {renamingId === s.id ? (
+                      <RenameInput
+                        initial={s.name}
+                        onCancel={() => setRenamingId(null)}
+                        onCommit={async (name) => {
+                          setRenamingId(null);
+                          try {
+                            await rename.mutateAsync({ id: s.id, name, previous: s.name });
+                          } catch (e) {
+                            toast.error(e);
+                          }
+                        }}
+                      />
+                    ) : (
+                      <button
+                        type="button"
+                        className="min-w-0 flex-1 truncate text-left"
+                        onClick={() => onOpen(s)}
+                        title={`Show excerpts in "${s.name}"`}
+                        data-testid="set-item"
+                      >
+                        {s.name}
+                      </button>
+                    )}
+                    <span className="w-6 shrink-0 text-right text-xs tabular-nums text-fg-muted">
+                      {s.memberCount || ""}
+                    </span>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button
+                          type="button"
+                          className="rounded p-0.5 text-fg-muted opacity-0 hover:bg-border focus-visible:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100"
+                          aria-label="Set actions"
+                        >
+                          <MoreHorizontal className="size-4" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" onCloseAutoFocus={(e) => e.preventDefault()}>
+                        <SetRowMenuItems
+                          onRename={() => setRenamingId(s.id)}
+                          onEditMembers={() => setDialog({ set: s })}
+                          onDelete={onDelete}
+                          menu={dropdownMenuPrimitives}
+                        />
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                </ContextMenuTrigger>
+                <ContextMenuContent onCloseAutoFocus={(e) => e.preventDefault()}>
+                  <SetRowMenuItems
+                    onRename={() => setRenamingId(s.id)}
+                    onEditMembers={() => setDialog({ set: s })}
+                    onDelete={onDelete}
+                    menu={contextMenuPrimitives}
+                  />
+                </ContextMenuContent>
+              </ContextMenu>
+              {expanded.has(s.id) ? <Members set={s} options={options} /> : null}
+            </li>
+          );
+        })}
       </ul>
       {dialog ? (
         <SetDialog kind={kind} set={dialog.set} options={options} onClose={() => setDialog(null)} />
       ) : null}
     </section>
+  );
+}
+
+/** A set row's action list, shared by its "…" button menu and its right-click menu. */
+function SetRowMenuItems({
+  onRename,
+  onEditMembers,
+  onDelete,
+  menu,
+}: {
+  onRename: () => void;
+  onEditMembers: () => void;
+  onDelete: () => void;
+  menu: MenuPrimitives;
+}) {
+  const { Item, Separator } = menu;
+  return (
+    <>
+      <Item onSelect={onRename}>Rename</Item>
+      <Item onSelect={onEditMembers}>Edit members…</Item>
+      <Separator />
+      <Item danger onSelect={onDelete}>
+        Delete
+      </Item>
+    </>
   );
 }
 

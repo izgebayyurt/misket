@@ -1,36 +1,35 @@
 import type { SetKind } from "@/api/types";
 import { useAddToSet, useSets } from "@/queries/sets";
-import {
-  DropdownMenuItem,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
-} from "@/components/ui/dropdown-menu";
+import { dropdownMenuPrimitives, type MenuPrimitives } from "@/components/ui/menu";
 import { toast } from "@/state/toasts";
 
 /**
- * "Add to set ▸" for a code or document row's context menu. Hidden until at
- * least one set of that kind exists, so the menu stays short in small
- * projects.
+ * "Add to set ▸" for a code or document row's menu. Hidden until at least
+ * one set of that kind exists, so the menu stays short in small projects.
+ * `menu` picks the button-triggered `DropdownMenu` or the right-click
+ * `ContextMenu` primitives so both triggers render the same submenu.
  */
 export function AddToSetMenu({
   kind,
   memberId,
   memberLabel,
+  menu = dropdownMenuPrimitives,
 }: {
   kind: SetKind;
   memberId: string;
   memberLabel: string;
+  menu?: MenuPrimitives;
 }) {
   const { data: sets } = useSets(kind);
   const add = useAddToSet();
+  const { Item, Sub, SubContent, SubTrigger } = menu;
   if (!sets?.length) return null;
   return (
-    <DropdownMenuSub>
-      <DropdownMenuSubTrigger data-testid="add-to-set">Add to set</DropdownMenuSubTrigger>
-      <DropdownMenuSubContent>
+    <Sub>
+      <SubTrigger data-testid="add-to-set">Add to set</SubTrigger>
+      <SubContent>
         {sets.map((s) => (
-          <DropdownMenuItem
+          <Item
             key={s.id}
             onSelect={async () => {
               try {
@@ -46,9 +45,9 @@ export function AddToSetMenu({
           >
             <span className="min-w-0 flex-1 truncate">{s.name}</span>
             <span className="text-xs tabular-nums text-fg-muted">{s.memberCount || ""}</span>
-          </DropdownMenuItem>
+          </Item>
         ))}
-      </DropdownMenuSubContent>
-    </DropdownMenuSub>
+      </SubContent>
+    </Sub>
   );
 }
