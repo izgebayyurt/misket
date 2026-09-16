@@ -50,7 +50,9 @@ export function Workspace({ project }: { project: ProjectInfo }) {
           ) : view.kind === "analysis" ? (
             <AnalysisView tab={view.tab} />
           ) : view.kind === "search" ? (
-            <SearchView />
+            // Remount when a new seed query arrives (e.g. from the
+            // word-frequency view), which the view only reads on mount.
+            <SearchView key={view.query ?? ""} initialQuery={view.query} />
           ) : view.kind === "descriptorTable" ? (
             <DescriptorTable />
           ) : view.kind === "overview" ? (

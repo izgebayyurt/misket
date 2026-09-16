@@ -645,6 +645,10 @@ pub struct SearchHit {
     /// Code points, end-exclusive.
     pub start_pos: i64,
     pub end_pos: i64,
+    /// The actual matched text, which is not always the query text verbatim:
+    /// a plain search can match a different case, and a stemmed search can
+    /// match an altogether different word form.
+    pub match_text: String,
     pub context_before: String,
     pub context_after: String,
 }

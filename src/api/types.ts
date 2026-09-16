@@ -422,6 +422,9 @@ export interface SearchHit {
   documentName: string;
   startPos: number;
   endPos: number;
+  /** The actual matched text — not always the query text verbatim (case, or
+   * a different word form when the search matched by stem). */
+  matchText: string;
   contextBefore: string;
   contextAfter: string;
 }

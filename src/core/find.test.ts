@@ -59,6 +59,29 @@ describe("findMatches", () => {
   it("returns no matches when the needle is longer than the haystack", () => {
     expect(findMatches("hi", "hello")).toEqual([]);
   });
+
+  describe("with { stem: true }", () => {
+    it("matches other word forms sharing a stem", () => {
+      const text = "She coded the interview yesterday.";
+      expect(findMatches(text, "coding", { stem: false })).toEqual([]);
+      const matches = findMatches(text, "coding", { stem: true });
+      expect(matches).toEqual([{ start: 4, end: 9 }]);
+      expect(text.slice(matches[0]!.start, matches[0]!.end)).toBe("coded");
+    });
+
+    it("matches a multi-word query as a contiguous, in-order run", () => {
+      const text = "The participants were coding interviews all week.";
+      const matches = findMatches(text, "code interview", { stem: true });
+      expect(matches).toEqual([{ start: 22, end: 39 }]);
+      expect(text.slice(matches[0]!.start, matches[0]!.end)).toBe("coding interviews");
+    });
+
+    it("does not match out of order or a merely similar-looking word", () => {
+      expect(findMatches("interview coding session", "code interview", { stem: true })).toEqual([]);
+      // "codicil" must not match "code" just because it starts the same way.
+      expect(findMatches("a codicil to the will", "code", { stem: true })).toEqual([]);
+    });
+  });
 });
 
 describe("matchIndexAtOrAfter", () => {

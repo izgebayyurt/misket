@@ -29,9 +29,10 @@ function groupByDocument(hits: SearchHit[]): DocumentGroup[] {
 }
 
 /** Project-wide "find in project": debounced search across every document. */
-export function SearchView() {
-  const [input, setInput] = useState("");
-  const [debounced, setDebounced] = useState("");
+export function SearchView({ initialQuery }: { initialQuery?: string } = {}) {
+  const [input, setInput] = useState(initialQuery ?? "");
+  const [debounced, setDebounced] = useState(initialQuery ?? "");
+  const [stem, setStem] = useState(false);
   const openDocument = useWorkspace((s) => s.openDocument);
 
   useEffect(() => {
@@ -39,7 +40,7 @@ export function SearchView() {
     return () => window.clearTimeout(t);
   }, [input]);
 
-  const { data: hits, isFetching } = useProjectSearch(debounced);
+  const { data: hits, isFetching } = useProjectSearch(debounced, stem);
   const groups = useMemo(() => groupByDocument(hits ?? []), [hits]);
   const hasQuery = debounced.trim().length > 0;
 
@@ -58,6 +59,18 @@ export function SearchView() {
             data-testid="search-input"
           />
         </div>
+        <label
+          className="flex shrink-0 items-center gap-1.5 text-xs text-fg-muted"
+          title="Also match other forms of the same word (e.g. “code” finds “coding”)"
+        >
+          <input
+            type="checkbox"
+            checked={stem}
+            onChange={(e) => setStem(e.target.checked)}
+            data-testid="search-match-word-forms"
+          />
+          Match word forms
+        </label>
         {hasQuery ? (
           <span className="ml-auto text-xs text-fg-muted" data-testid="search-total">
             {hits?.length ?? 0} match{hits?.length === 1 ? "" : "es"}
@@ -84,7 +97,7 @@ export function SearchView() {
                       data-testid="search-hit"
                     >
                       <span className="text-fg-muted">{h.contextBefore}</span>
-                      <span className="font-semibold text-fg">{debounced.trim()}</span>
+                      <span className="font-semibold text-fg">{h.matchText}</span>
                       <span className="text-fg-muted">{h.contextAfter}</span>
                     </button>
                   </li>

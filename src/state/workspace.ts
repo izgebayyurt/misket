@@ -8,7 +8,9 @@ export type View =
   /** `initialFilter` seeds the browser's filters when it mounts. */
   | { kind: "excerpts"; initialFilter?: ExcerptFilter }
   | { kind: "analysis"; tab: AnalysisTab }
-  | { kind: "search" }
+  /** `query` seeds the search box when it mounts (e.g. clicking a term in
+   * the word-frequency view). */
+  | { kind: "search"; query?: string }
   | { kind: "descriptorTable" }
   /** The project's home screen; the default view when a project opens. */
   | { kind: "overview" }

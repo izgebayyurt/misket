@@ -17,26 +17,45 @@ pub mod stem;
 /// cases, so a per-`char` `is_alphanumeric` scan is enough here without
 /// pulling in a grapheme-cluster dependency.
 pub fn tokenize(text: &str) -> Vec<String> {
+    tokenize_with_offsets(text)
+        .into_iter()
+        .map(|(token, _, _)| token)
+        .collect()
+}
+
+/// Like `tokenize`, but also returns each token's code-point start/end
+/// offsets in `text` (end-exclusive) — the same offset space excerpts use —
+/// so callers can map a matched token (or run of tokens) back to a range in
+/// the original text, e.g. for stemmed search.
+pub fn tokenize_with_offsets(text: &str) -> Vec<(String, i64, i64)> {
     let mut out = Vec::new();
     let mut current = String::new();
+    let mut current_start: i64 = 0;
+    let mut cp: i64 = 0;
     for c in text.chars() {
         if c.is_alphanumeric() || c == '\'' {
+            if current.is_empty() {
+                current_start = cp;
+            }
             current.push(c);
         } else if !current.is_empty() {
-            push_token(&mut out, &current);
+            push_token(&mut out, &current, current_start, cp);
             current.clear();
         }
+        cp += 1;
     }
     if !current.is_empty() {
-        push_token(&mut out, &current);
+        push_token(&mut out, &current, current_start, cp);
     }
     out
 }
 
-fn push_token(out: &mut Vec<String>, raw: &str) {
+fn push_token(out: &mut Vec<(String, i64, i64)>, raw: &str, start: i64, end: i64) {
+    let leading = raw.chars().take_while(|&c| c == '\'').count() as i64;
+    let trailing = raw.chars().rev().take_while(|&c| c == '\'').count() as i64;
     let trimmed = raw.trim_matches('\'');
     if !trimmed.is_empty() {
-        out.push(trimmed.to_lowercase());
+        out.push((trimmed.to_lowercase(), start + leading, end - trailing));
     }
 }
 
@@ -82,5 +101,18 @@ mod tests {
     fn empty_and_punctuation_only_text_tokenizes_to_nothing() {
         assert_eq!(tokenize(""), Vec::<String>::new());
         assert_eq!(tokenize("... --- !!!"), Vec::<String>::new());
+    }
+
+    #[test]
+    fn offsets_are_code_points_and_trimmed_apostrophes_shrink_the_range() {
+        // "don't 😀 'quoted'" — an emoji (1 code point) sits between words.
+        let tokens = tokenize_with_offsets("don't 😀 'quoted'");
+        assert_eq!(
+            tokens,
+            vec![
+                ("don't".to_string(), 0, 5),
+                ("quoted".to_string(), 9, 15), // the two leading/trailing quotes are excluded
+            ]
+        );
     }
 }

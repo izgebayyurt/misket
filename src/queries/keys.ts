@@ -30,6 +30,6 @@ export const keys = {
   setMembers: (setId: string) => ["setMembers", setId] as const,
   allSetMembers: ["setMembers"] as const,
   savedFilters: ["savedFilters"] as const,
-  search: (query: string) => ["search", query] as const,
+  search: (query: string, stem: boolean) => ["search", query, stem] as const,
   backups: ["backups"] as const,
 };
