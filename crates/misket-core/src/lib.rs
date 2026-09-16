@@ -8,5 +8,6 @@ pub mod db;
 pub mod error;
 pub mod models;
 pub mod sample;
+pub mod text;
 
 pub use error::{AppError, Result};
