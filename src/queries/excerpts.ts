@@ -8,6 +8,7 @@ import type {
   ExcerptSnapshot,
   RetagReport,
 } from "@/api/types";
+import { historyBeginGroup, historyEndGroup } from "@/api/history";
 import { keys } from "./keys";
 import { useInvalidateCodes } from "./codes";
 import { useWorkspace } from "@/state/workspace";
@@ -88,20 +89,14 @@ export function useApplyCodes() {
 
 /**
  * In vivo coding: create a code named after the selected text and apply it to
- * that selection. Two operations, so two steps in the history — undoing twice
- * takes both back, and neither can leave a stray empty code behind for good.
+ * that selection. One command, so it is one step in the history — undoing it
+ * can never leave a stray empty code behind.
  */
 export function useInVivoCode() {
   const invalidate = useInvalidateExcerpts();
   const invalidateCodes = useInvalidateCodes();
   return useMutation({
-    mutationFn: async ({
-      documentId,
-      startPos,
-      endPos,
-      name,
-      parentId,
-    }: {
+    mutationFn: async (args: {
       documentId: string;
       startPos: number;
       endPos: number;
@@ -109,12 +104,11 @@ export function useInVivoCode() {
       name: string;
       parentId: string | null;
     }) => {
-      const code = await codesApi.createCode({ name, parentId });
-      const r = await api.applyCodes({ documentId, startPos, endPos, codeIds: [code.id] });
-      rememberApplied([code.id]);
-      invalidate(documentId, r.excerpt.id);
+      const r = await api.inVivoCode(args);
+      rememberApplied([r.code.id]);
+      invalidate(args.documentId, r.excerpt.id);
       invalidateCodes();
-      return { codeId: code.id, excerptId: r.excerpt.id };
+      return { codeId: r.code.id, excerptId: r.excerpt.id };
     },
   });
 }
@@ -269,8 +263,8 @@ export function useRemoveCodesFromExcerpts() {
 
 /**
  * Push one excerpt down from a parent code to one of its children: it loses
- * the parent and gains the child. Two steps in the history, so taking it back
- * is two undos — the price of the loop being this cheap to do.
+ * the parent and gains the child. Two writes bracketed as one step, so one
+ * undo puts the excerpt back where it was.
  */
 export function usePushDownExcerpt() {
   const invalidate = useInvalidateExcerpts();
@@ -279,14 +273,20 @@ export function usePushDownExcerpt() {
       excerptId,
       fromCodeId,
       toCodeId,
+      label,
     }: {
       excerptId: string;
       fromCodeId: string;
       toCodeId: string;
       label: string;
     }) => {
-      await api.removeCodesFromExcerpts([excerptId], [fromCodeId]);
-      await api.addCodesToExcerpts([excerptId], [toCodeId]);
+      await historyBeginGroup(label);
+      try {
+        await api.removeCodesFromExcerpts([excerptId], [fromCodeId]);
+        await api.addCodesToExcerpts([excerptId], [toCodeId]);
+      } finally {
+        await historyEndGroup();
+      }
       rememberApplied([toCodeId]);
     },
     onSuccess: (_r, { excerptId }) => invalidate(undefined, excerptId),
@@ -296,8 +296,8 @@ export function usePushDownExcerpt() {
 /**
  * Roll sub-codes up into their parent: every excerpt tagged with a child gets
  * the parent instead, optionally followed by deleting the emptied children.
- * Both halves are undoable now — a code delete is a step like any other — so
- * this is one `retag_code` per child and, if asked, one delete per child.
+ * One retag per child and, if asked, one delete per child — all bracketed as
+ * a single step, so one undo unrolls the lot.
  */
 export function useRollUpCodes() {
   const invalidate = useInvalidateExcerpts();
@@ -307,6 +307,7 @@ export function useRollUpCodes() {
       parentId,
       childIds,
       deleteEmptied,
+      label,
     }: {
       parentId: string;
       childIds: string[];
@@ -314,11 +315,18 @@ export function useRollUpCodes() {
       label: string;
     }) => {
       const reports: RetagReport[] = [];
-      for (const childId of childIds) reports.push(await api.retagCode(childId, parentId));
+      await historyBeginGroup(label);
+      try {
+        for (const childId of childIds) reports.push(await api.retagCode(childId, parentId));
+        if (deleteEmptied) {
+          // `promote` so a rolled-up code's own sub-codes survive, moving up
+          // to the parent rather than disappearing with it.
+          for (const childId of childIds) await codesApi.deleteCode(childId, "promote");
+        }
+      } finally {
+        await historyEndGroup();
+      }
       if (deleteEmptied) {
-        // `promote` so a rolled-up code's own sub-codes survive, moving up to
-        // the parent rather than disappearing with it.
-        for (const childId of childIds) await codesApi.deleteCode(childId, "promote");
         const ws = useWorkspace.getState();
         if (ws.selectedCodeId && childIds.includes(ws.selectedCodeId))
           ws.setSelectedCodeId(parentId);

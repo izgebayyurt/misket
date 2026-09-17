@@ -12,7 +12,8 @@
 use rusqlite::{params, Connection, OptionalExtension, Row};
 use serde_json::json;
 
-use super::{activity, codes, documents, util};
+use super::history::SetOp;
+use super::{activity, codes, documents, history, util};
 use crate::error::{AppError, Result};
 use crate::models::{ExcerptFilter, SavedFilter, SetInfo, SetWithMembers};
 
@@ -128,6 +129,10 @@ pub fn create_set(
             params![id, m],
         )?;
     }
+    let created = SetWithMembers {
+        set: get_set(&tx, &id)?,
+        member_ids: set_members(&tx, &id)?,
+    };
     activity::record(
         &tx,
         "set.created",
@@ -135,8 +140,10 @@ pub fn create_set(
         Some(&id),
         format!("Created {kind} set \"{name}\""),
         json!({ "kind": kind, "name": name, "memberIds": member_ids }),
-        None,
-        None,
+        Some(history::payload(&SetOp::Restore {
+            set: Box::new(created),
+        })),
+        Some(history::payload(&SetOp::Drop { set_id: id.clone() })),
     )?;
     tx.commit()?;
     get_set(conn, &id)
@@ -164,8 +171,16 @@ pub fn rename_set(conn: &Connection, id: &str, name: &str) -> Result<SetInfo> {
                 "kind": current.kind,
                 "name": activity::change(current.name.clone(), name.to_string()),
             }),
-            None,
-            None,
+            Some(history::payload(&SetOp::Rename {
+                set_id: id.to_string(),
+                name: name.to_string(),
+                updated_at: get_set(conn, id)?.updated_at,
+            })),
+            Some(history::payload(&SetOp::Rename {
+                set_id: id.to_string(),
+                name: current.name.clone(),
+                updated_at: current.updated_at.clone(),
+            })),
         )?;
     }
     get_set(conn, id)
@@ -185,8 +200,15 @@ pub fn delete_set(conn: &Connection, id: &str) -> Result<SetWithMembers> {
         Some(id),
         format!("Deleted {} set \"{}\"", set.kind, set.name),
         json!({ "kind": set.kind, "name": set.name, "memberIds": member_ids }),
-        None,
-        None,
+        Some(history::payload(&SetOp::Drop {
+            set_id: id.to_string(),
+        })),
+        Some(history::payload(&SetOp::Restore {
+            set: Box::new(SetWithMembers {
+                set: set.clone(),
+                member_ids: member_ids.clone(),
+            }),
+        })),
     )?;
     tx.commit()?;
     Ok(SetWithMembers { set, member_ids })
@@ -222,6 +244,7 @@ pub fn set_set_members(
     for m in member_ids {
         ensure_member_exists(conn, &set.kind, m)?;
     }
+    let before = set_members(conn, set_id)?;
     let tx = util::tx(conn)?;
     tx.execute("DELETE FROM set_members WHERE set_id = ?1", [set_id])?;
     for m in member_ids {
@@ -234,6 +257,7 @@ pub fn set_set_members(
         "UPDATE sets SET updated_at = ?2 WHERE id = ?1",
         params![set_id, util::now()],
     )?;
+    let (forward, inverse) = membership_steps(&tx, &set, &before)?;
     activity::record(
         &tx,
         "set.members_changed",
@@ -246,8 +270,8 @@ pub fn set_set_members(
             if member_ids.len() == 1 { "" } else { "s" }
         ),
         json!({ "kind": set.kind, "name": set.name, "memberIds": member_ids }),
-        None,
-        None,
+        Some(forward),
+        Some(inverse),
     )?;
     tx.commit()?;
     set_members(conn, set_id)
@@ -256,6 +280,7 @@ pub fn set_set_members(
 pub fn add_to_set(conn: &Connection, set_id: &str, member_id: &str) -> Result<Vec<String>> {
     let set = get_set(conn, set_id)?;
     ensure_member_exists(conn, &set.kind, member_id)?;
+    let before = set_members(conn, set_id)?;
     let tx = util::tx(conn)?;
     tx.execute(
         "INSERT OR IGNORE INTO set_members (set_id, member_id) VALUES (?1, ?2)",
@@ -265,19 +290,50 @@ pub fn add_to_set(conn: &Connection, set_id: &str, member_id: &str) -> Result<Ve
         "UPDATE sets SET updated_at = ?2 WHERE id = ?1",
         params![set_id, util::now()],
     )?;
-    log_membership(&tx, &set, "Added", member_id)?;
+    log_membership(&tx, &set, "Added", member_id, &before)?;
     tx.commit()?;
     set_members(conn, set_id)
 }
 
+/// The pair of payloads for a membership change: the whole list either way,
+/// so adding one member, removing one and replacing the lot all replay the
+/// same way.
+fn membership_steps(
+    conn: &Connection,
+    set: &SetInfo,
+    before: &[String],
+) -> Result<(serde_json::Value, serde_json::Value)> {
+    let after = set_members(conn, &set.id)?;
+    let now = get_set(conn, &set.id)?.updated_at;
+    Ok((
+        history::payload(&SetOp::Members {
+            set_id: set.id.clone(),
+            member_ids: after,
+            updated_at: now,
+        }),
+        history::payload(&SetOp::Members {
+            set_id: set.id.clone(),
+            member_ids: before.to_vec(),
+            updated_at: set.updated_at.clone(),
+        }),
+    ))
+}
+
 /// One entry for a single member joining or leaving a set.
-fn log_membership(conn: &Connection, set: &SetInfo, verb: &str, member_id: &str) -> Result<()> {
+fn log_membership(
+    conn: &Connection,
+    set: &SetInfo,
+    verb: &str,
+    member_id: &str,
+    before: &[String],
+) -> Result<()> {
     let member_name = if set.kind == "code" {
         activity::code_name(conn, member_id)
     } else {
         activity::document_name(conn, member_id)
     };
     let preposition = if verb == "Added" { "to" } else { "from" };
+    let (forward, inverse) = membership_steps(conn, set, before)?;
     activity::record(
         conn,
         "set.members_changed",
@@ -294,19 +350,15 @@ fn log_membership(conn: &Connection, set: &SetInfo, verb: &str, member_id: &str)
             "memberName": member_name,
             "change": verb.to_lowercase(),
         }),
-        None,
-        None,
+        Some(forward),
+        Some(inverse),
     )
 }
 
 pub fn remove_from_set(conn: &Connection, set_id: &str, member_id: &str) -> Result<Vec<String>> {
     let set = get_set(conn, set_id)?;
+    let before = set_members(conn, set_id)?;
     let tx = util::tx(conn)?;
-    let member_name = if set.kind == "code" {
-        activity::code_name(&tx, member_id)
-    } else {
-        activity::document_name(&tx, member_id)
-    };
     tx.execute(
         "DELETE FROM set_members WHERE set_id = ?1 AND member_id = ?2",
         params![set_id, member_id],
@@ -315,25 +367,7 @@ pub fn remove_from_set(conn: &Connection, set_id: &str, member_id: &str) -> Resu
         "UPDATE sets SET updated_at = ?2 WHERE id = ?1",
         params![set_id, util::now()],
     )?;
-    activity::record(
-        &tx,
-        "set.members_changed",
-        "set",
-        Some(set_id),
-        format!(
-            "Removed \"{member_name}\" from {} set \"{}\"",
-            set.kind, set.name
-        ),
-        json!({
-            "kind": set.kind,
-            "name": set.name,
-            "memberId": member_id,
-            "memberName": member_name,
-            "change": "removed",
-        }),
-        None,
-        None,
-    )?;
+    log_membership(&tx, &set, "Removed", member_id, &before)?;
     tx.commit()?;
     set_members(conn, set_id)
 }
@@ -432,6 +466,12 @@ pub fn save_filter(conn: &Connection, name: &str, filter: &ExcerptFilter) -> Res
             |r| r.get(0),
         )
         .optional()?;
+    // What was stored under that name, so undo can put it back verbatim —
+    // or take the new entry away again when the name was unused.
+    let before = existing
+        .as_deref()
+        .map(|id| get_saved_filter(conn, id))
+        .transpose()?;
     let id = match existing {
         Some(id) => {
             conn.execute(
@@ -463,8 +503,17 @@ pub fn save_filter(conn: &Connection, name: &str, filter: &ExcerptFilter) -> Res
         Some(&id),
         format!("Saved filter \"{name}\""),
         json!({ "name": name, "filter": filter }),
-        None,
-        None,
+        Some(history::payload(&SetOp::RestoreFilter {
+            filter: Box::new(get_saved_filter(conn, &id)?),
+        })),
+        Some(match before {
+            Some(f) => history::payload(&SetOp::RestoreFilter {
+                filter: Box::new(f),
+            }),
+            None => history::payload(&SetOp::DropFilter {
+                filter_id: id.clone(),
+            }),
+        }),
     )?;
     get_saved_filter(conn, &id)
 }
@@ -480,8 +529,12 @@ pub fn delete_saved_filter(conn: &Connection, id: &str) -> Result<SavedFilter> {
         Some(id),
         format!("Deleted filter \"{}\"", saved.name),
         json!({ "name": saved.name, "filter": saved.filter }),
-        None,
-        None,
+        Some(history::payload(&SetOp::DropFilter {
+            filter_id: id.to_string(),
+        })),
+        Some(history::payload(&SetOp::RestoreFilter {
+            filter: Box::new(saved.clone()),
+        })),
     )?;
     tx.commit()?;
     Ok(saved)

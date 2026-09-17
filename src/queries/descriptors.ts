@@ -2,7 +2,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as api from "@/api/descriptors";
 import type { DescriptorFieldPatch, NewDescriptorField } from "@/api/types";
 import { keys } from "./keys";
-import { useUndoStore } from "@/state/undoStore";
 
 export function useDescriptorFields() {
   return useQuery({
@@ -45,8 +44,8 @@ export function useInvalidateDescriptors() {
 }
 
 /**
- * Set or clear one document's value for a field. Undo puts back whatever was
- * there before (or clears it again).
+ * Set or clear one document's value for a field. The backend records what
+ * was there before, so undo puts it back.
  */
 export function useSetDescriptorValue() {
   const invalidate = useInvalidateDescriptors();
@@ -57,12 +56,11 @@ export function useSetDescriptorValue() {
       fieldId,
       value,
       previous,
-      fieldName,
     }: {
       documentId: string;
       fieldId: string;
       value: string | null;
-      /** What is stored now, so undo can put it back. Read from the cache when omitted. */
+      /** What is stored now. Read from the cache when omitted. */
       previous?: string | null;
       fieldName?: string;
     }) => {
@@ -74,99 +72,49 @@ export function useSetDescriptorValue() {
           )
           ?.find((v) => v.fieldId === fieldId)?.value ??
         null;
+      // Writing the value it already has would be an empty history entry.
       if ((before ?? "") === (value ?? "")) return;
-      await useUndoStore.getState().run({
-        label: `Set ${fieldName ?? "descriptor"}`,
-        redo: async () => {
-          await api.setDescriptorValue(documentId, fieldId, value);
-          invalidate(documentId);
-        },
-        undo: async () => {
-          await api.setDescriptorValue(documentId, fieldId, before);
-          invalidate(documentId);
-        },
-      });
+      await api.setDescriptorValue(documentId, fieldId, value);
     },
+    onSuccess: (_r, { documentId }) => invalidate(documentId),
   });
 }
 
-/** Rename a field or edit its options; undoable. Changing kind is not undoable. */
+/**
+ * Rename a field, edit its options or change its type. Changing the type
+ * converts the values it can and drops the rest; the backend keeps every one
+ * of them, so undo brings the column back as it was.
+ */
 export function useUpdateDescriptorField() {
   const invalidate = useInvalidateDescriptors();
-  const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, patch }: { id: string; patch: DescriptorFieldPatch }) => {
-      const before = qc
-        .getQueryData<Awaited<ReturnType<typeof api.listDescriptorFields>>>(keys.descriptorFields)
-        ?.find((f) => f.id === id);
-      const changesKind = patch.kind !== undefined && patch.kind !== before?.kind;
-      if (changesKind || !before) {
-        await api.updateDescriptorField(id, patch);
-        useUndoStore.getState().clear();
-        invalidate();
-        return;
-      }
-      const inverse: DescriptorFieldPatch = { name: before.name, options: before.options };
-      await useUndoStore.getState().run({
-        label: `Edit descriptor "${before.name}"`,
-        redo: async () => {
-          await api.updateDescriptorField(id, patch);
-          invalidate();
-        },
-        undo: async () => {
-          await api.updateDescriptorField(id, inverse);
-          invalidate();
-        },
-      });
-    },
+    mutationFn: ({ id, patch }: { id: string; patch: DescriptorFieldPatch }) =>
+      api.updateDescriptorField(id, patch),
+    onSuccess: () => invalidate(),
   });
 }
 
 export function useReorderDescriptorFields() {
   const invalidate = useInvalidateDescriptors();
-  const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (ids: string[]) => {
-      const before = (
-        qc.getQueryData<Awaited<ReturnType<typeof api.listDescriptorFields>>>(
-          keys.descriptorFields,
-        ) ?? []
-      ).map((f) => f.id);
-      await useUndoStore.getState().run({
-        label: "Reorder descriptors",
-        redo: async () => {
-          await api.reorderDescriptorFields(ids);
-          invalidate();
-        },
-        undo: async () => {
-          await api.reorderDescriptorFields(before);
-          invalidate();
-        },
-      });
-    },
+    mutationFn: (ids: string[]) => api.reorderDescriptorFields(ids),
+    onSuccess: () => invalidate(),
   });
 }
 
-/** Not undoable: clears the stack, as adding a code to the codebook does. */
 export function useCreateDescriptorField() {
   const invalidate = useInvalidateDescriptors();
   return useMutation({
     mutationFn: (input: NewDescriptorField) => api.createDescriptorField(input),
-    onSuccess: () => {
-      useUndoStore.getState().clear();
-      invalidate();
-    },
+    onSuccess: () => invalidate(),
   });
 }
 
-/** Not undoable: the field's values go with it. Confirm first. */
+/** Undoable: the field's values are snapshotted before it goes. */
 export function useDeleteDescriptorField() {
   const invalidate = useInvalidateDescriptors();
   return useMutation({
     mutationFn: (id: string) => api.deleteDescriptorField(id),
-    onSuccess: () => {
-      useUndoStore.getState().clear();
-      invalidate();
-    },
+    onSuccess: () => invalidate(),
   });
 }

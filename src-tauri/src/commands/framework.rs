@@ -48,16 +48,7 @@ pub fn delete_framework_matrix(
     state.with_project(|p| framework::delete_matrix(&p.conn, &id))
 }
 
-/// Put a deleted matrix back, summaries included (undo).
-#[tauri::command]
-pub fn restore_framework_matrix(
-    state: State<'_, AppState>,
-    saved: FrameworkMatrixWithCells,
-) -> Result<FrameworkMatrix> {
-    state.with_project(|p| framework::restore_matrix(&p.conn, &saved))
-}
-
-/// Write one cell's summary; returns the previous text, for undo.
+/// Write one cell's summary; returns the text that was there before.
 #[tauri::command]
 pub fn set_framework_cell(
     state: State<'_, AppState>,

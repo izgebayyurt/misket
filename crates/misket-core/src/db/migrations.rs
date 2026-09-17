@@ -13,6 +13,9 @@ const MIGRATIONS: &[(i64, &str)] = &[
     (6, include_str!("migrations/0006_framework.sql")),
     (7, include_str!("migrations/0007_code_definitions.sql")),
     (8, include_str!("migrations/0008_history.sql")),
+    // 9 is the transcripts branch; a forward-only sequence keyed by
+    // `PRAGMA user_version` tolerates the gap if that branch lands later.
+    (9, include_str!("migrations/0009_history_groups.sql")),
 ];
 
 pub fn latest_version() -> i64 {

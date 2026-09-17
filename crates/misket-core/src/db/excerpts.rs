@@ -11,7 +11,8 @@ use super::{
 use crate::error::{AppError, Result};
 use crate::models::{
     ApplyCodesInput, ApplyResult, DescriptorFilter, ExcerptDetail, ExcerptFilter, ExcerptPage,
-    ExcerptRow, ExcerptSnapshot, ExcerptWithCodes, MergeResult, Rect, TagRow,
+    ExcerptRow, ExcerptSnapshot, ExcerptWithCodes, InVivoResult, MergeResult, NewCode, Rect,
+    TagRow,
 };
 
 const CONTEXT_CHARS: i64 = 120;
@@ -531,6 +532,50 @@ pub fn remove_code(conn: &Connection, id: &str, code_id: &str) -> Result<Excerpt
     get(conn, id)
 }
 
+/// In vivo coding: create a code named after the selected text and apply it
+/// to that selection.
+///
+/// Two writes, and both belong to the one thing the user did — so they go in
+/// a group and come off together. Undoing it can never leave a stray empty
+/// code behind, and redoing it brings back the same code id, which anything
+/// that named the code in the meantime still points at.
+pub fn in_vivo_code(
+    conn: &Connection,
+    document_id: &str,
+    start_pos: i64,
+    end_pos: i64,
+    name: &str,
+    parent_id: Option<&str>,
+) -> Result<InVivoResult> {
+    let tx = util::tx(conn)?;
+    let result = history::group(&tx, &format!("Coded in vivo: \"{}\"", name.trim()), |tx| {
+        let code = codes::create(
+            tx,
+            NewCode {
+                name: name.to_string(),
+                parent_id: parent_id.map(String::from),
+                ..Default::default()
+            },
+        )?;
+        let applied = apply_codes(
+            tx,
+            ApplyCodesInput {
+                document_id: document_id.to_string(),
+                start_pos: Some(start_pos),
+                end_pos: Some(end_pos),
+                code_ids: vec![code.id.clone()],
+                ..Default::default()
+            },
+        )?;
+        Ok(InVivoResult {
+            code,
+            excerpt: applied.excerpt,
+        })
+    })?;
+    tx.commit()?;
+    Ok(result)
+}
+
 /// Everything needed to put one excerpt back exactly as it stands: the row,
 /// its memos, and its tags with their own timestamps.
 pub fn snapshot(conn: &Connection, id: &str) -> Result<ExcerptSnapshot> {
@@ -867,9 +912,10 @@ pub fn split(conn: &Connection, id: &str, at: i64) -> Result<(ExcerptWithCodes, 
         ranges: vec![range_row(&excerpt)],
         ..Default::default()
     };
-    // Two entries, one operation: the left half's is glued to the right
+    // Two entries, one group: the left half's is recorded beside the right
     // half's, which carries the payloads, so one undo puts the excerpt back
     // in one piece.
+    history::begin_group(&tx, &summary)?;
     activity::record(
         &tx,
         "excerpt.split",
@@ -877,8 +923,8 @@ pub fn split(conn: &Connection, id: &str, at: i64) -> Result<(ExcerptWithCodes, 
         Some(id),
         &summary,
         detail.clone(),
-        Some(history::linked()),
-        Some(history::linked()),
+        Some(history::noop()),
+        Some(history::noop()),
     )?;
     activity::record(
         &tx,
@@ -890,6 +936,7 @@ pub fn split(conn: &Connection, id: &str, at: i64) -> Result<(ExcerptWithCodes, 
         Some(history::payload(&forward)),
         Some(history::payload(&inverse)),
     )?;
+    history::end_group(&tx)?;
     tx.commit()?;
     Ok((get(conn, id)?, get(conn, &right_id)?))
 }
@@ -1009,7 +1056,9 @@ pub fn merge_adjacent(conn: &Connection, left_id: &str, right_id: &str) -> Resul
         ..Default::default()
     };
     // Both the survivor and the excerpt that disappeared get an entry; the
-    // second carries the payloads for the pair.
+    // second carries the payloads for the pair, and the group makes them one
+    // step to undo.
+    history::begin_group(&tx, &summary)?;
     activity::record(
         &tx,
         "excerpt.merged",
@@ -1017,8 +1066,8 @@ pub fn merge_adjacent(conn: &Connection, left_id: &str, right_id: &str) -> Resul
         Some(left_id),
         &summary,
         detail.clone(),
-        Some(history::linked()),
-        Some(history::linked()),
+        Some(history::noop()),
+        Some(history::noop()),
     )?;
     activity::record(
         &tx,
@@ -1030,6 +1079,7 @@ pub fn merge_adjacent(conn: &Connection, left_id: &str, right_id: &str) -> Resul
         Some(history::payload(&forward)),
         Some(history::payload(&inverse)),
     )?;
+    history::end_group(&tx)?;
     tx.commit()?;
     Ok(MergeResult {
         excerpt: get(conn, left_id)?,

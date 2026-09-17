@@ -191,8 +191,8 @@ function DeleteDescriptorDialog({
         title={`Delete "${field.name}"?`}
         description={
           field.valueCount > 0
-            ? `${field.valueCount} document${field.valueCount === 1 ? "" : "s"} will lose this value. This cannot be undone.`
-            : "No document uses it. This cannot be undone."
+            ? `${field.valueCount} document${field.valueCount === 1 ? "" : "s"} will lose this value. You can undo this from History.`
+            : "No document uses it. You can undo this from History."
         }
       >
         <DialogFooter>

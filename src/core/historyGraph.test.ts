@@ -21,6 +21,7 @@ function node(partial: Partial<HistoryNodeSummary> & { id: number }): HistoryNod
     undoable: true,
     isHead: false,
     preferredChild: null,
+    stepCount: 1,
     children: [],
     ...partial,
   };

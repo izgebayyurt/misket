@@ -331,6 +331,15 @@ function HistoryRow({
             data-testid="history-row-checkout"
           >
             <span className="min-w-0 flex-1 truncate">{node.summary}</span>
+            {node.stepCount > 1 ? (
+              <span
+                className="shrink-0 text-[10px] text-fg-muted"
+                title={`${node.stepCount} changes, undone and redone as one step`}
+                data-testid="history-step-count"
+              >
+                {node.stepCount} changes
+              </span>
+            ) : null}
             {node.branchName ? (
               <span
                 className="shrink-0 rounded-full border border-border bg-panel px-1.5 py-0.5 text-[10px] text-fg-muted"

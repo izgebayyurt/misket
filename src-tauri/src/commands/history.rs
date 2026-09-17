@@ -50,3 +50,18 @@ pub fn history_rename_branch(
 pub fn history_compact(state: State<'_, AppState>, id: i64) -> Result<CompactReport> {
     state.with_project(|p| history::compact_before(&p.conn, id))
 }
+
+/// Open a compound step: every write until `history_end_group` becomes one
+/// step to undo, labelled `summary`. Used where the frontend has to make
+/// several calls for what the user did once, such as importing a folder.
+#[tauri::command]
+pub fn history_begin_group(state: State<'_, AppState>, summary: String) -> Result<()> {
+    state.with_project(|p| history::begin_group(&p.conn, &summary))
+}
+
+/// Close the step `history_begin_group` opened. Safe to call when none is
+/// open, so it belongs in a `finally`.
+#[tauri::command]
+pub fn history_end_group(state: State<'_, AppState>) -> Result<()> {
+    state.with_project(|p| history::end_group(&p.conn))
+}

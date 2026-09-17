@@ -292,6 +292,12 @@ export interface MemoTarget {
   excerptId?: string | null;
 }
 
+/** What in vivo coding produced: the new code and the excerpt it tagged. */
+export interface InVivoResult {
+  code: Code;
+  excerpt: ExcerptWithCodes;
+}
+
 export interface ExcerptDetail extends ExcerptWithCodes {
   documentName: string;
   contextBefore: string;
@@ -645,8 +651,8 @@ export interface FrameworkMatrixView {
 /** A deleted matrix with every summary it held, so undo can put it back. */
 export interface FrameworkMatrixWithCells {
   matrix: FrameworkMatrix;
-  /** `[rowKey, codeId, summary]`. */
-  cells: [string, string, string][];
+  /** `[rowKey, codeId, summary, updatedAt]`. */
+  cells: [string, string, string, string][];
 }
 
 /** One speaker's turn detected in a document (see `detectSpeakerTurns`).
@@ -729,6 +735,10 @@ export interface HistoryNode {
   inverse: unknown | null;
   branchName: string | null;
   preferredChild: number | null;
+  /** The compound step this node belongs to, named by its leading node's id. */
+  groupId: number | null;
+  /** Set on a group's leading node: the label shown instead of its steps. */
+  groupSummary: string | null;
 }
 
 /** A node as the history view draws it: no payloads, but the shape around it. */
@@ -744,6 +754,8 @@ export interface HistoryNodeSummary {
   isHead: boolean;
   /** Which child redo would follow from here; null on a leaf. */
   preferredChild: number | null;
+  /** How many writes this node stands for; more than 1 for a compound step. */
+  stepCount: number;
   /** Oldest first; more than one means the tree branches here. */
   children: number[];
 }

@@ -8,7 +8,7 @@ use std::collections::{BTreeSet, HashMap, HashSet};
 use rusqlite::{types::Value, Connection};
 
 use super::meta;
-use super::{codes, descriptors, documents, sets};
+use super::{activity, codes, descriptors, documents, history, sets, util};
 use crate::error::{AppError, Result};
 use crate::models::{
     CoOccurrence, CodeByDescriptor, CodeByDocument, CodeFrequency, CrosstabColumn, CrosstabRequest,
@@ -300,12 +300,38 @@ pub fn set_stop_words(conn: &Connection, words: &[String]) -> Result<()> {
         .map(|w| w.trim().to_lowercase())
         .filter(|w| !w.is_empty())
         .collect();
-    let json = serde_json::to_string(&cleaned.into_iter().collect::<Vec<_>>())?;
-    conn.execute(
+    let words: Vec<String> = cleaned.into_iter().collect();
+    let json = serde_json::to_string(&words)?;
+    let before = meta(conn, "stop_words")?;
+    let tx = util::tx(conn)?;
+    tx.execute(
         "INSERT INTO project_meta(key, value) VALUES ('stop_words', ?1)
          ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-        [json],
+        [&json],
     )?;
+    if before.as_deref() != Some(json.as_str()) {
+        let step = |value: Option<&str>| {
+            history::payload(&history::ProjectOp::SetMeta {
+                key: "stop_words".into(),
+                value: value.map(String::from),
+            })
+        };
+        activity::record(
+            &tx,
+            "analysis.stop_words_set",
+            "project",
+            None,
+            format!(
+                "Set the stop-word list to {} word{}",
+                words.len(),
+                if words.len() == 1 { "" } else { "s" }
+            ),
+            serde_json::json!({ "count": words.len(), "words": words }),
+            Some(step(Some(&json))),
+            Some(step(before.as_deref())),
+        )?;
+    }
+    tx.commit()?;
     Ok(())
 }
 
