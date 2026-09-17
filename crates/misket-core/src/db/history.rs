@@ -25,9 +25,9 @@ use serde_json::{json, Value};
 use super::{codes, documents, excerpts, framework, transcripts, util};
 use crate::error::{AppError, Result};
 use crate::models::{
-    ChildrenStrategy, CodePatch, CodeTreeSnapshot, CompactReport, DescriptorField,
+    ChildrenStrategy, CodePatch, CodeTreeSnapshot, Coder, CompactReport, DescriptorField,
     DocumentSnapshot, ExcerptSnapshot, FrameworkMatrixWithCells, HistoryNode, HistoryNodeSummary,
-    Memo, SavedFilter, SetWithMembers, TagRow,
+    Memo, SavedFilter, SetWithMembers, SyncPoint, TagRow,
 };
 use crate::text::TranscriptFormat;
 
@@ -1010,6 +1010,70 @@ pub struct MemoChange {
     pub restore: Vec<Memo>,
 }
 
+/// The bookkeeping half of "pull from another copy" (`db::merge`): the coder
+/// rows the pull brought over and the sync point it left behind.
+///
+/// Like [`ExcerptChange`], one shape serves both directions — the forward
+/// writes the rows and the inverse writes back whatever was there before, or
+/// deletes what was not there at all. The rows the pull *merges* are not in
+/// here: each of those is an ordinary `document.imported`, `code.created` or
+/// `bulk.codes_added` node inside the same group, which is what makes a whole
+/// pull undoable without a single line of special-case undo.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct PullChange {
+    /// Coder ids to remove: the ones this pull introduced.
+    pub drop_coders: Vec<String>,
+    /// Whole `coders` rows to write, id and birthday included.
+    pub coders: Vec<Coder>,
+    /// `(otherProjectId, otherCoderId)` sync points to remove.
+    pub drop_sync_points: Vec<(String, String)>,
+    /// Whole `sync_points` rows to write.
+    pub sync_points: Vec<SyncPoint>,
+}
+
+impl PullChange {
+    fn run(&self, conn: &Connection) -> Result<()> {
+        for id in &self.drop_coders {
+            conn.execute("DELETE FROM coders WHERE id = ?1", [id])?;
+        }
+        for c in &self.coders {
+            conn.execute(
+                "INSERT INTO coders (id, name, color, created_at) VALUES (?1, ?2, ?3, ?4)
+                 ON CONFLICT(id) DO UPDATE SET
+                   name = excluded.name, color = excluded.color,
+                   created_at = excluded.created_at",
+                params![c.id, c.name, c.color, c.created_at],
+            )?;
+        }
+        for (project_id, coder_id) in &self.drop_sync_points {
+            conn.execute(
+                "DELETE FROM sync_points WHERE other_project_id = ?1 AND other_coder_id = ?2",
+                params![project_id, coder_id],
+            )?;
+        }
+        for p in &self.sync_points {
+            conn.execute(
+                "INSERT INTO sync_points
+                   (other_project_id, other_coder_id, at, our_node_id, their_node_id, base_json)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+                 ON CONFLICT(other_project_id, other_coder_id) DO UPDATE SET
+                   at = excluded.at, our_node_id = excluded.our_node_id,
+                   their_node_id = excluded.their_node_id, base_json = excluded.base_json",
+                params![
+                    p.other_project_id,
+                    p.other_coder_id,
+                    p.at,
+                    p.our_node_id,
+                    p.their_node_id,
+                    p.base_json
+                ],
+            )?;
+        }
+        Ok(())
+    }
+}
+
 // -------------------------------------------------------------- applying
 
 impl CodeOp {
@@ -1248,6 +1312,9 @@ fn apply(conn: &Connection, node_id: i64, kind: &str, payload: &Value) -> Result
         }
         "project.renamed" | "analysis.stop_words_set" => {
             serde_json::from_value::<ProjectOp>(payload.clone())?.run(conn)
+        }
+        "project.pulled" | "project.sync_point" => {
+            serde_json::from_value::<PullChange>(payload.clone())?.run(conn)
         }
         "framework.matrix_created"
         | "framework.matrix_updated"
@@ -1660,7 +1727,7 @@ pub fn memos_deleted(ids: &[String]) -> Value {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use crate::db::{
         bulk, codes, descriptors, documents, excerpts, framework, memos, sets, OpenProject,
@@ -1679,7 +1746,7 @@ mod tests {
     /// is the point), and so is the head pointer inside `project_meta`. What
     /// is left is the state an undo has to restore *exactly*: ids, order,
     /// timestamps and all.
-    fn dump_state(conn: &Connection) -> BTreeMap<String, Vec<String>> {
+    pub(crate) fn dump_state(conn: &Connection) -> BTreeMap<String, Vec<String>> {
         let mut names: Vec<String> = conn
             .prepare(
                 "SELECT name FROM sqlite_master WHERE type = 'table'
@@ -1748,7 +1815,7 @@ mod tests {
 
     /// Assert two dumps match, naming the table and the rows that differ
     /// rather than printing the whole project twice.
-    fn assert_same(
+    pub(crate) fn assert_same(
         left: &BTreeMap<String, Vec<String>>,
         right: &BTreeMap<String, Vec<String>>,
         what: &str,

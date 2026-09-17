@@ -1344,6 +1344,169 @@ pub struct FrameworkMatrixWithCells {
     pub cells: Vec<(String, String, String, String)>,
 }
 
+// -------------------------------------------------------- pulling a copy
+
+/// How much of one kind of thing a pull found, split by what happened to it.
+///
+/// `matched` is "the same row, recognised by its id"; `renamed` is the softer
+/// match the rules allow (a document by its content hash, a code by its place
+/// and name, a set or a field by its name); `new` is what only the other copy
+/// has and the pull would bring over.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct MergeCount {
+    pub matched: i64,
+    /// Matched by something other than the id — a hash, a name, a range.
+    pub by_name: i64,
+    pub new: i64,
+}
+
+impl MergeCount {
+    pub fn total_incoming(&self) -> i64 {
+        self.new
+    }
+}
+
+/// One coder in the other copy, and how much of it is theirs.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct MergeCoder {
+    pub id: String,
+    pub name: String,
+    pub color: String,
+    /// `excerpt_codes` rows in the other file.
+    pub coding_count: i64,
+    /// Codings of theirs this pull would actually bring over.
+    pub incoming_count: i64,
+    /// Whether this is the coder the other file writes as.
+    pub is_theirs: bool,
+    /// Whether this is *us*: our own work coming back through their copy.
+    pub is_local: bool,
+}
+
+/// A question only the user can answer: both copies changed the same thing.
+///
+/// `ours` and `theirs` are the two values as prose, ready to show side by
+/// side. `choice` ids are stable strings (`ours`, `theirs`, `both`,
+/// `restore`, `drop`) and `default` is the one the dialog preselects.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct MergeConflict {
+    /// Stable within one plan, and the same across a preview and the apply
+    /// that follows it: `<kind>:<target>`.
+    pub id: String,
+    /// `code.scalar` | `code.deletedHere` | `memo` | `descriptor.value` |
+    /// `framework.cell`
+    pub kind: String,
+    /// What the conflict is about, for the dialog's heading.
+    pub title: String,
+    /// The field or cell in question, when the title alone is ambiguous.
+    pub field: String,
+    pub ours: String,
+    pub theirs: String,
+    /// `(id, label)` for every way out, in the order to show them.
+    pub choices: Vec<(String, String)>,
+    pub default: String,
+}
+
+/// The user's answer to one [`MergeConflict`].
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct MergeDecision {
+    pub conflict_id: String,
+    pub choice: String,
+}
+
+/// What pulling from another copy would do, shown before anything is written.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct MergePlan {
+    /// The other file's own name for itself, falling back to its file name.
+    pub other_name: String,
+    pub other_path: String,
+    pub other_project_id: String,
+    /// Whether that is the same project this file is a copy of.
+    pub same_project: bool,
+    /// Nothing has ever been pulled from this copy before, so there is no
+    /// base to merge scalars against and ours stand.
+    pub first_pull: bool,
+    pub other_coders: Vec<MergeCoder>,
+    pub documents: MergeCount,
+    pub codes: MergeCount,
+    pub excerpts: MergeCount,
+    pub codings: MergeCount,
+    pub memos: MergeCount,
+    pub descriptor_fields: MergeCount,
+    pub descriptor_values: MergeCount,
+    pub sets: MergeCount,
+    pub filters: MergeCount,
+    pub framework_matrices: MergeCount,
+    pub framework_cells: MergeCount,
+    pub conflicts: Vec<MergeConflict>,
+    /// Plain sentences worth reading before confirming.
+    pub notes: Vec<String>,
+}
+
+impl MergePlan {
+    /// Whether the pull would write anything at all.
+    pub fn is_empty(&self) -> bool {
+        self.conflicts.is_empty()
+            && [
+                &self.documents,
+                &self.codes,
+                &self.excerpts,
+                &self.codings,
+                &self.memos,
+                &self.descriptor_fields,
+                &self.descriptor_values,
+                &self.sets,
+                &self.filters,
+                &self.framework_matrices,
+                &self.framework_cells,
+            ]
+            .iter()
+            .all(|c| c.new == 0)
+    }
+}
+
+/// What a pull did, once it has been done.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct MergeReport {
+    pub other_name: String,
+    pub documents: i64,
+    pub codes: i64,
+    pub excerpts: i64,
+    pub codings: i64,
+    pub memos: i64,
+    pub descriptor_fields: i64,
+    pub descriptor_values: i64,
+    pub sets: i64,
+    pub filters: i64,
+    pub framework_matrices: i64,
+    pub framework_cells: i64,
+    /// Conflicts that were answered, however they were answered.
+    pub conflicts_resolved: i64,
+    /// Codings brought over, by coder id, biggest first.
+    pub by_coder: Vec<MergeCoder>,
+    /// The sentence the history shows for the whole pull.
+    pub summary: String,
+}
+
+/// One row of `sync_points`: what we knew of another copy last time we pulled.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncPoint {
+    pub other_project_id: String,
+    pub other_coder_id: String,
+    pub at: String,
+    pub our_node_id: Option<i64>,
+    pub their_node_id: Option<i64>,
+    /// The mergeable scalar state as it stood after that pull, written and
+    /// read only by `db::merge`.
+    pub base_json: String,
+}
+
 /// serde helper: distinguishes "absent" from "present but null".
 mod double_option {
     use serde::{Deserialize, Deserializer, Serialize, Serializer};
