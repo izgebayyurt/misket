@@ -127,8 +127,13 @@ keyboard-friendly interface without a subscription.
   history as a timeline with the values before and after, and the whole log
   exports as CSV. Set your name under Settings → "Your name (for the activity
   log)"; without one Misket uses your computer's user name.
-- **Undo/redo**: every change is undoable, including deleting or merging codes;
-  history is kept in the project file, so it survives closing the app.
+- **Undo/redo**: everything is undoable — deleting a document with its
+  excerpts, changing a descriptor's type, importing a codebook, editing a
+  framework matrix, renaming the project — and what you did in one go comes
+  back in one go. The only exception is restoring a backup, which replaces the
+  whole file. History is kept in the project file, so it survives closing the
+  app, travels with a backup, and is still there for whoever you send the
+  project to.
 - **Export** the codebook as CSV or a reusable JSON file, excerpts as CSV, the
   activity log as CSV, or the whole project as JSON.
 

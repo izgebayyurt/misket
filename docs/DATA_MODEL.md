@@ -347,7 +347,8 @@ them back instead of failing on the primary key.
 
 ## History
 
-`history` (schema 8) is both the audit trail and the undo stack. It replaced
+`history` (schema 8, groups in schema 10) is both the audit trail and the undo
+stack. It replaced
 `activity_log`, which was append-only and could only be read; a history row
 also carries the operation and its exact opposite, so a change can be walked
 back and forward long after the window that made it has closed. It is a table
@@ -365,10 +366,14 @@ restored with the data they describe.
 | `forward_json`, `inverse_json`     | the operation and its opposite, as replayable JSON. `NULL` = this step cannot be walked |
 | `branch_name`                      | the name "fork here" gave this node                                                     |
 | `preferred_child`                  | which child redo follows when there is more than one                                    |
+| `group_id`                         | the compound step this node is part of, named by the id of the node that leads it       |
+| `group_summary`                    | on a group's leading node only: the label shown in place of the steps inside it         |
 
 `history_blobs(node_id, name, bytes)` holds what is too big for a JSON
-payload — a deleted document's text, an image's pixels — keyed by node and by
-a name the payload refers to.
+payload — a deleted document's text under `text`, an image's pixels under
+`media` — keyed by node and by a name the payload refers to. The rows go with
+their node: `ON DELETE CASCADE` when compaction drops it, and explicitly when
+compaction clears the payloads of the new root.
 
 `project_meta.history_head` is the id of the node undo would take back next;
 empty means "before the first node". `history_root_child` is the same idea for
@@ -394,6 +399,28 @@ turns out to contain a step with no payload leaves the project untouched.
 making `id` a root with its payloads cleared; it refuses while the project is
 somewhere else in the tree, because that state would become unreachable.
 
+### Compound steps
+
+One thing the user does can be several writes: merging two codes touches both
+sides, importing a folder creates a document per file, rolling sub-codes up
+retags and then deletes each of them, in vivo coding creates a code and
+applies it. Each write still gets its own node — so each still carries an
+exact inverse, and each still reads correctly in the activity feed — but they
+share a `group_id`, and `undo`, `redo` and `checkout` move over the whole
+group at once.
+
+`history::begin_group(conn, summary)` / `end_group(conn)` bracket them, in the
+same per-connection `TEMP` table as the replay flag; `history::group(conn,
+summary, f)` is the closure form, and `relabel_group` renames the step for an
+operation that only knows what it did once it has done it ("Imported a
+codebook: 12 codes created, 3 matched"). The first node recorded inside a
+group lends the group its id and carries its label. `tree()` collapses a group
+into that one node, with `stepCount` saying how many writes are behind it, and
+`checkout` on a node inside a group lands on the whole group rather than
+half-way through one operation. The Tauri commands `history_begin_group` /
+`history_end_group` expose the bracket, for the few multi-step actions the
+frontend still drives (a multi-file import, a push-down, a roll-up).
+
 ### Payload conventions
 
 A payload is `serde_json::Value`, self-contained, and carries the **original
@@ -403,12 +430,25 @@ on a code or an excerpt), because "put it back as it was" includes when it
 last changed. There is one vocabulary per family, and the same shape serves
 both directions:
 
-| Family                               | Payload                                                                                                                                      |
-| ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `code.*`                             | a `CodeOp`: `restore` (a `CodeTreeSnapshot`, plus children to re-parent and tags to take back), `drop`, `delete`, `update`, `move`, `merge`  |
-| `excerpt.*`, `bulk.*`                | an `ExcerptChange`: memos to move, excerpts to delete, ranges to set, snapshots to restore, tags to remove, tags to add, timestamps to touch |
-| `memo.*`                             | a `MemoChange`: memo ids to delete and whole rows to upsert                                                                                  |
-| an operation that writes two entries | the first is `{"op":"linked"}` and the second carries the payloads, so one undo takes the pair back together                                 |
+| Family                             | Payload                                                                                                                                      |
+| ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `code.*`                           | a `CodeOp`: `restore` (a `CodeTreeSnapshot`, plus children to re-parent and tags to take back), `drop`, `delete`, `update`, `move`, `merge`  |
+| `excerpt.*`, `bulk.*`              | an `ExcerptChange`: memos to move, excerpts to delete, ranges to set, snapshots to restore, tags to remove, tags to add, timestamps to touch |
+| `memo.*`                           | a `MemoChange`: memo ids to delete and whole rows to upsert                                                                                  |
+| `document.*`                       | a `DocumentOp`: `restore` (a `DocumentSnapshot`, with the text and the pixels in the node's blobs), `drop`, `rename`, `reorder`              |
+| `descriptor.*`                     | a `DescriptorOp`: `field` (the row, optionally replacing every value), `dropField`, `reorderFields`, `setValue`                              |
+| `set.*`, `filter.*`                | a `SetOp`: `restore`, `drop`, `rename`, `members` (the whole list), `restoreFilter`, `dropFilter`                                            |
+| `framework.*`                      | a `FrameworkOp`: `restore` (the matrix and every summary), `drop`, `configure`, `cell`                                                       |
+| `project.*`, `analysis.*`          | a `ProjectOp`: one `project_meta` key and the value to put there                                                                             |
+| a node whose sibling does the work | `{"op":"noop"}` — the first half of a merge or a split, whose group partner undoes both (schema 8 wrote `{"op":"linked"}`; both are read)    |
+
+A `DocumentSnapshot` is everything deleting a document would take with it: the
+row, the excerpts cut from it with their codes and memos, its descriptor
+values, the document sets it belonged to, the framework summaries written
+against its row and its own memos. Its text and image bytes are _not_ in the
+JSON — they go in `history_blobs`, which is why `DocumentOp::Restore` is
+handed the node it belongs to. `documents::restore` puts it all back under the
+original id, skipping anything whose other side has been deleted since.
 
 A `CodeTreeSnapshot` is everything deleting a branch of the codebook would
 take with it: the rows parents-first, the sibling order of the groups
@@ -428,8 +468,8 @@ activity::record(&tx, "code.moved", "code", Some(id), summary, detail, forward, 
 
 so an entry can never outlive — or be lost by — what it describes. Passing
 `None` for both payloads records a step that reads correctly but cannot be
-undone; that is what the kinds phase 2 still has to cover do today, and what
-every row copied over from `activity_log` looks like.
+undone; nothing does that any more, and it is what every row copied over from
+`activity_log` looks like.
 
 Replaying a node calls the ordinary domain functions, which would log the
 replay as a fresh edit. `history::with_replay` raises a flag in a `TEMP`
@@ -447,31 +487,42 @@ tables per connection and outside the database file, so two people opening the
 same project never see each other's name and the `.misket` is unchanged by it.
 A `&Connection` that was never told (every core test) logs an empty actor.
 
-**Kinds.** The verb is dotted, `noun.past_tense`. Everything in the first four
-groups is undoable; the rest is recorded with no payloads until phase 2.
+**Kinds.** The verb is dotted, `noun.past_tense`. Every one of them is
+undoable; restoring a backup is the only change in the app that is not, and it
+is not recorded here at all, because it replaces the file the history lives in.
 
-| Group        | Kinds                                                                                                                           |
-| ------------ | ------------------------------------------------------------------------------------------------------------------------------- |
-| `code`       | `created`, `updated`, `moved`, `deleted`, `merged_into` (the source), `merged_from` (the survivor)                              |
-| `excerpt`    | `created`, `codes_added`, `code_removed`, `range_updated`, `split`, `split_off`, `merged`, `merged_into`, `deleted`, `restored` |
-| `bulk`       | `excerpts_deleted`, `codes_added`, `codes_removed`, `retagged`, `auto_coded`                                                    |
-| `memo`       | `created`, `updated`, `deleted`, `restored`                                                                                     |
-| `descriptor` | `field_created`, `field_updated`, `field_deleted`, `value_set`                                                                  |
-| `set`        | `created`, `renamed`, `members_changed`, `deleted`                                                                              |
-| `filter`     | `saved`, `deleted`                                                                                                              |
-| `document`   | `imported`, `renamed`, `deleted`                                                                                                |
-| `codebook`   | `imported`                                                                                                                      |
+| Group        | Kinds                                                                                                                           | Undoable |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------- | -------- |
+| `code`       | `created`, `updated`, `moved`, `deleted`, `merged_into` (the source), `merged_from` (the survivor)                              | yes      |
+| `excerpt`    | `created`, `codes_added`, `code_removed`, `range_updated`, `split`, `split_off`, `merged`, `merged_into`, `deleted`, `restored` | yes      |
+| `bulk`       | `excerpts_deleted`, `codes_added`, `codes_removed`, `retagged`, `auto_coded`                                                    | yes      |
+| `memo`       | `created`, `updated`, `deleted`, `restored`                                                                                     | yes      |
+| `document`   | `imported`, `renamed`, `reordered`, `deleted`                                                                                   | yes      |
+| `descriptor` | `field_created`, `field_updated`, `field_deleted`, `fields_reordered`, `value_set`                                              | yes      |
+| `set`        | `created`, `renamed`, `members_changed`, `deleted`                                                                              | yes      |
+| `filter`     | `saved`, `deleted`                                                                                                              | yes      |
+| `framework`  | `matrix_created`, `matrix_updated`, `matrix_deleted`, `cell_set`                                                                | yes      |
+| `codebook`   | `imported` (one group over the `code.*` nodes it wrote)                                                                         | yes      |
+| `project`    | `renamed`                                                                                                                       | yes      |
+| `analysis`   | `stop_words_set`                                                                                                                | yes      |
+| —            | restoring a backup (`backup::restore`)                                                                                          | **no**   |
+
+A node with no `inverse_json` can therefore only be one the schema-8 migration
+copied over from `activity_log` — those predate payloads — or the root
+`compact_before` made, whose past was deliberately thrown away. Undo says so
+rather than "this step cannot be undone".
 
 `target_kind` is `code`, `excerpt`, `document`, `descriptor_field`, `set`,
-`saved_filter`, `codebook` or `project`. Three conventions make the per-target
+`saved_filter`, `framework_matrix`, `codebook` or `project`. Three conventions make the per-target
 timelines readable:
 
 - A **merge** and a **split** write one entry per side (`code.merged_into` on
   the source and `code.merged_from` on the survivor; `excerpt.split` and
   `excerpt.split_off`), because both halves need the event in their own
-  history and one of them is about to disappear. Everything else writes one
-  entry, or none when nothing actually changed (saving a code dialog without
-  an edit, setting a descriptor to the value it already had).
+  history and one of them is about to disappear; they share a `group_id`, so
+  they are one step to undo. Everything else writes one entry, or none when
+  nothing actually changed (saving a code dialog without an edit, setting a
+  descriptor to the value it already had).
 - A **memo** is logged against what it is attached to, not against itself, so
   a code's history shows the note written while it was being renamed.
 - A **bulk** operation targets its kind with a null `target_id` (or, for
