@@ -814,8 +814,8 @@ fn build(
     if first_pull {
         notes.push(
             "This is the first pull from this copy, so there is no shared starting point to \
-             judge edits against: anything you have both changed keeps your version, and is \
-             listed below."
+             judge edits against: anything you have both changed keeps your version, and any \
+             difference is noted here."
                 .into(),
         );
     }
