@@ -80,7 +80,13 @@ export function HistoryDetail({
             ) : null}
             {data.isHead ? (
               <p className="mt-2 text-xs font-medium text-accent">The project is at this step.</p>
-            ) : data.undoable ? null : (
+            ) : data.applied ? null : (
+              <p className="mt-2 text-xs text-fg-muted" data-testid="history-detail-unapplied">
+                Not in force: the project has been taken back past this step, or is on another
+                branch. What it did is described below all the same.
+              </p>
+            )}
+            {data.undoable ? null : (
               <p className="mt-2 text-xs text-fg-muted">
                 This step carries no inverse, so it cannot be replayed backwards.
               </p>

@@ -1646,15 +1646,27 @@ pub fn tree(conn: &Connection) -> Result<Vec<HistoryNodeSummary>> {
 
 // ------------------------------------------------------ one step in detail
 
-/// How a reference reads when what it pointed at is gone.
+/// How a reference reads when it cannot be found.
+///
+/// Two different absences, and saying which is the whole point: a step *on
+/// the way to where the project is* whose target is missing had it deleted
+/// since, while a step the project has undone past, or one on another branch,
+/// simply has not been applied — its excerpt is not there because that
+/// coding is not in force, not because anyone threw it away.
 const DELETED_SUFFIX: &str = "(since deleted)";
+const UNAPPLIED_SUFFIX: &str = "(not in the project right now)";
 
-fn deleted(label: &str) -> String {
+fn missing(label: &str, applied: bool) -> String {
+    let suffix = if applied {
+        DELETED_SUFFIX
+    } else {
+        UNAPPLIED_SUFFIX
+    };
     let label = label.trim();
     if label.is_empty() {
-        DELETED_SUFFIX.to_string()
+        suffix.to_string()
     } else {
-        format!("{label} {DELETED_SUFFIX}")
+        format!("{label} {suffix}")
     }
 }
 
@@ -1711,6 +1723,7 @@ fn resolve_ref(
     id: &str,
     recorded: Option<String>,
     detail: &Value,
+    applied: bool,
 ) -> Option<HistoryRef> {
     let plain = |label: String, exists: bool| HistoryRef {
         kind: kind.to_string(),
@@ -1739,7 +1752,7 @@ fn resolve_ref(
                     ..plain(name, true)
                 },
                 None => plain(
-                    deleted(&recorded.unwrap_or_else(|| "This code".into())),
+                    missing(&recorded.unwrap_or_else(|| "This code".into()), applied),
                     false,
                 ),
             })
@@ -1755,7 +1768,7 @@ fn resolve_ref(
             Some(match name {
                 Some(name) => plain(name, true),
                 None => plain(
-                    deleted(&recorded.unwrap_or_else(|| "This document".into())),
+                    missing(&recorded.unwrap_or_else(|| "This document".into()), applied),
                     false,
                 ),
             })
@@ -1778,7 +1791,7 @@ fn resolve_ref(
                     true,
                 ),
                 None => plain(
-                    deleted(&recorded.unwrap_or_else(|| "This memo".into())),
+                    missing(&recorded.unwrap_or_else(|| "This memo".into()), applied),
                     false,
                 ),
             })
@@ -1826,7 +1839,7 @@ fn resolve_ref(
                         document_id: detail_str(detail, "documentId"),
                         start_pos: start,
                         end_pos: end,
-                        ..plain(deleted(&what), false)
+                        ..plain(missing(&what, applied), false)
                     }
                 }
             })
@@ -1839,7 +1852,7 @@ fn resolve_ref(
 }
 
 /// Every reference one node points at, its own target first.
-fn node_refs(conn: &Connection, node: &HistoryNode) -> Vec<HistoryRef> {
+fn node_refs(conn: &Connection, node: &HistoryNode, applied: bool) -> Vec<HistoryRef> {
     let detail = &node.detail;
     let mut out: Vec<HistoryRef> = vec![];
     fn push(out: &mut Vec<HistoryRef>, r: HistoryRef) {
@@ -1854,7 +1867,7 @@ fn node_refs(conn: &Connection, node: &HistoryNode) -> Vec<HistoryRef> {
             "memo" => detail_str(detail, "title"),
             _ => detail_str(detail, "name"),
         };
-        if let Some(r) = resolve_ref(conn, &node.target_kind, id, recorded, detail) {
+        if let Some(r) = resolve_ref(conn, &node.target_kind, id, recorded, detail, applied) {
             push(&mut out, r);
         }
     }
@@ -1868,7 +1881,7 @@ fn node_refs(conn: &Connection, node: &HistoryNode) -> Vec<HistoryRef> {
                 .and_then(|n| n.get(i))
                 .and_then(Value::as_str)
                 .map(str::to_string);
-            if let Some(r) = resolve_ref(conn, "code", id, recorded, detail) {
+            if let Some(r) = resolve_ref(conn, "code", id, recorded, detail, applied) {
                 push(&mut out, r);
             }
         }
@@ -1886,7 +1899,14 @@ fn node_refs(conn: &Connection, node: &HistoryNode) -> Vec<HistoryRef> {
             continue;
         }
         if let Some(id) = detail_str(detail, key) {
-            if let Some(r) = resolve_ref(conn, "code", &id, detail_str(detail, name_key), detail) {
+            if let Some(r) = resolve_ref(
+                conn,
+                "code",
+                &id,
+                detail_str(detail, name_key),
+                detail,
+                applied,
+            ) {
                 push(&mut out, r);
             }
         }
@@ -1900,17 +1920,25 @@ fn node_refs(conn: &Connection, node: &HistoryNode) -> Vec<HistoryRef> {
             &id,
             detail_str(detail, "documentName"),
             detail,
+            applied,
         ) {
             push(&mut out, r);
         }
     }
     if let Some(id) = detail_str(detail, "excerptId") {
-        if let Some(r) = resolve_ref(conn, "excerpt", &id, None, detail) {
+        if let Some(r) = resolve_ref(conn, "excerpt", &id, None, detail, applied) {
             push(&mut out, r);
         }
     }
     if let Some(id) = detail_str(detail, "memoId") {
-        if let Some(r) = resolve_ref(conn, "memo", &id, detail_str(detail, "title"), detail) {
+        if let Some(r) = resolve_ref(
+            conn,
+            "memo",
+            &id,
+            detail_str(detail, "title"),
+            detail,
+            applied,
+        ) {
             push(&mut out, r);
         }
     }
@@ -1929,6 +1957,10 @@ pub fn node_detail(conn: &Connection, id: i64) -> Result<HistoryNodeDetail> {
     let leader = member_ids.first().copied().unwrap_or(id);
     let node = get(conn, leader)?;
     let head = head(conn)?;
+    // Is this step in force? It is exactly when the project sits at it or
+    // below it: anything the project has undone past, and every step of a
+    // branch it is not on, has not been applied.
+    let applied = head.is_some_and(|h| descendants(conn, leader).is_ok_and(|d| d.contains(&h)));
 
     let mut undoable = true;
     let mut is_head = false;
@@ -1943,7 +1975,7 @@ pub fn node_detail(conn: &Connection, id: i64) -> Result<HistoryNodeDetail> {
             kind: member.kind.clone(),
             summary: member.summary.clone(),
         });
-        for r in node_refs(conn, &member) {
+        for r in node_refs(conn, &member, applied) {
             if !refs.iter().any(|x| x.kind == r.kind && x.id == r.id) {
                 refs.push(r);
             }
@@ -1967,6 +1999,7 @@ pub fn node_detail(conn: &Connection, id: i64) -> Result<HistoryNodeDetail> {
         branch_name: node.branch_name.clone(),
         undoable,
         is_head,
+        applied,
         step_count: member_ids.len() as i64,
         refs,
         members: if member_ids.len() > 1 {
@@ -3710,6 +3743,34 @@ pub(crate) mod tests {
         assert_eq!(k.label, "Access (since deleted)");
         assert!(k.path.is_none());
         assert!(k.color.is_none());
+    }
+
+    #[test]
+    fn node_detail_tells_an_unapplied_step_apart_from_a_deleted_target() {
+        let f = Fixture::new();
+        let c = f.conn();
+        let code = f.code("Access", None);
+        f.excerpt(0, 10, std::slice::from_ref(&code));
+        let coding = head(c).unwrap().unwrap();
+
+        // Applied and present.
+        let now = node_detail(c, coding).unwrap();
+        assert!(now.applied);
+        assert!(find_ref(&now, "excerpt").exists);
+
+        // Undone: the excerpt is not there, but nobody deleted it — the
+        // project is simply at an earlier step.
+        undo(c).unwrap();
+        let undone = node_detail(c, coding).unwrap();
+        assert!(!undone.applied);
+        let e = find_ref(&undone, "excerpt");
+        assert!(!e.exists);
+        assert_eq!(
+            e.label,
+            "the text at 0\u{2013}10 (not in the project right now)"
+        );
+        // The code itself is still there, so it still reads normally.
+        assert!(find_ref(&undone, "code").exists);
     }
 
     #[test]

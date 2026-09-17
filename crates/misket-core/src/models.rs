@@ -1385,6 +1385,11 @@ pub struct HistoryNodeDetail {
     pub branch_name: Option<String>,
     pub undoable: bool,
     pub is_head: bool,
+    /// Whether this step is in force: the project sits at it or below it.
+    /// A step the project has undone past, or one on a branch it is not on,
+    /// is not applied, and a reference of its that cannot be found says so
+    /// rather than claiming the target was deleted.
+    pub applied: bool,
     /// How many writes this step stands for: 1 normally, more for a group.
     pub step_count: i64,
     /// Resolved references, the step's own target first.

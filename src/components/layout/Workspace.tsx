@@ -69,7 +69,10 @@ export function Workspace({ project }: { project: ProjectInfo }) {
           )}
           <ImportDropzone />
         </main>
-        <RightPanel />
+        {/* The history view brings its own panel — what a step did, rather
+            than memos for whatever is selected elsewhere — and two panels
+            either side of the branch graph leave it nothing to draw in. */}
+        {view.kind === "history" ? null : <RightPanel />}
       </div>
       <StatusBar project={project} />
       <CodePalette />

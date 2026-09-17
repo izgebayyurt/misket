@@ -1000,6 +1000,13 @@ export interface HistoryNodeDetail {
   branchName: string | null;
   undoable: boolean;
   isHead: boolean;
+  /**
+   * Whether this step is in force: the project sits at it or below it. A
+   * step the project has undone past, or one on a branch it is not on, is
+   * not applied — and a reference of its that cannot be found says "not in
+   * the project right now" rather than "since deleted".
+   */
+  applied: boolean;
   stepCount: number;
   /** The step's own target first, then everything else it names. */
   refs: HistoryRef[];
