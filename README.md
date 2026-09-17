@@ -179,6 +179,12 @@ keyboard-friendly interface without a subscription.
   fork and name branches, compact old history.
 - **Export** the codebook as CSV or a reusable JSON file, excerpts as CSV, the
   activity log as CSV, or the whole project as JSON.
+- **REFI-QDA (`.qdpx`)**: export the whole project — sources, codebook,
+  codings with the coder who made each one, memos, attributes and sets — in
+  [the interchange format](https://www.qdasoftware.org/) NVivo, ATLAS.ti,
+  MAXQDA, QDA Miner, Quirkos and QualCoder read, and import one back the same
+  way. An import shows you what is in the file before it writes anything,
+  says what it cannot take, and arrives as a single undoable step.
 
 ![Excerpt browser](docs/screenshots/browser.png)
 
