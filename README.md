@@ -130,13 +130,23 @@ keyboard-friendly interface without a subscription.
   under a name to come back to it. Sets and saved filters are included in the
   project JSON export.
 - **Memos** on documents, codes, excerpts and the project.
+- **Coder identity**: every code you apply and every memo you write is signed
+  with who you are — a name, a colour and an id this copy of Misket generates
+  once (Settings → "You"). Two people can code the same passage with the same
+  code without overwriting each other: those are two codings, and the excerpt
+  inspector shows a small mark for each, with "Remove Bob's coding" when it is
+  not yours. Filter the excerpt browser and the analysis views by coder, colour
+  the document's underlines by who coded rather than by which code, and see
+  everyone's share on the overview screen. Counts are over passages, not
+  codings, so agreement never inflates a total. This is the groundwork for
+  merging a colleague's copy of a project and for inter-rater reliability.
 - **Audit trail**: every change — a code created, renamed, moved or merged, an
   excerpt coded, adjusted or deleted, a memo written, a descriptor set — is
   recorded in the project file with who made it and when. The overview screen
   lists the latest hundred, the code and excerpt inspectors show one thing's
   history as a timeline with the values before and after, and the whole log
-  exports as CSV. Set your name under Settings → "Your name (for the activity
-  log)"; without one Misket uses your computer's user name.
+  exports as CSV. Set your name under Settings → "You"; without one Misket uses
+  your computer's user name.
 - **Undo/redo**: everything is undoable — deleting a document with its
   excerpts, changing a descriptor's type, importing a codebook, editing a
   framework matrix, renaming the project — and what you did in one go comes
