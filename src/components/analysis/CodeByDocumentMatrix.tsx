@@ -5,6 +5,7 @@ import { useCodeByDocument, useCodeFrequencies } from "@/queries/analysis";
 import { useCodeTree } from "@/queries/codes";
 import { useDocuments } from "@/queries/documents";
 import { ColorDot } from "@/components/codebook/ColorSwatch";
+import { CoderFilter } from "@/components/coders/CoderMark";
 import { useWorkspace } from "@/state/workspace";
 import { AnalysisToolbar, EmptyNote, ExportCsvButton } from "./shared";
 import { shade } from "./shade";
@@ -14,10 +15,11 @@ const NO_DOCUMENT_FILTER: string[] = [];
 export function CodeByDocumentMatrix() {
   const [includeSub, setIncludeSub] = useState(false);
   const [onlyUsed, setOnlyUsed] = useState(true);
-  const direct = useCodeByDocument();
+  const [coderIds, setCoderIds] = useState<string[]>([]);
+  const direct = useCodeByDocument(coderIds);
   // Descendant-inclusive counts come from the frequency table, where they are
   // already de-duplicated per excerpt.
-  const frequencies = useCodeFrequencies(NO_DOCUMENT_FILTER);
+  const frequencies = useCodeFrequencies(NO_DOCUMENT_FILTER, NO_DOCUMENT_FILTER, coderIds);
   const { data: docs } = useDocuments();
   const tree = useCodeTree();
   const openExcerpts = useWorkspace((s) => s.openExcerpts);
@@ -50,6 +52,7 @@ export function CodeByDocumentMatrix() {
 
   const toolbar = (
     <AnalysisToolbar>
+      <CoderFilter coderIds={coderIds} onChange={setCoderIds} />
       <label className="flex items-center gap-1.5 text-xs">
         <input
           type="checkbox"

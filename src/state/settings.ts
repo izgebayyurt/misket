@@ -1,5 +1,7 @@
 import { create } from "zustand";
 import { getSettings, setSettings } from "@/api/settings";
+import { queryClient } from "@/queries/client";
+import { keys } from "@/queries/keys";
 import type { AppSettings } from "@/api/types";
 import { setTheme } from "./theme";
 
@@ -12,6 +14,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   showParagraphNumbers: true,
   showSpeakerGutter: true,
   coderName: null,
+  coderId: null,
+  coderColor: null,
+  lanesByCoder: false,
 };
 
 const SAVE_DEBOUNCE_MS = 400;
@@ -32,9 +37,15 @@ let saveTimer: ReturnType<typeof setTimeout> | undefined;
 function persist(s: AppSettings) {
   if (saveTimer) clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
-    void setSettings(s).catch(() => {
-      // Best-effort: a failed write just means the next change retries.
-    });
+    void setSettings(s)
+      .then(() => {
+        // The backend also writes the new name and colour onto the open
+        // project's `coders` row, so anything showing them refetches.
+        queryClient.invalidateQueries({ queryKey: keys.coders });
+      })
+      .catch(() => {
+        // Best-effort: a failed write just means the next change retries.
+      });
   }, SAVE_DEBOUNCE_MS);
 }
 

@@ -8,6 +8,7 @@ import { useCodeFrequencies, useCodeTimeline } from "@/queries/analysis";
 import { useCodeTree } from "@/queries/codes";
 import { useDocuments } from "@/queries/documents";
 import { ColorDot } from "@/components/codebook/ColorSwatch";
+import { CoderFilter } from "@/components/coders/CoderMark";
 import { useWorkspace } from "@/state/workspace";
 import { cn } from "@/lib/utils";
 import { AnalysisToolbar, DocumentFilter, EmptyNote, ExportCsvButton } from "./shared";
@@ -25,8 +26,9 @@ interface Row extends CodeFrequency {
 export function CodeFrequencies() {
   const [documentIds, setDocumentIds] = useState<string[]>([]);
   const [documentSetIds, setDocumentSetIds] = useState<string[]>([]);
+  const [coderIds, setCoderIds] = useState<string[]>([]);
   const [sort, setSort] = useState<{ key: SortKey; desc: boolean }>({ key: "code", desc: false });
-  const { data, isPending } = useCodeFrequencies(documentIds, documentSetIds);
+  const { data, isPending } = useCodeFrequencies(documentIds, documentSetIds, coderIds);
   const tree = useCodeTree();
   const { data: docs } = useDocuments();
   const openExcerpts = useWorkspace((s) => s.openExcerpts);
@@ -106,6 +108,7 @@ export function CodeFrequencies() {
           documentSetIds={documentSetIds}
           onSetIdsChange={setDocumentSetIds}
         />
+        <CoderFilter coderIds={coderIds} onChange={setCoderIds} />
         <span className="text-xs text-fg-muted">
           {rows.length} code{rows.length === 1 ? "" : "s"}
         </span>

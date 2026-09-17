@@ -29,6 +29,8 @@ import { useProjectInfo } from "@/queries/project";
 import { useWorkspace } from "@/state/workspace";
 import { useReadingPositions } from "@/state/readingPositions";
 import { useShortcutActions } from "@/state/shortcutActions";
+import { coderIdsOf } from "@/core/coders";
+import { useCoders } from "@/queries/coders";
 import { useSettings } from "@/state/settings";
 import { useTranscript } from "@/queries/transcripts";
 import { SelectionToolbar } from "./SelectionToolbar";
@@ -88,6 +90,8 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
   const [renaming, setRenaming] = useState(false);
   const showParagraphNumbers = useSettings((s) => s.settings.showParagraphNumbers);
   const showSpeakerGutter = useSettings((s) => s.settings.showSpeakerGutter);
+  const lanesByCoder = useSettings((s) => s.settings.lanesByCoder);
+  const { data: coders } = useCoders();
   const { data: transcript } = useTranscript(documentId);
 
   const text = doc?.text ?? "";
@@ -139,7 +143,18 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
     return out;
   }, [showSpeakerGutter, text, turnsU16]);
 
-  const colorById = useMemo(() => new Map((codes ?? []).map((c) => [c.id, c.color])), [codes]);
+  // What an underline lane stands for. Normally a code, and the colour is the
+  // code's; with "colour lanes by coder" on, a coder, and the colour is
+  // theirs. Nothing else changes: segmentation, the `.doc-text` contract and
+  // the per-segment `--l1`…`--l4` variables are the same either way, which is
+  // why the swap happens here rather than in the renderer.
+  const laneColorById = useMemo(
+    () =>
+      lanesByCoder
+        ? new Map((coders ?? []).map((c) => [c.id, c.color]))
+        : new Map((codes ?? []).map((c) => [c.id, c.color])),
+    [codes, coders, lanesByCoder],
+  );
   const shortcutToCode = useMemo(
     () => new Map((codes ?? []).filter((c) => c.shortcut).map((c) => [c.shortcut!, c.id])),
     [codes],
@@ -154,10 +169,10 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
         id: e.id,
         start: cpToUtf16(offsetMap, e.startPos!),
         end: cpToUtf16(offsetMap, e.endPos!),
-        codeIds: e.codeIds,
+        codeIds: lanesByCoder ? coderIdsOf(e) : e.codeIds,
       }))
       .sort((a, b) => a.start - b.start || a.end - b.end);
-  }, [excerpts, offsetMap, text]);
+  }, [excerpts, lanesByCoder, offsetMap, text]);
 
   const excerptById = useMemo(() => new Map((excerpts ?? []).map((e) => [e.id, e])), [excerpts]);
 
@@ -1025,7 +1040,8 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
                 text={p.text}
                 turn={turnByParagraph.get(p.start)}
                 excerpts={previewed}
-                colorById={colorById}
+                colorById={laneColorById}
+                laneNoun={lanesByCoder ? "coders" : "codes"}
                 focusedId={focusedId}
                 flashId={flashId}
                 onSegmentClick={onSegmentClick}
@@ -1159,6 +1175,8 @@ interface ParagraphProps {
   text: string;
   excerpts: RenderableExcerpt[];
   colorById: Map<string, string>;
+  /** What the lanes stand for, for the "+N more" title: codes, or coders. */
+  laneNoun: string;
   focusedId: string | null;
   flashId: string | null;
   /** Set when this paragraph opens a speaker turn and the gutter is on. */
@@ -1222,7 +1240,7 @@ const Paragraph = memo(function Paragraph(p: ParagraphProps) {
             onClick={(e) => p.onSegmentClick(e, seg)}
             title={
               seg.codeIds.length > MAX_LANES
-                ? `+${seg.codeIds.length - MAX_LANES} more codes`
+                ? `+${seg.codeIds.length - MAX_LANES} more ${p.laneNoun}`
                 : undefined
             }
           >
@@ -1236,7 +1254,13 @@ const Paragraph = memo(function Paragraph(p: ParagraphProps) {
 
 /** Re-render a paragraph only when something intersecting it changed. */
 function areParagraphPropsEqual(a: ParagraphProps, b: ParagraphProps): boolean {
-  if (a.start !== b.start || a.end !== b.end || a.text !== b.text || a.colorById !== b.colorById)
+  if (
+    a.start !== b.start ||
+    a.end !== b.end ||
+    a.text !== b.text ||
+    a.colorById !== b.colorById ||
+    a.laneNoun !== b.laneNoun
+  )
     return false;
   // Turning the gutter on or off, or re-reading the document with another
   // transcript format, changes where the segments break.

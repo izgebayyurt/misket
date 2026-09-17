@@ -46,6 +46,7 @@ export function useInvalidateExcerpts() {
     qc.invalidateQueries({ queryKey: keys.excerptQueries });
     qc.invalidateQueries({ queryKey: keys.analysis });
     qc.invalidateQueries({ queryKey: keys.codes });
+    qc.invalidateQueries({ queryKey: keys.coders });
     qc.invalidateQueries({ queryKey: keys.documents });
     qc.invalidateQueries({ queryKey: keys.project });
     qc.invalidateQueries({ queryKey: keys.stats });
@@ -124,11 +125,23 @@ export function useAddExcerptCodes() {
   });
 }
 
+/**
+ * Take a code off an excerpt. `coderId` is undefined for "mine", which is what
+ * the inspector's × does; pass an id to remove somebody else's coding.
+ */
 export function useRemoveExcerptCode() {
   const invalidate = useInvalidateExcerpts();
   return useMutation({
-    mutationFn: ({ id, codeId }: { id: string; documentId: string; codeId: string }) =>
-      api.removeExcerptCode(id, codeId),
+    mutationFn: ({
+      id,
+      codeId,
+      coderId,
+    }: {
+      id: string;
+      documentId: string;
+      codeId: string;
+      coderId?: string | null;
+    }) => api.removeExcerptCode(id, codeId, coderId ?? null),
     onSuccess: (_r, { id, documentId }) => invalidate(documentId, id),
   });
 }

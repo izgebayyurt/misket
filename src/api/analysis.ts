@@ -15,18 +15,33 @@ import type {
  * `documentIds` null or empty means "every document". `documentSetIds` is
  * unioned into `documentIds` on the Rust side, exactly like the excerpt
  * browser: a set that is picked but empty (or unknown) matches nothing.
+ * `coderIds` null or empty means "everyone".
+ *
+ * Every count is over distinct (excerpt, code) pairs, so a passage two people
+ * coded the same way counts once whoever is included.
  */
-export const codeFrequencies = (documentIds?: string[] | null, documentSetIds?: string[] | null) =>
+export const codeFrequencies = (
+  documentIds?: string[] | null,
+  documentSetIds?: string[] | null,
+  coderIds?: string[] | null,
+) =>
   invoke<CodeFrequency[]>("code_frequencies", {
     documentIds: documentIds ?? null,
     documentSetIds: documentSetIds ?? null,
+    coderIds: coderIds ?? null,
   });
-export const coOccurrence = (documentIds?: string[] | null, documentSetIds?: string[] | null) =>
+export const coOccurrence = (
+  documentIds?: string[] | null,
+  documentSetIds?: string[] | null,
+  coderIds?: string[] | null,
+) =>
   invoke<CoOccurrence>("co_occurrence", {
     documentIds: documentIds ?? null,
     documentSetIds: documentSetIds ?? null,
+    coderIds: coderIds ?? null,
   });
-export const codeByDocument = () => invoke<CodeByDocument>("code_by_document");
+export const codeByDocument = (coderIds?: string[] | null) =>
+  invoke<CodeByDocument>("code_by_document", { coderIds: coderIds ?? null });
 
 export const wordFrequencies = (scope: WordFrequencyScope, options: WordFrequencyOptions) =>
   invoke<WordFrequency[]>("word_frequencies", { scope, options });

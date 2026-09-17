@@ -1,6 +1,7 @@
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ColorPicker } from "@/components/codebook/ColorSwatch";
 import { useSettings } from "@/state/settings";
 import type { Theme } from "@/api/types";
 
@@ -137,11 +138,11 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
           </section>
 
           <section>
-            <label
-              htmlFor="settings-coder-name"
-              className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-fg-muted"
-            >
-              Your name (for the activity log)
+            <h3 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-fg-muted">
+              You
+            </h3>
+            <label htmlFor="settings-coder-name" className="mb-1 block text-sm">
+              Name
             </label>
             <Input
               id="settings-coder-name"
@@ -151,9 +152,46 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
               data-testid="settings-coder-name"
             />
             <p className="mt-1 text-xs text-fg-muted">
-              Recorded next to every change you make in this project, so a shared file says who did
-              what. Leave it empty to use your computer's user name.
+              Recorded next to every change you make and on every code you apply, so a shared file
+              says who did what. Leave it empty to use your computer's user name.
             </p>
+
+            <div className="mt-3">
+              <span className="mb-1 block text-sm">Colour</span>
+              <ColorPicker
+                value={settings.coderColor ?? ""}
+                onChange={(coderColor) => update({ coderColor })}
+              />
+              <p className="mt-1 text-xs text-fg-muted">
+                How your coding is marked when more than one person has worked on a project.
+              </p>
+            </div>
+
+            <label className="mt-3 flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={settings.lanesByCoder}
+                onChange={(e) => update({ lanesByCoder: e.target.checked })}
+                data-testid="settings-lanes-by-coder"
+              />
+              Colour document underlines by coder
+            </label>
+
+            <div className="mt-3">
+              <span className="mb-1 block text-sm">Coder id</span>
+              <Input
+                readOnly
+                value={settings.coderId ?? "(not set yet)"}
+                className="font-mono text-xs"
+                onFocus={(e) => e.currentTarget.select()}
+                data-testid="settings-coder-id"
+              />
+              <p className="mt-1 text-xs text-fg-muted">
+                Share this with nobody; it just tells copies apart. It is generated once on this
+                computer and never changes, which is how Misket can later merge a colleague&rsquo;s
+                copy of a project into yours without mixing up whose coding is whose.
+              </p>
+            </div>
           </section>
         </div>
       </DialogContent>

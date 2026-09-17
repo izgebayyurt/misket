@@ -4,6 +4,7 @@ import { matrixCsv } from "@/core/csv";
 import { useCoOccurrence } from "@/queries/analysis";
 import { useCodeTree } from "@/queries/codes";
 import { ColorDot } from "@/components/codebook/ColorSwatch";
+import { CoderFilter } from "@/components/coders/CoderMark";
 import { useWorkspace } from "@/state/workspace";
 import { AnalysisToolbar, DocumentFilter, EmptyNote, ExportCsvButton } from "./shared";
 import { shade } from "./shade";
@@ -12,7 +13,8 @@ export function CoOccurrenceMatrix() {
   const [documentIds, setDocumentIds] = useState<string[]>([]);
   const [documentSetIds, setDocumentSetIds] = useState<string[]>([]);
   const [onlyUsed, setOnlyUsed] = useState(true);
-  const { data, isPending } = useCoOccurrence(documentIds, documentSetIds);
+  const [coderIds, setCoderIds] = useState<string[]>([]);
+  const { data, isPending } = useCoOccurrence(documentIds, documentSetIds, coderIds);
   const tree = useCodeTree();
   const openExcerpts = useWorkspace((s) => s.openExcerpts);
 
@@ -50,6 +52,8 @@ export function CoOccurrenceMatrix() {
           setDocumentIds={setDocumentIds}
           documentSetIds={documentSetIds}
           setDocumentSetIds={setDocumentSetIds}
+          coderIds={coderIds}
+          setCoderIds={setCoderIds}
           onlyUsed={onlyUsed}
           setOnlyUsed={setOnlyUsed}
           csv={csv}
@@ -71,6 +75,8 @@ export function CoOccurrenceMatrix() {
         setDocumentIds={setDocumentIds}
         documentSetIds={documentSetIds}
         setDocumentSetIds={setDocumentSetIds}
+        coderIds={coderIds}
+        setCoderIds={setCoderIds}
         onlyUsed={onlyUsed}
         setOnlyUsed={setOnlyUsed}
         csv={csv}
@@ -171,6 +177,8 @@ function Toolbar({
   setDocumentIds,
   documentSetIds,
   setDocumentSetIds,
+  coderIds,
+  setCoderIds,
   onlyUsed,
   setOnlyUsed,
   csv,
@@ -180,6 +188,8 @@ function Toolbar({
   setDocumentIds: (ids: string[]) => void;
   documentSetIds: string[];
   setDocumentSetIds: (ids: string[]) => void;
+  coderIds: string[];
+  setCoderIds: (ids: string[]) => void;
   onlyUsed: boolean;
   setOnlyUsed: (v: boolean) => void;
   csv: () => string;
@@ -193,6 +203,7 @@ function Toolbar({
         documentSetIds={documentSetIds}
         onSetIdsChange={setDocumentSetIds}
       />
+      <CoderFilter coderIds={coderIds} onChange={setCoderIds} />
       <label className="flex items-center gap-1.5 text-xs">
         <input
           type="checkbox"

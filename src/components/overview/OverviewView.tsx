@@ -6,6 +6,7 @@ import { useCodes, useCodeTree } from "@/queries/codes";
 import { useCreateMemo, useMemos } from "@/queries/memos";
 import { useCodeTimeline } from "@/queries/analysis";
 import { useSets } from "@/queries/sets";
+import { useCoders } from "@/queries/coders";
 import { pathOf } from "@/core/codeTree";
 import { sparklineAreaPath, sparklineLinePath, zeroFillDays } from "@/core/sparkline";
 import { relativeTime } from "@/core/activity";
@@ -148,6 +149,8 @@ export function OverviewView() {
             onOpen={(id) => openExcerpts({ codeIds: [id], includeDescendants: false })}
           />
         </section>
+
+        <CodersOverview onOpen={(id) => openExcerpts({ coderIds: [id] })} />
 
         <section>
           <div className="mb-2 flex items-center justify-between gap-2">
@@ -484,6 +487,50 @@ function TopCodes({
         </li>
       ))}
     </ul>
+  );
+}
+
+/**
+ * Who has worked on this project, and how much of it is theirs. Hidden until
+ * there is more than one coder, because a project with one person in it has
+ * nothing to compare.
+ */
+function CodersOverview({ onOpen }: { onOpen: (coderId: string) => void }) {
+  const { data: coders } = useCoders();
+  if (!coders || coders.length < 2) return null;
+  const max = Math.max(...coders.map((c) => c.codingCount), 1);
+  return (
+    <section data-testid="overview-coders">
+      <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-fg-muted">Coders</h2>
+      <ul className="space-y-1">
+        {coders.map((c) => (
+          <li key={c.id}>
+            <button
+              type="button"
+              onClick={() => onOpen(c.id)}
+              title={`Show excerpts coded by ${c.name}`}
+              className="flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-sm hover:bg-muted"
+              data-testid="coder-row"
+            >
+              <ColorDot color={c.color} />
+              <span className="min-w-0 flex-1 truncate">
+                {c.name}
+                {c.isLocal ? <span className="text-fg-muted"> (you)</span> : null}
+              </span>
+              <span className="h-1.5 w-20 shrink-0 overflow-hidden rounded-full bg-muted">
+                <span
+                  className="block h-full rounded-full"
+                  style={{ width: `${(c.codingCount / max) * 100}%`, background: c.color }}
+                />
+              </span>
+              <span className="w-16 shrink-0 text-right text-xs tabular-nums text-fg-muted">
+                {c.codingCount} coding{c.codingCount === 1 ? "" : "s"}
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 
