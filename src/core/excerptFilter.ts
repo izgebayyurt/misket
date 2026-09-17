@@ -1,4 +1,4 @@
-import type { DescriptorFilter, ExcerptFilter, Query } from "@/api/types";
+import type { DescriptorFilter, ExcerptFilter, Query, WeightRangeFilter } from "@/api/types";
 
 /**
  * The excerpt browser's filter state: every field an `ExcerptFilter` can set,
@@ -23,6 +23,9 @@ export interface FilterState {
   speakers: string[];
   /** Only excerpts coded by these coders; empty means everyone. */
   coderIds: string[];
+  /** Only a coding of one weighted code whose value falls in this range;
+   * `null` is no filter. */
+  weightRange: WeightRangeFilter | null;
 }
 
 export const emptyFilterState: FilterState = {
@@ -38,6 +41,7 @@ export const emptyFilterState: FilterState = {
   query: null,
   speakers: [],
   coderIds: [],
+  weightRange: null,
 };
 
 /** Read a filter (a saved one, or the analysis views' click-through). */
@@ -55,6 +59,7 @@ export function filterState(f: ExcerptFilter | undefined | null): FilterState {
     query: f?.query ?? null,
     speakers: f?.speakers ?? [],
     coderIds: f?.coderIds ?? [],
+    weightRange: f?.weightRange ?? null,
   };
 }
 
@@ -73,6 +78,7 @@ export function toFilter(state: FilterState, limit: number, offset = 0): Excerpt
     query: state.query,
     speakers: state.speakers.length ? state.speakers : null,
     coderIds: state.coderIds.length ? state.coderIds : null,
+    weightRange: state.weightRange,
     limit,
     offset,
   };
@@ -97,6 +103,7 @@ export function isFiltered(state: FilterState): boolean {
     state.overlapsCodeId !== null ||
     state.query !== null ||
     state.speakers.length > 0 ||
-    state.coderIds.length > 0
+    state.coderIds.length > 0 ||
+    state.weightRange !== null
   );
 }

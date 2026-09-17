@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as api from "@/api/analysis";
 import type {
   CrosstabRequest,
+  ExcerptFilter,
   TimelineBucket,
   WordFrequencyOptions,
   WordFrequencyScope,
@@ -98,6 +99,17 @@ export function useCodeByDescriptor(request: CrosstabRequest | null) {
     queryKey: keys.codeByDescriptor(request ?? { fieldId: "" }),
     queryFn: () => api.codeByDescriptor(request!),
     enabled: !!request?.fieldId,
+    placeholderData: (prev) => prev,
+  });
+}
+
+/** Summary statistics for one weighted code's codings, scoped like the
+ * excerpt browser. Disabled until a code is picked. */
+export function useWeightSummary(codeId: string | null, filter: ExcerptFilter) {
+  return useQuery({
+    queryKey: keys.weightSummary(codeId ?? "", filter),
+    queryFn: () => api.weightSummary(codeId!, filter),
+    enabled: !!codeId,
     placeholderData: (prev) => prev,
   });
 }

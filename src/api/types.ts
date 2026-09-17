@@ -131,6 +131,19 @@ export interface Document extends DocumentSummary {
   text: string | null;
 }
 
+/** A numeric scale a code's applications can be rated on ("code weights" in
+ * Dedoose's terms): intensity 1..5, a -2..+2 sentiment, and so on.
+ * `min < max`, `step > 0`, `default` within `[min, max]`. `labels` keys are
+ * the value formatted the same way the value itself displays (usually just
+ * the two ends, e.g. `{"1": "weak", "5": "strong"}`). */
+export interface WeightScale {
+  min: number;
+  max: number;
+  step: number;
+  default: number;
+  labels?: Record<string, string>;
+}
+
 export interface Code {
   id: string;
   parentId: string | null;
@@ -146,6 +159,8 @@ export interface Code {
    * that excerpt is deleted. */
   exampleExcerptId: string | null;
   shortcut: string | null;
+  /** The rating scale this code's codings can carry a weight on, if any. */
+  weightScale?: WeightScale | null;
   sortOrder: number;
   excerptCount: number;
   createdAt: string;
@@ -172,6 +187,9 @@ export interface CodePatch {
   shortcut?: string | null;
   /** `null` clears the example excerpt; omit to leave unchanged. */
   exampleExcerptId?: string | null;
+  /** `null` clears the weight scale (nulling every weight under this code);
+   * omit to leave it unchanged. */
+  weightScale?: WeightScale | null;
 }
 
 export type ChildrenStrategy = "delete" | "promote";
@@ -221,6 +239,9 @@ export interface ExcerptWithCodes {
 export interface Coding {
   codeId: string;
   coderId: string;
+  /** This coder's value on the code's scale, or absent/null if the code has
+   * no scale or this coding has not been rated. */
+  weight?: number | null;
 }
 
 /** A region of an image, as fractions of its width and height (0..1). */
@@ -442,8 +463,17 @@ export interface ExcerptFilter {
    * means everyone, which is the default. It narrows which excerpts come
    * back, not which codes they show. */
   coderIds?: string[] | null;
+  /** Only excerpts with a coding of `codeId` whose weight falls in
+   * `[min, max]` (inclusive). A coding with no weight never matches. */
+  weightRange?: WeightRangeFilter | null;
   limit?: number;
   offset?: number;
+}
+
+export interface WeightRangeFilter {
+  codeId: string;
+  min: number;
+  max: number;
 }
 
 /** `[excerptId, codeId]`. */
@@ -465,6 +495,14 @@ export interface RetagReport {
   moved: string[];
   /** Excerpts that already carried the target, so they only lost the source. */
   alreadyHad: string[];
+}
+
+/** What `setWeightsToExcerpts` actually changed: only codings that existed
+ * and really had a different weight, each with the value it carried before
+ * — undo is the same call with those values put back. */
+export interface BulkWeightReport {
+  /** `[excerptId, coderId, previousWeight]`. */
+  changed: [string, string, number | null][];
 }
 
 /** One range to auto-code (a search match, or one already expanded to its
@@ -611,10 +649,18 @@ export interface CrosstabRow {
   codeId: string;
   /** One count per column, in `columns` order. */
   cells: number[];
+  /** One mean weight per column, present only when the request's `measure`
+   * is `"meanWeight"`. `null` in a cell means the code has no scale, or no
+   * weighted coding fell in that column. */
+  weightCells?: (number | null)[] | null;
 }
 
 /** What a cell counts: excerpts (the default) or distinct documents. */
 export type CrosstabMode = "excerpts" | "documents";
+
+/** What a cell holds: a `count` (the default) or `meanWeight` (on top of the
+ * count, in `weightCells`). */
+export type CrosstabMeasure = "count" | "meanWeight";
 
 export interface CrosstabRequest {
   fieldId: string;
@@ -628,6 +674,7 @@ export interface CrosstabRequest {
   /** Number fields only: equal-width bins between min and max (default 4). */
   bins?: number | null;
   mode?: CrosstabMode | null;
+  measure?: CrosstabMeasure | null;
 }
 
 export interface CodeByDescriptor {
@@ -637,6 +684,25 @@ export interface CodeByDescriptor {
   /** Documents in scope per column, whether or not anything in them is coded. */
   documentsPerColumn: number[];
   mode: CrosstabMode;
+}
+
+/** One value on a weight scale and how many codings carry it, in
+ * `WeightSummary.histogram`, ascending by value. */
+export interface WeightHistogramBin {
+  value: number;
+  count: number;
+}
+
+/** Summary statistics for one weighted code's codings, over whatever
+ * `ExcerptFilter` scoped them to. */
+export interface WeightSummary {
+  /** How many codings of this code, in scope, carry a weight. */
+  count: number;
+  mean: number | null;
+  median: number | null;
+  min: number | null;
+  max: number | null;
+  histogram: WeightHistogramBin[];
 }
 
 // ------------------------------------------- inter-rater reliability (IRR)

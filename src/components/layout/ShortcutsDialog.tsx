@@ -83,6 +83,16 @@ export function ShortcutsDialog({ onClose }: { onClose: () => void }) {
                   </div>
                 ))}
               </dl>
+              {g.title === "Coding" ? (
+                <dl className="space-y-1">
+                  <div className="flex items-center justify-between gap-4 text-sm">
+                    <dt>Rate the last applied code, with an excerpt focused</dt>
+                    <dd className="whitespace-nowrap rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-xs">
+                      1–9
+                    </dd>
+                  </div>
+                </dl>
+              ) : null}
             </section>
           ))}
           <section>

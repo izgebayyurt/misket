@@ -11,7 +11,8 @@ import { SetsPickerGroup } from "@/components/sets/SetsPickerGroup";
 import { CoderFilter } from "@/components/coders/CoderMark";
 import { SavedFilters } from "./SavedFilters";
 import { QueryBuilder } from "./QueryBuilder";
-import type { DescriptorFilter, ExcerptFilter, Query } from "@/api/types";
+import type { DescriptorFilter, ExcerptFilter, Query, WeightRangeFilter } from "@/api/types";
+import { Input } from "@/components/ui/input";
 
 interface Props {
   codeIds: string[];
@@ -42,6 +43,9 @@ interface Props {
   /** Only excerpts coded by these coders; empty means everyone. */
   coderIds: string[];
   onCoderIds: (v: string[]) => void;
+  /** Only a coding of one weighted code whose value falls in this range. */
+  weightRange: WeightRangeFilter | null;
+  onWeightRange: (v: WeightRangeFilter | null) => void;
   /** The filter as it stands, for "Save current filter…". */
   filter: ExcerptFilter;
   onApplyFilter: (filter: ExcerptFilter) => void;
@@ -60,6 +64,12 @@ export function ExcerptFilters(p: Props) {
   const docCount = p.documentIds.length + p.documentSetIds.length;
   const overlapsCode = p.overlapsCodeId
     ? flattenTree(tree).find((n) => n.code.id === p.overlapsCodeId)?.code
+    : undefined;
+  const weightedCodes = flattenTree(tree)
+    .map((n) => n.code)
+    .filter((c) => c.weightScale);
+  const weightCode = p.weightRange
+    ? weightedCodes.find((c) => c.id === p.weightRange!.codeId)
     : undefined;
 
   return (
@@ -217,6 +227,75 @@ export function ExcerptFilters(p: Props) {
         </FilterPicker>
       ) : null}
       <CoderFilter coderIds={p.coderIds} onChange={p.onCoderIds} />
+      {weightedCodes.length > 0 ? (
+        <FilterPicker
+          label={
+            p.weightRange
+              ? `${weightCode?.name ?? p.weightRange.codeId} ${p.weightRange.min}–${p.weightRange.max}`
+              : "Weight between"
+          }
+          active={!!p.weightRange}
+          onClear={() => p.onWeightRange(null)}
+          testId="filter-weight"
+        >
+          {(query) => (
+            <div className="min-w-56">
+              {p.weightRange && weightCode?.weightScale ? (
+                <div className="flex items-center gap-2 border-b border-border px-2 pb-2">
+                  <Input
+                    type="number"
+                    aria-label="Minimum weight"
+                    className="h-7"
+                    min={weightCode.weightScale.min}
+                    max={weightCode.weightScale.max}
+                    step={weightCode.weightScale.step}
+                    value={p.weightRange.min}
+                    onChange={(e) =>
+                      p.onWeightRange({ ...p.weightRange!, min: Number(e.target.value) })
+                    }
+                  />
+                  <span className="text-fg-muted">–</span>
+                  <Input
+                    type="number"
+                    aria-label="Maximum weight"
+                    className="h-7"
+                    min={weightCode.weightScale.min}
+                    max={weightCode.weightScale.max}
+                    step={weightCode.weightScale.step}
+                    value={p.weightRange.max}
+                    onChange={(e) =>
+                      p.onWeightRange({ ...p.weightRange!, max: Number(e.target.value) })
+                    }
+                  />
+                </div>
+              ) : null}
+              {weightedCodes
+                .filter((c) => c.name.toLowerCase().includes(query.toLowerCase()))
+                .map((c) => (
+                  <label
+                    key={c.id}
+                    className="flex cursor-default items-center gap-2 rounded px-2 py-1 hover:bg-muted"
+                  >
+                    <input
+                      type="radio"
+                      name="weight-filter-code"
+                      checked={p.weightRange?.codeId === c.id}
+                      onChange={() =>
+                        p.onWeightRange({
+                          codeId: c.id,
+                          min: c.weightScale!.min,
+                          max: c.weightScale!.max,
+                        })
+                      }
+                    />
+                    <ColorDot color={c.color} />
+                    <span className="truncate">{c.name}</span>
+                  </label>
+                ))}
+            </div>
+          )}
+        </FilterPicker>
+      ) : null}
       <DescriptorConditions conditions={p.descriptors} onChange={p.onDescriptors} />
       <QueryBuilder query={p.query} onChange={p.onQuery} />
       <label className="flex items-center gap-1.5 text-xs">

@@ -1,8 +1,8 @@
 use misket_core::db::{bulk, excerpts};
 use misket_core::models::{
-    ApplyCodesInput, ApplyResult, AutoCodeHit, AutoCodeReport, BulkCodeReport, ExcerptDetail,
-    ExcerptFilter, ExcerptPage, ExcerptSnapshot, ExcerptWithCodes, InVivoResult, MergeResult,
-    RetagReport, SplitResult,
+    ApplyCodesInput, ApplyResult, AutoCodeHit, AutoCodeReport, BulkCodeReport, BulkWeightReport,
+    ExcerptDetail, ExcerptFilter, ExcerptPage, ExcerptSnapshot, ExcerptWithCodes, InVivoResult,
+    MergeResult, RetagReport, SplitResult,
 };
 use misket_core::Result;
 use tauri::State;
@@ -74,6 +74,21 @@ pub fn remove_excerpt_code(
 #[tauri::command]
 pub fn delete_excerpt(state: State<'_, AppState>, id: String) -> Result<ExcerptSnapshot> {
     state.with_project(|p| excerpts::delete(&p.conn, &id))
+}
+
+/// Rate one coding on its code's weight scale, or clear it (`weight: None`).
+/// `coder_id` is `None` for "mine", same convention as
+/// [`remove_excerpt_code`].
+#[tauri::command]
+pub fn set_excerpt_weight(
+    state: State<'_, AppState>,
+    id: String,
+    code_id: String,
+    coder_id: Option<String>,
+    weight: Option<f64>,
+) -> Result<ExcerptWithCodes> {
+    state
+        .with_project(|p| excerpts::set_weight(&p.conn, &id, &code_id, coder_id.as_deref(), weight))
 }
 
 #[tauri::command]
@@ -164,4 +179,16 @@ pub fn auto_code(
     code_id: String,
 ) -> Result<AutoCodeReport> {
     state.with_project(|p| bulk::auto_code(&p.conn, &hits, &code_id))
+}
+
+/// Set the local coder's weight on `code_id` to the same value across many
+/// excerpts (the browser's bulk rating action).
+#[tauri::command]
+pub fn set_weights_to_excerpts(
+    state: State<'_, AppState>,
+    code_id: String,
+    ids: Vec<String>,
+    weight: Option<f64>,
+) -> Result<BulkWeightReport> {
+    state.with_project(|p| bulk::set_weights_many(&p.conn, &code_id, &ids, weight))
 }

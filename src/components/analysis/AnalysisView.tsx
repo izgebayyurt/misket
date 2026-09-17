@@ -7,6 +7,7 @@ import { CodeByDocumentMatrix } from "./CodeByDocumentMatrix";
 import { FrameworkMatrixView } from "./FrameworkMatrixView";
 import { CodeByDescriptorMatrix } from "./CodeByDescriptorMatrix";
 import { WordFrequencies } from "./WordFrequencies";
+import { WeightsView } from "./WeightsView";
 
 const TABS: { id: AnalysisTab; label: string }[] = [
   { id: "frequencies", label: "Frequencies" },
@@ -15,6 +16,7 @@ const TABS: { id: AnalysisTab; label: string }[] = [
   { id: "framework", label: "Framework" },
   { id: "descriptor", label: "By descriptor" },
   { id: "words", label: "Words" },
+  { id: "weights", label: "Weights" },
 ];
 
 export function AnalysisView({ tab }: { tab: AnalysisTab }) {
@@ -50,6 +52,8 @@ export function AnalysisView({ tab }: { tab: AnalysisTab }) {
           <FrameworkMatrixView />
         ) : tab === "descriptor" ? (
           <CodeByDescriptorMatrix />
+        ) : tab === "weights" ? (
+          <WeightsView />
         ) : (
           <WordFrequencies />
         )}

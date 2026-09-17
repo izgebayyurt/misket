@@ -17,6 +17,7 @@ const MIGRATIONS: &[(i64, &str)] = &[
     (10, include_str!("migrations/0010_transcripts.sql")),
     (11, include_str!("migrations/0011_coders.sql")),
     (12, include_str!("migrations/0012_sync_points.sql")),
+    (13, include_str!("migrations/0013_weights.sql")),
 ];
 
 pub fn latest_version() -> i64 {
@@ -88,6 +89,7 @@ mod tests {
         // Put the table back the way schema 10 had it, with two codings in it.
         conn.execute_batch(
             "DROP TABLE sync_points;
+             ALTER TABLE codes DROP COLUMN weight_scale_json;
              DROP INDEX excerpt_codes_coder_idx;
              DROP INDEX excerpt_codes_code_idx;
              DROP TABLE excerpt_codes;

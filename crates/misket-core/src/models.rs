@@ -134,6 +134,25 @@ pub struct Document {
 
 // -------------------------------------------------------------------- codes
 
+/// A numeric scale a code's applications can be rated on: intensity 1..5, a
+/// -2..+2 sentiment, and so on ("code weights" in Dedoose's terms). Validated
+/// by `db::codes::validate_weight_scale`: `min < max`, `step > 0`, `default`
+/// within `[min, max]`.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct WeightScale {
+    pub min: f64,
+    pub max: f64,
+    pub step: f64,
+    pub default: f64,
+    /// Labels for particular values (usually just the two ends: `"1" ->
+    /// "weak"`, `"5" -> "strong"`), keyed by the value formatted the same way
+    /// `db::codes::format_weight` would. A `BTreeMap` so the JSON serializes
+    /// in a stable, numerically sorted order.
+    #[serde(default)]
+    pub labels: std::collections::BTreeMap<String, String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Code {
@@ -151,6 +170,9 @@ pub struct Code {
     /// that excerpt clears the pointer (`ON DELETE SET NULL`).
     pub example_excerpt_id: Option<String>,
     pub shortcut: Option<String>,
+    /// The rating scale this code's codings can carry a weight on, if any.
+    #[serde(default)]
+    pub weight_scale: Option<WeightScale>,
     pub sort_order: i64,
     pub excerpt_count: i64,
     pub created_at: String,
@@ -195,6 +217,12 @@ pub struct CodePatch {
     pub shortcut: Option<Option<String>>,
     #[serde(default, with = "double_option")]
     pub example_excerpt_id: Option<Option<String>>,
+    /// Double option: absent leaves the scale alone, `null` clears it
+    /// (nulling every weight recorded under this code), and a value replaces
+    /// it (see `db::codes::update` for what happens to weights that no
+    /// longer fit).
+    #[serde(default, with = "double_option")]
+    pub weight_scale: Option<Option<WeightScale>>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
@@ -314,11 +342,20 @@ pub struct ApplyCodesInput {
 /// One `excerpt_codes` row as the frontend reads it: a code applied to this
 /// excerpt by one coder. Two coders who applied the same code are two
 /// codings and one entry in `code_ids`.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+///
+/// No longer `Eq`/`Hash` since `weight` joined the row: nothing needs a
+/// `Coding` as a hash key, and comparing two codings by identity (same code,
+/// same coder) rather than by their current weight is what callers that used
+/// to `contains`/`==` a `Coding` actually want (see `excerpts::merge_adjacent`).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Coding {
     pub code_id: String,
     pub coder_id: String,
+    /// This coder's value on the code's scale, or `None` if the code has no
+    /// scale or this coding has not been rated.
+    #[serde(default)]
+    pub weight: Option<f64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -543,10 +580,23 @@ pub struct ExcerptFilter {
     /// It narrows which excerpts come back, not which codes they show.
     #[serde(default)]
     pub coder_ids: Option<Vec<String>>,
+    /// Only excerpts with a coding of `code_id` whose weight falls in
+    /// `[min, max]` (inclusive). A coding with no weight never matches.
+    #[serde(default)]
+    pub weight_range: Option<WeightRangeFilter>,
     #[serde(default = "default_limit")]
     pub limit: i64,
     #[serde(default)]
     pub offset: i64,
+}
+
+/// See [`ExcerptFilter::weight_range`].
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct WeightRangeFilter {
+    pub code_id: String,
+    pub min: f64,
+    pub max: f64,
 }
 
 fn default_true() -> bool {
@@ -571,6 +621,7 @@ impl Default for ExcerptFilter {
             query: None,
             speakers: None,
             coder_ids: None,
+            weight_range: None,
             limit: default_limit(),
             offset: 0,
         }
@@ -613,6 +664,17 @@ pub struct BulkCodeReport {
     pub pairs: Vec<(String, String)>,
 }
 
+/// What `db::bulk::set_weights_many` actually changed: only the codings that
+/// existed and really had a different weight, each with the value it carried
+/// before, so undo is the same call with those values put back.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct BulkWeightReport {
+    /// `(excerpt_id, coder_id, previous_weight)`, one entry per coding this
+    /// call actually changed.
+    pub changed: Vec<(String, String, Option<f64>)>,
+}
+
 /// Moving every excerpt from one code to another.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
@@ -653,6 +715,31 @@ pub struct AutoCodeReport {
 }
 
 // ----------------------------------------------------------------- analysis
+
+/// One value on a weight scale and how many codings carry it. `histogram` in
+/// [`WeightSummary`] has one entry per distinct value actually recorded, in
+/// ascending order, so a scale nobody has used at the low end simply has no
+/// bin there.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct WeightHistogramBin {
+    pub value: f64,
+    pub count: i64,
+}
+
+/// Summary statistics for one weighted code's codings, over whatever
+/// [`ExcerptFilter`] scoped them to. See `db::analysis::weight_summary`.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct WeightSummary {
+    /// How many codings of this code, in scope, carry a weight.
+    pub count: i64,
+    pub mean: Option<f64>,
+    pub median: Option<f64>,
+    pub min: Option<f64>,
+    pub max: Option<f64>,
+    pub histogram: Vec<WeightHistogramBin>,
+}
 
 /// One row of the code frequency table. `own` counts excerpts tagged with the
 /// code itself; `with_descendants`, `document_count` and `per_document`
@@ -766,6 +853,12 @@ pub struct CrosstabRequest {
     /// What a cell counts: `excerpts` (the default) or `documents`.
     #[serde(default)]
     pub mode: Option<String>,
+    /// What a cell holds: `count` (the default, `mode` above) or
+    /// `meanWeight` — the mean of the row code's weights among the excerpts
+    /// that column would otherwise count. A row whose code has no scale, or
+    /// no weighted codings in a column, gets `null` there.
+    #[serde(default)]
+    pub measure: Option<String>,
 }
 
 impl Default for CrosstabRequest {
@@ -779,6 +872,7 @@ impl Default for CrosstabRequest {
             coder_ids: None,
             bins: None,
             mode: None,
+            measure: None,
         }
     }
 }
@@ -805,6 +899,11 @@ pub struct CrosstabColumn {
 pub struct CrosstabRow {
     pub code_id: String,
     pub cells: Vec<i64>,
+    /// One mean weight per column, present (and non-empty) only when the
+    /// request's `measure` is `"meanWeight"`. `None` in a cell means the
+    /// code has no scale, or no weighted coding fell in that column.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub weight_cells: Option<Vec<Option<f64>>>,
 }
 
 /// Codes against the values of one descriptor field. See
@@ -1349,6 +1448,11 @@ pub struct CodeRow {
     pub inclusion: String,
     pub exclusion: String,
     pub shortcut: Option<String>,
+    /// The scale this code carries, if any, as `Code::weightScale` — kept as
+    /// its own field (rather than reusing `Code`) so a snapshot round-trips
+    /// exactly what was in `codes.weight_scale_json`.
+    #[serde(default)]
+    pub weight_scale: Option<WeightScale>,
     pub sort_order: i64,
     pub created_at: String,
     pub updated_at: String,
@@ -1375,6 +1479,11 @@ pub struct TagRow {
     #[serde(default)]
     pub coder_id: String,
     pub created_at: String,
+    /// Absent (rather than `None`) in a payload written before schema 13,
+    /// which is exactly what should happen when replaying it: the coding had
+    /// no weight yet.
+    #[serde(default)]
+    pub weight: Option<f64>,
 }
 
 /// One `framework_cells` row.

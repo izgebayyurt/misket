@@ -39,6 +39,7 @@ describe("filterState", () => {
       query: QUERY,
       speakers: ["P1"],
       coderIds: ["ada"],
+      weightRange: { codeId: "w1", min: 2, max: 4 },
       limit: 10,
     });
     expect(state).toEqual({
@@ -54,6 +55,7 @@ describe("filterState", () => {
       query: QUERY,
       speakers: ["P1"],
       coderIds: ["ada"],
+      weightRange: { codeId: "w1", min: 2, max: 4 },
     });
   });
 
@@ -84,6 +86,7 @@ describe("toFilter", () => {
       query: null,
       speakers: null,
       coderIds: null,
+      weightRange: null,
       limit: 200,
       offset: 0,
     });
@@ -143,6 +146,7 @@ describe("counts and isFiltered", () => {
       { descriptors: [{ fieldId: "f", op: "empty" as const, values: [] }] },
       { query: QUERY },
       { coderIds: ["ada"] },
+      { weightRange: { codeId: "w1", min: 1, max: 5 } },
     ]) {
       expect(isFiltered({ ...emptyFilterState, ...patch })).toBe(true);
     }

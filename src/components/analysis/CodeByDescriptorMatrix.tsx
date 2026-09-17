@@ -8,7 +8,8 @@ import { useProjectSpeakers } from "@/queries/transcripts";
 import { ColorDot } from "@/components/codebook/ColorSwatch";
 import { FilterPicker } from "@/components/ui/filter-picker";
 import { useWorkspace } from "@/state/workspace";
-import type { CrosstabMode, CrosstabRequest } from "@/api/types";
+import type { CrosstabMeasure, CrosstabMode, CrosstabRequest } from "@/api/types";
+import { formatWeight } from "@/core/weights";
 import { CoderFilter } from "@/components/coders/CoderMark";
 import { AnalysisToolbar, DocumentFilter, EmptyNote, ExportCsvButton } from "./shared";
 import { shade } from "./shade";
@@ -39,6 +40,7 @@ export function CodeByDescriptorMatrix() {
   const [documentSetIds, setDocumentSetIds] = useState<string[]>([]);
   const [coderIds, setCoderIds] = useState<string[]>([]);
   const [mode, setMode] = useState<CrosstabMode>("excerpts");
+  const [measure, setMeasure] = useState<CrosstabMeasure>("count");
   const [bins, setBins] = useState(4);
   const tree = useCodeTree();
   const openExcerpts = useWorkspace((s) => s.openExcerpts);
@@ -80,9 +82,21 @@ export function CodeByDescriptorMatrix() {
             coderIds: coderIds.length ? coderIds : null,
             bins: isNumber ? bins : null,
             mode,
+            measure,
           }
         : null,
-    [field, codeIds, includeSub, documentIds, documentSetIds, coderIds, isNumber, bins, mode],
+    [
+      field,
+      codeIds,
+      includeSub,
+      documentIds,
+      documentSetIds,
+      coderIds,
+      isNumber,
+      bins,
+      mode,
+      measure,
+    ],
   );
   const { data, isPending } = useCodeByDescriptor(request);
 
@@ -91,15 +105,22 @@ export function CodeByDescriptorMatrix() {
     return (id: string) => byId.get(id);
   }, [tree]);
 
+  const isWeight = measure === "meanWeight";
+
   const { rows, columns, columnTotals, max } = useMemo(() => {
     const columns = data?.columns ?? [];
     // Rows with nothing in them are noise; the picker is how you get them back.
     const rows = (data?.rows ?? []).filter((r) => r.cells.some((n) => n > 0));
     const columnTotals = columns.map((_, i) => rows.reduce((sum, r) => sum + r.cells[i]!, 0));
     let max = 0;
-    for (const r of rows) for (const n of r.cells) max = Math.max(max, n);
+    if (isWeight) {
+      for (const r of rows)
+        for (const w of r.weightCells ?? []) if (w != null) max = Math.max(max, w);
+    } else {
+      for (const r of rows) for (const n of r.cells) max = Math.max(max, n);
+    }
     return { rows, columns, columnTotals, max };
-  }, [data]);
+  }, [data, isWeight]);
 
   const unit = data?.mode === "documents" ? "document" : "excerpt";
 
@@ -189,6 +210,16 @@ export function CodeByDescriptorMatrix() {
       >
         <option value="excerpts">Count excerpts</option>
         <option value="documents">Count documents</option>
+      </select>
+      <select
+        className="rounded-md border border-border bg-bg px-2 py-1 text-xs"
+        value={measure}
+        onChange={(e) => setMeasure(e.target.value as CrosstabMeasure)}
+        aria-label="Measure"
+        data-testid="crosstab-measure"
+      >
+        <option value="count">Counts</option>
+        <option value="meanWeight">Mean weight</option>
       </select>
       {isNumber ? (
         <label className="flex items-center gap-1.5 text-xs text-fg-muted">
@@ -285,6 +316,7 @@ export function CodeByDescriptorMatrix() {
                     </th>
                     {r.cells.map((n, i) => {
                       const column = columns[i]!;
+                      const weight = r.weightCells?.[i] ?? null;
                       return (
                         <td
                           key={column.label}
@@ -292,10 +324,16 @@ export function CodeByDescriptorMatrix() {
                             "h-7 cursor-default border border-border/60 px-2 text-center tabular-nums " +
                             (n ? "hover:outline hover:outline-accent" : "")
                           }
-                          style={shade(n, max)}
-                          title={`${pathOf(tree, r.codeId)} × ${column.label}: ${n} ${unit}${
-                            n === 1 ? "" : "s"
-                          }`}
+                          style={shade(isWeight ? (weight ?? 0) : n, max)}
+                          title={
+                            isWeight
+                              ? weight != null
+                                ? `${pathOf(tree, r.codeId)} × ${column.label}: mean weight ${formatWeight(weight)}`
+                                : `${pathOf(tree, r.codeId)} × ${column.label}: no rated codings`
+                              : `${pathOf(tree, r.codeId)} × ${column.label}: ${n} ${unit}${
+                                  n === 1 ? "" : "s"
+                                }`
+                          }
                           onClick={() => {
                             // The "(no speaker)" column has no filter that
                             // reproduces it, so it carries no values and does
@@ -321,7 +359,7 @@ export function CodeByDescriptorMatrix() {
                           }}
                           data-testid={n ? "crosstab-cell" : undefined}
                         >
-                          {n || ""}
+                          {isWeight ? (weight != null ? formatWeight(weight) : "–") : n || ""}
                         </td>
                       );
                     })}

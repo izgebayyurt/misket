@@ -5,7 +5,9 @@ import type {
   CodeFrequency,
   CoOccurrence,
   CrosstabRequest,
+  ExcerptFilter,
   TimelineBucket,
+  WeightSummary,
   WordFrequency,
   WordFrequencyOptions,
   WordFrequencyScope,
@@ -59,3 +61,8 @@ export const codeTimeline = (codeId: string, includeDescendants: boolean, bucket
 /** Codes against one descriptor field's values (the mixed-methods cross-tab). */
 export const codeByDescriptor = (request: CrosstabRequest) =>
   invoke<CodeByDescriptor>("code_by_descriptor", { request });
+
+/** Summary statistics for one weighted code's codings, scoped like the
+ * excerpt browser. */
+export const weightSummary = (codeId: string, filter: ExcerptFilter) =>
+  invoke<WeightSummary>("weight_summary", { codeId, filter });
