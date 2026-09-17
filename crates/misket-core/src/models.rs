@@ -1531,12 +1531,6 @@ pub struct MergeCount {
     pub new: i64,
 }
 
-impl MergeCount {
-    pub fn total_incoming(&self) -> i64 {
-        self.new
-    }
-}
-
 /// One coder in the other copy, and how much of it is theirs.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]

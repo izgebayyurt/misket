@@ -1414,7 +1414,6 @@ fn build(
         .iter()
         .map(|v| (value_key(&v.document_id, &v.field_id), v))
         .collect();
-    let our_doc_ids: HashSet<&str> = ours.documents.iter().map(|d| d.id.as_str()).collect();
     for v in &theirs.values {
         let document_id = Mapping::id(&map.document, &v.document_id);
         let field_id = Mapping::id(&map.field, &v.field_id);
@@ -1474,7 +1473,6 @@ fn build(
                 }
             }
         }
-        let _ = &our_doc_ids;
     }
 
     // --------------------------------------------------------------- sets
