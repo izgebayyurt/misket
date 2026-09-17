@@ -156,7 +156,51 @@
           <strong>Project</strong> — a full JSON export of the project's documents, codes, coders,
           excerpts (each with who applied which code), memos, descriptors and activity log.
         </li>
+        <li>
+          <strong>REFI-QDA</strong> — a <code>.qdpx</code> file in the interchange format the QDA
+          vendors agreed on. See below.
+        </li>
       </ul>
+
+      <h2 id="refi-qda">Taking your project to another tool (REFI-QDA)</h2>
+      <p>
+        <a href="https://www.qdasoftware.org/">REFI-QDA</a> is the interchange standard NVivo,
+        ATLAS.ti, MAXQDA, QDA Miner, Quirkos and QualCoder read and write. A <code>.qdpx</code> file
+        is a ZIP holding the project as XML plus a copy of every source, so it is a self-contained,
+        readable archive whatever you open it with next — including nothing at all, in ten years'
+        time.
+      </p>
+      <p>
+        <strong>Export &gt; REFI-QDA (.qdpx)…</strong> writes your documents and pictures, the
+        codebook with its colours and definitions, every coding with the coder who made it, your
+        memos, your document attributes and your sets. Code shortcuts, framework matrices, saved
+        filters and the undo history have no equivalent in the standard and stay behind; the toast
+        tells you exactly what was left out rather than letting you find out later.
+      </p>
+      <p>
+        <strong>Import REFI-QDA…</strong> reads a file from any of those tools and shows you what is
+        in it — sources, codes, codings, users, notes, variables, sets — before writing anything,
+        along with a list of what it cannot take (PDF and audio sources, cases, links, concept
+        maps). Then you choose:
+      </p>
+      <ul>
+        <li>
+          <strong>Merge into this project</strong> — documents you already have are matched by their
+          text, codes by their full name, so a colleague's <code>.qdpx</code> of the same study
+          lands on the material you are already working on instead of duplicating it.
+        </li>
+        <li>
+          <strong>Take it as this project</strong> — for an empty project: everything arrives with
+          the identities the file gives it.
+        </li>
+      </ul>
+      <p>
+        Either way the whole import is a single undoable step, so one <kbd>Ctrl</kbd>/<kbd>⌘</kbd> +
+        <kbd>Z</kbd> takes the entire file back out if it is not what you expected. Text arrives
+        normalised the way any Misket document does — line endings collapsed, Unicode composed — and
+        the imported codings are moved to match, so a selection made in a tool that counts
+        differently still highlights the right words.
+      </p>
 
       <h2>Nothing leaves your machine</h2>
       <p>

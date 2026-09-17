@@ -1384,7 +1384,7 @@ fn apply(conn: &Connection, node_id: i64, kind: &str, payload: &Value) -> Result
         "project.renamed" | "analysis.stop_words_set" => {
             serde_json::from_value::<ProjectOp>(payload.clone())?.run(conn)
         }
-        "project.pulled" | "project.sync_point" => {
+        "project.pulled" | "project.sync_point" | "project.refi_imported" => {
             serde_json::from_value::<PullChange>(payload.clone())?.run(conn)
         }
         "framework.matrix_created"

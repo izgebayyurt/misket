@@ -25,6 +25,7 @@ export const keys = {
   descriptorMatrix: ["descriptorMatrix"] as const,
   importableFiles: (dir: string, recursive: boolean) =>
     ["importableFiles", dir, recursive] as const,
+  tessdataLanguages: ["tessdataLanguages"] as const,
   documentExcerpts: (documentId: string) => ["excerpts", documentId] as const,
   excerpt: (id: string) => ["excerpt", id] as const,
   excerptQuery: (filter: ExcerptFilter) => ["excerptQuery", filter] as const,

@@ -12,6 +12,8 @@ pub struct E2eConfig {
     /// A copy to pull from, so the smoke test never opens a native file
     /// chooser (`MISKET_E2E_PULL`).
     pub pull_path: Option<String>,
+    /// A `.qdpx` to import, for the same reason (`MISKET_E2E_REFI`).
+    pub refi_path: Option<String>,
 }
 
 #[tauri::command]
@@ -35,6 +37,9 @@ pub fn get_e2e_config() -> E2eConfig {
             })
             .unwrap_or_default(),
         pull_path: std::env::var("MISKET_E2E_PULL")
+            .ok()
+            .filter(|s| !s.is_empty()),
+        refi_path: std::env::var("MISKET_E2E_REFI")
             .ok()
             .filter(|s| !s.is_empty()),
     }

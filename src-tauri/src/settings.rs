@@ -73,6 +73,13 @@ pub struct AppSettings {
     /// are what most people are reading for.
     #[serde(default)]
     pub lanes_by_coder: bool,
+    /// Extra Tesseract language codes to use for PDF OCR, on top of the
+    /// bundled `eng`. Each one needs a matching `<code>.traineddata` file
+    /// dropped into the app's tessdata folder (see `commands::ocr` and
+    /// `docs/OCR.md`) — this list is just which of those the person wants
+    /// active, not what is available.
+    #[serde(default)]
+    pub ocr_languages: Vec<String>,
 }
 
 impl Default for AppSettings {
@@ -89,6 +96,7 @@ impl Default for AppSettings {
             coder_id: None,
             coder_color: None,
             lanes_by_coder: false,
+            ocr_languages: Vec::new(),
         }
     }
 }
@@ -220,6 +228,7 @@ mod tests {
             coder_id: Some("11111111-2222-3333-4444-555555555555".into()),
             coder_color: Some("#5CB85C".into()),
             lanes_by_coder: true,
+            ocr_languages: vec!["tur".into()],
         };
         write(&path, &settings).unwrap();
         assert_eq!(read(&path).unwrap(), settings);
@@ -248,6 +257,7 @@ mod tests {
         assert_eq!(settings.coder_name, None);
         assert_eq!(settings.coder_id, None);
         assert!(!settings.lanes_by_coder);
+        assert!(settings.ocr_languages.is_empty());
     }
 
     #[test]
