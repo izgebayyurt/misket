@@ -1689,6 +1689,34 @@ mod tests {
             assert!(wf(&rows, "漢字学").is_some());
         }
 
+        /// The text-only analyses are text-only on purpose: a recording has
+        /// no words to count and no text to search, and asking for them must
+        /// simply leave it out rather than fail or count its name.
+        #[test]
+        fn recordings_and_images_are_left_out_of_the_text_analyses() {
+            use crate::db::{media, search};
+
+            let p = OpenProject::in_memory("t").unwrap();
+            documents::create(&p.conn, new_doc("Trust came up twice.")).unwrap();
+            let dir = tempfile::tempdir().unwrap();
+            let file = media::tests::fake_file(dir.path(), "Trust interview.mp3", 2048, 4);
+            media::create(&p.conn, None, media::tests::new_media(&file)).unwrap();
+            documents::create_image(&p.conn, documents::tests::new_image(b"\x89PNG")).unwrap();
+
+            let rows = word_frequencies(
+                &p.conn,
+                &WordFrequencyScope::default(),
+                &WordFrequencyOptions::default(),
+            )
+            .unwrap();
+            assert_eq!(wf(&rows, "trust").unwrap().count, 1, "only the transcript");
+            assert!(wf(&rows, "interview").is_none(), "not a document's name");
+
+            // And searching the project never opens a media file.
+            let hits = search::search_project(&p.conn, "trust", 10, false, false).unwrap();
+            assert_eq!(hits.len(), 1, "only the transcript is searched");
+        }
+
         #[test]
         fn min_length_option_is_honoured() {
             let p = OpenProject::in_memory("t").unwrap();

@@ -22,6 +22,10 @@ pub struct AppState {
     /// lets the protocol answer `/probe/<token>` for exactly the files the
     /// user just picked, without letting the page name a path of its own.
     pub probes: Mutex<VecDeque<(String, PathBuf)>>,
+    /// Where a media element can reach the open project's recordings: the
+    /// loopback HTTP server's origin and this run's token (`crate::media`).
+    /// `None` only if the listener could not be bound at all.
+    pub media_server: Mutex<Option<(String, String)>>,
 }
 
 impl AppState {

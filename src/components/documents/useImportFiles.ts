@@ -2,7 +2,7 @@ import { useCallback } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { readSourceFile } from "@/api/project";
 import { listDocuments, stageMediaProbe } from "@/api/documents";
-import { probeUrl } from "@/api/media";
+import { loadMediaServer, probeUrl } from "@/api/media";
 import {
   baseName,
   extensionOf,
@@ -326,7 +326,12 @@ async function measureMedia(path: string): Promise<MediaInfo | null> {
   } catch {
     return null;
   }
-  const measured = await measureElement(probe.mime, probeUrl(probe.token));
+  // A recording is measured through the loopback server, for the same reason
+  // it is played through it (`src/api/media.ts`).
+  if (!(await loadMediaServer())) return null;
+  const url = probeUrl(probe.token);
+  if (!url) return null;
+  const measured = await measureElement(probe.mime, url);
   if (!measured) return null;
   return {
     mime: probe.mime,

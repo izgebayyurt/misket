@@ -10,6 +10,27 @@ use tauri::State;
 
 use crate::state::AppState;
 
+/// The loopback origin and token the page builds media URLs from.
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MediaServerInfo {
+    pub origin: String,
+    pub token: String,
+}
+
+/// Where a media element can reach this project's recordings.
+///
+/// A recording cannot be played from a custom URI scheme on Linux, so it is
+/// served over a loopback HTTP listener bound at startup; this hands the page
+/// that listener's origin and this run's token (`crate::media`). `None` means
+/// the listener could not be bound, and the viewer says so rather than
+/// showing a player that will never start.
+#[tauri::command]
+pub fn media_server(state: State<'_, AppState>) -> Option<MediaServerInfo> {
+    let found = state.media_server.lock().ok().and_then(|slot| slot.clone());
+    found.map(|(origin, token)| MediaServerInfo { origin, token })
+}
+
 /// Stage a picked file so the webview can measure it before importing.
 ///
 /// A recording's duration only a decoder knows, and the file is not a

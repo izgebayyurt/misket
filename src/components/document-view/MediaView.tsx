@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Pause, Play } from "lucide-react";
-import { mediaUrl } from "@/api/media";
+import { loadMediaServer, mediaFileUrl, mediaServer } from "@/api/media";
 import { useCodes } from "@/queries/codes";
 import { useApplyCodes, useDeleteExcerpt, useDocumentExcerpts } from "@/queries/excerpts";
 import {
@@ -11,6 +11,8 @@ import {
 } from "@/queries/documents";
 import { useRelinkMedia } from "@/components/documents/useRelinkMedia";
 import { useProjectInfo } from "@/queries/project";
+import { useQueryClient } from "@tanstack/react-query";
+import { keys } from "@/queries/keys";
 import {
   clampPosition,
   downsamplePeaks,
@@ -92,6 +94,7 @@ export function MediaView({ documentId, focusExcerptId }: Props) {
   const setPeaks = useSetMediaPeaks();
   const setThumbnail = useSetExcerptThumbnail();
   const setMeasurements = useSetMediaMeasurements();
+  const qc = useQueryClient();
 
   const rootRef = useRef<HTMLDivElement>(null);
   // The keys read the position from a ref: `timeupdate` fires several times a
@@ -110,6 +113,9 @@ export function MediaView({ documentId, focusExcerptId }: Props) {
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(1);
   const [playbackError, setPlaybackError] = useState<string | null>(null);
+  // Where a media element can reach a recording (`src/api/media.ts`). Asked
+  // for once per run; `null` while the answer is still on its way.
+  const [serverReady, setServerReady] = useState(() => !!mediaServer());
   const [renaming, setRenaming] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
@@ -117,7 +123,26 @@ export function MediaView({ documentId, focusExcerptId }: Props) {
   const durationMs = media?.durationMs ?? 0;
   const isVideo = isVideoMime(media?.mime ?? "");
   const missing = doc?.mediaMissing ?? false;
+  const ext = extensionOf(doc?.sourcePath ?? "");
   const projectPath = projectInfo?.path ?? "";
+
+  useEffect(() => {
+    if (serverReady) return;
+    let cancelled = false;
+    void loadMediaServer().then((info) => {
+      if (cancelled) return;
+      if (info) setServerReady(true);
+      else
+        setPlaybackError(
+          "Misket could not open the local connection it plays recordings through, so this one cannot be played. Restarting the app usually fixes it.",
+        );
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [serverReady]);
+
+  const src = serverReady ? mediaFileUrl(documentId) : null;
 
   const colorById = useMemo(() => new Map((codes ?? []).map((c) => [c.id, c.color])), [codes]);
 
@@ -247,7 +272,7 @@ export function MediaView({ documentId, focusExcerptId }: Props) {
   const peaks = media?.peaks ?? null;
   const computing = useRef<string | null>(null);
   useEffect(() => {
-    if (!doc || missing || peaks || computing.current === documentId) return;
+    if (!doc || missing || peaks || !serverReady || computing.current === documentId) return;
     if (durationMs <= 0 || durationMs > MAX_PEAK_DURATION_MS) return;
     if ((media?.sizeBytes ?? 0) > MAX_PEAK_BYTES) return;
     computing.current = documentId;
@@ -266,7 +291,7 @@ export function MediaView({ documentId, focusExcerptId }: Props) {
     };
     // Once per document, as soon as it is known to have no peaks yet.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [documentId, !!doc, missing, !!peaks, durationMs]);
+  }, [documentId, !!doc, missing, !!peaks, durationMs, serverReady]);
 
   // --- coding --------------------------------------------------------------
 
@@ -480,6 +505,17 @@ export function MediaView({ documentId, focusExcerptId }: Props) {
     togglePlay,
   ]);
 
+  /**
+   * A player that will not start is usually a codec this build cannot
+   * decode — but it is also what a file deleted a moment ago looks like, so
+   * the row is re-read before anything is claimed about the codec.
+   */
+  const onPlaybackError = useCallback(() => {
+    void qc.invalidateQueries({ queryKey: keys.document(documentId) });
+    void qc.invalidateQueries({ queryKey: keys.documents });
+    setPlaybackError(unsupportedHint(doc?.name ?? "This recording", ext));
+  }, [doc?.name, documentId, ext, qc]);
+
   // --- relinking -----------------------------------------------------------
   const pickRelink = useCallback(async () => {
     if (await relink.pickAndRelink(documentId)) setPlaybackError(null);
@@ -502,7 +538,6 @@ export function MediaView({ documentId, focusExcerptId }: Props) {
   if (error) return <div className="p-6 text-danger">{String(error)}</div>;
   if (!doc) return null;
 
-  const ext = extensionOf(doc.sourcePath ?? "");
   const codable = isCodableRange(range, durationMs);
 
   return (
@@ -579,7 +614,7 @@ export function MediaView({ documentId, focusExcerptId }: Props) {
               ) : isVideo ? (
                 <video
                   ref={playerRef}
-                  src={mediaUrl(documentId)}
+                  src={src ?? undefined}
                   className="max-h-full max-w-full"
                   preload="metadata"
                   onClick={togglePlay}
@@ -587,13 +622,13 @@ export function MediaView({ documentId, focusExcerptId }: Props) {
                   onPause={() => setPlaying(false)}
                   onLoadedMetadata={onLoadedMetadata}
                   onTimeUpdate={(e) => notePosition(Math.round(e.currentTarget.currentTime * 1000))}
-                  onError={() => setPlaybackError(unsupportedHint(doc.name, ext))}
+                  onError={onPlaybackError}
                   data-testid="media-player"
                 />
               ) : (
                 <audio
                   ref={playerRef}
-                  src={mediaUrl(documentId)}
+                  src={src ?? undefined}
                   className="w-full max-w-2xl"
                   controls
                   preload="metadata"
@@ -601,7 +636,7 @@ export function MediaView({ documentId, focusExcerptId }: Props) {
                   onPause={() => setPlaying(false)}
                   onLoadedMetadata={onLoadedMetadata}
                   onTimeUpdate={(e) => notePosition(Math.round(e.currentTarget.currentTime * 1000))}
-                  onError={() => setPlaybackError(unsupportedHint(doc.name, ext))}
+                  onError={onPlaybackError}
                   data-testid="media-player"
                 />
               )}
@@ -691,7 +726,8 @@ function seekAndWait(player: HTMLVideoElement, seconds: number): Promise<void> {
  */
 async function computePeaks(documentId: string, sizeBytes: number): Promise<number[] | null> {
   try {
-    const url = mediaUrl(documentId);
+    const url = mediaFileUrl(documentId);
+    if (!url) return null;
     const parts: Uint8Array[] = [];
     let at = 0;
     let total = sizeBytes;

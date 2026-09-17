@@ -22,7 +22,12 @@ export function useDocument(id: string | null) {
     queryKey: keys.document(id ?? ""),
     queryFn: () => api.getDocument(id!),
     enabled: !!id,
-    staleTime: Infinity, // document text is immutable
+    // A text or image document never changes once imported, so it is cached
+    // for the session. A recording is held by reference: its file can be
+    // moved or relinked outside the app, and `mediaMissing` and the cached
+    // waveform both change under it, so it is re-read whenever anything
+    // looks at it again.
+    staleTime: (query) => (query.state.data?.kind === "video" ? 0 : Infinity),
   });
 }
 

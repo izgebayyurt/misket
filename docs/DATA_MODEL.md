@@ -367,14 +367,21 @@ without a history node, like the transcript format cached in
   document and undoing puts the frame back with everything else. Audio
   excerpts show their slice of the waveform instead.
 
-The bytes reach the webview through the same `misket-media` scheme images use
-(`src-tauri/src/media.rs`), which answers `Range: bytes=…` with a `206` and a
-`Content-Range` — WebKit will not let the user seek in an element whose source
-cannot — and caps one response at 4 MiB, so a seek never loads a whole
-interview into memory. The same handler serves `/thumbnail/<excerptId>` and,
-during an import, `/probe/<token>`: a file the user has just picked, staged in
-`AppState` so its duration can be measured before it is a document. The page
+The bytes reach the webview through `src-tauri/src/media.rs`, which answers
+`Range: bytes=…` with a `206` and a `Content-Range` — WebKit will not let the
+user seek in an element whose source cannot — and caps one response at 4 MiB,
+so a seek never loads a whole interview into memory. It serves three routes:
+`/document/<id>`, `/thumbnail/<excerptId>` (the captured frame) and, during an
+import, `/probe/<token>` — a file the user has just picked, staged in
+`AppState` so its duration can be measured before it is a document; the page
 hands over a token, never a path.
+
+Images and thumbnails are served over the same `misket-media` URI scheme they
+always were, but a recording cannot be: a media element on Linux refuses a
+custom scheme (and `asset://`, and `file://`). So the same routes are also
+served over a loopback HTTP listener on an ephemeral port, gated by a token
+minted per run of the app; `docs/ARCHITECTURE.md` explains why, and
+`src/api/media.ts` decides which URL each use needs.
 
 ## Transcripts
 

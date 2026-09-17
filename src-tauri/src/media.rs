@@ -19,6 +19,22 @@
 //! gigabyte into memory to answer one seek is not an option either, so a
 //! ranged request reads exactly the slice it asked for (up to [`CHUNK`]) off
 //! the disk.
+//!
+//! # Why a recording also needs a loopback HTTP server
+//!
+//! An `<img>` loads happily from a custom scheme, but a media element does
+//! not: on Linux WebKitGTK hands playback to GStreamer, which only knows a
+//! handful of URI schemes, and `misket-media://`, Tauri's own `asset://` and
+//! plain `file://` are all refused with `MEDIA_ERR_SRC_NOT_SUPPORTED`
+//! (measured, not guessed — see `e2e/`). A `blob:` URL works, but building
+//! one means holding the whole recording in the page's memory, which is the
+//! very thing holding media by reference exists to avoid.
+//!
+//! So [`Server`] binds a listener on `127.0.0.1` with an ephemeral port and
+//! serves the same three routes over HTTP/1.1, which GStreamer streams and
+//! seeks in natively. It answers only requests carrying the random token
+//! minted for this run of the app, it never leaves the loopback interface,
+//! and it stops with the process.
 
 use std::io::{Read, Seek, SeekFrom};
 use std::path::Path;
@@ -267,6 +283,218 @@ pub fn response<R: tauri::Runtime>(
     }
 }
 
+/// A URL-decoded percent escape (`%2F` and friends) in a request target.
+fn percent_decode(s: &str) -> String {
+    let bytes = s.as_bytes();
+    let mut out: Vec<u8> = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%' && i + 2 < bytes.len() {
+            let hex = std::str::from_utf8(&bytes[i + 1..i + 3]).ok();
+            if let Some(v) = hex.and_then(|h| u8::from_str_radix(h, 16).ok()) {
+                out.push(v);
+                i += 3;
+                continue;
+            }
+        }
+        out.push(bytes[i]);
+        i += 1;
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
+/// Split a request target into its path and the value of its `t` parameter.
+fn split_target(target: &str) -> (String, Option<String>) {
+    let (path, query) = match target.split_once('?') {
+        Some((p, q)) => (p, Some(q)),
+        None => (target, None),
+    };
+    let token = query.and_then(|q| {
+        q.split('&')
+            .filter_map(|pair| pair.split_once('='))
+            .find(|(k, _)| *k == "t")
+            .map(|(_, v)| percent_decode(v))
+    });
+    (percent_decode(path), token)
+}
+
+/// Whether two tokens match, without leaking where they first differ.
+fn token_matches(given: Option<&str>, expected: &str) -> bool {
+    let Some(given) = given else { return false };
+    if given.len() != expected.len() {
+        return false;
+    }
+    given
+        .bytes()
+        .zip(expected.bytes())
+        .fold(0u8, |acc, (a, b)| acc | (a ^ b))
+        == 0
+}
+
+/// The loopback HTTP server a media element can actually play from.
+///
+/// Its `origin` is what the frontend builds URLs against; the token is part
+/// of it, so a URL that leaves the app is useless once the app has quit.
+pub struct Server {
+    pub port: u16,
+    pub token: String,
+}
+
+impl Server {
+    /// `http://127.0.0.1:<port>`, with no trailing slash.
+    pub fn origin(&self) -> String {
+        format!("http://127.0.0.1:{}", self.port)
+    }
+}
+
+/// How long a connection may take to send its request line and headers.
+const HEADER_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+
+/// The most bytes of request head to read before giving up on a client.
+const MAX_HEAD: usize = 16 * 1024;
+
+/// Bind the loopback server and answer requests on it until the app exits.
+///
+/// Binding port 0 asks the OS for a free one, so two copies of Misket never
+/// fight over it. Each connection is answered on its own thread and closed
+/// again: a media element makes many short ranged requests, and over loopback
+/// a fresh connection costs nothing worth keeping alive for.
+pub fn serve_on_loopback<R: tauri::Runtime>(app: tauri::AppHandle<R>) -> std::io::Result<Server> {
+    use std::net::TcpListener;
+
+    let listener = TcpListener::bind(("127.0.0.1", 0))?;
+    let port = listener.local_addr()?.port();
+    let token = misket_core::db::util::new_id();
+    let expected = token.clone();
+    std::thread::spawn(move || {
+        for stream in listener.incoming() {
+            let Ok(stream) = stream else { continue };
+            let app = app.clone();
+            let expected = expected.clone();
+            std::thread::spawn(move || {
+                let _ = answer(&app, stream, &expected);
+            });
+        }
+    });
+    Ok(Server { port, token })
+}
+
+/// Read one request off `stream` and write one response back.
+fn answer<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+    mut stream: std::net::TcpStream,
+    expected: &str,
+) -> std::io::Result<()> {
+    use std::io::Write;
+
+    stream.set_read_timeout(Some(HEADER_TIMEOUT))?;
+    let mut head = Vec::with_capacity(1024);
+    let mut byte = [0u8; 1];
+    // Read up to the blank line that ends the head; the body (there is never
+    // one for GET or HEAD) is left unread.
+    while !head.ends_with(b"\r\n\r\n") && !head.ends_with(b"\n\n") {
+        match stream.read(&mut byte)? {
+            0 => break,
+            _ => head.push(byte[0]),
+        }
+        if head.len() > MAX_HEAD {
+            return write_head(&mut stream, StatusCode::BAD_REQUEST, &[], 0).map(|_| ());
+        }
+    }
+    let head = String::from_utf8_lossy(&head).into_owned();
+    let mut lines = head.lines();
+    let request_line = lines.next().unwrap_or_default();
+    let mut parts = request_line.split_whitespace();
+    let method = parts.next().unwrap_or_default().to_ascii_uppercase();
+    let target = parts.next().unwrap_or("/");
+    let mut range: Option<String> = None;
+    for line in lines {
+        if let Some((name, value)) = line.split_once(':') {
+            if name.trim().eq_ignore_ascii_case("range") {
+                range = Some(value.trim().to_string());
+            }
+        }
+    }
+
+    // A ranged `fetch` from the page is a cross-origin request with a
+    // non-simple header, so the browser asks first.
+    if method == "OPTIONS" {
+        return write_head(
+            &mut stream,
+            StatusCode::NO_CONTENT,
+            &[
+                ("access-control-allow-origin", "*".into()),
+                ("access-control-allow-methods", "GET, HEAD, OPTIONS".into()),
+                ("access-control-allow-headers", "range".into()),
+                ("access-control-max-age", "86400".into()),
+            ],
+            0,
+        )
+        .map(|_| ());
+    }
+    if method != "GET" && method != "HEAD" {
+        return write_head(&mut stream, StatusCode::METHOD_NOT_ALLOWED, &[], 0).map(|_| ());
+    }
+
+    let (path, given) = split_target(target);
+    if !token_matches(given.as_deref(), expected) {
+        // No explanation: a request without this run's token is not ours.
+        return write_head(&mut stream, StatusCode::FORBIDDEN, &[], 0).map(|_| ());
+    }
+
+    let response = response(app, &path, range.as_deref());
+    let status = response.status();
+    let headers: Vec<(String, String)> = response
+        .headers()
+        .iter()
+        .filter_map(|(k, v)| {
+            v.to_str()
+                .ok()
+                .map(|v| (k.as_str().to_string(), v.to_string()))
+        })
+        .collect();
+    let mut extra: Vec<(&str, String)> = headers
+        .iter()
+        .map(|(k, v)| (k.as_str(), v.clone()))
+        .collect();
+    // So a ranged `fetch` from the page can read what it got.
+    extra.push((
+        "access-control-expose-headers",
+        "content-range, content-length, accept-ranges, content-type".into(),
+    ));
+    let body = response.body();
+    write_head(&mut stream, status, &extra, body.len())?;
+    if method == "GET" {
+        stream.write_all(body)?;
+    }
+    stream.flush()
+}
+
+/// Write a status line and headers, then `Connection: close`.
+fn write_head(
+    stream: &mut std::net::TcpStream,
+    status: StatusCode,
+    headers: &[(&str, String)],
+    body_len: usize,
+) -> std::io::Result<()> {
+    use std::io::Write;
+
+    let reason = status.canonical_reason().unwrap_or("");
+    let mut out = format!("HTTP/1.1 {} {reason}\r\n", status.as_u16());
+    let mut wrote_length = false;
+    for (name, value) in headers {
+        if name.eq_ignore_ascii_case("content-length") {
+            wrote_length = true;
+        }
+        out.push_str(&format!("{name}: {value}\r\n"));
+    }
+    if !wrote_length {
+        out.push_str(&format!("content-length: {body_len}\r\n"));
+    }
+    out.push_str("connection: close\r\n\r\n");
+    stream.write_all(out.as_bytes())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -387,6 +615,35 @@ mod tests {
                 end: 1000 + CHUNK - 1
             }
         );
+    }
+
+    #[test]
+    fn a_request_target_gives_up_its_path_and_token() {
+        assert_eq!(
+            split_target("/document/abc?t=xyz"),
+            ("/document/abc".into(), Some("xyz".into()))
+        );
+        assert_eq!(
+            split_target("/document/abc"),
+            ("/document/abc".into(), None)
+        );
+        // Anything percent-escaped comes back decoded, in the path and the
+        // token alike.
+        assert_eq!(
+            split_target("/thumbnail/a%2Fb?x=1&t=a%20b"),
+            ("/thumbnail/a/b".into(), Some("a b".into()))
+        );
+        // A malformed escape is left alone rather than dropped.
+        assert_eq!(split_target("/a%zz"), ("/a%zz".into(), None));
+    }
+
+    #[test]
+    fn only_this_runs_token_is_accepted() {
+        assert!(token_matches(Some("abc"), "abc"));
+        assert!(!token_matches(Some("abd"), "abc"));
+        assert!(!token_matches(Some("ab"), "abc"));
+        assert!(!token_matches(Some(""), "abc"));
+        assert!(!token_matches(None, "abc"));
     }
 
     #[test]

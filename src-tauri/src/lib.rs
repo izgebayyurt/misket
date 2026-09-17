@@ -49,6 +49,19 @@ pub fn run() {
             });
         })
         .setup(|app| {
+            // A media element cannot play from a custom scheme on Linux, so
+            // recordings are served over loopback HTTP instead (see
+            // `crate::media`). Failing to bind is not fatal: everything but
+            // audio and video still works.
+            match media::serve_on_loopback(app.handle().clone()) {
+                Ok(server) => {
+                    let found = (server.origin(), server.token);
+                    if let Ok(mut slot) = app.state::<AppState>().media_server.lock() {
+                        *slot = Some(found);
+                    }
+                }
+                Err(e) => eprintln!("could not start the media server: {e}"),
+            }
             // Windows and Linux pass a double-clicked file as the first argument.
             if let Some(arg) = std::env::args().nth(1) {
                 if is_project_path(&arg) {
@@ -73,6 +86,7 @@ pub fn run() {
             commands::project::take_pending_open_path,
             commands::documents::create_document,
             commands::documents::create_image_document,
+            commands::media::media_server,
             commands::media::stage_media_probe,
             commands::media::create_media_document,
             commands::media::relink_media_document,
