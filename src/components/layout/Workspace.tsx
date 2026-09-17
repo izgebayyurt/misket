@@ -9,7 +9,6 @@ import { useWorkspace } from "@/state/workspace";
 import { useGlobalShortcuts } from "@/hooks/useGlobalShortcuts";
 import { ExcerptBrowser } from "@/components/excerpts/ExcerptBrowser";
 import { AnalysisView } from "@/components/analysis/AnalysisView";
-import { ReliabilityView } from "@/components/analysis/ReliabilityView";
 import { SearchView } from "@/components/search/SearchView";
 import { DescriptorTable } from "@/components/descriptors/DescriptorTable";
 import { OverviewView } from "@/components/overview/OverviewView";
@@ -55,8 +54,6 @@ export function Workspace({ project }: { project: ProjectInfo }) {
             />
           ) : view.kind === "analysis" ? (
             <AnalysisView tab={view.tab} />
-          ) : view.kind === "reliability" ? (
-            <ReliabilityView />
           ) : view.kind === "search" ? (
             // Remount when a new seed query arrives (e.g. from the
             // word-frequency view), which the view only reads on mount.
