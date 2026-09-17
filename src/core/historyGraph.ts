@@ -115,7 +115,9 @@ export function layoutHistory(nodes: HistoryNodeSummary[]): HistoryLayout {
 
   // Relabel so the main line — root, through preferredChild, to a leaf — is
   // always lane 0, regardless of which branch happened to open first.
-  const root = nodes.filter((n) => n.parentId == null || !byId.has(n.parentId)).sort((a, b) => a.id - b.id)[0];
+  const root = nodes
+    .filter((n) => n.parentId == null || !byId.has(n.parentId))
+    .sort((a, b) => a.id - b.id)[0];
   if (root) {
     const rootLane = laneOf.get(root.id) ?? 0;
     if (rootLane !== 0) {
@@ -172,7 +174,8 @@ export function edgePath(edge: HistoryEdge, laneWidth: number, rowHeight: number
 function descendantIds(nodes: HistoryNodeSummary[], id: number): Set<number> {
   const childrenOf = new Map<number, number[]>();
   for (const n of nodes) {
-    if (n.parentId != null) childrenOf.set(n.parentId, [...(childrenOf.get(n.parentId) ?? []), n.id]);
+    if (n.parentId != null)
+      childrenOf.set(n.parentId, [...(childrenOf.get(n.parentId) ?? []), n.id]);
   }
   const keep = new Set<number>();
   const stack = [id];

@@ -463,7 +463,11 @@ function NamePromptDialog({
             <Button type="button" variant="ghost" onClick={onClose}>
               Cancel
             </Button>
-            <Button type="submit" disabled={!allowEmpty && !value.trim()} data-testid="history-name-submit">
+            <Button
+              type="submit"
+              disabled={!allowEmpty && !value.trim()}
+              data-testid="history-name-submit"
+            >
               {submitLabel}
             </Button>
           </DialogFooter>
@@ -493,7 +497,9 @@ function CompactConfirmDialog({
       ? "Nothing leads up to this step, so there is nothing to drop."
       : `This drops ${dropped.toLocaleString()} step${dropped === 1 ? "" : "s"} that ` +
         `${dropped === 1 ? "does" : "do"} not lead to or from "${target.summary}"` +
-        (droppedBranches.length > 0 ? `, including the branch${droppedBranches.length === 1 ? "" : "es"} ${droppedBranches.map((b) => `"${b}"`).join(", ")}` : "") +
+        (droppedBranches.length > 0
+          ? `, including the branch${droppedBranches.length === 1 ? "" : "es"} ${droppedBranches.map((b) => `"${b}"`).join(", ")}`
+          : "") +
         ". This cannot be undone.";
   return (
     <ConfirmDialog
