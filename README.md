@@ -76,12 +76,22 @@ keyboard-friendly interface without a subscription.
   pick a code, choose what gets coded (just the match, its whole sentence, or
   its whole paragraph) and apply it to every hit in one undoable step —
   matches that share a sentence or paragraph share one excerpt.
-- **Auto-code by speaker turn**: transcripts with `Name:`, `[Name]` or
-  `Name (00:12):` lines get a "Speakers" menu in the document header listing
-  each detected speaker and their turn count; "Code all turns of _Speaker_
+- **Speaker-aware transcripts**: Misket works out how a transcript marks who
+  is speaking — `Name:`, `[Name]`, `Name (00:12):`, `[00:12:03] Name:`,
+  `00:12:03 Name:`, or a pattern you write yourself — and lays those labels
+  out in a gutter beside the text instead of leaving them in the flow. The
+  text itself is never edited, so coding is unaffected: a selection that
+  starts on a label starts at what was said. The document header says which
+  format is in force ("Transcript: Name:, 42 turns, 3 speakers") and opens a
+  dialog to change it, mark the document as not a transcript, or make the
+  choice the project's default. Detection is conservative — a label only
+  counts once it recurs, and `Note:`-style asides need to recur three times.
+  Excerpts carry a speaker chip, the excerpt browser filters by speaker, and
+  the code cross-tab can put speakers across the top.
+- **Auto-code by speaker turn**: the "Speakers" menu in the document header
+  lists each speaker with their turn count; "Code all turns of _Speaker_
   with…" codes every one of their turns (the spoken text, not the label) with
-  one chosen code. Detection is conservative — a label only counts once it
-  recurs at least twice in the document.
+  one chosen code.
 - **Query**: build Boolean and proximity retrievals in the browser — "Access
   and Barriers", "Access not Barriers", "Access near Barriers in the same
   paragraph" or within N characters — with one level of grouping, and save

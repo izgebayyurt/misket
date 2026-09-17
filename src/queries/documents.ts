@@ -26,16 +26,6 @@ export function useDocument(id: string | null) {
   });
 }
 
-/** Speaker turns detected in a text document, for the "Speakers" menu. */
-export function useSpeakerTurns(id: string | null) {
-  return useQuery({
-    queryKey: keys.speakerTurns(id ?? ""),
-    queryFn: () => api.detectSpeakerTurns(id!),
-    enabled: !!id,
-    staleTime: Infinity, // document text is immutable
-  });
-}
-
 function useInvalidateDocuments() {
   const qc = useQueryClient();
   return () => {

@@ -115,12 +115,39 @@
         paragraph, and confirm — matches that share a sentence or paragraph become one excerpt. The
         whole batch is one undo step.
       </p>
+      <h2 id="transcripts">Transcripts: who is speaking</h2>
       <p>
-        For interview transcripts that consistently mark who is speaking —
-        <code>Name:</code>, <code>[Name]</code> or <code>Name (00:12):</code> lines that recur
-        through the document — the document header shows a <strong>Speakers</strong> menu listing
-        each detected speaker with their turn count. Pick one and a code to tag every one of their
-        turns (the spoken text, not the label) in a single step.
+        When a document marks each turn with a speaker — <code>Interviewer:</code>,
+        <code>[P1]</code>, <code>P1 (00:12):</code>, <code>[00:12:03] P1:</code> or
+        <code>00:12:03 P1:</code> — Misket recognizes it on import and moves those labels out of the
+        way: they are drawn in a gutter down the left of the text, with the timestamp on a second
+        line, so what you read is what was said.
+      </p>
+      <p>
+        The labels are not removed. Document text is never edited in Misket, because every excerpt
+        is a position in it; only the layout changes. What does change is coding: a selection that
+        starts on a label starts at the first word the speaker actually said, and selecting a label
+        on its own codes nothing.
+      </p>
+      <p>
+        The header shows what Misket decided — <em>Transcript: Name:, 42 turns, 3 speakers</em> —
+        and clicking it opens the format dialog. Pick a different shape of label, write your own
+        pattern (a regular expression with a named <code>speaker</code> group, and
+        <code>time</code> if the labels carry one), or say <strong>Not a transcript</strong> if
+        Misket has read prose as one. The preview lists the first turns each choice finds, so you
+        can see whether it is right before applying it; tick
+        <strong>Use as this project's default</strong> when every file in the study is written the
+        same way. Changing the format is undoable like any other edit. If you would rather see the
+        labels in the flow of the text, turn the gutter off under
+        <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>,</kbd>.
+      </p>
+      <p>
+        Speakers then follow the excerpts around: each one in the browser carries a chip saying who
+        said it, the <strong>Speaker</strong> filter narrows to one or more of them, and the code
+        cross-tab under <strong>Analysis</strong> can put speakers across the top instead of a
+        descriptor — "which themes does each participant raise". The <strong>Speakers</strong> menu
+        beside the chip lists everyone with their turn count; pick one and a code to tag every one
+        of their turns in a single step.
       </p>
       <h2 id="orientation">Find your place in a long transcript</h2>
       <p>

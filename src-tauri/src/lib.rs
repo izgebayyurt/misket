@@ -112,7 +112,6 @@ pub fn run() {
             commands::documents::get_document,
             commands::documents::rename_document,
             commands::documents::reorder_documents,
-            commands::documents::detect_speaker_turns,
             commands::transcripts::get_transcript,
             commands::transcripts::preview_transcript,
             commands::transcripts::set_transcript_format,
