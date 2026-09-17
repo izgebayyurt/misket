@@ -114,6 +114,73 @@ export const SHORTCUTS: Record<Action, Shortcut> = {
   escape: { key: "Escape", global: true },
 };
 
+// ------------------------------------------------------- audio and video
+
+/**
+ * What the audio/video viewer's keys do. These live apart from [`SHORTCUTS`]
+ * on purpose.
+ *
+ * They are **bare, unmodified keys** — the conventional ones from every
+ * editing tool: space to play, `J`/`L` to scrub, comma and full stop to
+ * nudge, brackets to mark in and out. A bare full stop everywhere else in
+ * Misket is just a full stop, so these must not go through [`matchAction`],
+ * which the application-wide listener uses. `MediaView` calls
+ * [`matchMediaAction`] itself and acts only while the player has the focus.
+ *
+ * Coding the marked stretch is not here: `Enter` (`editExcerpt`) and
+ * `Ctrl`/`⌘`+`K` (`palette`) already mean "act on what is selected", and the
+ * viewer registers handlers for both.
+ */
+export type MediaAction =
+  | "mediaPlayPause"
+  | "mediaBack"
+  | "mediaForward"
+  | "mediaStepBack"
+  | "mediaStepForward"
+  | "mediaSetIn"
+  | "mediaSetOut";
+
+export const MEDIA_SHORTCUTS: Record<MediaAction, Shortcut> = {
+  mediaPlayPause: { key: " " },
+  mediaBack: { key: "j" },
+  mediaForward: { key: "l" },
+  mediaStepBack: { key: "," },
+  mediaStepForward: { key: "." },
+  mediaSetIn: { key: "[" },
+  mediaSetOut: { key: "]" },
+};
+
+export const MEDIA_LABELS: Record<MediaAction, string> = {
+  mediaPlayPause: "Play / pause",
+  mediaBack: "Back 5 seconds",
+  mediaForward: "Forward 5 seconds",
+  mediaStepBack: "Back 100 ms",
+  mediaStepForward: "Forward 100 ms",
+  mediaSetIn: "Set the in-point here",
+  mediaSetOut: "Set the out-point here",
+};
+
+/** How far `J`/`L` scrub, in milliseconds. */
+export const MEDIA_SEEK_MS = 5_000;
+
+/** How far `,`/`.` nudge, in milliseconds. */
+export const MEDIA_STEP_MS = 100;
+
+/**
+ * Match a keyboard event to a media action, or null. Never matches inside a
+ * text field, and never with a modifier held, so a code hotkey chord or an
+ * application shortcut is left alone.
+ */
+export function matchMediaAction(e: KeyboardEvent): MediaAction | null {
+  if (isTextField(e.target) || mod(e) || e.altKey || e.shiftKey || e.ctrlKey || e.metaKey) {
+    return null;
+  }
+  for (const [action, s] of Object.entries(MEDIA_SHORTCUTS) as [MediaAction, Shortcut][]) {
+    if (s.key.length === 1 ? e.key.toLowerCase() === s.key : e.key === s.key) return action;
+  }
+  return null;
+}
+
 /**
  * Is `target` a genuine text-entry surface (typing there should keep its own
  * keys)? A `<button>`, a menu trigger/item, or anything else that is merely
@@ -149,16 +216,25 @@ const KEY_GLYPHS: Record<string, string> = {
   ArrowRight: "→",
   ArrowUp: "↑",
   ArrowDown: "↓",
+  " ": "Space",
 };
 
 export function describe(action: Action): string {
-  const s = SHORTCUTS[action];
+  return describeShortcut(SHORTCUTS[action]);
+}
+
+/** The printable form of one chord, for the reference overlay. */
+export function describeShortcut(s: Shortcut): string {
   const parts: string[] = [];
   if (s.mod) parts.push(modLabel);
   if (s.shift) parts.push("⇧");
   if (s.alt) parts.push(isMac ? "⌥" : "Alt+");
   parts.push(KEY_GLYPHS[s.key] ?? (s.key.length === 1 ? s.key.toUpperCase() : s.key));
   return parts.join("");
+}
+
+export function describeMedia(action: MediaAction): string {
+  return describeShortcut(MEDIA_SHORTCUTS[action]);
 }
 
 /** Human-readable name for each action, shown in the keyboard reference overlay. */
@@ -206,4 +282,8 @@ export const LABELS: Record<Action, string> = {
 
 export function label(action: Action): string {
   return LABELS[action];
+}
+
+export function mediaLabel(action: MediaAction): string {
+  return MEDIA_LABELS[action];
 }

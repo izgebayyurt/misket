@@ -73,6 +73,12 @@ pub struct AppSettings {
     /// are what most people are reading for.
     #[serde(default)]
     pub lanes_by_coder: bool,
+    /// Copy audio and video files into `<project>.media/` on import instead
+    /// of pointing at where they already are. Off by default: a recording is
+    /// held by reference precisely so a project file stays small. The import
+    /// dialog offers it per batch and remembers the answer here.
+    #[serde(default)]
+    pub copy_media_into_project: bool,
 }
 
 impl Default for AppSettings {
@@ -89,6 +95,7 @@ impl Default for AppSettings {
             coder_id: None,
             coder_color: None,
             lanes_by_coder: false,
+            copy_media_into_project: false,
         }
     }
 }
@@ -220,6 +227,7 @@ mod tests {
             coder_id: Some("11111111-2222-3333-4444-555555555555".into()),
             coder_color: Some("#5CB85C".into()),
             lanes_by_coder: true,
+            copy_media_into_project: true,
         };
         write(&path, &settings).unwrap();
         assert_eq!(read(&path).unwrap(), settings);

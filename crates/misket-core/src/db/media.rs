@@ -102,6 +102,30 @@ pub fn media_dir(project_path: &Path) -> PathBuf {
     project_path.with_file_name(format!("{stem}.media"))
 }
 
+/// The MIME type Misket imports this path as, by extension; `None` for
+/// anything that is not an audio or video file it knows.
+pub fn mime_for_path(path: &Path) -> Option<&'static str> {
+    let ext = path.extension()?.to_str()?.to_ascii_lowercase();
+    let wanted = match ext.as_str() {
+        "mp3" => "audio/mpeg",
+        "wav" => "audio/wav",
+        "m4a" => "audio/mp4",
+        "aac" => "audio/aac",
+        "ogg" => "audio/ogg",
+        "flac" => "audio/flac",
+        "mp4" => "video/mp4",
+        "mov" => "video/quicktime",
+        "webm" => "video/webm",
+        "m4v" => "video/x-m4v",
+        "mkv" => "video/x-matroska",
+        _ => return None,
+    };
+    MEDIA_MIMES
+        .iter()
+        .find(|(m, _)| *m == wanted)
+        .map(|(m, _)| *m)
+}
+
 fn format_for(mime: &str) -> Result<&'static str> {
     MEDIA_MIMES
         .iter()
@@ -912,6 +936,29 @@ pub(crate) mod tests {
             Err(AppError::NotFound(_))
         ));
         assert!(path.is_file());
+    }
+
+    #[test]
+    fn every_known_extension_maps_to_a_known_mime() {
+        for (ext, mime) in [
+            ("mp3", "audio/mpeg"),
+            ("WAV", "audio/wav"),
+            ("mp4", "video/mp4"),
+            ("mkv", "video/x-matroska"),
+        ] {
+            assert_eq!(
+                mime_for_path(Path::new(&format!("/a/b.{ext}"))),
+                Some(mime),
+                "{ext}"
+            );
+        }
+        assert_eq!(mime_for_path(Path::new("/a/b.txt")), None);
+        assert_eq!(mime_for_path(Path::new("/a/b")), None);
+        // Every extension the frontend offers has a MIME here, and every
+        // MIME here has a source format.
+        for (mime, _) in MEDIA_MIMES {
+            assert!(format_for(mime).is_ok(), "{mime}");
+        }
     }
 
     #[test]

@@ -1,5 +1,6 @@
 import { X } from "lucide-react";
-import { useExcerptDetail, useRemoveExcerptCode } from "@/queries/excerpts";
+import { useState } from "react";
+import { useExcerptDetail, useRemoveExcerptCode, useUpdateExcerptRange } from "@/queries/excerpts";
 import { useCodeTree } from "@/queries/codes";
 import { useCoders } from "@/queries/coders";
 import { CoderMark } from "@/components/coders/CoderMark";
@@ -17,6 +18,9 @@ import { MemoList } from "@/components/memos/MemoList";
 import { ExcerptHistory } from "@/components/activity/HistoryTimeline";
 import { useWorkspace } from "@/state/workspace";
 import { toast } from "@/state/toasts";
+import { formatTimecode, parseTimecode } from "@/core/media";
+import { Input } from "@/components/ui/input";
+import { MediaThumbnail } from "./MediaThumbnail";
 import { RegionThumbnail } from "./RegionThumbnail";
 
 /** Right-panel view of the focused excerpt: context, codes, memos. */
@@ -51,6 +55,24 @@ export function ExcerptInspector({ excerptId }: { excerptId: string }) {
             <p className="mt-1 text-[11px] text-fg-muted">
               {detail.documentName} · {detail.snapshot}
             </p>
+          </>
+        ) : detail.kind === "video_range" ? (
+          <>
+            <MediaThumbnail
+              documentId={detail.documentId}
+              excerptId={detail.id}
+              startMs={detail.startPos}
+              endMs={detail.endPos}
+              width={244}
+              height={140}
+            />
+            <p className="mt-1 text-[11px] text-fg-muted">{detail.documentName}</p>
+            <MediaRangeEditor
+              excerptId={detail.id}
+              documentId={detail.documentId}
+              startMs={detail.startPos ?? 0}
+              endMs={detail.endPos ?? 0}
+            />
           </>
         ) : (
           <>
@@ -133,5 +155,102 @@ export function ExcerptInspector({ excerptId }: { excerptId: string }) {
       <MemoList target={{ excerptId }} heading="Memos" />
       <ExcerptHistory excerptId={excerptId} />
     </div>
+  );
+}
+
+/**
+ * The in- and out-points of a coded stretch, editable.
+ *
+ * Typed as `m:ss.s` (or plain seconds), applied through the same
+ * `update_range` the text viewer's boundary keys use — so it is one undoable
+ * step, and the `[in-out]` label is rewritten by Rust rather than here.
+ */
+function MediaRangeEditor({
+  excerptId,
+  documentId,
+  startMs,
+  endMs,
+}: {
+  excerptId: string;
+  documentId: string;
+  startMs: number;
+  endMs: number;
+}) {
+  const updateRange = useUpdateExcerptRange();
+  const [draft, setDraft] = useState<{ in: string; out: string } | null>(null);
+  const shown = draft ?? { in: formatTimecode(startMs), out: formatTimecode(endMs) };
+
+  const commit = async (next: { in: string; out: string }) => {
+    const start = parseTimecode(next.in);
+    const end = parseTimecode(next.out);
+    setDraft(null);
+    if (start === null || end === null) {
+      toast.info("Times read as m:ss.s — for example 1:02.4.");
+      return;
+    }
+    try {
+      await updateRange.mutateAsync({
+        id: excerptId,
+        documentId,
+        startPos: start,
+        endPos: end,
+        previousStartPos: startMs,
+        previousEndPos: endMs,
+      });
+    } catch (e) {
+      toast.error(e);
+    }
+  };
+
+  return (
+    <div className="mt-2 flex items-center gap-1.5" data-testid="media-range-editor">
+      <TimeField
+        label="In"
+        value={shown.in}
+        onChange={(v) => setDraft({ ...shown, in: v })}
+        onCommit={() => void commit(shown)}
+      />
+      <span className="text-fg-muted">–</span>
+      <TimeField
+        label="Out"
+        value={shown.out}
+        onChange={(v) => setDraft({ ...shown, out: v })}
+        onCommit={() => void commit(shown)}
+      />
+      <span className="text-[11px] text-fg-muted">
+        {formatTimecode(Math.max(0, endMs - startMs))} long
+      </span>
+    </div>
+  );
+}
+
+function TimeField({
+  label,
+  value,
+  onChange,
+  onCommit,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  onCommit: () => void;
+}) {
+  return (
+    <label className="flex items-center gap-1 text-[11px] text-fg-muted">
+      {label}
+      <Input
+        value={value}
+        aria-label={`${label}-point`}
+        className="h-6 w-20 px-1 py-0 font-mono text-xs tabular-nums"
+        onChange={(e) => onChange(e.target.value)}
+        onBlur={onCommit}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            e.currentTarget.blur();
+          }
+        }}
+      />
+    </label>
   );
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mediaUrlFor } from "./media";
+import { mediaUrlFor, thumbnailUrlFor } from "./media";
 
 describe("mediaUrl", () => {
   it("uses the custom scheme on Linux and macOS", () => {
@@ -12,5 +12,10 @@ describe("mediaUrl", () => {
 
   it("escapes anything unexpected in an id", () => {
     expect(mediaUrlFor("a/b?c", false)).toBe("misket-media://localhost/document/a%2Fb%3Fc");
+  });
+
+  it("addresses an excerpt's captured frame on its own path", () => {
+    expect(thumbnailUrlFor("e-1", false)).toBe("misket-media://localhost/thumbnail/e-1");
+    expect(thumbnailUrlFor("e-1", true)).toBe("http://misket-media.localhost/thumbnail/e-1");
   });
 });

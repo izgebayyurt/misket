@@ -1,5 +1,5 @@
 import { mediaUrl } from "@/api/media";
-import { cropStyle, FULL_RECT, parseGeometry } from "@/core/imageCrop";
+import { cropStyle, FULL_RECT, naturalSize, parseGeometry } from "@/core/imageCrop";
 import { useDocuments } from "@/queries/documents";
 
 interface Props {
@@ -13,7 +13,7 @@ interface Props {
 /** The pixels an image excerpt covers, cropped into a fixed box. */
 export function RegionThumbnail({ documentId, geometry, width, height }: Props) {
   const { data: docs } = useDocuments();
-  const natural = docs?.find((d) => d.id === documentId)?.media ?? null;
+  const natural = naturalSize(docs?.find((d) => d.id === documentId)?.media);
   const { container, image } = cropStyle(
     parseGeometry(geometry) ?? FULL_RECT,
     { width, height },

@@ -2,11 +2,16 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
-  describe as describeShortcut,
+  describe as describeAction,
+  describeMedia,
   LABELS,
   matchAction,
+  matchMediaAction,
+  MEDIA_LABELS,
+  MEDIA_SHORTCUTS,
   SHORTCUTS,
   type Action,
+  type MediaAction,
 } from "./keymap";
 
 function ev(init: Partial<KeyboardEvent> & { key: string }, target?: EventTarget): KeyboardEvent {
@@ -161,6 +166,43 @@ describe("keymap", () => {
     expect(matchAction(ev({ key: "g", ctrlKey: true }, input))).toBeNull();
   });
 
+  it("keeps the media keys off the application-wide listener", () => {
+    // They are bare keys: every one of them has to stay meaningless to
+    // `matchAction`, or Space would stop scrolling a text document and a
+    // full stop would stop being a full stop.
+    for (const s of Object.values(MEDIA_SHORTCUTS)) {
+      expect(matchAction(ev({ key: s.key })), s.key).toBeNull();
+    }
+  });
+
+  it("matches the media keys only bare and only outside a text field", () => {
+    expect(matchMediaAction(ev({ key: " " }))).toBe("mediaPlayPause");
+    expect(matchMediaAction(ev({ key: "J" }))).toBe("mediaBack");
+    expect(matchMediaAction(ev({ key: "l" }))).toBe("mediaForward");
+    expect(matchMediaAction(ev({ key: "," }))).toBe("mediaStepBack");
+    expect(matchMediaAction(ev({ key: "." }))).toBe("mediaStepForward");
+    expect(matchMediaAction(ev({ key: "[" }))).toBe("mediaSetIn");
+    expect(matchMediaAction(ev({ key: "]" }))).toBe("mediaSetOut");
+    expect(matchMediaAction(ev({ key: "x" }))).toBeNull();
+    // Any modifier belongs to an application shortcut, not to the player.
+    expect(matchMediaAction(ev({ key: ".", ctrlKey: true }))).toBeNull();
+    expect(matchMediaAction(ev({ key: " ", shiftKey: true }))).toBeNull();
+    expect(matchMediaAction(ev({ key: "j", altKey: true }))).toBeNull();
+    // And typing in a field is typing.
+    const input = document.createElement("input");
+    expect(matchMediaAction(ev({ key: " " }, input))).toBeNull();
+    expect(matchMediaAction(ev({ key: "]" }, input))).toBeNull();
+  });
+
+  it("gives every media action a label and a printable chord", () => {
+    for (const action of Object.keys(MEDIA_SHORTCUTS) as MediaAction[]) {
+      expect(MEDIA_LABELS[action], `missing label for "${action}"`).toBeTruthy();
+      expect(describeMedia(action)).toBeTruthy();
+    }
+    expect(describeMedia("mediaPlayPause")).toBe("Space");
+    expect(describeMedia("mediaBack")).toBe("J");
+  });
+
   it("never binds the same chord to two actions", () => {
     const seen = new Map<string, Action>();
     for (const [action, s] of Object.entries(SHORTCUTS) as [Action, (typeof SHORTCUTS)[Action]][]) {
@@ -173,8 +215,8 @@ describe("keymap", () => {
   });
 
   it("describes arrow shortcuts with glyphs", () => {
-    expect(describeShortcut("excerptEndLeft")).toContain("←");
-    expect(describeShortcut("excerptEndRight")).toContain("→");
+    expect(describeAction("excerptEndLeft")).toContain("←");
+    expect(describeAction("excerptEndRight")).toContain("→");
   });
 
   it("gives every action a non-empty label", () => {
@@ -195,6 +237,12 @@ describe("keymap", () => {
       expect(
         shortcutsHtml.includes(LABELS[action]),
         `"${LABELS[action]}" (action "${action}") is missing from site/docs/shortcuts.html`,
+      ).toBe(true);
+    }
+    for (const action of Object.keys(MEDIA_SHORTCUTS) as MediaAction[]) {
+      expect(
+        shortcutsHtml.includes(MEDIA_LABELS[action]),
+        `"${MEDIA_LABELS[action]}" (action "${action}") is missing from site/docs/shortcuts.html`,
       ).toBe(true);
     }
   });

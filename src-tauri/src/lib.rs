@@ -72,6 +72,7 @@ pub fn run() {
             commands::project::take_pending_open_path,
             commands::documents::create_document,
             commands::documents::create_image_document,
+            commands::media::stage_media_probe,
             commands::media::create_media_document,
             commands::media::relink_media_document,
             commands::media::set_media_peaks,

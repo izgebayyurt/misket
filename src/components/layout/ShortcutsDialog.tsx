@@ -1,5 +1,13 @@
 import { Dialog, DialogContent } from "@/components/ui/dialog";
-import { describe, label, type Action } from "@/core/keymap";
+import {
+  describe,
+  describeMedia,
+  label,
+  mediaLabel,
+  MEDIA_SHORTCUTS,
+  type Action,
+  type MediaAction,
+} from "@/core/keymap";
 import { useCodes } from "@/queries/codes";
 import { ColorDot } from "@/components/codebook/ColorSwatch";
 
@@ -60,6 +68,9 @@ const GROUPS: { title: string; actions: Action[] }[] = [
   },
 ];
 
+/** The player's bare keys, live only while the audio/video view has focus. */
+const MEDIA_GROUP = Object.keys(MEDIA_SHORTCUTS) as MediaAction[];
+
 export function ShortcutsDialog({ onClose }: { onClose: () => void }) {
   const { data: codes } = useCodes();
   const withShortcut = (codes ?? []).filter((c) => c.shortcut);
@@ -85,6 +96,25 @@ export function ShortcutsDialog({ onClose }: { onClose: () => void }) {
               </dl>
             </section>
           ))}
+          <section>
+            <h3 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-fg-muted">
+              Audio and video
+            </h3>
+            <p className="mb-1.5 text-xs text-fg-muted">
+              Bare keys, live only while the player has the focus. With an in- and out-point marked,{" "}
+              {describe("editExcerpt")} or {describe("palette")} codes that stretch.
+            </p>
+            <dl className="space-y-1">
+              {MEDIA_GROUP.map((action) => (
+                <div key={action} className="flex items-center justify-between gap-4 text-sm">
+                  <dt>{mediaLabel(action)}</dt>
+                  <dd className="whitespace-nowrap rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-xs">
+                    {describeMedia(action)}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          </section>
           <section>
             <h3 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-fg-muted">
               Code hotkeys

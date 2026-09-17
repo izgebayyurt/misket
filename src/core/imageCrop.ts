@@ -23,6 +23,20 @@ export interface Size {
 /** The whole image, used whenever a stored rectangle cannot be trusted. */
 export const FULL_RECT: Rect = { x: 0, y: 0, w: 1, h: 1 };
 
+/**
+ * The pixel size in a document's `media`, or null when it has none.
+ *
+ * `MediaInfo` covers images, audio and video, so its `width`/`height` are
+ * optional: a recording of a conversation has a duration and no pixels.
+ */
+export function naturalSize(
+  media: { width?: number | null; height?: number | null } | null | undefined,
+): Size | null {
+  const width = media?.width ?? 0;
+  const height = media?.height ?? 0;
+  return width > 0 && height > 0 ? { width, height } : null;
+}
+
 function isFiniteRect(r: Rect): boolean {
   return [r.x, r.y, r.w, r.h].every((v) => typeof v === "number" && Number.isFinite(v));
 }

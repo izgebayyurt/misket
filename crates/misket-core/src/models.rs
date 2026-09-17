@@ -149,6 +149,17 @@ pub struct MediaInfo {
     pub peaks: Option<Vec<f64>>,
 }
 
+/// A candidate media file, staged so the webview can measure it before it
+/// becomes a document (`stage_media_probe`).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct MediaProbe {
+    /// Opaque token the media protocol serves this file under.
+    pub token: String,
+    pub mime: String,
+    pub size_bytes: i64,
+}
+
 /// An audio or video document whose file is no longer where it was imported
 /// from, for the warning badges and the project overview.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

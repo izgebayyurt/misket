@@ -8,7 +8,10 @@
 //! - `/document/<id>` for an audio or video document — the file on disk at
 //!   `documents.source_path`, because a recording is held by reference;
 //! - `/thumbnail/<excerptId>` — the frame captured for a coded stretch of
-//!   video.
+//!   video;
+//! - `/probe/<token>` — a file the user has just picked in the import dialog,
+//!   staged in `AppState` so the webview can measure its duration before it
+//!   becomes a document. The page hands over a token, never a path.
 //!
 //! A recording is served with **HTTP range support**. WebKit will not let the
 //! user seek in a `<video>` or `<audio>` element whose source cannot answer
@@ -204,10 +207,22 @@ pub fn response<R: tauri::Runtime>(
         state.with_project(|p| media::source(&p.conn, id))
     } else if let Some(id) = path.strip_prefix("/thumbnail/").filter(|s| !s.is_empty()) {
         state.with_project(|p| media::thumbnail_source(&p.conn, id))
+    } else if let Some(token) = path.strip_prefix("/probe/").filter(|s| !s.is_empty()) {
+        match state.probe_path(token) {
+            Some(file) => Ok(Source::File {
+                mime: media::mime_for_path(&file)
+                    .unwrap_or("application/octet-stream")
+                    .to_string(),
+                path: file,
+            }),
+            None => Err(misket_core::AppError::NotFound(
+                "that file is no longer staged for import".into(),
+            )),
+        }
     } else {
         return fail(
             StatusCode::BAD_REQUEST,
-            format!("expected /document/<id> or /thumbnail/<id>, got {path}"),
+            format!("expected /document/<id>, /thumbnail/<id> or /probe/<token>, got {path}"),
         );
     };
     match source {

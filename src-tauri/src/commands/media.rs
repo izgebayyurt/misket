@@ -1,12 +1,42 @@
 //! Audio and video documents: import by reference, relink, and the two
 //! caches the viewer fills in (waveform peaks, excerpt frames).
 
-use misket_core::db::media;
-use misket_core::models::{Document, DocumentSummary, MissingMedia, NewMediaDocument};
-use misket_core::Result;
+use std::path::PathBuf;
+
+use misket_core::db::{media, util};
+use misket_core::models::{Document, DocumentSummary, MediaProbe, MissingMedia, NewMediaDocument};
+use misket_core::{AppError, Result};
 use tauri::State;
 
 use crate::state::AppState;
+
+/// Stage a picked file so the webview can measure it before importing.
+///
+/// A recording's duration only a decoder knows, and the file is not a
+/// document yet, so the media protocol cannot serve it by id. This hands back
+/// an opaque token the protocol will answer `/probe/<token>` for — the page
+/// never names a path — plus what can be read without decoding anything.
+#[tauri::command]
+pub fn stage_media_probe(state: State<'_, AppState>, path: String) -> Result<MediaProbe> {
+    let path = PathBuf::from(path);
+    let mime = media::mime_for_path(&path).ok_or_else(|| {
+        AppError::Validation(format!(
+            "{} is not an audio or video file Misket imports",
+            path.display()
+        ))
+    })?;
+    let meta = std::fs::metadata(&path)?;
+    if !meta.is_file() {
+        return Err(AppError::NotFound(format!("no file at {}", path.display())));
+    }
+    let token = util::new_id();
+    state.stage_probe(token.clone(), path)?;
+    Ok(MediaProbe {
+        token,
+        mime: mime.to_string(),
+        size_bytes: meta.len() as i64,
+    })
+}
 
 /// Import an audio or video document. The file is **not** copied into the
 /// project file: the row keeps its path and what the frontend measured by
