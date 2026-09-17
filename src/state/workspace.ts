@@ -108,7 +108,16 @@ export const useWorkspace = create<WorkspaceState>((set) => ({
       focusedExcerptId: null,
     }),
   setSidebarTab: (sidebarTab) => set({ sidebarTab }),
-  setSelectedCodeId: (selectedCodeId) => set({ selectedCodeId }),
+  // Selecting a code and focusing an excerpt are mutually exclusive targets
+  // for the right panel (like `setFocusedExcerptId` below): picking a code
+  // in the tree should show its own definition, memos and history rather
+  // than leaving the panel on whatever excerpt was last focused.
+  setSelectedCodeId: (selectedCodeId) =>
+    set(
+      selectedCodeId
+        ? { selectedCodeId, focusedExcerptId: null, pendingSelection: null }
+        : { selectedCodeId },
+    ),
   setPendingSelection: (pendingSelection) =>
     set(pendingSelection ? { pendingSelection, focusedExcerptId: null } : { pendingSelection }),
   setFocusedExcerptId: (focusedExcerptId) =>
