@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
 import * as api from "@/api/codes";
-import type { ChildrenStrategy, CodePatch, NewCode } from "@/api/types";
+import type { ChildrenStrategy, Code, CodePatch, NewCode } from "@/api/types";
+import { historyBeginGroup, historyEndGroup } from "@/api/history";
 import { buildCodeTree } from "@/core/codeTree";
 import { keys } from "./keys";
 
@@ -96,6 +97,41 @@ export function useDeleteCode() {
       qc.invalidateQueries({ queryKey: keys.excerptQueries });
       qc.invalidateQueries({ queryKey: keys.allMemos });
     },
+  });
+}
+
+/**
+ * From the code clustering view: create a new top-level code and move a
+ * cluster's member codes under it, as one undoable step (create, then one
+ * move per member — bracketed exactly like `useRollUpCodes`, so a single
+ * undo puts every member back where it was and drops the new parent).
+ */
+export function useCreateParentFromCluster() {
+  const invalidate = useInvalidateCodes();
+  return useMutation({
+    mutationFn: async ({
+      name,
+      color,
+      memberIds,
+      label,
+    }: {
+      name: string;
+      color: string;
+      memberIds: string[];
+      label: string;
+    }): Promise<Code> => {
+      await historyBeginGroup(label);
+      try {
+        const parent = await api.createCode({ name, color, parentId: null });
+        for (let index = 0; index < memberIds.length; index++) {
+          await api.moveCode(memberIds[index]!, parent.id, index);
+        }
+        return parent;
+      } finally {
+        await historyEndGroup();
+      }
+    },
+    onSuccess: invalidate,
   });
 }
 

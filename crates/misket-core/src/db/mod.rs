@@ -19,6 +19,7 @@ pub mod memos;
 pub mod merge;
 pub mod migrations;
 pub mod query_expr;
+pub mod refi;
 pub mod search;
 pub mod sets;
 pub mod stats;

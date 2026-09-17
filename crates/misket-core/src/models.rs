@@ -1758,6 +1758,85 @@ pub struct SyncPoint {
     pub base_json: String,
 }
 
+// ---------------------------------------------------------------- REFI-QDA
+
+/// What `db::refi::export_refi` wrote, for the toast and the tests.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct RefiExportReport {
+    pub path: String,
+    pub text_sources: i64,
+    pub picture_sources: i64,
+    /// Sources carried by reference rather than by content (video).
+    pub other_sources: i64,
+    pub codes: i64,
+    /// `PlainTextSelection` / `PictureSelection` elements written.
+    pub selections: i64,
+    pub codings: i64,
+    pub users: i64,
+    pub notes: i64,
+    pub variables: i64,
+    pub sets: i64,
+    /// What REFI-QDA has no room for, in sentences ready to show.
+    pub skipped: Vec<String>,
+}
+
+/// What importing a `.qdpx` would bring in (`db::refi::preview_refi`). Reads
+/// the file and writes nothing.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct RefiPreview {
+    pub project_name: String,
+    /// The `origin` attribute: which tool wrote the file.
+    pub origin: String,
+    pub text_sources: i64,
+    pub picture_sources: i64,
+    pub codes: i64,
+    pub codings: i64,
+    pub users: i64,
+    pub notes: i64,
+    pub variables: i64,
+    pub sets: i64,
+    /// Sources and elements Misket has no place for, ready to show.
+    pub unsupported: Vec<String>,
+    /// Whether the open project already holds documents or codes, in which
+    /// case `replace` is not on offer.
+    pub project_has_content: bool,
+}
+
+/// What `db::refi::import_refi` brought in.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct RefiImportReport {
+    pub project_name: String,
+    pub documents: i64,
+    /// Documents the file and the project turned out to share.
+    pub matched_documents: i64,
+    pub excerpts: i64,
+    pub codes: i64,
+    pub matched_codes: i64,
+    pub codings: i64,
+    pub coders: i64,
+    pub memos: i64,
+    pub descriptor_fields: i64,
+    pub descriptor_values: i64,
+    pub sets: i64,
+    /// The sentence the history and the toast show.
+    pub summary: String,
+    pub unsupported: Vec<String>,
+}
+
+/// `Merge` matches documents by content and codes by their full name path,
+/// the way a codebook import does; `Replace` brings everything in under the
+/// file's own identities and is only allowed into a project that holds no
+/// documents and no codes.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum RefiImportMode {
+    Merge,
+    Replace,
+}
+
 /// serde helper: distinguishes "absent" from "present but null".
 mod double_option {
     use serde::{Deserialize, Deserializer, Serialize, Serializer};

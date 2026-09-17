@@ -1101,3 +1101,66 @@ export interface MergeReport {
   byCoder: MergeCoder[];
   summary: string;
 }
+
+// --------------------------------------------------------------- REFI-QDA
+
+/** What exporting a `.qdpx` wrote. */
+export interface RefiExportReport {
+  path: string;
+  textSources: number;
+  pictureSources: number;
+  /** Sources carried by reference rather than by content (video). */
+  otherSources: number;
+  codes: number;
+  /** `PlainTextSelection` / `PictureSelection` elements written. */
+  selections: number;
+  codings: number;
+  users: number;
+  notes: number;
+  variables: number;
+  sets: number;
+  /** What REFI-QDA has no room for, in sentences ready to show. */
+  skipped: string[];
+}
+
+/** What importing a `.qdpx` would bring in. Reads the file, writes nothing. */
+export interface RefiPreview {
+  projectName: string;
+  /** The `origin` attribute: which tool wrote the file. */
+  origin: string;
+  textSources: number;
+  pictureSources: number;
+  codes: number;
+  codings: number;
+  users: number;
+  notes: number;
+  variables: number;
+  sets: number;
+  unsupported: string[];
+  /** Documents or codes are already here, so "replace" is not on offer. */
+  projectHasContent: boolean;
+}
+
+/** What a `.qdpx` import did. */
+export interface RefiImportReport {
+  projectName: string;
+  documents: number;
+  matchedDocuments: number;
+  excerpts: number;
+  codes: number;
+  matchedCodes: number;
+  codings: number;
+  coders: number;
+  memos: number;
+  descriptorFields: number;
+  descriptorValues: number;
+  sets: number;
+  summary: string;
+  unsupported: string[];
+}
+
+/**
+ * `merge` matches documents by content and codes by full name path;
+ * `replace` only enters a project with no documents and no codes.
+ */
+export type RefiImportMode = "merge" | "replace";
