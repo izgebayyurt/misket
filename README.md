@@ -1,6 +1,6 @@
 # Misket
 
-Open-source qualitative coding for text and images, with video on the way.
+Open-source qualitative coding for text, images, audio and video.
 Misket is a local-first desktop app: your project is a single file on your
 machine, and nothing is uploaded anywhere.
 
@@ -14,8 +14,9 @@ keyboard-friendly interface without a subscription.
 
 ## What it does today
 
-- **Import** plain text, Markdown, Word (`.docx`), PDF (text only) and image
-  (PNG, JPEG, WebP) documents, one at a time or a whole folder at once
+- **Import** plain text, Markdown, Word (`.docx`), PDF (text only), image
+  (PNG, JPEG, WebP), audio (MP3, WAV, M4A, AAC, OGG, FLAC) and video (MP4,
+  MOV, WebM, M4V, MKV) documents, one at a time or a whole folder at once
   ("Import folder…", optionally including subfolders).
   If a file has blank-line gaps, trailing spaces or other likely-accidental
   whitespace, Misket offers to tidy it up before import (document text is
@@ -51,6 +52,22 @@ keyboard-friendly interface without a subscription.
   `Tab` cycles them, and the excerpt browser shows a thumbnail of each one.
   The image is copied into the project file, so a `.misket` stays
   self-contained.
+- **Code audio and video**: a recording opens in a player with a timeline
+  under it — the waveform, one band per coded stretch in its code's colour,
+  and the playhead. `Space` plays, `J`/`L` scrub five seconds, `,`/`.` nudge
+  100 ms, and `[` and `]` mark an in- and an out-point; `Enter` or the palette
+  then codes that stretch, or a code's hotkey applies it straight away.
+  Playback speed runs 0.5–2×, and the position is remembered per document.
+  Excerpts show their `[1:02.4–1:09.0]` timecode with the frame captured at
+  the in-point (or the waveform slice, for audio), and clicking one in the
+  browser jumps to the document and seeks there.
+- **Recordings stay on disk**: an interview is not copied into the project
+  file — a `.misket` with ten hours of tape coded in it is still small enough
+  to email. Misket remembers where each file is, warns when one has moved, and
+  offers "Relink…" from the document row, the viewer or the project overview
+  (undoable, like every other change). If you would rather keep everything
+  together, the import dialog can copy the files into a `<project>.media/`
+  folder beside the project instead.
 - **Find your place in a long transcript**: paragraph numbers in the gutter
   (optional), `Ctrl`/`⌘`+`G` to go to one, `Ctrl`/`⌘`+`Home`/`End` to jump to
   the top or bottom, and a reading position remembered per document so
@@ -191,6 +208,10 @@ keyboard-friendly interface without a subscription.
 | In vivo code: name a code after the selected words     | `Ctrl`/`⌘` + `Shift` + `K`                    |
 | Apply the last code used again (quick code)            | `Ctrl`/`⌘` + `.`                              |
 | Fit / zoom an image                                    | `0` / `+` / `-`                               |
+| Play / pause a recording                               | `Space`                                       |
+| Scrub back / forward 5 seconds                         | `J` / `L`                                     |
+| Nudge back / forward 100 ms                            | `,` / `.`                                     |
+| Set the in- / out-point                                | `[` / `]`                                     |
 | Next / previous excerpt                                | `Tab` / `Shift`+`Tab`                         |
 | Jump to the top / bottom of the document               | `Ctrl`/`⌘` + `Home` / `End`                   |
 | Go to paragraph                                        | `Ctrl`/`⌘` + `G`                              |
@@ -296,8 +317,9 @@ together, [docs/DATA_MODEL.md](docs/DATA_MODEL.md) for the schema, and
 
 ## Roadmap
 
-- **Milestone 2**: image regions are in; video time ranges and transcript
-  alignment are next (the data model already supports both).
+- **Milestone 2**: image regions and audio/video time ranges are in;
+  transcript alignment (jumping between a recording and its transcript) is
+  next.
 - Full-text search, REFI-QDA import/export, project sharing.
 
 ## License
