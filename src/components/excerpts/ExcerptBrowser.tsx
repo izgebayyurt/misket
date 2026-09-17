@@ -191,6 +191,8 @@ export function ExcerptBrowser() {
         onQuery={(query) => update({ query })}
         speakers={state.speakers}
         onSpeakers={(speakers) => update({ speakers })}
+        coderIds={state.coderIds}
+        onCoderIds={(coderIds) => update({ coderIds })}
         filter={filter}
         onApplyFilter={applyFilter}
         total={data?.total ?? 0}

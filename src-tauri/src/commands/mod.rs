@@ -2,6 +2,7 @@ pub mod activity;
 pub mod analysis;
 pub mod backup;
 pub mod codebook;
+pub mod coders;
 pub mod codes;
 pub mod descriptors;
 pub mod documents;

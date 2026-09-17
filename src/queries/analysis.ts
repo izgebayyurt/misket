@@ -12,10 +12,14 @@ import { keys } from "./keys";
  * Code frequency table, optionally restricted to a set of documents (by id,
  * by document set, or both — unioned).
  */
-export function useCodeFrequencies(documentIds: string[], documentSetIds: string[] = []) {
+export function useCodeFrequencies(
+  documentIds: string[],
+  documentSetIds: string[] = [],
+  coderIds: string[] = [],
+) {
   return useQuery({
-    queryKey: keys.codeFrequencies(documentIds, documentSetIds),
-    queryFn: () => api.codeFrequencies(documentIds, documentSetIds),
+    queryKey: keys.codeFrequencies(documentIds, documentSetIds, coderIds),
+    queryFn: () => api.codeFrequencies(documentIds, documentSetIds, coderIds),
     placeholderData: (prev) => prev,
   });
 }
@@ -24,17 +28,24 @@ export function useCodeFrequencies(documentIds: string[], documentSetIds: string
  * Co-occurrence matrix, optionally restricted to a set of documents (by id,
  * by document set, or both — unioned).
  */
-export function useCoOccurrence(documentIds: string[], documentSetIds: string[] = []) {
+export function useCoOccurrence(
+  documentIds: string[],
+  documentSetIds: string[] = [],
+  coderIds: string[] = [],
+) {
   return useQuery({
-    queryKey: keys.coOccurrence(documentIds, documentSetIds),
-    queryFn: () => api.coOccurrence(documentIds, documentSetIds),
+    queryKey: keys.coOccurrence(documentIds, documentSetIds, coderIds),
+    queryFn: () => api.coOccurrence(documentIds, documentSetIds, coderIds),
     placeholderData: (prev) => prev,
   });
 }
 
 /** Excerpt counts per document and code (direct tags only). */
-export function useCodeByDocument() {
-  return useQuery({ queryKey: keys.codeByDocument, queryFn: api.codeByDocument });
+export function useCodeByDocument(coderIds: string[] = []) {
+  return useQuery({
+    queryKey: keys.codeByDocument(coderIds),
+    queryFn: () => api.codeByDocument(coderIds),
+  });
 }
 
 /** Word frequency table over a document/set/code scope. */

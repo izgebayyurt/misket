@@ -69,6 +69,29 @@
         for your own transparency, not an authentication system.
       </p>
 
+      <h2 id="who-coded-what">Who coded what</h2>
+      <p>
+        Every code you apply and every memo you write is signed with a <strong>coder</strong>: a
+        name, a colour and an id this copy of Misket generates once and keeps in its settings
+        (Settings → &ldquo;You&rdquo;). The id is private and meaningless on its own — it exists
+        only so that two copies of the same project can be told apart when they are brought back
+        together.
+      </p>
+      <p>
+        Because a coding belongs to a coder, two people can apply the same code to the same passage
+        without overwriting each other: those are two codings of one passage, and the excerpt
+        inspector shows a small mark for each. Removing a code takes back <em>your</em> coding and
+        leaves your colleague&rsquo;s; the menu offers to remove theirs explicitly when that is what
+        you mean. The excerpt browser and the analysis views have a &ldquo;Coders&rdquo; filter
+        (everyone, only me, or any of them), the document view can colour its underlines by coder
+        instead of by code, and the overview screen lists everyone with how much they have coded.
+      </p>
+      <p>
+        Every count in Misket — frequencies, co-occurrence, code × document, the cross-tabs — counts
+        <em>passages</em>, not codings, so two people agreeing never makes a code look twice as
+        common. Narrow to one coder to ask how much that person coded.
+      </p>
+
       <h2>Cloud-synced folders</h2>
       <p>
         If you create or open a project inside a folder a cloud sync client manages — Dropbox,
@@ -89,16 +112,16 @@
           reuse the same codes.
         </li>
         <li>
-          <strong>Excerpts</strong> — CSV, one row per excerpt with its codes, document, position,
-          text and descriptor values.
+          <strong>Excerpts</strong> — CSV, one row per excerpt with its codes, the coders who
+          applied them, document, position, text and descriptor values.
         </li>
         <li>
           <strong>Activity log</strong> — CSV, one row per recorded change with its time, actor,
           kind, target and a readable summary.
         </li>
         <li>
-          <strong>Project</strong> — a full JSON export of the project's documents, codes, excerpts,
-          memos, descriptors and activity log.
+          <strong>Project</strong> — a full JSON export of the project's documents, codes, coders,
+          excerpts (each with who applied which code), memos, descriptors and activity log.
         </li>
       </ul>
 

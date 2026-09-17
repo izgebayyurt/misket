@@ -1,4 +1,4 @@
-use misket_core::db::activity;
+use misket_core::db::{activity, coders};
 use misket_core::{AppError, Result};
 use tauri::{AppHandle, State};
 
@@ -17,10 +17,14 @@ pub fn set_settings(
     settings: AppSettings,
 ) -> Result<()> {
     crate::settings::save(&app, &settings)?;
-    // A renamed coder signs the rest of this session, without reopening.
-    match state
-        .with_project(|p| activity::set_actor(&p.conn, &crate::settings::actor_name(&settings)))
-    {
+    // A renamed or recoloured coder signs the rest of this session, and the
+    // open project's `coders` row follows, without reopening.
+    let (_, me) = crate::settings::coder(&app, &settings);
+    match state.with_project(|p| {
+        activity::set_actor(&p.conn, &me.name)?;
+        coders::ensure_local(&p.conn, &me.id, &me.name, &me.color)?;
+        Ok(())
+    }) {
         Ok(()) | Err(AppError::NoProjectOpen) => Ok(()),
         Err(e) => Err(e),
     }

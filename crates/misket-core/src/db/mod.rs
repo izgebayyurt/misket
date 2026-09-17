@@ -5,6 +5,7 @@ pub mod analysis;
 pub mod backup;
 pub mod bulk;
 pub mod codebook_import;
+pub mod coders;
 pub mod codes;
 pub mod descriptors;
 pub mod documents;
@@ -277,7 +278,23 @@ mod tests {
             let p = OpenProject::create(&path, "Old", "0.1.0").unwrap();
             p.conn
                 .execute_batch(
-                    "DROP TABLE history_blobs;
+                    "DROP INDEX memos_coder_idx;
+                     ALTER TABLE memos DROP COLUMN coder_id;
+                     DROP INDEX excerpt_codes_coder_idx;
+                     DROP INDEX excerpt_codes_code_idx;
+                     CREATE TABLE excerpt_codes_v1 (
+                       excerpt_id TEXT NOT NULL REFERENCES excerpts(id) ON DELETE CASCADE,
+                       code_id    TEXT NOT NULL REFERENCES codes(id)    ON DELETE CASCADE,
+                       created_at TEXT NOT NULL,
+                       PRIMARY KEY (excerpt_id, code_id)
+                     ) WITHOUT ROWID;
+                     INSERT INTO excerpt_codes_v1 (excerpt_id, code_id, created_at)
+                       SELECT excerpt_id, code_id, created_at FROM excerpt_codes;
+                     DROP TABLE excerpt_codes;
+                     ALTER TABLE excerpt_codes_v1 RENAME TO excerpt_codes;
+                     CREATE INDEX excerpt_codes_code_idx ON excerpt_codes(code_id);
+                     DROP TABLE coders;
+                     DROP TABLE history_blobs;
                      DROP TABLE history;
                      DELETE FROM project_meta WHERE key = 'history_head';
                      DROP TRIGGER framework_cells_code_deleted;
@@ -320,6 +337,9 @@ mod tests {
                 "SELECT count(*) FROM descriptor_fields;
                  SELECT count(*) FROM media_blobs;
                  SELECT count(*) FROM sets;
+                 SELECT count(*) FROM coders;
+                 SELECT count(*) FROM excerpt_codes WHERE coder_id = '';
+                 SELECT count(*) FROM memos WHERE coder_id = '';
                  SELECT count(*) FROM history;
                  SELECT count(*) FROM framework_matrices;
                  SELECT count(*) FROM codes WHERE inclusion = '' AND exclusion = ''

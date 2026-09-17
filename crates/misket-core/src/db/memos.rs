@@ -7,7 +7,8 @@ use super::{activity, history, util};
 use crate::error::{AppError, Result};
 use crate::models::{Memo, MemoTarget};
 
-const COLUMNS: &str = "id, document_id, code_id, excerpt_id, title, body, created_at, updated_at";
+const COLUMNS: &str =
+    "id, document_id, code_id, excerpt_id, title, body, coder_id, created_at, updated_at";
 
 pub(super) fn from_row(r: &Row) -> rusqlite::Result<Memo> {
     Ok(Memo {
@@ -17,9 +18,21 @@ pub(super) fn from_row(r: &Row) -> rusqlite::Result<Memo> {
         excerpt_id: r.get(3)?,
         title: r.get(4)?,
         body: r.get(5)?,
-        created_at: r.get(6)?,
-        updated_at: r.get(7)?,
+        coder_id: r.get(6)?,
+        created_at: r.get(7)?,
+        updated_at: r.get(8)?,
     })
+}
+
+/// Who a restored memo belongs to: its own coder, or — for a snapshot taken
+/// before schema 11, which can only have come from this project's one user —
+/// whoever is at the keyboard now.
+pub(super) fn memo_coder(conn: &Connection, memo: &Memo) -> String {
+    if memo.coder_id.is_empty() {
+        history::local_coder(conn)
+    } else {
+        memo.coder_id.clone()
+    }
 }
 
 fn validate_target(target: &MemoTarget) -> Result<()> {
@@ -123,6 +136,7 @@ fn log_memo(
             "documentId": memo.document_id,
             "codeId": memo.code_id,
             "excerptId": memo.excerpt_id,
+            "coderId": memo.coder_id,
         }),
         Some(forward),
         Some(inverse),
@@ -134,7 +148,7 @@ pub fn create(conn: &Connection, target: MemoTarget, title: &str, body: &str) ->
     let id = util::new_id();
     let now = util::now();
     conn.execute(
-        &format!("INSERT INTO memos ({COLUMNS}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7)"),
+        &format!("INSERT INTO memos ({COLUMNS}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8)"),
         params![
             id,
             target.document_id,
@@ -142,6 +156,7 @@ pub fn create(conn: &Connection, target: MemoTarget, title: &str, body: &str) ->
             target.excerpt_id,
             title,
             body,
+            history::local_coder(conn),
             now
         ],
     )
@@ -202,7 +217,7 @@ pub fn delete(conn: &Connection, id: &str) -> Result<Memo> {
 /// Reinsert a deleted memo with its original id (for undo).
 pub fn restore(conn: &Connection, memo: &Memo) -> Result<Memo> {
     conn.execute(
-        &format!("INSERT INTO memos ({COLUMNS}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)"),
+        &format!("INSERT INTO memos ({COLUMNS}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)"),
         params![
             memo.id,
             memo.document_id,
@@ -210,6 +225,9 @@ pub fn restore(conn: &Connection, memo: &Memo) -> Result<Memo> {
             memo.excerpt_id,
             memo.title,
             memo.body,
+            // A memo restored from a payload written before schema 11 has no
+            // coder; it was written here, so it becomes the local coder's.
+            memo_coder(conn, memo),
             memo.created_at,
             memo.updated_at
         ],

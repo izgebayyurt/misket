@@ -17,9 +17,10 @@ stays a single file that can be copied while open), `synchronous = NORMAL`.
 | `documents`          | imported sources. `kind` is `text` or `image` (`video` later). `text` is immutable and NULL for media; `text_length` is the code point count; `media_json` holds `{width,height,mime}`; `content_hash` de-duplicates imports; `transcript_json` is how the document marks who is speaking |
 | `codes`              | the codebook tree: adjacency list (`parent_id`) with `sort_order` among siblings, `color`, optional single-key `shortcut`, and the definition fields `description`, `inclusion`, `exclusion` and `example_excerpt_id`. Sibling names are unique case-insensitively                        |
 | `excerpts`           | coded ranges. `kind` = `text` (code point `start_pos`/`end_pos`), `video_range` (milliseconds) or `image_region` (`geometry` JSON `{x,y,w,h}` normalized 0..1). `snapshot` stores the excerpted text or a description of the region. One excerpt per exact range or rectangle             |
-| `excerpt_codes`      | many-to-many between excerpts and codes                                                                                                                                                                                                                                                   |
+| `excerpt_codes`      | many-to-many between excerpts and codes, per coder: the primary key is `(excerpt_id, code_id, coder_id)`, so two people applying the same code to one passage are two rows                                                                                                                |
+| `coders`             | who has worked on this project: `id` (a UUID an install generates once and keeps in its settings), `name`, `color`, `created_at`                                                                                                                                                          |
 | `media_blobs`        | the bytes of an image document, with their MIME type, one row per document. Deleting the document drops them                                                                                                                                                                              |
-| `memos`              | notes with at most one target: `document_id`, `code_id`, `excerpt_id`, or none (project memo). Each target is a real foreign key so deletes cascade                                                                                                                                       |
+| `memos`              | notes with at most one target: `document_id`, `code_id`, `excerpt_id`, or none (project memo). Each target is a real foreign key so deletes cascade. `coder_id` is who wrote it                                                                                                           |
 | `descriptor_fields`  | document attributes ("Site", "Age group"). `kind` is `text`, `number`, `choice` or `date`; `options_json` holds a choice field's options as a JSON array of strings; `sort_order` is the order they are shown in. Names are unique case-insensitively                                     |
 | `descriptor_values`  | one value per (`document_id`, `field_id`), `WITHOUT ROWID`. Both foreign keys cascade, so deleting a document or a field takes its values with it                                                                                                                                         |
 | `sets`               | named groups of codes or of documents. `kind` is `code` or `document`; names are unique per kind, case-insensitively, so "Round 1" can be both                                                                                                                                            |
@@ -30,6 +31,69 @@ stays a single file that can be copied while open), `synchronous = NORMAL`.
 
 All ids are UUID v4 strings so deleted rows can be restored with their original
 identity (undo) and so exports are stable.
+
+## Coders
+
+Misket has no accounts and no server, and a project is one file. A **coder**
+(schema 11, `crates/misket-core/src/db/coders.rs`) is therefore an _install_:
+a UUID generated once and kept in the app's settings (`AppSettings.coderId`),
+plus the name and colour that install signs with (`coderName`, `coderColor` —
+the name is the same string the activity log's `actor` uses). The id is the
+stable part. Names change and two people can share one; the id is what lets a
+later "pull from another coder's copy" tell two people's work apart, and an
+inter-rater view line them up.
+
+Three columns carry it:
+
+| Column                   | Why                                                                                          |
+| ------------------------ | -------------------------------------------------------------------------------------------- |
+| `excerpt_codes.coder_id` | part of the primary key, so agreeing with a colleague adds a coding instead of doing nothing |
+| `memos.coder_id`         | a memo is somebody's note                                                                    |
+| `history.coder_id`       | an edit is somebody's edit, so undo and redo can give a coding back to whoever made it       |
+
+`coder_id = ''` means "written before schema 11, owner not yet known". The
+migration leaves every existing row that way and `coders::ensure_local` — which
+the desktop app calls right after migrating, with the id, name and colour from
+settings — upserts the local coder's row and adopts them, once. That is right,
+because a project file that predates coder identity can only have had one
+person in it. It is idempotent and a no-op from the second open on.
+
+Like the actor name, the local coder id rides on the connection rather than
+through forty function parameters: `history::set_local_coder` writes it to a
+`TEMP` table and `history::local_coder(conn)` reads it back, so it is per
+connection and never in the file. A `&Connection` that was never told (a core
+test that has not called `ensure_local`) writes an empty coder.
+
+**Which rules follow from that.**
+
+- Every new coding — `apply_codes`, `add_codes`, in vivo, quick-code,
+  auto-code, `bulk::add_codes_many` — is the local coder's.
+- Anything that _moves_ a coding keeps its original coder: `bulk::retag_code`
+  (which is also roll-up), `codes::merge`, splitting and merging excerpts, and
+  every undo payload. Merging two codes never quietly reassigns a colleague's
+  work to whoever ran the merge.
+- `excerpts::remove_code(conn, excerpt, code, coder_id)` takes off _one_
+  coder's row: `None` means the local coder, which is what the inspector's ×
+  does, and `Some(id)` is the deliberate "Remove Bob's coding".
+  `bulk::remove_codes_many` is the same, always the local coder's. Deleting the
+  whole excerpt still takes every coder's rows with it, and its inverse
+  restores them with their coders.
+- Counting is over **distinct `(excerpt, code)` pairs**, everywhere:
+  frequencies, co-occurrence, code-by-document, both cross-tabs, `Code.excerptCount`
+  and the overview's top codes. A passage two people coded the same way is one
+  excerpt under that code, not two. Narrowing to one coder is the way to ask
+  "how much did _they_ code".
+- `ExcerptFilter.coderIds` (absent or empty = everyone) keeps only excerpts
+  carrying a coding by one of those coders. It narrows which excerpts come
+  back, not which codes they show.
+
+The DTO side: an excerpt keeps `codeIds` — every code on it once, whoever
+applied it, so rendering and the document view's lanes do not change when a
+second coder agrees — and adds `codings: [{codeId, coderId}]`, one entry per
+`excerpt_codes` row. `coders::list` (the `list_coders` command) returns
+`CoderSummary {id, name, color, codingCount, memoCount, isLocal}` for everyone
+in the file, including an id that appears on a coding but has no `coders` row
+of its own, named by its id so nothing is invisible to a filter.
 
 ## Images
 
@@ -421,6 +485,7 @@ restored with the data they describe.
 | `id`                               | the write order; the log is read by `id`, never by `at` (see below)                     |
 | `parent_id`                        | the step this one followed — the edge that makes the log a tree. `NULL` for a root      |
 | `at`, `actor`                      | when, and whoever was at the keyboard                                                   |
+| `coder_id`                         | which coder made this edit (schema 11); `''` for a node recorded before that            |
 | `kind`, `target_kind`, `target_id` | the dotted verb and what it happened to                                                 |
 | `summary`, `detail_json`           | the sentence the UI shows, and the structured before/after values behind it             |
 | `forward_json`, `inverse_json`     | the operation and its opposite, as replayable JSON. `NULL` = this step cannot be walked |
@@ -487,7 +552,10 @@ A payload is `serde_json::Value`, self-contained, and carries the **original
 ids**, so a restore puts the same row back rather than a copy that only looks
 the same. Timestamps travel with it too (`created_at` on a tag, `updated_at`
 on a code or an excerpt), because "put it back as it was" includes when it
-last changed. There is one vocabulary per family, and the same shape serves
+last changed. So does attribution: a `TagRow` carries `coder_id` and a `Memo`
+carries its own, so undoing and redoing a coding gives it back to whoever made
+it rather than to whoever pressed Ctrl+Z. An empty `coder_id` in a payload
+written before schema 11 replays as the local coder, which is who wrote it. There is one vocabulary per family, and the same shape serves
 both directions:
 
 | Family                             | Payload                                                                                                                                      |
@@ -649,13 +717,20 @@ mutation and on window focus, the same way the activity feed already did.
   codes listed parents-before-children (depth-first in path order, like the CSV).
   `example_excerpt_id` is deliberately left out of both: it points at an
   excerpt that does not exist in the importing project
-- Excerpts CSV: `excerpt_id, document, start, end, geometry, text, codes, memo_count, created_at`
+- Excerpts CSV: `excerpt_id, document, start, end, geometry, text, codes, coders, memo_count, created_at`
   (codes are full paths separated by `; `), then one column per descriptor
   field, named after the field, holding the excerpt's document's value.
+  One row per excerpt, not per coding: `codes` lists every code on it once and
+  `coders` lists the names of everyone who coded it, both `; `-separated. Who
+  applied which code is in the project JSON, where each excerpt's `codings`
+  pairs them up.
   `start`/`end` are empty for image excerpts and `geometry` is empty for text
   ones; `text` holds the snapshot either way
 - Activity CSV: `at, actor, kind, target_kind, target_id, summary, detail_json`, oldest first
-- Project JSON: `{ format: "misket-project", formatVersion: 1, meta, documents, codes, excerpts, memos, descriptorFields, descriptorValues, sets, savedFilters, activity }`.
+- Project JSON: `{ format: "misket-project", formatVersion: 1, meta, documents, codes, coders, excerpts, memos, descriptorFields, descriptorValues, sets, savedFilters, activity }`.
+  `coders` is everyone whose work is in the file; each excerpt carries
+  `codings: [{codeId, coderId}]` alongside `codeIds`, and each memo its own
+  `coderId`.
   `sets` is `[{ set: SetInfo, memberIds }]` for every code set and document
   set; `savedFilters` is the `SavedFilter` list with `filter` already parsed
   back into an `ExcerptFilter` object, not left as a JSON string; `activity`

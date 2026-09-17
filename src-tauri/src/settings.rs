@@ -3,6 +3,7 @@
 
 use std::path::{Path, PathBuf};
 
+use misket_core::models::Coder;
 use misket_core::Result;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
@@ -53,10 +54,25 @@ pub struct AppSettings {
     /// rather than leaving them inline where the document stores them.
     #[serde(default = "default_true")]
     pub show_speaker_gutter: bool,
-    /// The name recorded as the actor in a project's activity log. Empty (or
-    /// absent) means "use the OS user name".
+    /// The name recorded as the actor in a project's activity log, and the
+    /// local coder's name. Empty (or absent) means "use the OS user name".
     #[serde(default)]
     pub coder_name: Option<String>,
+    /// This install's coder id (`misket_core::db::coders`): a UUID generated
+    /// once, the first time it is needed, and never changed. It is what tells
+    /// two people's copies of a project apart when one is merged into the
+    /// other. Absent in a settings file written before coder identity; the
+    /// first [`coder`] call fills it in.
+    #[serde(default)]
+    pub coder_id: Option<String>,
+    /// The colour this coder's work is drawn in. Absent means "pick one".
+    #[serde(default)]
+    pub coder_color: Option<String>,
+    /// Colour the document view's underline lanes by who applied the code
+    /// rather than by the code itself. Off by default: a codebook's colours
+    /// are what most people are reading for.
+    #[serde(default)]
+    pub lanes_by_coder: bool,
 }
 
 impl Default for AppSettings {
@@ -70,6 +86,9 @@ impl Default for AppSettings {
             show_paragraph_numbers: default_true(),
             show_speaker_gutter: default_true(),
             coder_name: None,
+            coder_id: None,
+            coder_color: None,
+            lanes_by_coder: false,
         }
     }
 }
@@ -118,6 +137,54 @@ pub fn actor_name(settings: &AppSettings) -> String {
     }
 }
 
+/// The default colour for a new coder, derived from the id so two installs
+/// rarely land on the same one.
+fn default_coder_color(id: &str) -> String {
+    misket_core::db::coders::color_for(id)
+}
+
+/// Who this install is, as a project file records it: id, name and colour.
+///
+/// The id is generated the first time it is asked for and written straight
+/// back to the settings file, so it is stable from then on — it is the whole
+/// point of the thing. Returns the settings as they now stand alongside the
+/// coder, because that write may have changed them.
+pub fn coder(app: &AppHandle, settings: &AppSettings) -> (AppSettings, Coder) {
+    let mut settings = settings.clone();
+    let mut changed = false;
+    let id = match settings.coder_id.as_deref().map(str::trim) {
+        Some(id) if !id.is_empty() => id.to_string(),
+        _ => {
+            let id = misket_core::db::util::new_id();
+            settings.coder_id = Some(id.clone());
+            changed = true;
+            id
+        }
+    };
+    let color = match settings.coder_color.as_deref().map(str::trim) {
+        Some(c) if !c.is_empty() => c.to_string(),
+        _ => {
+            let c = default_coder_color(&id);
+            settings.coder_color = Some(c.clone());
+            changed = true;
+            c
+        }
+    };
+    if changed {
+        let _ = save(app, &settings);
+    }
+    let name = actor_name(&settings);
+    (
+        settings,
+        Coder {
+            id,
+            name,
+            color,
+            created_at: String::new(),
+        },
+    )
+}
+
 pub fn load(app: &AppHandle) -> Result<AppSettings> {
     read(&file(app)?)
 }
@@ -150,6 +217,9 @@ mod tests {
             show_paragraph_numbers: false,
             show_speaker_gutter: false,
             coder_name: Some("Ada".into()),
+            coder_id: Some("11111111-2222-3333-4444-555555555555".into()),
+            coder_color: Some("#5CB85C".into()),
+            lanes_by_coder: true,
         };
         write(&path, &settings).unwrap();
         assert_eq!(read(&path).unwrap(), settings);
@@ -176,6 +246,8 @@ mod tests {
         assert_eq!(settings.keep_backups, default_keep_backups());
         assert!(settings.show_paragraph_numbers);
         assert_eq!(settings.coder_name, None);
+        assert_eq!(settings.coder_id, None);
+        assert!(!settings.lanes_by_coder);
     }
 
     #[test]

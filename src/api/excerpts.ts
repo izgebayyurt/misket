@@ -34,8 +34,12 @@ export const listDocumentExcerpts = (documentId: string) =>
 export const getExcerpt = (id: string) => invoke<ExcerptDetail>("get_excerpt", { id });
 export const addExcerptCodes = (id: string, codeIds: string[]) =>
   invoke<ExcerptWithCodes>("add_excerpt_codes", { id, codeIds });
-export const removeExcerptCode = (id: string, codeId: string) =>
-  invoke<ExcerptWithCodes>("remove_excerpt_code", { id, codeId });
+/**
+ * Take a code off an excerpt. `coderId` is null for "mine", which is what the
+ * inspector's × does; pass an id to remove somebody else's coding.
+ */
+export const removeExcerptCode = (id: string, codeId: string, coderId: string | null = null) =>
+  invoke<ExcerptWithCodes>("remove_excerpt_code", { id, codeId, coderId });
 export const deleteExcerpt = (id: string) => invoke<ExcerptSnapshot>("delete_excerpt", { id });
 export const restoreExcerpt = (snapshot: ExcerptSnapshot) =>
   invoke<ExcerptWithCodes>("restore_excerpt", { snapshot });

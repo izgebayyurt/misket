@@ -445,7 +445,7 @@ mod tests {
         writes(c, 1, || {
             excerpts::add_codes(c, &e, std::slice::from_ref(&b.id)).unwrap()
         });
-        writes(c, 1, || excerpts::remove_code(c, &e, &b.id).unwrap());
+        writes(c, 1, || excerpts::remove_code(c, &e, &b.id, None).unwrap());
         writes(c, 1, || excerpts::update_range(c, &e, 0, 14).unwrap());
         // A split and a merge each write one entry per excerpt involved, so
         // the half that is created (or removed) has a history of its own.
@@ -629,7 +629,7 @@ mod tests {
         .unwrap();
         let id = applied.excerpt.id;
         excerpts::update_range(c, &id, 0, 11).unwrap();
-        excerpts::remove_code(c, &id, &code.id).unwrap();
+        excerpts::remove_code(c, &id, &code.id, None).unwrap();
 
         let history = excerpt_history(c, &id).unwrap();
         assert_eq!(

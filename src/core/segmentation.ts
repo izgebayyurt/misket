@@ -7,6 +7,9 @@ export interface RenderableExcerpt {
   id: string;
   start: number;
   end: number;
+  /** What the underline lanes stand for. Normally the excerpt's codes; the
+   * document view passes coder ids instead when "colour lanes by coder" is
+   * on, which is the only difference that setting makes. */
   codeIds: string[];
 }
 

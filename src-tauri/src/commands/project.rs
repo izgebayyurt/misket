@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use misket_core::db::{activity, stats, OpenProject};
+use misket_core::db::{activity, coders, stats, OpenProject};
 use misket_core::models::{ProjectInfo, ProjectStats, RecentProject};
 use misket_core::{AppError, Result};
 use tauri::{AppHandle, Manager, State};
@@ -14,11 +14,14 @@ pub(crate) fn install(
     project: OpenProject,
 ) -> Result<ProjectInfo> {
     let info = project.info()?;
-    // Whoever opened it signs everything they do to it from here on.
-    let actor = crate::settings::load(app)
-        .map(|s| crate::settings::actor_name(&s))
-        .unwrap_or_default();
-    activity::set_actor(&project.conn, &actor)?;
+    // Whoever opened it signs everything they do to it from here on: the
+    // name goes in the activity log, the id on every coding, memo and
+    // history node. `ensure_local` also adopts the work of a project that
+    // predates coder identity, once.
+    let settings = crate::settings::load(app).unwrap_or_default();
+    let (_, me) = crate::settings::coder(app, &settings);
+    activity::set_actor(&project.conn, &me.name)?;
+    coders::ensure_local(&project.conn, &me.id, &me.name, &me.color)?;
     recent::touch(app, &info.path, &info.name)?;
     let mut guard = state
         .project

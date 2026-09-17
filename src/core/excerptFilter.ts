@@ -21,6 +21,8 @@ export interface FilterState {
   query: Query | null;
   /** Only what these speakers said; empty is no filter. */
   speakers: string[];
+  /** Only excerpts coded by these coders; empty means everyone. */
+  coderIds: string[];
 }
 
 export const emptyFilterState: FilterState = {
@@ -35,6 +37,7 @@ export const emptyFilterState: FilterState = {
   descriptors: [],
   query: null,
   speakers: [],
+  coderIds: [],
 };
 
 /** Read a filter (a saved one, or the analysis views' click-through). */
@@ -51,6 +54,7 @@ export function filterState(f: ExcerptFilter | undefined | null): FilterState {
     descriptors: f?.descriptors ?? [],
     query: f?.query ?? null,
     speakers: f?.speakers ?? [],
+    coderIds: f?.coderIds ?? [],
   };
 }
 
@@ -68,6 +72,7 @@ export function toFilter(state: FilterState, limit: number, offset = 0): Excerpt
     descriptors: state.descriptors.length ? state.descriptors : null,
     query: state.query,
     speakers: state.speakers.length ? state.speakers : null,
+    coderIds: state.coderIds.length ? state.coderIds : null,
     limit,
     offset,
   };
@@ -91,6 +96,7 @@ export function isFiltered(state: FilterState): boolean {
     state.uncodedOnly ||
     state.overlapsCodeId !== null ||
     state.query !== null ||
-    state.speakers.length > 0
+    state.speakers.length > 0 ||
+    state.coderIds.length > 0
   );
 }

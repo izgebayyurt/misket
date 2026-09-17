@@ -16,6 +16,8 @@ export const keys = {
   documents: ["documents"] as const,
   document: (id: string) => ["document", id] as const,
   codes: ["codes"] as const,
+  /** Everyone whose work is in the project, with their coding counts. */
+  coders: ["coders"] as const,
   descriptorFields: ["descriptorFields"] as const,
   descriptorValues: (documentId: string) => ["descriptorValues", documentId] as const,
   allDescriptorValues: ["descriptorValues"] as const,
@@ -27,11 +29,11 @@ export const keys = {
   excerptQuery: (filter: ExcerptFilter) => ["excerptQuery", filter] as const,
   excerptQueries: ["excerptQuery"] as const,
   analysis: ["analysis"] as const,
-  codeFrequencies: (documentIds: string[], documentSetIds: string[]) =>
-    ["analysis", "frequencies", documentIds, documentSetIds] as const,
-  coOccurrence: (documentIds: string[], documentSetIds: string[]) =>
-    ["analysis", "cooccurrence", documentIds, documentSetIds] as const,
-  codeByDocument: ["analysis", "codeByDocument"] as const,
+  codeFrequencies: (documentIds: string[], documentSetIds: string[], coderIds: string[]) =>
+    ["analysis", "frequencies", documentIds, documentSetIds, coderIds] as const,
+  coOccurrence: (documentIds: string[], documentSetIds: string[], coderIds: string[]) =>
+    ["analysis", "cooccurrence", documentIds, documentSetIds, coderIds] as const,
+  codeByDocument: (coderIds: string[]) => ["analysis", "codeByDocument", coderIds] as const,
   wordFrequencies: (scope: WordFrequencyScope, options: WordFrequencyOptions) =>
     ["analysis", "wordFrequencies", scope, options] as const,
   stopWords: ["analysis", "stopWords"] as const,

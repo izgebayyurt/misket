@@ -292,16 +292,18 @@ pub fn restore(
     }
     for m in &snapshot.memos {
         tx.execute(
-            "INSERT INTO memos (id, document_id, title, body, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+            "INSERT INTO memos (id, document_id, title, body, coder_id, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
              ON CONFLICT(id) DO UPDATE SET
                document_id = excluded.document_id, title = excluded.title,
-               body = excluded.body, updated_at = excluded.updated_at",
+               body = excluded.body, coder_id = excluded.coder_id,
+               updated_at = excluded.updated_at",
             params![
                 m.id,
                 snapshot.id,
                 m.title,
                 m.body,
+                memos::memo_coder(&tx, m),
                 m.created_at,
                 m.updated_at
             ],

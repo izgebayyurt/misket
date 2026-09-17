@@ -63,8 +63,18 @@ export interface AppSettings {
   /** Lay a transcript's speaker labels out in a gutter beside the text
    * instead of leaving them inline where they are stored. */
   showSpeakerGutter: boolean;
-  /** Recorded as the actor in the activity log; empty means the OS user name. */
+  /** Recorded as the actor in the activity log, and the local coder's name;
+   * empty means the OS user name. */
   coderName?: string | null;
+  /** This install's coder id: a UUID generated once and never changed. It is
+   * what tells two people's copies of a project apart. Absent until the app
+   * has needed it once. */
+  coderId?: string | null;
+  /** The colour this coder's work is drawn in; absent means "pick one". */
+  coderColor?: string | null;
+  /** Colour the document view's underline lanes by who applied the code
+   * rather than by the code itself. */
+  lanesByCoder: boolean;
 }
 
 export type DocumentKind = "text" | "image" | "video";
@@ -196,10 +206,21 @@ export interface ExcerptWithCodes {
   endPos: number | null;
   geometry: string | null;
   snapshot: string | null;
+  /** Every code on this excerpt, once, whoever applied it. */
   codeIds: string[];
+  /** The same codings with their coders, one entry per `excerpt_codes` row:
+   * two people who applied the same code are two codings and one `codeIds`
+   * entry. Absent in a payload from before coder identity. */
+  codings?: Coding[];
   memoCount: number;
   createdAt: string;
   updatedAt: string;
+}
+
+/** One code applied to one excerpt by one coder. */
+export interface Coding {
+  codeId: string;
+  coderId: string;
 }
 
 /** A region of an image, as fractions of its width and height (0..1). */
@@ -281,6 +302,26 @@ export interface DescriptorFilter {
   values: string[];
 }
 
+/** One coder: an install of Misket, identified by a UUID kept in its settings. */
+export interface Coder {
+  id: string;
+  name: string;
+  color: string;
+  createdAt: string;
+}
+
+/** A coder with how much of the project is theirs. */
+export interface CoderSummary {
+  id: string;
+  name: string;
+  color: string;
+  /** `excerpt_codes` rows, not distinct excerpts. */
+  codingCount: number;
+  memoCount: number;
+  /** Whether this is the coder this install writes as. */
+  isLocal: boolean;
+}
+
 export interface Memo {
   id: string;
   documentId: string | null;
@@ -288,6 +329,8 @@ export interface Memo {
   excerptId: string | null;
   title: string;
   body: string;
+  /** Who wrote it; empty in a payload from before coder identity. */
+  coderId?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -318,10 +361,11 @@ export interface ExcerptSnapshot {
   tags?: TagRow[];
 }
 
-/** One `excerpt_codes` row. */
+/** One `excerpt_codes` row, with the coder it belongs to. */
 export interface TagRow {
   excerptId: string;
   codeId: string;
+  coderId?: string;
   createdAt: string;
 }
 
@@ -394,6 +438,10 @@ export interface ExcerptFilter {
   /** Only what these speakers said. Answered from each document's transcript
    * format before paging, like `query`; an empty list is no filter. */
   speakers?: string[] | null;
+  /** Only excerpts carrying a coding by one of these coders. Absent or empty
+   * means everyone, which is the default. It narrows which excerpts come
+   * back, not which codes they show. */
+  coderIds?: string[] | null;
   limit?: number;
   offset?: number;
 }
@@ -575,6 +623,8 @@ export interface CrosstabRequest {
   includeDescendants?: boolean;
   documentIds?: string[] | null;
   documentSetIds?: string[] | null;
+  /** Whose coding to count; everyone when absent or empty. */
+  coderIds?: string[] | null;
   /** Number fields only: equal-width bins between min and max (default 4). */
   bins?: number | null;
   mode?: CrosstabMode | null;
@@ -796,6 +846,8 @@ export interface HistoryNodeSummary {
   parentId: number | null;
   at: string;
   actor: string;
+  /** Which coder made this edit; empty for a node from before coder identity. */
+  coderId?: string;
   kind: string;
   summary: string;
   branchName: string | null;

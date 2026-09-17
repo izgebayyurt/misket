@@ -15,6 +15,7 @@ const MIGRATIONS: &[(i64, &str)] = &[
     (8, include_str!("migrations/0008_history.sql")),
     (9, include_str!("migrations/0009_history_groups.sql")),
     (10, include_str!("migrations/0010_transcripts.sql")),
+    (11, include_str!("migrations/0011_coders.sql")),
 ];
 
 pub fn latest_version() -> i64 {
@@ -74,6 +75,95 @@ mod tests {
         // for a forward-only sequence keyed by `PRAGMA user_version`.
         assert!(MIGRATIONS.windows(2).all(|w| w[0].0 < w[1].0));
         assert_eq!(latest_version(), MIGRATIONS.last().unwrap().0);
+    }
+
+    /// Schema 11 rebuilds `excerpt_codes` to put the coder in its primary
+    /// key. A rebuild is the one migration shape that can silently lose rows,
+    /// so this runs it over a real v10 table and counts what comes out.
+    #[test]
+    fn schema_11_rebuilds_excerpt_codes_and_keeps_every_coding() {
+        let conn = Connection::open_in_memory().unwrap();
+        migrate(&conn).unwrap();
+        // Put the table back the way schema 10 had it, with two codings in it.
+        conn.execute_batch(
+            "DROP INDEX excerpt_codes_coder_idx;
+             DROP INDEX excerpt_codes_code_idx;
+             DROP TABLE excerpt_codes;
+             DROP TABLE coders;
+             DROP INDEX memos_coder_idx;
+             ALTER TABLE memos   DROP COLUMN coder_id;
+             ALTER TABLE history DROP COLUMN coder_id;
+             CREATE TABLE excerpt_codes (
+               excerpt_id TEXT NOT NULL REFERENCES excerpts(id) ON DELETE CASCADE,
+               code_id    TEXT NOT NULL REFERENCES codes(id)    ON DELETE CASCADE,
+               created_at TEXT NOT NULL,
+               PRIMARY KEY (excerpt_id, code_id)
+             ) WITHOUT ROWID;
+             CREATE INDEX excerpt_codes_code_idx ON excerpt_codes(code_id);
+             INSERT INTO documents (id, kind, name, content_hash, text, text_length,
+                                    created_at, updated_at)
+               VALUES ('d', 'text', 'Interview', 'h', 'one two three', 13, 't', 't');
+             INSERT INTO codes (id, name, color, created_at, updated_at)
+               VALUES ('c1', 'Alpha', '#D9534F', 't', 't'),
+                      ('c2', 'Beta',  '#5CB85C', 't', 't');
+             INSERT INTO excerpts (id, document_id, kind, start_pos, end_pos, snapshot,
+                                   created_at, updated_at)
+               VALUES ('e', 'd', 'text', 0, 3, 'one', 't', 't');
+             INSERT INTO excerpt_codes (excerpt_id, code_id, created_at)
+               VALUES ('e', 'c1', '2024-01-01T00:00:00Z'),
+                      ('e', 'c2', '2024-01-02T00:00:00Z');
+             INSERT INTO memos (id, excerpt_id, title, body, created_at, updated_at)
+               VALUES ('m', 'e', 'Note', 'body', 't', 't');
+             PRAGMA user_version = 10;",
+        )
+        .unwrap();
+
+        migrate(&conn).unwrap();
+        assert_eq!(current_version(&conn).unwrap(), latest_version());
+
+        // Both codings survived the rebuild, keeping their own timestamps,
+        // and are waiting for an owner.
+        let rows: Vec<(String, String, String)> = conn
+            .prepare("SELECT code_id, coder_id, created_at FROM excerpt_codes ORDER BY code_id")
+            .unwrap()
+            .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
+            .unwrap()
+            .collect::<rusqlite::Result<_>>()
+            .unwrap();
+        assert_eq!(
+            rows,
+            vec![
+                ("c1".into(), String::new(), "2024-01-01T00:00:00Z".into()),
+                ("c2".into(), String::new(), "2024-01-02T00:00:00Z".into()),
+            ]
+        );
+        // The index the browser's code filter leans on is back.
+        let indexes: i64 = conn
+            .query_row(
+                "SELECT count(*) FROM sqlite_master
+                  WHERE name IN ('excerpt_codes_code_idx', 'excerpt_codes_coder_idx')",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(indexes, 2);
+
+        // And the first open claims all of it for whoever is at the keyboard.
+        super::super::coders::ensure_local(&conn, "ada", "Ada", "#D9534F").unwrap();
+        let mine: i64 = conn
+            .query_row(
+                "SELECT count(*) FROM excerpt_codes WHERE coder_id = 'ada'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(mine, 2);
+        let memo_coder: String = conn
+            .query_row("SELECT coder_id FROM memos WHERE id = 'm'", [], |r| {
+                r.get(0)
+            })
+            .unwrap();
+        assert_eq!(memo_coder, "ada");
     }
 
     #[test]

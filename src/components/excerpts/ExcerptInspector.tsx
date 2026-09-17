@@ -1,6 +1,14 @@
 import { X } from "lucide-react";
 import { useExcerptDetail, useRemoveExcerptCode } from "@/queries/excerpts";
 import { useCodeTree } from "@/queries/codes";
+import { useCoders } from "@/queries/coders";
+import { CoderMark } from "@/components/coders/CoderMark";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { pathOf } from "@/core/codeTree";
 import { ColorDot } from "@/components/codebook/ColorSwatch";
 import { UseAsExampleButton } from "@/components/codebook/UseAsExampleButton";
@@ -16,8 +24,16 @@ export function ExcerptInspector({ excerptId }: { excerptId: string }) {
   const { data: detail } = useExcerptDetail(excerptId);
   const tree = useCodeTree();
   const removeCode = useRemoveExcerptCode();
+  const { data: coders } = useCoders();
   const setPaletteOpen = useWorkspace((s) => s.setPaletteOpen);
   if (!detail) return null;
+  const me = coders?.find((c) => c.isLocal)?.id;
+  const nameOf = (coderId: string) =>
+    coderId === me ? "my" : `${coders?.find((c) => c.id === coderId)?.name ?? coderId}'s`;
+  const remove = (codeId: string, coderId?: string) =>
+    removeCode
+      .mutateAsync({ id: detail.id, documentId: detail.documentId, codeId, coderId })
+      .catch(toast.error);
   return (
     <div className="flex flex-col" data-testid="excerpt-inspector">
       <div className="border-b border-border p-3">
@@ -57,27 +73,58 @@ export function ExcerptInspector({ excerptId }: { excerptId: string }) {
           </Button>
         </div>
         <ul className="mt-1">
-          {detail.codeIds.map((id) => (
-            <li
-              key={id}
-              className="group flex items-center gap-2 rounded px-1 py-1 text-sm hover:bg-muted"
-            >
-              <ColorDot color={tree.byId.get(id)?.code.color ?? "#999"} />
-              <span className="min-w-0 flex-1 truncate">{pathOf(tree, id)}</span>
-              <UseAsExampleButton codeId={id} excerptId={detail.id} />
-              <button
-                className="rounded p-0.5 text-fg-muted opacity-0 hover:bg-border group-hover:opacity-100"
-                aria-label="Remove code"
-                onClick={() =>
-                  removeCode
-                    .mutateAsync({ id: detail.id, documentId: detail.documentId, codeId: id })
-                    .catch(toast.error)
-                }
+          {detail.codeIds.map((id) => {
+            // Who applied this code. One coding and it is mine is the
+            // ordinary case, and gets the ordinary ×; anything else offers a
+            // choice, because taking back your own work and taking away a
+            // colleague's are different acts.
+            const applied = (detail.codings ?? [])
+              .filter((c) => c.codeId === id)
+              .map((c) => c.coderId);
+            const mineOnly = applied.length <= 1 && (applied.length === 0 || applied[0] === me);
+            return (
+              <li
+                key={id}
+                className="group flex items-center gap-2 rounded px-1 py-1 text-sm hover:bg-muted"
               >
-                <X className="size-3.5" />
-              </button>
-            </li>
-          ))}
+                <ColorDot color={tree.byId.get(id)?.code.color ?? "#999"} />
+                <span className="min-w-0 flex-1 truncate">{pathOf(tree, id)}</span>
+                {coders && coders.length > 1
+                  ? applied.map((coderId) => <CoderMark key={coderId} coderId={coderId} />)
+                  : null}
+                <UseAsExampleButton codeId={id} excerptId={detail.id} />
+                {mineOnly ? (
+                  <button
+                    className="rounded p-0.5 text-fg-muted opacity-0 hover:bg-border group-hover:opacity-100"
+                    aria-label="Remove code"
+                    onClick={() => void remove(id)}
+                  >
+                    <X className="size-3.5" />
+                  </button>
+                ) : (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger
+                      className="rounded p-0.5 text-fg-muted opacity-0 hover:bg-border group-hover:opacity-100 data-[state=open]:opacity-100"
+                      aria-label="Remove code"
+                    >
+                      <X className="size-3.5" />
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      {applied.map((coderId) => (
+                        <DropdownMenuItem
+                          key={coderId}
+                          danger
+                          onSelect={() => void remove(id, coderId)}
+                        >
+                          Remove {nameOf(coderId)} coding
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
+              </li>
+            );
+          })}
           {detail.codeIds.length === 0 ? (
             <li className="px-1 text-sm text-fg-muted">Uncoded.</li>
           ) : null}

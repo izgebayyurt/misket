@@ -59,13 +59,16 @@ pub fn add_excerpt_codes(
     state.with_project(|p| excerpts::add_codes(&p.conn, &id, &code_ids))
 }
 
+/// Take a code off an excerpt. `coder_id` is `None` for "mine", which is what
+/// the inspector's × does; pass an id to remove somebody else's coding.
 #[tauri::command]
 pub fn remove_excerpt_code(
     state: State<'_, AppState>,
     id: String,
     code_id: String,
+    coder_id: Option<String>,
 ) -> Result<ExcerptWithCodes> {
-    state.with_project(|p| excerpts::remove_code(&p.conn, &id, &code_id))
+    state.with_project(|p| excerpts::remove_code(&p.conn, &id, &code_id, coder_id.as_deref()))
 }
 
 #[tauri::command]

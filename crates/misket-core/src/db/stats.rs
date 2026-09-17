@@ -91,7 +91,7 @@ fn excerpts_per_day(conn: &Connection) -> Result<Vec<(String, i64)>> {
 /// on code id so the result is stable.
 fn top_codes(conn: &Connection) -> Result<Vec<(String, i64)>> {
     let mut stmt = conn.prepare(
-        "SELECT code_id, count(*) AS c
+        "SELECT code_id, count(DISTINCT excerpt_id) AS c
          FROM excerpt_codes
          GROUP BY code_id
          ORDER BY c DESC, code_id

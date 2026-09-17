@@ -8,6 +8,7 @@ import { ColorDot } from "@/components/codebook/ColorSwatch";
 import { FilterPicker } from "@/components/ui/filter-picker";
 import { DescriptorConditions } from "@/components/descriptors/DescriptorConditions";
 import { SetsPickerGroup } from "@/components/sets/SetsPickerGroup";
+import { CoderFilter } from "@/components/coders/CoderMark";
 import { SavedFilters } from "./SavedFilters";
 import { QueryBuilder } from "./QueryBuilder";
 import type { DescriptorFilter, ExcerptFilter, Query } from "@/api/types";
@@ -38,6 +39,9 @@ interface Props {
   /** Only what these speakers said; empty is no filter. */
   speakers: string[];
   onSpeakers: (v: string[]) => void;
+  /** Only excerpts coded by these coders; empty means everyone. */
+  coderIds: string[];
+  onCoderIds: (v: string[]) => void;
   /** The filter as it stands, for "Save current filter…". */
   filter: ExcerptFilter;
   onApplyFilter: (filter: ExcerptFilter) => void;
@@ -212,6 +216,7 @@ export function ExcerptFilters(p: Props) {
           )}
         </FilterPicker>
       ) : null}
+      <CoderFilter coderIds={p.coderIds} onChange={p.onCoderIds} />
       <DescriptorConditions conditions={p.descriptors} onChange={p.onDescriptors} />
       <QueryBuilder query={p.query} onChange={p.onQuery} />
       <label className="flex items-center gap-1.5 text-xs">

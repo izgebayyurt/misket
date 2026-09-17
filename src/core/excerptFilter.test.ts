@@ -38,6 +38,7 @@ describe("filterState", () => {
       descriptors: [{ fieldId: "f", op: "eq", values: ["x"] }],
       query: QUERY,
       speakers: ["P1"],
+      coderIds: ["ada"],
       limit: 10,
     });
     expect(state).toEqual({
@@ -52,6 +53,7 @@ describe("filterState", () => {
       descriptors: [{ fieldId: "f", op: "eq", values: ["x"] }],
       query: QUERY,
       speakers: ["P1"],
+      coderIds: ["ada"],
     });
   });
 
@@ -81,6 +83,7 @@ describe("toFilter", () => {
       descriptors: null,
       query: null,
       speakers: null,
+      coderIds: null,
       limit: 200,
       offset: 0,
     });
@@ -139,6 +142,7 @@ describe("counts and isFiltered", () => {
       { overlapsCodeId: "c" },
       { descriptors: [{ fieldId: "f", op: "empty" as const, values: [] }] },
       { query: QUERY },
+      { coderIds: ["ada"] },
     ]) {
       expect(isFiltered({ ...emptyFilterState, ...patch })).toBe(true);
     }
