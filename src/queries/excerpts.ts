@@ -48,6 +48,7 @@ export function useInvalidateExcerpts() {
     qc.invalidateQueries({ queryKey: keys.documents });
     qc.invalidateQueries({ queryKey: keys.project });
     qc.invalidateQueries({ queryKey: keys.stats });
+    qc.invalidateQueries({ queryKey: keys.history });
   };
 }
 

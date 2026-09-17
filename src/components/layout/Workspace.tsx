@@ -12,6 +12,7 @@ import { AnalysisView } from "@/components/analysis/AnalysisView";
 import { SearchView } from "@/components/search/SearchView";
 import { DescriptorTable } from "@/components/descriptors/DescriptorTable";
 import { OverviewView } from "@/components/overview/OverviewView";
+import { HistoryView } from "@/components/history/HistoryView";
 import { CodePalette } from "@/components/palette/CodePalette";
 import { ImportDropzone } from "@/components/documents/ImportDropzone";
 import { SettingsDialog } from "./SettingsDialog";
@@ -61,6 +62,8 @@ export function Workspace({ project }: { project: ProjectInfo }) {
             <DescriptorTable />
           ) : view.kind === "overview" ? (
             <OverviewView />
+          ) : view.kind === "history" ? (
+            <HistoryView />
           ) : (
             <EmptyState />
           )}

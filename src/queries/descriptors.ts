@@ -40,6 +40,7 @@ export function useInvalidateDescriptors() {
     qc.invalidateQueries({ queryKey: keys.excerptQueries });
     qc.invalidateQueries({ queryKey: keys.analysis });
     qc.invalidateQueries({ queryKey: keys.stats });
+    qc.invalidateQueries({ queryKey: keys.history });
   };
 }
 

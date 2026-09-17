@@ -24,6 +24,10 @@ export function useGlobalShortcuts() {
           e.preventDefault();
           ws.setView({ kind: "overview" });
           return;
+        case "history":
+          e.preventDefault();
+          ws.setView({ kind: "history" });
+          return;
         case "excerptBrowser":
           e.preventDefault();
           ws.openExcerpts();

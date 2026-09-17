@@ -33,6 +33,7 @@ function useInvalidateFramework() {
   return (id?: string) => {
     qc.invalidateQueries({ queryKey: keys.frameworkMatrices });
     if (id) qc.invalidateQueries({ queryKey: keys.frameworkMatrix(id) });
+    qc.invalidateQueries({ queryKey: keys.history });
   };
 }
 

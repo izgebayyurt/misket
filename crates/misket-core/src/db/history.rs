@@ -781,10 +781,11 @@ pub fn tree(conn: &Connection) -> Result<Vec<HistoryNodeSummary>> {
     let head = head(conn)?;
     let mut children: HashMap<Option<i64>, Vec<i64>> = HashMap::new();
     let mut stmt = conn.prepare(
-        "SELECT id, parent_id, at, actor, kind, summary, branch_name, inverse_json IS NOT NULL
+        "SELECT id, parent_id, at, actor, kind, summary, branch_name, inverse_json IS NOT NULL,
+                preferred_child
          FROM history ORDER BY id",
     )?;
-    /// id, parent, at, actor, kind, summary, branch name, undoable.
+    /// id, parent, at, actor, kind, summary, branch name, undoable, preferred child.
     type TreeRow = (
         i64,
         Option<i64>,
@@ -794,6 +795,7 @@ pub fn tree(conn: &Connection) -> Result<Vec<HistoryNodeSummary>> {
         String,
         Option<String>,
         bool,
+        Option<i64>,
     );
     let rows: Vec<TreeRow> = stmt
         .query_map([], |r| {
@@ -806,6 +808,7 @@ pub fn tree(conn: &Connection) -> Result<Vec<HistoryNodeSummary>> {
                 r.get(5)?,
                 r.get(6)?,
                 r.get(7)?,
+                r.get(8)?,
             ))
         })?
         .collect::<rusqlite::Result<_>>()?;
@@ -815,17 +818,20 @@ pub fn tree(conn: &Connection) -> Result<Vec<HistoryNodeSummary>> {
     Ok(rows
         .iter()
         .map(
-            |(id, parent_id, at, actor, kind, summary, branch_name, undoable)| HistoryNodeSummary {
-                id: *id,
-                parent_id: *parent_id,
-                at: at.clone(),
-                actor: actor.clone(),
-                kind: kind.clone(),
-                summary: summary.clone(),
-                branch_name: branch_name.clone(),
-                undoable: *undoable,
-                is_head: head == Some(*id),
-                children: children.get(&Some(*id)).cloned().unwrap_or_default(),
+            |(id, parent_id, at, actor, kind, summary, branch_name, undoable, preferred_child)| {
+                HistoryNodeSummary {
+                    id: *id,
+                    parent_id: *parent_id,
+                    at: at.clone(),
+                    actor: actor.clone(),
+                    kind: kind.clone(),
+                    summary: summary.clone(),
+                    branch_name: branch_name.clone(),
+                    undoable: *undoable,
+                    is_head: head == Some(*id),
+                    preferred_child: *preferred_child,
+                    children: children.get(&Some(*id)).cloned().unwrap_or_default(),
+                }
             },
         )
         .collect())
@@ -1557,6 +1563,16 @@ mod tests {
         assert!(root.undoable);
         assert!(tree.iter().filter(|n| n.is_head).count() == 1);
         assert!(tree.last().unwrap().is_head);
+        // The graph view's main line follows `preferred_child`: after undoing
+        // "One" and writing "Two", the fork's preferred child is the second
+        // (current) branch, not the first.
+        assert_eq!(root.preferred_child, Some(tree.last().unwrap().id));
+        assert_ne!(root.preferred_child, Some(root.children[0]));
+        let leaf = tree
+            .iter()
+            .find(|n| n.id == tree.last().unwrap().id)
+            .unwrap();
+        assert_eq!(leaf.preferred_child, None, "a leaf has no preferred child");
 
         rename_branch(c, fork.id, None).unwrap();
         assert_eq!(get(c, fork.id).unwrap().branch_name, None);
