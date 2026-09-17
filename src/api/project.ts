@@ -27,3 +27,8 @@ export async function readSourceFile(path: string): Promise<Uint8Array> {
 /** Write text to a path the user picked in the save dialog (CSV exports). */
 export const writeTextFile = (path: string, contents: string) =>
   invoke<void>("write_text_file", { path, contents });
+
+/** Write bytes to a path the user picked in the save dialog (PNG exports of
+ * the treemap or dendrogram, rendered to a canvas first). */
+export const writeBinaryFile = (path: string, contents: Uint8Array) =>
+  invoke<void>("write_binary_file", { path, contents: Array.from(contents) });

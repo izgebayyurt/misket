@@ -165,3 +165,11 @@ pub fn write_text_file(path: String, contents: String) -> Result<()> {
     std::fs::write(&path, contents)?;
     Ok(())
 }
+
+/// Write bytes the frontend produced (a canvas-rendered PNG export, e.g. the
+/// treemap or dendrogram) to a path the user picked in the save dialog.
+#[tauri::command]
+pub fn write_binary_file(path: String, contents: Vec<u8>) -> Result<()> {
+    std::fs::write(&path, contents)?;
+    Ok(())
+}
