@@ -9,6 +9,7 @@ import { ColorDot } from "@/components/codebook/ColorSwatch";
 import { FilterPicker } from "@/components/ui/filter-picker";
 import { useWorkspace } from "@/state/workspace";
 import type { CrosstabMode, CrosstabRequest } from "@/api/types";
+import { CoderFilter } from "@/components/coders/CoderMark";
 import { AnalysisToolbar, DocumentFilter, EmptyNote, ExportCsvButton } from "./shared";
 import { shade } from "./shade";
 
@@ -36,6 +37,7 @@ export function CodeByDescriptorMatrix() {
   const [includeSub, setIncludeSub] = useState(true);
   const [documentIds, setDocumentIds] = useState<string[]>([]);
   const [documentSetIds, setDocumentSetIds] = useState<string[]>([]);
+  const [coderIds, setCoderIds] = useState<string[]>([]);
   const [mode, setMode] = useState<CrosstabMode>("excerpts");
   const [bins, setBins] = useState(4);
   const tree = useCodeTree();
@@ -75,11 +77,12 @@ export function CodeByDescriptorMatrix() {
             includeDescendants: includeSub,
             documentIds: documentIds.length ? documentIds : null,
             documentSetIds: documentSetIds.length ? documentSetIds : null,
+            coderIds: coderIds.length ? coderIds : null,
             bins: isNumber ? bins : null,
             mode,
           }
         : null,
-    [field, codeIds, includeSub, documentIds, documentSetIds, isNumber, bins, mode],
+    [field, codeIds, includeSub, documentIds, documentSetIds, coderIds, isNumber, bins, mode],
   );
   const { data, isPending } = useCodeByDescriptor(request);
 
@@ -176,6 +179,7 @@ export function CodeByDescriptorMatrix() {
         documentSetIds={documentSetIds}
         onSetIdsChange={setDocumentSetIds}
       />
+      <CoderFilter coderIds={coderIds} onChange={setCoderIds} />
       <select
         className="rounded-md border border-border bg-bg px-2 py-1 text-xs"
         value={mode}
