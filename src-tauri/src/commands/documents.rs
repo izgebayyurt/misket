@@ -57,10 +57,12 @@ pub fn delete_document(state: State<'_, AppState>, app: AppHandle, id: String) -
 }
 
 /// Extensions `src/core/importers` can take: the ones it parses into text,
-/// plus the image formats it imports as media. Keep in sync with
-/// `SUPPORTED_EXTENSIONS` there.
-const IMPORTABLE_EXTENSIONS: [&str; 9] = [
-    "txt", "md", "markdown", "docx", "pdf", "png", "jpg", "jpeg", "webp",
+/// the image formats it stores inside the project, and the audio and video
+/// formats it imports by reference. Keep in sync with `SUPPORTED_EXTENSIONS`
+/// there.
+const IMPORTABLE_EXTENSIONS: [&str; 20] = [
+    "txt", "md", "markdown", "docx", "pdf", "png", "jpg", "jpeg", "webp", "mp3", "wav", "m4a",
+    "aac", "ogg", "flac", "mp4", "mov", "webm", "m4v", "mkv",
 ];
 
 fn is_importable(path: &Path) -> bool {
@@ -139,6 +141,8 @@ mod tests {
             "a.md",
             "C.PDF",
             "shot.png",
+            "tape.mp3",
+            "clip.mp4",
             "notes.rtf",
             ".hidden.txt",
         ] {
@@ -162,10 +166,21 @@ mod tests {
                 })
                 .collect()
         };
-        assert_eq!(names(false), ["a.md", "b.txt", "C.PDF", "shot.png"]);
+        assert_eq!(
+            names(false),
+            ["a.md", "b.txt", "C.PDF", "clip.mp4", "shot.png", "tape.mp3"]
+        );
         assert_eq!(
             names(true),
-            ["a.md", "b.txt", "C.PDF", "deep.docx", "shot.png"]
+            [
+                "a.md",
+                "b.txt",
+                "C.PDF",
+                "clip.mp4",
+                "deep.docx",
+                "shot.png",
+                "tape.mp3"
+            ]
         );
         assert!(matches!(
             list_importable_files("/definitely/not/here".into(), false),
