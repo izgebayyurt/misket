@@ -99,6 +99,14 @@
         merge it into the current codebook by matching code names, or add it fresh under a code you
         choose.
       </p>
+      <p>
+        A code can also carry a <strong>weight scale</strong> — a numeric range with a step and an
+        optional label for each end, such as intensity 1–5 or a -2..+2 sentiment. Turn it on in the
+        code's edit dialog. Every fresh application of that code then starts at the scale's default,
+        ready to adjust from the inspector, a compact 1–9 control, or (with an excerpt focused) the
+        <kbd>1</kbd>–<kbd>9</kbd> keys. See <a href="tutorial.html#analysis">Analysis views</a> for
+        the histogram and the cross-tab's mean-weight measure.
+      </p>
 
       <h2 id="coding">Code text</h2>
       <p>Select a span of text in the document, then either:</p>
@@ -304,6 +312,12 @@
           from the same view.
         </li>
         <li>
+          a <strong>Weights</strong> tab: pick a code that has a numeric scale (give one to a code
+          in its dialog — a range, a step and an optional label for each end) and see a histogram of
+          every rated value plus its mean, median, min and max, scoped by the same document/coder
+          filters as the browser. Click a bar to see exactly those excerpts.
+        </li>
+        <li>
           a <strong>treemap</strong> of the code hierarchy: each code's tile area is its distinct
           excerpt count (own, or including sub-codes — a toggle), coloured with the code's own
           colour tinted lighter the deeper it sits. Click a code with sub-codes to drill into it — a
@@ -319,6 +333,13 @@
           actually co-occur; otherwise the view explains what to do first.
         </li>
       </ul>
+      <p>
+        The code-by-descriptor cross-tab also has a measure switch, <strong>Counts</strong> or
+        <strong>Mean weight</strong>: with a weighted code as a row, "mean weight" replaces its
+        counts with the mean of its ratings in each column, so a mixed-methods write-up can say not
+        just how often a theme comes up at each site but how strongly, on average, it was coded
+        there.
+      </p>
       <p>
         Every cell or word clicks through — to the matching excerpts in the browser, or, for a word,
         to a project search seeded with that term — and each view exports to CSV (the treemap and

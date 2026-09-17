@@ -8,6 +8,7 @@ export type AnalysisTab =
   | "descriptor"
   | "framework"
   | "words"
+  | "weights"
   | "treemap"
   | "clustering";
 

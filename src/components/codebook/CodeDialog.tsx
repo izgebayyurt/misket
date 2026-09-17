@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { Code } from "@/api/types";
+import type { Code, WeightScale } from "@/api/types";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter } from "@/components/ui/dialog";
 import { Input, Textarea } from "@/components/ui/input";
@@ -7,6 +7,7 @@ import { ColorPicker } from "./ColorSwatch";
 import { useCodes, useCreateCode, useUpdateCode } from "@/queries/codes";
 import { nextColor, pathOf } from "@/core/codeTree";
 import { useCodeTree } from "@/queries/codes";
+import { formatWeight, validateWeightScale } from "@/core/weights";
 import { toast } from "@/state/toasts";
 
 type Props =
@@ -31,12 +32,54 @@ export function CodeDialog(props: Props) {
   const [exclusion, setExclusion] = useState(editing?.exclusion ?? "");
   const [shortcut, setShortcut] = useState(editing?.shortcut ?? "");
 
+  // A weight scale is edit-only: a fresh code has nowhere for a rating to
+  // live yet, and giving it one is exactly the same "edit code" action as
+  // any other field, once it exists.
+  const existingScale = editing?.weightScale ?? null;
+  const [hasScale, setHasScale] = useState(!!existingScale);
+  const [scaleMin, setScaleMin] = useState(String(existingScale?.min ?? 1));
+  const [scaleMax, setScaleMax] = useState(String(existingScale?.max ?? 5));
+  const [scaleStep, setScaleStep] = useState(String(existingScale?.step ?? 1));
+  const [scaleDefault, setScaleDefault] = useState(String(existingScale?.default ?? 3));
+  const [labelMin, setLabelMin] = useState(
+    existingScale ? (existingScale.labels?.[formatWeight(existingScale.min)] ?? "") : "",
+  );
+  const [labelMax, setLabelMax] = useState(
+    existingScale ? (existingScale.labels?.[formatWeight(existingScale.max)] ?? "") : "",
+  );
+
   const parentPath =
     props.mode === "create" && props.parentId ? pathOf(tree, props.parentId) : null;
+
+  /** The scale as the form has it, or an error to show instead of saving. */
+  function buildScale(): { scale: WeightScale | null; error: string | null } {
+    if (!hasScale) return { scale: null, error: null };
+    const [min, max, step, def] = [scaleMin, scaleMax, scaleStep, scaleDefault].map(Number);
+    if ([min, max, step, def].some((n) => Number.isNaN(n))) {
+      return { scale: null, error: "Weight scale: min, max, step and default must be numbers." };
+    }
+    const labels: Record<string, string> = {};
+    if (labelMin.trim()) labels[formatWeight(min!)] = labelMin.trim();
+    if (labelMax.trim()) labels[formatWeight(max!)] = labelMax.trim();
+    const scale: WeightScale = {
+      min: min!,
+      max: max!,
+      step: step!,
+      default: def!,
+      ...(Object.keys(labels).length > 0 ? { labels } : {}),
+    };
+    const problem = validateWeightScale(scale);
+    return problem ? { scale: null, error: `Weight scale: ${problem}.` } : { scale, error: null };
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!name.trim()) return;
+    const { scale, error } = buildScale();
+    if (error) {
+      toast.error(error);
+      return;
+    }
     try {
       if (props.mode === "create") {
         const created = await create.mutateAsync({
@@ -52,7 +95,15 @@ export function CodeDialog(props: Props) {
       } else {
         await update.mutateAsync({
           id: props.code.id,
-          patch: { name, color, description, inclusion, exclusion, shortcut: shortcut || null },
+          patch: {
+            name,
+            color,
+            description,
+            inclusion,
+            exclusion,
+            shortcut: shortcut || null,
+            weightScale: scale,
+          },
         });
       }
       props.onClose();
@@ -144,6 +195,104 @@ export function CodeDialog(props: Props) {
               className="mt-1 w-16"
             />
           </div>
+          {editing ? (
+            <div className="rounded-md border border-border p-2.5" data-testid="weight-scale">
+              <label className="flex items-center gap-2 text-xs font-medium text-fg-muted">
+                <input
+                  type="checkbox"
+                  className="accent-accent"
+                  checked={hasScale}
+                  onChange={(e) => setHasScale(e.target.checked)}
+                  data-testid="weight-scale-toggle"
+                />
+                Weight scale — rate each application on a numeric scale
+              </label>
+              {hasScale ? (
+                <div className="mt-2 space-y-2">
+                  <div className="grid grid-cols-4 gap-2">
+                    <div>
+                      <label className="text-[11px] text-fg-muted" htmlFor="scale-min">
+                        Min
+                      </label>
+                      <Input
+                        id="scale-min"
+                        type="number"
+                        value={scaleMin}
+                        onChange={(e) => setScaleMin(e.target.value)}
+                        className="mt-0.5"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] text-fg-muted" htmlFor="scale-max">
+                        Max
+                      </label>
+                      <Input
+                        id="scale-max"
+                        type="number"
+                        value={scaleMax}
+                        onChange={(e) => setScaleMax(e.target.value)}
+                        className="mt-0.5"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] text-fg-muted" htmlFor="scale-step">
+                        Step
+                      </label>
+                      <Input
+                        id="scale-step"
+                        type="number"
+                        value={scaleStep}
+                        onChange={(e) => setScaleStep(e.target.value)}
+                        className="mt-0.5"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] text-fg-muted" htmlFor="scale-default">
+                        Default
+                      </label>
+                      <Input
+                        id="scale-default"
+                        type="number"
+                        value={scaleDefault}
+                        onChange={(e) => setScaleDefault(e.target.value)}
+                        className="mt-0.5"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-[11px] text-fg-muted" htmlFor="scale-label-min">
+                        Label for {scaleMin || "min"} (optional)
+                      </label>
+                      <Input
+                        id="scale-label-min"
+                        value={labelMin}
+                        onChange={(e) => setLabelMin(e.target.value)}
+                        placeholder="e.g. weak"
+                        className="mt-0.5"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] text-fg-muted" htmlFor="scale-label-max">
+                        Label for {scaleMax || "max"} (optional)
+                      </label>
+                      <Input
+                        id="scale-label-max"
+                        value={labelMax}
+                        onChange={(e) => setLabelMax(e.target.value)}
+                        placeholder="e.g. strong"
+                        className="mt-0.5"
+                      />
+                    </div>
+                  </div>
+                  <p className="text-[11px] text-fg-muted">
+                    Every fresh coding of this code starts at the default; clearing the scale
+                    removes every weight recorded under it.
+                  </p>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={props.onClose}>
               Cancel

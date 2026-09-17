@@ -187,6 +187,7 @@ pub fn excerpts_csv<W: Write>(conn: &Connection, filter: &ExcerptFilter, w: W) -
         "text".into(),
         "codes".into(),
         "coders".into(),
+        "weights".into(),
         "memo_count".into(),
         "created_at".into(),
     ];
@@ -213,6 +214,21 @@ pub fn excerpts_csv<W: Write>(conn: &Connection, filter: &ExcerptFilter, w: W) -
                 coder_list.push(name);
             }
         }
+        // "code=value" per rated coding; a passage two coders rated
+        // differently lists both, same as `coders` lists both names.
+        let weight_list = e
+            .codings
+            .iter()
+            .filter_map(|coding| {
+                let value = coding.weight?;
+                let path = paths
+                    .get(&coding.code_id)
+                    .cloned()
+                    .unwrap_or_else(|| coding.code_id.clone());
+                Some(format!("{path}={value}"))
+            })
+            .collect::<Vec<_>>()
+            .join("; ");
         let mut record = vec![
             e.id.clone(),
             row.document_name.clone(),
@@ -222,6 +238,7 @@ pub fn excerpts_csv<W: Write>(conn: &Connection, filter: &ExcerptFilter, w: W) -
             e.snapshot.clone().unwrap_or_default(),
             code_list,
             coder_list.join("; "),
+            weight_list,
             e.memo_count.to_string(),
             e.created_at.clone(),
         ];
@@ -448,8 +465,8 @@ mod tests {
         // One column per descriptor field, after the fixed columns.
         assert!(
             s.starts_with(
-                "excerpt_id,document,start,end,geometry,text,codes,coders,memo_count,created_at,\
-                 Site,Age\n"
+                "excerpt_id,document,start,end,geometry,text,codes,coders,weights,memo_count,\
+                 created_at,Site,Age\n"
             ),
             "{s}"
         );
@@ -460,8 +477,9 @@ mod tests {
         // Both code paths, semicolon-separated, then the memo count.
         assert!(s.contains("Greeting / Formal, sort of"), "{s}");
         assert!(s.contains("; Greeting"), "{s}");
-        // Then who coded it, then the memo count.
-        assert!(s.contains("\",Ada,1,"), "{s}");
+        // Then who coded it; neither code has a weight scale, so the weights
+        // column is empty, then the memo count.
+        assert!(s.contains("\",Ada,,1,"), "{s}");
     }
 
     #[test]

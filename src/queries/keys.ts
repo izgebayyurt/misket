@@ -47,6 +47,8 @@ export const keys = {
   frameworkMatrix: (id: string) => ["analysis", "framework", id] as const,
   codeByDescriptor: (request: CrosstabRequest) =>
     ["analysis", "codeByDescriptor", request] as const,
+  weightSummary: (codeId: string, filter: ExcerptFilter) =>
+    ["analysis", "weightSummary", codeId, filter] as const,
   /** One inter-rater comparison. Under "analysis" so adopting or removing a
    * coding from the reliability view refetches it. */
   irr: (request: IrrRequest) => ["analysis", "irr", request] as const,
