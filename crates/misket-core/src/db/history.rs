@@ -22,11 +22,12 @@ use rusqlite::{params, Connection, OptionalExtension, Row};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
-use super::{codes, documents, excerpts, util};
+use super::{codes, documents, excerpts, framework, util};
 use crate::error::{AppError, Result};
 use crate::models::{
     ChildrenStrategy, CodePatch, CodeTreeSnapshot, CompactReport, DescriptorField,
-    DocumentSnapshot, ExcerptSnapshot, HistoryNode, HistoryNodeSummary, Memo, TagRow,
+    DocumentSnapshot, ExcerptSnapshot, FrameworkMatrixWithCells, HistoryNode, HistoryNodeSummary,
+    Memo, SavedFilter, SetWithMembers, TagRow,
 };
 
 // ------------------------------------------------------------- the head
@@ -710,6 +711,204 @@ fn place_fields(conn: &Connection, ids: &[String]) -> Result<()> {
     Ok(())
 }
 
+/// Sets and saved filters. Every one of these puts back a whole row, with
+/// the id it had, so a filter or an open browser that names a set keeps
+/// working across an undo.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "op", rename_all = "camelCase")]
+pub enum SetOp {
+    Restore {
+        set: Box<SetWithMembers>,
+    },
+    Drop {
+        set_id: String,
+    },
+    Rename {
+        set_id: String,
+        name: String,
+        updated_at: String,
+    },
+    /// The whole membership, so one payload covers adding one member,
+    /// removing one, and replacing the lot.
+    Members {
+        set_id: String,
+        member_ids: Vec<String>,
+        updated_at: String,
+    },
+    RestoreFilter {
+        filter: Box<SavedFilter>,
+    },
+    DropFilter {
+        filter_id: String,
+    },
+}
+
+impl SetOp {
+    fn run(&self, conn: &Connection) -> Result<()> {
+        match self {
+            SetOp::Restore { set } => {
+                let s = &set.set;
+                conn.execute(
+                    "INSERT INTO sets (id, kind, name, sort_order, created_at, updated_at)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+                     ON CONFLICT(id) DO UPDATE SET
+                       name = excluded.name, sort_order = excluded.sort_order,
+                       updated_at = excluded.updated_at",
+                    params![
+                        s.id,
+                        s.kind,
+                        s.name,
+                        s.sort_order,
+                        s.created_at,
+                        s.updated_at
+                    ],
+                )?;
+                write_members(conn, &s.id, &set.member_ids)
+            }
+            SetOp::Drop { set_id } => {
+                conn.execute("DELETE FROM sets WHERE id = ?1", [set_id])?;
+                Ok(())
+            }
+            SetOp::Rename {
+                set_id,
+                name,
+                updated_at,
+            } => {
+                conn.execute(
+                    "UPDATE sets SET name = ?2, updated_at = ?3 WHERE id = ?1",
+                    params![set_id, name, updated_at],
+                )?;
+                Ok(())
+            }
+            SetOp::Members {
+                set_id,
+                member_ids,
+                updated_at,
+            } => {
+                write_members(conn, set_id, member_ids)?;
+                conn.execute(
+                    "UPDATE sets SET updated_at = ?2 WHERE id = ?1",
+                    params![set_id, updated_at],
+                )?;
+                Ok(())
+            }
+            SetOp::RestoreFilter { filter } => {
+                let f = &filter;
+                conn.execute(
+                    "INSERT INTO saved_filters (id, name, filter_json, sort_order, created_at, updated_at)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+                     ON CONFLICT(id) DO UPDATE SET
+                       name = excluded.name, filter_json = excluded.filter_json,
+                       sort_order = excluded.sort_order, updated_at = excluded.updated_at",
+                    params![
+                        f.id,
+                        f.name,
+                        serde_json::to_string(&f.filter)?,
+                        f.sort_order,
+                        f.created_at,
+                        f.updated_at
+                    ],
+                )?;
+                Ok(())
+            }
+            SetOp::DropFilter { filter_id } => {
+                conn.execute("DELETE FROM saved_filters WHERE id = ?1", [filter_id])?;
+                Ok(())
+            }
+        }
+    }
+}
+
+/// Replace a set's membership. A member whose code or document has been
+/// deleted since is left out rather than resurrected as a dangling id.
+fn write_members(conn: &Connection, set_id: &str, member_ids: &[String]) -> Result<()> {
+    conn.execute("DELETE FROM set_members WHERE set_id = ?1", [set_id])?;
+    for m in member_ids {
+        conn.execute(
+            "INSERT OR IGNORE INTO set_members (set_id, member_id)
+             SELECT ?1, ?2
+              WHERE EXISTS (SELECT 1 FROM codes WHERE id = ?2)
+                 OR EXISTS (SELECT 1 FROM documents WHERE id = ?2)",
+            params![set_id, m],
+        )?;
+    }
+    Ok(())
+}
+
+/// Framework matrices. A matrix is a configuration plus a grid of written
+/// summaries; `Restore` puts both back under the original id, so an open grid
+/// keeps working across an undo.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "op", rename_all = "camelCase")]
+pub enum FrameworkOp {
+    Restore {
+        saved: Box<FrameworkMatrixWithCells>,
+    },
+    Drop {
+        matrix_id: String,
+    },
+    /// The whole configuration, so undoing an edit is the same call the other
+    /// way round.
+    Configure {
+        matrix_id: String,
+        input: Box<crate::models::FrameworkMatrixInput>,
+        updated_at: String,
+    },
+    Cell {
+        matrix_id: String,
+        row_key: String,
+        code_id: String,
+        /// Empty deletes the cell, as writing an empty summary does.
+        summary: String,
+        /// When the cell last changed, so replaying restores the row rather
+        /// than stamping it with the moment of the undo.
+        #[serde(default)]
+        updated_at: String,
+    },
+}
+
+impl FrameworkOp {
+    fn run(&self, conn: &Connection) -> Result<()> {
+        match self {
+            FrameworkOp::Restore { saved } => {
+                framework::restore_matrix(conn, saved)?;
+                Ok(())
+            }
+            FrameworkOp::Drop { matrix_id } => {
+                conn.execute("DELETE FROM framework_matrices WHERE id = ?1", [matrix_id])?;
+                Ok(())
+            }
+            FrameworkOp::Configure {
+                matrix_id,
+                input,
+                updated_at,
+            } => {
+                framework::update_matrix(conn, matrix_id, input)?;
+                conn.execute(
+                    "UPDATE framework_matrices SET updated_at = ?2 WHERE id = ?1",
+                    params![matrix_id, updated_at],
+                )?;
+                Ok(())
+            }
+            FrameworkOp::Cell {
+                matrix_id,
+                row_key,
+                code_id,
+                summary,
+                updated_at,
+            } => {
+                framework::set_cell_summary(conn, matrix_id, row_key, code_id, summary)?;
+                conn.execute(
+                    "UPDATE framework_cells SET updated_at = ?4
+                      WHERE matrix_id = ?1 AND row_key = ?2 AND code_id = ?3",
+                    params![matrix_id, row_key, code_id, updated_at],
+                )?;
+                Ok(())
+            }
+        }
+    }
+}
+
 /// Memo writes: `restore` upserts a whole row, so it covers create, edit and
 /// undelete alike.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -920,6 +1119,16 @@ fn apply(conn: &Connection, node_id: i64, kind: &str, payload: &Value) -> Result
         "document.imported" | "document.deleted" | "document.renamed" | "document.reordered" => {
             serde_json::from_value::<DocumentOp>(payload.clone())?.run(conn, node_id)
         }
+        "framework.matrix_created"
+        | "framework.matrix_updated"
+        | "framework.matrix_deleted"
+        | "framework.cell_set" => serde_json::from_value::<FrameworkOp>(payload.clone())?.run(conn),
+        "set.created"
+        | "set.renamed"
+        | "set.deleted"
+        | "set.members_changed"
+        | "filter.saved"
+        | "filter.deleted" => serde_json::from_value::<SetOp>(payload.clone())?.run(conn),
         "descriptor.field_created"
         | "descriptor.field_updated"
         | "descriptor.field_deleted"
@@ -1291,7 +1500,9 @@ pub fn memos_deleted(ids: &[String]) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db::{bulk, codes, descriptors, documents, excerpts, memos, sets, OpenProject};
+    use crate::db::{
+        bulk, codes, descriptors, documents, excerpts, framework, memos, sets, OpenProject,
+    };
     use crate::models::{
         ActivityFilter, ApplyCodesInput, AutoCodeHit, ChildrenStrategy, CodePatch, MemoTarget,
         NewCode,
@@ -2096,6 +2307,90 @@ mod tests {
                 .count(),
             2
         );
+    }
+
+    // ---------------------------------------- sets, filters and matrices
+
+    #[test]
+    fn round_trips_sets_and_saved_filters() {
+        let f = Fixture::new();
+        let c = f.conn();
+        let a = f.code("Alpha", None);
+        let b = f.code("Beta", None);
+        assert_round_trip(c, "create a set", |c| {
+            sets::create_set(c, "code", "Round 1", std::slice::from_ref(&a), None).unwrap();
+        });
+        let set = sets::list_sets(c, "code").unwrap()[0].id.clone();
+        assert_round_trip(c, "rename a set", |c| {
+            sets::rename_set(c, &set, "Round 2").unwrap();
+        });
+        assert_round_trip(c, "add a member", |c| {
+            sets::add_to_set(c, &set, &b).unwrap();
+        });
+        assert_round_trip(c, "remove a member", |c| {
+            sets::remove_from_set(c, &set, &a).unwrap();
+        });
+        assert_round_trip(c, "replace the members", |c| {
+            sets::set_set_members(c, &set, &[a.clone(), b.clone()]).unwrap();
+        });
+        assert_round_trip(c, "delete a set", |c| {
+            sets::delete_set(c, &set).unwrap();
+        });
+
+        let filter = crate::models::ExcerptFilter {
+            code_ids: Some(vec![a.clone()]),
+            ..Default::default()
+        };
+        assert_round_trip(c, "save a filter", |c| {
+            sets::save_filter(c, "Alpha only", &filter).unwrap();
+        });
+        assert_round_trip(c, "overwrite a filter", |c| {
+            sets::save_filter(c, "Alpha only", &crate::models::ExcerptFilter::default()).unwrap();
+        });
+        let saved = sets::list_saved_filters(c).unwrap()[0].id.clone();
+        assert_round_trip(c, "delete a filter", |c| {
+            sets::delete_saved_filter(c, &saved).unwrap();
+        });
+    }
+
+    #[test]
+    fn round_trips_framework_matrices_and_their_summaries() {
+        let f = Fixture::new();
+        let c = f.conn();
+        let code = f.code("Access", None);
+        let config = |name: &str| crate::models::FrameworkMatrixInput {
+            name: name.into(),
+            row_kind: "document".into(),
+            code_ids: vec![code.clone()],
+            ..Default::default()
+        };
+        assert_round_trip(c, "create a matrix", |c| {
+            framework::create_matrix(c, &config("Wave 1"), None).unwrap();
+        });
+        let m = framework::list_matrices(c).unwrap()[0].id.clone();
+        assert_round_trip(c, "write a cell", |c| {
+            framework::set_cell_summary(c, &m, &f.doc, &code, "Waits months.").unwrap();
+        });
+        assert_round_trip(c, "rewrite a cell", |c| {
+            framework::set_cell_summary(c, &m, &f.doc, &code, "Waited a year.").unwrap();
+        });
+        assert_round_trip(c, "clear a cell", |c| {
+            framework::set_cell_summary(c, &m, &f.doc, &code, "").unwrap();
+        });
+        framework::set_cell_summary(c, &m, &f.doc, &code, "Waits months.").unwrap();
+        assert_round_trip(c, "reconfigure a matrix", |c| {
+            framework::update_matrix(c, &m, &config("Wave 2")).unwrap();
+        });
+        assert_round_trip(c, "delete a matrix with its summaries", |c| {
+            framework::delete_matrix(c, &m).unwrap();
+        });
+        // The redo deleted it; undoing once more brings the grid back whole.
+        undo(c).unwrap().unwrap();
+        let view = framework::get_matrix(c, &m).unwrap();
+        assert!(view
+            .cells
+            .iter()
+            .any(|cell| cell.summary == "Waits months."));
     }
 
     // -------------------------------------------------- compound steps

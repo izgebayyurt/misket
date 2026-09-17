@@ -645,8 +645,8 @@ export interface FrameworkMatrixView {
 /** A deleted matrix with every summary it held, so undo can put it back. */
 export interface FrameworkMatrixWithCells {
   matrix: FrameworkMatrix;
-  /** `[rowKey, codeId, summary]`. */
-  cells: [string, string, string][];
+  /** `[rowKey, codeId, summary, updatedAt]`. */
+  cells: [string, string, string, string][];
 }
 
 /** One speaker's turn detected in a document (see `detectSpeakerTurns`).

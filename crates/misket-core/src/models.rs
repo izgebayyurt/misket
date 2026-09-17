@@ -1232,8 +1232,9 @@ pub struct FrameworkMatrixView {
 #[serde(rename_all = "camelCase")]
 pub struct FrameworkMatrixWithCells {
     pub matrix: FrameworkMatrix,
-    /// `(rowKey, codeId, summary)`.
-    pub cells: Vec<(String, String, String)>,
+    /// `(rowKey, codeId, summary, updatedAt)` — the timestamp too, so undo
+    /// puts the grid back exactly as it stood rather than touching every cell.
+    pub cells: Vec<(String, String, String, String)>,
 }
 
 /// serde helper: distinguishes "absent" from "present but null".
