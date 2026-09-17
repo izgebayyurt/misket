@@ -616,6 +616,16 @@ pub enum DocumentOp {
     Reorder {
         ids: Vec<String>,
     },
+    /// Point an audio or video document at a different file. The bytes live
+    /// outside the project, so a relink moves the path, the fingerprint and
+    /// the measurements together (`db::media::relink`).
+    Relink {
+        document_id: String,
+        source_path: Option<String>,
+        content_hash: String,
+        media_json: Option<String>,
+        updated_at: String,
+    },
 }
 
 impl DocumentOp {
@@ -652,6 +662,27 @@ impl DocumentOp {
                         params![id, i as i64],
                     )?;
                 }
+                Ok(())
+            }
+            DocumentOp::Relink {
+                document_id,
+                source_path,
+                content_hash,
+                media_json,
+                updated_at,
+            } => {
+                conn.execute(
+                    "UPDATE documents SET source_path = ?2, content_hash = ?3,
+                                          media_json = ?4, updated_at = ?5
+                      WHERE id = ?1",
+                    params![
+                        document_id,
+                        source_path,
+                        content_hash,
+                        media_json,
+                        updated_at
+                    ],
+                )?;
                 Ok(())
             }
         }
@@ -1307,7 +1338,8 @@ fn apply(conn: &Connection, node_id: i64, kind: &str, payload: &Value) -> Result
         "transcript.format_set" | "transcript.default_set" => {
             serde_json::from_value::<TranscriptChange>(payload.clone())?.run(conn)
         }
-        "document.imported" | "document.deleted" | "document.renamed" | "document.reordered" => {
+        "document.imported" | "document.deleted" | "document.renamed" | "document.reordered"
+        | "document.relinked" => {
             serde_json::from_value::<DocumentOp>(payload.clone())?.run(conn, node_id)
         }
         "project.renamed" | "analysis.stop_words_set" => {
@@ -2423,6 +2455,71 @@ pub(crate) mod tests {
         undo(c).unwrap().unwrap();
         assert_eq!(documents::get_media(c, &image).unwrap().1, b"\x89PNG bytes");
         assert_eq!(excerpts::list_for_document(c, &image).unwrap().len(), 1);
+    }
+
+    /// Audio and video documents: the row round-trips, and none of the bytes
+    /// come along — the recording stays on disk, so `history_blobs` holds
+    /// nothing for it however big the file is.
+    #[test]
+    fn round_trips_importing_deleting_and_relinking_a_media_document() {
+        use crate::db::media;
+
+        let p = OpenProject::in_memory("t").unwrap();
+        let c = &p.conn;
+        crate::db::activity::set_actor(c, "Ada").unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let path = media::tests::fake_file(dir.path(), "interview.mp3", 8192, 11);
+
+        assert_round_trip(c, "import a recording", |c| {
+            media::create(c, None, media::tests::new_media(&path)).unwrap();
+        });
+        let id = documents::list(c).unwrap()[0].id.clone();
+        let blobs: i64 = c
+            .query_row("SELECT count(*) FROM history_blobs", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(blobs, 0, "a recording's bytes never enter the project file");
+
+        let code = codes::tests::mk(c, "Alpha", None).id;
+        assert_round_trip(c, "code a stretch of the recording", |c| {
+            excerpts::apply_codes(
+                c,
+                ApplyCodesInput {
+                    document_id: id.clone(),
+                    kind: Some("video_range".into()),
+                    start_pos: Some(12_000),
+                    end_pos: Some(19_500),
+                    code_ids: vec![code.clone()],
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        });
+        let e = excerpts::list_for_document(c, &id).unwrap()[0].id.clone();
+        assert_round_trip(c, "move the in and out points", |c| {
+            excerpts::update_range(c, &e, 11_000, 20_000).unwrap();
+        });
+        // A captured frame travels with the excerpt through delete and undo.
+        media::set_thumbnail(c, &e, "image/jpeg", b"\xff\xd8frame").unwrap();
+        assert_round_trip(c, "delete a coded stretch", |c| {
+            excerpts::delete(c, &e).unwrap();
+        });
+        undo(c).unwrap().unwrap();
+        assert_eq!(
+            media::thumbnail(c, &e).unwrap().unwrap().bytes,
+            b"\xff\xd8frame"
+        );
+        redo(c, None).unwrap().unwrap();
+
+        let moved = dir.path().join("moved.mp3");
+        std::fs::rename(&path, &moved).unwrap();
+        assert_round_trip(c, "relink", |c| {
+            media::relink(c, &id, &moved.to_string_lossy()).unwrap();
+        });
+        assert_round_trip(c, "delete the recording", |c| {
+            documents::delete(c, &id).unwrap();
+        });
+        // The file itself is never touched by any of it.
+        assert!(moved.is_file());
     }
 
     #[test]

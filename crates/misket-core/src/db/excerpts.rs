@@ -6,8 +6,8 @@ use serde_json::json;
 
 use super::history::{ExcerptChange, MemoMove, RangeRow, Touch};
 use super::{
-    activity, codes, descriptors, documents, history, memos, query_expr, sets, text, transcripts,
-    util,
+    activity, codes, descriptors, documents, history, media, memos, query_expr, sets, text,
+    transcripts, util,
 };
 use crate::error::{AppError, Result};
 use crate::models::{
@@ -215,7 +215,8 @@ pub fn region_snapshot(rect: &Rect) -> String {
     )
 }
 
-/// What `apply_codes` is about to code: a text range or an image region.
+/// What `apply_codes` is about to code: a text range, an image region or a
+/// stretch of a recording.
 enum Target {
     Text {
         start: i64,
@@ -226,6 +227,51 @@ enum Target {
         geometry: String,
         snapshot: String,
     },
+    /// Milliseconds into an audio or video document, end-exclusive.
+    Range {
+        start: i64,
+        end: i64,
+        snapshot: String,
+    },
+}
+
+/// Validate a time range against a recording and label it.
+///
+/// `duration_ms` is what the frontend measured at import: an in/out pair past
+/// the end of the recording is a mistake (a stale timeline, a relinked file),
+/// not something to store and play back as silence.
+pub fn check_media_range(start: i64, end: i64, duration_ms: i64) -> Result<String> {
+    if start < 0 || end <= start {
+        return Err(AppError::Validation(format!(
+            "{} is not a stretch of the recording: the out-point has to come after the in-point",
+            media::range_label(start, end)
+        )));
+    }
+    if duration_ms > 0 && end > duration_ms {
+        return Err(AppError::Validation(format!(
+            "{} runs past the end of the recording ({})",
+            media::range_label(start, end),
+            media::timecode(duration_ms)
+        )));
+    }
+    Ok(media::range_label(start, end))
+}
+
+/// The recording a `video_range` excerpt belongs to, with its duration.
+fn media_document(conn: &Connection, document_id: &str) -> Result<(String, i64)> {
+    let doc = documents::get_summary(conn, document_id)?;
+    if doc.kind != documents::MEDIA_KIND {
+        return Err(AppError::Validation(format!(
+            "{:?} is not an audio or video document",
+            doc.name
+        )));
+    }
+    let duration = doc
+        .media
+        .as_ref()
+        .and_then(|m| m.duration_ms)
+        .unwrap_or_default();
+    Ok((doc.name, duration))
 }
 
 /// Create the excerpt for this exact range or region if needed, then attach
@@ -272,6 +318,22 @@ pub fn apply_codes(conn: &Connection, input: ApplyCodesInput) -> Result<ApplyRes
             Target::Region {
                 geometry: canonical_geometry(&rect)?,
                 snapshot: region_snapshot(&rect),
+            }
+        }
+        "video_range" => {
+            let (_, duration) = media_document(conn, &input.document_id)?;
+            let (start, end) = match (input.start_pos, input.end_pos) {
+                (Some(s), Some(e)) => (s, e),
+                _ => {
+                    return Err(AppError::Validation(
+                        "a media excerpt needs an in-point and an out-point".into(),
+                    ))
+                }
+            };
+            Target::Range {
+                start,
+                end,
+                snapshot: check_media_range(start, end, duration)?,
             }
         }
         other => {
@@ -325,6 +387,31 @@ pub fn apply_codes(conn: &Connection, input: ApplyCodesInput) -> Result<ApplyRes
                         "INSERT INTO excerpts (id, document_id, kind, geometry, snapshot, created_at, updated_at)
                          VALUES (?1, ?2, 'image_region', ?3, ?4, ?5, ?5)",
                         params![id, input.document_id, geometry, snapshot, now],
+                    )?;
+                    (id, true)
+                }
+            }
+        }
+        Target::Range {
+            start,
+            end,
+            snapshot,
+        } => {
+            let existing: Option<String> = tx
+                .query_row(
+                    "SELECT id FROM excerpts WHERE document_id = ?1 AND kind = 'video_range' AND start_pos = ?2 AND end_pos = ?3",
+                    params![input.document_id, start, end],
+                    |r| r.get(0),
+                )
+                .optional()?;
+            match existing {
+                Some(id) => (id, false),
+                None => {
+                    let id = util::new_id();
+                    tx.execute(
+                        "INSERT INTO excerpts (id, document_id, kind, start_pos, end_pos, snapshot, created_at, updated_at)
+                         VALUES (?1, ?2, 'video_range', ?3, ?4, ?5, ?6, ?6)",
+                        params![id, input.document_id, start, end, snapshot, now],
                     )?;
                     (id, true)
                 }
@@ -655,6 +742,9 @@ pub fn snapshot(conn: &Connection, id: &str) -> Result<ExcerptSnapshot> {
         excerpt,
         memos: memos::list_for_excerpt(conn, id)?,
         tags,
+        // A captured frame is a cache, but it is *this* excerpt's cache: it
+        // rides along so deleting and undoing does not lose it.
+        thumbnail: media::thumbnail(conn, id)?,
     })
 }
 
@@ -691,6 +781,7 @@ pub fn delete(conn: &Connection, id: &str) -> Result<ExcerptSnapshot> {
         excerpt,
         memos,
         tags: taken.tags,
+        thumbnail: taken.thumbnail,
     })
 }
 
@@ -754,6 +845,9 @@ pub fn restore(conn: &Connection, snapshot: &ExcerptSnapshot) -> Result<ExcerptW
              SELECT ?1, id, ?3, ?4 FROM codes WHERE id = ?2",
             params![e.id, t.code_id, coder, t.created_at],
         )?;
+    }
+    if let Some(thumb) = &snapshot.thumbnail {
+        media::restore_thumbnail(&tx, &e.document_id, &e.id, thumb)?;
     }
     for m in &snapshot.memos {
         // `ON CONFLICT` covers undoing a merge: the memos were re-pointed to
@@ -822,12 +916,14 @@ fn check_range(start: i64, end: i64, len: i64) -> Result<()> {
     Ok(())
 }
 
-/// Is `[start, end)` already taken by a text excerpt other than `except`?
-/// The unique index `excerpts_text_range_uq` allows one text excerpt per exact
-/// range, so an occupied range is a `Conflict` rather than a silent merge.
+/// Is `[start, end)` already taken by an excerpt of this kind other than
+/// `except`? The unique indexes `excerpts_text_range_uq` and
+/// `excerpts_video_range_uq` allow one excerpt per exact range, so an
+/// occupied range is a `Conflict` rather than a silent merge.
 fn range_taken(
     conn: &Connection,
     document_id: &str,
+    kind: &str,
     start: i64,
     end: i64,
     except: &[&str],
@@ -835,8 +931,8 @@ fn range_taken(
     let id: Option<String> = conn
         .query_row(
             "SELECT id FROM excerpts
-             WHERE document_id = ?1 AND kind = 'text' AND start_pos = ?2 AND end_pos = ?3",
-            params![document_id, start, end],
+             WHERE document_id = ?1 AND kind = ?4 AND start_pos = ?2 AND end_pos = ?3",
+            params![document_id, start, end, kind],
             |r| r.get(0),
         )
         .optional()?;
@@ -852,9 +948,10 @@ fn snapshot_of(doc_text: &str, start: i64, end: i64) -> Result<String> {
         .ok_or_else(|| AppError::Validation(format!("range {start}..{end} is not sliceable")))
 }
 
-/// Move a text excerpt's boundaries, recomputing its snapshot from the
-/// document text. Codes and memos stay where they are, so undo is another
-/// `update_range` back to the old offsets.
+/// Move an excerpt's boundaries, recomputing its snapshot: the quoted text
+/// for a text range, the `[in–out]` label for a stretch of a recording.
+/// Codes and memos stay where they are, so undo is another `update_range`
+/// back to the old offsets.
 pub fn update_range(
     conn: &Connection,
     id: &str,
@@ -862,10 +959,33 @@ pub fn update_range(
     end_pos: i64,
 ) -> Result<ExcerptWithCodes> {
     let excerpt = get(conn, id)?;
-    text_range(&excerpt)?;
-    let (doc_text, len) = documents::get_text(conn, &excerpt.document_id)?;
-    check_range(start_pos, end_pos, len)?;
-    if range_taken(conn, &excerpt.document_id, start_pos, end_pos, &[id])? {
+    // Text offsets are code points into immutable text; media offsets are
+    // milliseconds into a recording of known length. Both are bounded, and
+    // both have to stay unique for their kind.
+    let new_snapshot = match excerpt.kind.as_str() {
+        "text" => {
+            let (doc_text, len) = documents::get_text(conn, &excerpt.document_id)?;
+            check_range(start_pos, end_pos, len)?;
+            snapshot_of(&doc_text, start_pos, end_pos)?
+        }
+        "video_range" => {
+            let (_, duration) = media_document(conn, &excerpt.document_id)?;
+            check_media_range(start_pos, end_pos, duration)?
+        }
+        _ => {
+            return Err(AppError::Validation(format!(
+                "excerpt {id} has no boundaries to move"
+            )))
+        }
+    };
+    if range_taken(
+        conn,
+        &excerpt.document_id,
+        &excerpt.kind,
+        start_pos,
+        end_pos,
+        &[id],
+    )? {
         return Err(AppError::Conflict(
             "another excerpt already covers exactly this range".into(),
         ));
@@ -875,13 +995,7 @@ pub fn update_range(
     tx.execute(
         "UPDATE excerpts SET start_pos = ?2, end_pos = ?3, snapshot = ?4, updated_at = ?5
          WHERE id = ?1",
-        params![
-            id,
-            start_pos,
-            end_pos,
-            snapshot_of(&doc_text, start_pos, end_pos)?,
-            now
-        ],
+        params![id, start_pos, end_pos, new_snapshot, now],
     )?;
     let after = get(&tx, id)?;
     activity::record(
@@ -934,7 +1048,7 @@ pub fn split(conn: &Connection, id: &str, at: i64) -> Result<(ExcerptWithCodes, 
     }
     let (doc_text, _) = documents::get_text(conn, &excerpt.document_id)?;
     for (s, e) in [(start, at), (at, end)] {
-        if range_taken(conn, &excerpt.document_id, s, e, &[id])? {
+        if range_taken(conn, &excerpt.document_id, "text", s, e, &[id])? {
             return Err(AppError::Conflict(
                 "one half of the split is already covered by another excerpt".into(),
             ));
@@ -1048,7 +1162,14 @@ pub fn merge_adjacent(conn: &Connection, left_id: &str, right_id: &str) -> Resul
     let (start, end) = (ls.min(rs), le.max(re));
     let (doc_text, len) = documents::get_text(conn, &left.document_id)?;
     check_range(start, end, len)?;
-    if range_taken(conn, &left.document_id, start, end, &[left_id, right_id])? {
+    if range_taken(
+        conn,
+        &left.document_id,
+        "text",
+        start,
+        end,
+        &[left_id, right_id],
+    )? {
         return Err(AppError::Conflict(
             "another excerpt already covers exactly the merged range".into(),
         ));
@@ -2386,6 +2507,141 @@ mod tests {
         ));
         // Nothing was changed by the attempts.
         assert_eq!(list_for_document(&p.conn, &doc).unwrap().len(), 2);
+    }
+
+    /// A stretch of a recording: milliseconds, bounded by the duration the
+    /// import measured, one excerpt per exact in/out pair.
+    #[test]
+    fn video_ranges_are_validated_against_the_duration_and_upsert() {
+        use crate::db::media;
+
+        let p = OpenProject::in_memory("t").unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let path = media::tests::fake_file(dir.path(), "a.mp4", 4096, 2);
+        // The fixture's recording is 125 400 ms long.
+        let doc = media::create(&p.conn, None, media::tests::new_media(&path))
+            .unwrap()
+            .summary
+            .id;
+        let a = mk_code(&p.conn, "A", None).id;
+        let b = mk_code(&p.conn, "B", None).id;
+        let range = |s: i64, e: i64, codes: &[&str]| ApplyCodesInput {
+            document_id: doc.clone(),
+            kind: Some("video_range".into()),
+            start_pos: Some(s),
+            end_pos: Some(e),
+            code_ids: codes.iter().map(|c| c.to_string()).collect(),
+            ..Default::default()
+        };
+
+        let r1 = apply_codes(&p.conn, range(12_000, 19_500, &[&a])).unwrap();
+        assert!(r1.created);
+        assert_eq!(r1.excerpt.kind, "video_range");
+        assert_eq!(r1.excerpt.start_pos, Some(12_000));
+        assert_eq!(r1.excerpt.snapshot.as_deref(), Some("[0:12.0–0:19.5]"));
+        assert!(r1.excerpt.geometry.is_none());
+        // The same in/out pair upserts rather than duplicating.
+        let r2 = apply_codes(&p.conn, range(12_000, 19_500, &[&a, &b])).unwrap();
+        assert!(!r2.created);
+        assert_eq!(r2.excerpt.id, r1.excerpt.id);
+        assert_eq!(r2.added_code_ids, vec![b.clone()]);
+        assert_eq!(list_for_document(&p.conn, &doc).unwrap().len(), 1);
+
+        // Bounds: negative, empty, inverted, and past the end of the file.
+        for (s, e) in [(-1, 500), (500, 500), (900, 400), (0, 125_401)] {
+            assert!(
+                matches!(
+                    apply_codes(&p.conn, range(s, e, &[&a])),
+                    Err(AppError::Validation(_))
+                ),
+                "{s}..{e}"
+            );
+        }
+        // Exactly to the last millisecond is fine.
+        apply_codes(&p.conn, range(120_000, 125_400, &[&a])).unwrap();
+        // Offsets are required.
+        assert!(matches!(
+            apply_codes(
+                &p.conn,
+                ApplyCodesInput {
+                    document_id: doc.clone(),
+                    kind: Some("video_range".into()),
+                    code_ids: vec![a.clone()],
+                    ..Default::default()
+                }
+            ),
+            Err(AppError::Validation(_))
+        ));
+        // And a text document has no timeline to code.
+        let text = documents::create(&p.conn, documents::tests::new_doc("hello there"))
+            .unwrap()
+            .summary
+            .id;
+        assert!(matches!(
+            apply_codes(
+                &p.conn,
+                ApplyCodesInput {
+                    document_id: text,
+                    ..range(0, 1_000, &[&a])
+                }
+            ),
+            Err(AppError::Validation(_))
+        ));
+    }
+
+    /// `update_range` moves a recording's in/out points, relabelling the
+    /// snapshot, and refuses a range another excerpt already covers.
+    #[test]
+    fn update_range_moves_media_in_and_out_points() {
+        use crate::db::media;
+
+        let p = OpenProject::in_memory("t").unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let path = media::tests::fake_file(dir.path(), "a.mp4", 4096, 3);
+        let doc = media::create(&p.conn, None, media::tests::new_media(&path))
+            .unwrap()
+            .summary
+            .id;
+        let a = mk_code(&p.conn, "A", None).id;
+        let range = |s: i64, e: i64| ApplyCodesInput {
+            document_id: doc.clone(),
+            kind: Some("video_range".into()),
+            start_pos: Some(s),
+            end_pos: Some(e),
+            code_ids: vec![a.clone()],
+            ..Default::default()
+        };
+        let one = apply_codes(&p.conn, range(1_000, 2_000))
+            .unwrap()
+            .excerpt
+            .id;
+        let two = apply_codes(&p.conn, range(5_000, 6_000))
+            .unwrap()
+            .excerpt
+            .id;
+
+        let moved = update_range(&p.conn, &one, 1_500, 3_250).unwrap();
+        assert_eq!((moved.start_pos, moved.end_pos), (Some(1_500), Some(3_250)));
+        assert_eq!(moved.snapshot.as_deref(), Some("[0:01.5–0:03.2]"));
+        // Past the end, and onto the other excerpt's exact range.
+        assert!(matches!(
+            update_range(&p.conn, &one, 0, 200_000),
+            Err(AppError::Validation(_))
+        ));
+        assert!(matches!(
+            update_range(&p.conn, &one, 5_000, 6_000),
+            Err(AppError::Conflict(_))
+        ));
+        assert_eq!(get(&p.conn, &two).unwrap().start_pos, Some(5_000));
+        // Splitting and merging remain text-only.
+        assert!(matches!(
+            split(&p.conn, &one, 2_000),
+            Err(AppError::Validation(_))
+        ));
+        assert!(matches!(
+            merge_adjacent(&p.conn, &one, &two),
+            Err(AppError::Validation(_))
+        ));
     }
 
     #[test]

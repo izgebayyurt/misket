@@ -12,6 +12,13 @@ use crate::models::{
     NewDocument, NewImageDocument,
 };
 
+/// The document kind audio and video share. The schema's `kind` vocabulary is
+/// `text | image | video` (0001_init.sql); an mp3 and an mp4 differ only in
+/// their `media_json.mime`, and everything that reads a recording — the
+/// viewer, `video_range` excerpts, the missing-file checks — treats them
+/// alike, so they are one kind.
+pub const MEDIA_KIND: &str = "video";
+
 const SUMMARY_COLUMNS: &str =
     "d.id, d.kind, d.name, d.source_path, d.source_format, d.text_length, d.media_json, d.sort_order,
      (SELECT count(*) FROM excerpts e WHERE e.document_id = d.id) AS excerpt_count,
@@ -26,16 +33,20 @@ pub const IMAGE_MIMES: [(&str, &str); 3] = [
 
 fn summary_from_row(r: &Row) -> rusqlite::Result<DocumentSummary> {
     let media_json: Option<String> = r.get(6)?;
+    let kind: String = r.get(1)?;
+    let source_path: Option<String> = r.get(3)?;
+    let media_missing = super::media::is_missing(&kind, source_path.as_deref());
     Ok(DocumentSummary {
         id: r.get(0)?,
-        kind: r.get(1)?,
+        kind,
         name: r.get(2)?,
-        source_path: r.get(3)?,
+        source_path,
         source_format: r.get(4)?,
         text_length: r.get(5)?,
         // A media_json we cannot parse (written by a newer build) is simply
         // not reported rather than failing the whole listing.
         media: media_json.and_then(|j| serde_json::from_str(&j).ok()),
+        media_missing,
         sort_order: r.get(7)?,
         excerpt_count: r.get(8)?,
         created_at: r.get(9)?,
@@ -109,7 +120,7 @@ pub fn create(conn: &Connection, input: NewDocument) -> Result<Document> {
 /// The forward payload is the whole document, bytes and all, so redoing an
 /// undone import brings it back with the same id — which every excerpt cut
 /// from it before the undo still points at.
-fn log_import(conn: &Connection, id: &str) -> Result<()> {
+pub(super) fn log_import(conn: &Connection, id: &str) -> Result<()> {
     let doc = get_summary(conn, id)?;
     let (snapshot, text, media) = snapshot(conn, id)?;
     let mut blobs: Vec<(&str, &[u8])> = vec![];
@@ -261,7 +272,8 @@ pub fn restore(
     )?;
     if let (Some(bytes), Some(mime)) = (media, snapshot.media_mime.as_deref()) {
         tx.execute(
-            "INSERT INTO media_blobs (document_id, mime, bytes) VALUES (?1, ?2, ?3)",
+            "INSERT INTO media_blobs (document_id, excerpt_id, name, mime, bytes)
+             VALUES (?1, NULL, 'source', ?2, ?3)",
             params![snapshot.id, mime, bytes],
         )?;
     }
@@ -368,9 +380,11 @@ pub fn create_image(conn: &Connection, input: NewImageDocument) -> Result<Docume
         }
     }
     let media = serde_json::to_string(&MediaInfo {
-        width: input.width,
-        height: input.height,
+        width: Some(input.width),
+        height: Some(input.height),
         mime: mime.clone(),
+        size_bytes: Some(bytes.len() as i64),
+        ..Default::default()
     })?;
     let id = util::new_id();
     let now = util::now();
@@ -395,7 +409,8 @@ pub fn create_image(conn: &Connection, input: NewImageDocument) -> Result<Docume
         ],
     )?;
     tx.execute(
-        "INSERT INTO media_blobs (document_id, mime, bytes) VALUES (?1, ?2, ?3)",
+        "INSERT INTO media_blobs (document_id, excerpt_id, name, mime, bytes)
+         VALUES (?1, NULL, 'source', ?2, ?3)",
         params![id, mime, bytes],
     )?;
     // An image has no text to read speakers out of, but it gets the same
@@ -410,7 +425,8 @@ pub fn create_image(conn: &Connection, input: NewImageDocument) -> Result<Docume
 /// The stored bytes of a media document, with their MIME type.
 pub fn get_media(conn: &Connection, id: &str) -> Result<(String, Vec<u8>)> {
     conn.query_row(
-        "SELECT mime, bytes FROM media_blobs WHERE document_id = ?1",
+        "SELECT mime, bytes FROM media_blobs
+          WHERE document_id = ?1 AND excerpt_id IS NULL AND name = 'source'",
         [id],
         |r| Ok((r.get(0)?, r.get(1)?)),
     )
@@ -654,7 +670,7 @@ pub(crate) mod tests {
         assert_eq!(d.summary.text_length, None);
         assert!(d.text.is_none());
         let media = d.summary.media.clone().unwrap();
-        assert_eq!((media.width, media.height), (800, 600));
+        assert_eq!((media.width, media.height), (Some(800), Some(600)));
         assert_eq!(media.mime, "image/png");
         assert_eq!(
             d.summary.source_path.as_deref(),

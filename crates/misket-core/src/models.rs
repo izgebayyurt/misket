@@ -41,6 +41,9 @@ pub struct ProjectStats {
     pub documents: i64,
     pub text_documents: i64,
     pub image_documents: i64,
+    /// Audio and video documents (`kind = 'video'`).
+    #[serde(default)]
+    pub media_documents: i64,
     pub codes: i64,
     pub excerpts: i64,
     /// Excerpts tagged with at least one code.
@@ -56,6 +59,10 @@ pub struct ProjectStats {
     pub excerpts_per_day: Vec<(String, i64)>,
     /// `(codeId, count)`, direct tags only, highest first, top 8.
     pub top_codes: Vec<(String, i64)>,
+    /// Audio and video documents whose file is not where it was imported
+    /// from; the overview lists them with a Relink action.
+    #[serde(default)]
+    pub missing_media: Vec<MissingMedia>,
 }
 
 // ---------------------------------------------------------------- documents
@@ -92,13 +99,64 @@ pub struct NewImageDocument {
     pub allow_duplicate: bool,
 }
 
-/// `documents.media_json` for an image (and, later, a video) document.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+/// An audio or video document. The file is **not** copied into the project
+/// file: `source_path` points at it on disk and `media` records what the
+/// frontend measured by loading it in a hidden media element. With
+/// `copy_into_project` the file is first copied next to the `.misket` (into
+/// `<project>.media/`) and `source_path` points at the copy.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct NewMediaDocument {
+    pub name: String,
+    pub source_path: String,
+    /// `audio/mpeg`, `video/mp4`, … — see `db::media::MEDIA_MIMES`.
+    pub mime: String,
+    /// What the webview read off the file: duration, pixel size, size on disk.
+    pub media: MediaInfo,
+    #[serde(default)]
+    pub copy_into_project: bool,
+    #[serde(default)]
+    pub allow_duplicate: bool,
+}
+
+/// `documents.media_json`: what is known about an image, audio or video
+/// document's media without opening the file again.
+///
+/// Only `mime` is always present. An image has `width`/`height`; a recording
+/// has `duration_ms` and, for video, a pixel size too. `size_bytes` and
+/// `file_hash` describe the file the document was imported from, so a
+/// relinked file can be recognised as the same recording.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct MediaInfo {
-    pub width: i64,
-    pub height: i64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub width: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub height: Option<i64>,
     pub mime: String,
+    /// Playing time in milliseconds; the upper bound on a `video_range`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub duration_ms: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub size_bytes: Option<i64>,
+    /// A cheap content fingerprint: see `db::media::file_hash`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub file_hash: Option<String>,
+    /// Waveform peaks in 0..1, one per equal slice of the recording. A
+    /// rendering cache computed once by the viewer (`set_media_peaks`), like
+    /// the transcript format cache in `documents.transcript_json`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub peaks: Option<Vec<f64>>,
+}
+
+/// An audio or video document whose file is no longer where it was imported
+/// from, for the warning badges and the project overview.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct MissingMedia {
+    pub document_id: String,
+    pub name: String,
+    pub source_path: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -112,6 +170,12 @@ pub struct DocumentSummary {
     pub text_length: Option<i64>,
     /// Image and video documents only: size and MIME of the stored media.
     pub media: Option<MediaInfo>,
+    /// True when this is an audio or video document whose file is not at
+    /// `source_path` any more — the row shows a badge and the viewer offers
+    /// to relink. Always false for text and image documents, whose bytes are
+    /// inside the project file.
+    #[serde(default)]
+    pub media_missing: bool,
     pub sort_order: i64,
     pub excerpt_count: i64,
     /// The speakers the document's transcript format finds, in first-seen
@@ -422,6 +486,18 @@ pub struct ExcerptSnapshot {
     /// back to `excerpt.code_ids`.
     #[serde(default)]
     pub tags: Vec<TagRow>,
+    /// The frame captured for a `video_range` excerpt, so deleting and
+    /// undoing puts the thumbnail back with everything else.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub thumbnail: Option<MediaThumbnail>,
+}
+
+/// A small image stored in `media_blobs` beside an excerpt.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct MediaThumbnail {
+    pub mime: String,
+    pub bytes: Vec<u8>,
 }
 
 /// The two halves left by [`crate::db::excerpts::split`]; `left` keeps the original id.
