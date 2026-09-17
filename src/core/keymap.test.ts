@@ -114,13 +114,17 @@ describe("keymap", () => {
     expect(matchAction(ev({ key: "ArrowRight", shiftKey: true }))).toBeNull();
   });
 
-  it("keeps in vivo coding clear of the import shortcut", () => {
-    expect(matchAction(ev({ key: "I", ctrlKey: true, shiftKey: true }))).toBe("inVivoCode");
+  it("keeps in vivo coding clear of the import shortcut and the inspector chord", () => {
+    expect(matchAction(ev({ key: "K", ctrlKey: true, shiftKey: true }))).toBe("inVivoCode");
     expect(matchAction(ev({ key: "i", ctrlKey: true }))).toBe("import");
+    // Ctrl/Cmd+Shift+I is deliberately left unbound: WebKitGTK reserves it for
+    // its Web Inspector in debug builds, so binding it there would never reach
+    // the page's key handler.
+    expect(matchAction(ev({ key: "I", ctrlKey: true, shiftKey: true }))).toBeNull();
     // Import is global; in vivo coding acts on a document selection, so it
     // stays out of the way while typing.
     const input = document.createElement("input");
-    expect(matchAction(ev({ key: "I", ctrlKey: true, shiftKey: true }, input))).toBeNull();
+    expect(matchAction(ev({ key: "K", ctrlKey: true, shiftKey: true }, input))).toBeNull();
     expect(matchAction(ev({ key: "i", ctrlKey: true }, input))).toBe("import");
   });
 

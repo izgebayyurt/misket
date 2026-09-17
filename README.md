@@ -40,7 +40,7 @@ keyboard-friendly interface without a subscription.
   `>name` to create one on the spot), or press a code's hotkey. The picker
   shows each code's description and, for nested codes, its full path.
   `Ctrl`/`⌘`+`.` repeats whichever code you applied last — the status bar
-  names it, so the key is never a guess. `Ctrl`/`⌘`+`Shift`+`I` codes
+  names it, so the key is never a guess. `Ctrl`/`⌘`+`Shift`+`K` codes
   **in vivo**: it names a new code after the selected words (under the code
   selected in the tree, if any) and applies it in one undoable step; typing
   `>` in the palette with a selection fills the same name in, still editable.
@@ -140,7 +140,7 @@ keyboard-friendly interface without a subscription.
 | ------------------------------------------------------ | --------------------------------------------- |
 | Code the selection / add a code to the focused excerpt | `Ctrl`/`⌘` + `K`                              |
 | Apply a code directly                                  | its hotkey (set in the code's settings)       |
-| In vivo code: name a code after the selected words     | `Ctrl`/`⌘` + `Shift` + `I`                    |
+| In vivo code: name a code after the selected words     | `Ctrl`/`⌘` + `Shift` + `K`                    |
 | Apply the last code used again (quick code)            | `Ctrl`/`⌘` + `.`                              |
 | Fit / zoom an image                                    | `0` / `+` / `-`                               |
 | Next / previous excerpt                                | `Tab` / `Shift`+`Tab`                         |
