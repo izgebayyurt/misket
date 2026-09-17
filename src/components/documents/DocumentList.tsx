@@ -31,7 +31,6 @@ import { ImportFolderDialog } from "./ImportFolderDialog";
 import { DocumentSets } from "./DocumentSets";
 import { AddToSetMenu } from "@/components/sets/AddToSetMenu";
 import { toast } from "@/state/toasts";
-import { useUndoStore } from "@/state/undoStore";
 import type { DocumentSummary } from "@/api/types";
 
 export function DocumentList() {
@@ -230,8 +229,8 @@ function DeleteDialog({ doc, onClose }: { doc: DocumentSummary; onClose: () => v
         title={`Delete "${doc.name}"?`}
         description={
           doc.excerptCount > 0
-            ? `This also deletes its ${doc.excerptCount} excerpt${doc.excerptCount === 1 ? "" : "s"} and their memos. This cannot be undone.`
-            : "This cannot be undone."
+            ? `This also deletes its ${doc.excerptCount} excerpt${doc.excerptCount === 1 ? "" : "s"} and their memos. You can undo this from History.`
+            : "You can undo this from History."
         }
       >
         <DialogFooter>
@@ -243,7 +242,6 @@ function DeleteDialog({ doc, onClose }: { doc: DocumentSummary; onClose: () => v
             onClick={async () => {
               try {
                 await del.mutateAsync(doc.id);
-                useUndoStore.getState().clear();
                 if (view.kind === "document" && view.documentId === doc.id)
                   setView({ kind: "empty" });
                 onClose();

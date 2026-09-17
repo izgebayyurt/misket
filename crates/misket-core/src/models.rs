@@ -329,6 +329,15 @@ pub struct ApplyResult {
     pub added_code_ids: Vec<String>,
 }
 
+/// What in vivo coding produced: the code named after the selected text, and
+/// the excerpt it was applied to.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct InVivoResult {
+    pub code: Code,
+    pub excerpt: ExcerptWithCodes,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct ExcerptDetail {

@@ -292,6 +292,12 @@ export interface MemoTarget {
   excerptId?: string | null;
 }
 
+/** What in vivo coding produced: the new code and the excerpt it tagged. */
+export interface InVivoResult {
+  code: Code;
+  excerpt: ExcerptWithCodes;
+}
+
 export interface ExcerptDetail extends ExcerptWithCodes {
   documentName: string;
   contextBefore: string;

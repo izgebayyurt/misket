@@ -23,11 +23,7 @@ export const updateFrameworkMatrix = (id: string, input: FrameworkMatrixInput) =
 export const deleteFrameworkMatrix = (id: string) =>
   invoke<FrameworkMatrixWithCells>("delete_framework_matrix", { id });
 
-/** Put a deleted matrix back, summaries included. */
-export const restoreFrameworkMatrix = (saved: FrameworkMatrixWithCells) =>
-  invoke<FrameworkMatrix>("restore_framework_matrix", { saved });
-
-/** Write one cell's summary; resolves to the previous text, for undo. */
+/** Write one cell's summary; resolves to the text that was there before. */
 export const setFrameworkCell = (
   matrixId: string,
   rowKey: string,

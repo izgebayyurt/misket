@@ -2,6 +2,7 @@ import { invoke } from "./client";
 import type {
   ApplyCodesInput,
   ApplyResult,
+  InVivoResult,
   AutoCodeHit,
   AutoCodeReport,
   BulkCodeReport,
@@ -16,6 +17,18 @@ import type {
 } from "./types";
 
 export const applyCodes = (input: ApplyCodesInput) => invoke<ApplyResult>("apply_codes", { input });
+
+/**
+ * Create a code named after the selected text and apply it to that
+ * selection. One command, so it is one step to undo.
+ */
+export const inVivoCode = (args: {
+  documentId: string;
+  startPos: number;
+  endPos: number;
+  name: string;
+  parentId: string | null;
+}) => invoke<InVivoResult>("in_vivo_code", args);
 export const listDocumentExcerpts = (documentId: string) =>
   invoke<ExcerptWithCodes[]>("list_document_excerpts", { documentId });
 export const getExcerpt = (id: string) => invoke<ExcerptDetail>("get_excerpt", { id });

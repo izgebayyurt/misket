@@ -1,8 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as api from "@/api/sets";
-import type { ExcerptFilter, SavedFilter, SetInfo, SetKind } from "@/api/types";
+import type { ExcerptFilter, SetInfo, SetKind } from "@/api/types";
 import { keys } from "./keys";
-import { useUndoStore } from "@/state/undoStore";
 
 export function useSets(kind: SetKind) {
   return useQuery({
@@ -47,7 +46,7 @@ export function useInvalidateSets() {
 export function useCreateSet() {
   const invalidate = useInvalidateSets();
   return useMutation({
-    mutationFn: async ({
+    mutationFn: ({
       kind,
       name,
       memberIds = [],
@@ -55,21 +54,8 @@ export function useCreateSet() {
       kind: SetKind;
       name: string;
       memberIds?: string[];
-    }) => {
-      let created: SetInfo | null = null;
-      await useUndoStore.getState().run({
-        label: `Create set "${name.trim()}"`,
-        redo: async () => {
-          created = await api.createSet(kind, name, memberIds, created?.id);
-          invalidate(created.id);
-        },
-        undo: async () => {
-          if (created) await api.deleteSet(created.id);
-          invalidate(created?.id);
-        },
-      });
-      return created as SetInfo | null;
-    },
+    }) => api.createSet(kind, name, memberIds),
+    onSuccess: (created) => invalidate(created.id),
   });
 }
 
@@ -78,18 +64,9 @@ export function useRenameSet() {
   return useMutation({
     mutationFn: async ({ id, name, previous }: { id: string; name: string; previous: string }) => {
       if (name.trim() === previous) return;
-      await useUndoStore.getState().run({
-        label: `Rename set "${previous}"`,
-        redo: async () => {
-          await api.renameSet(id, name);
-          invalidate(id);
-        },
-        undo: async () => {
-          await api.renameSet(id, previous);
-          invalidate(id);
-        },
-      });
+      await api.renameSet(id, name);
     },
+    onSuccess: (_r, { id }) => invalidate(id),
   });
 }
 
@@ -97,20 +74,8 @@ export function useRenameSet() {
 export function useDeleteSet() {
   const invalidate = useInvalidateSets();
   return useMutation({
-    mutationFn: async (set: SetInfo) => {
-      let memberIds: string[] = [];
-      await useUndoStore.getState().run({
-        label: `Delete set "${set.name}"`,
-        redo: async () => {
-          memberIds = (await api.deleteSet(set.id)).memberIds;
-          invalidate(set.id);
-        },
-        undo: async () => {
-          await api.createSet(set.kind, set.name, memberIds, set.id);
-          invalidate(set.id);
-        },
-      });
-    },
+    mutationFn: (set: SetInfo) => api.deleteSet(set.id),
+    onSuccess: (_r, set) => invalidate(set.id),
   });
 }
 
@@ -121,7 +86,6 @@ export function useSetSetMembers() {
     mutationFn: async ({
       setId,
       memberIds,
-      setName,
     }: {
       setId: string;
       memberIds: string[];
@@ -129,18 +93,9 @@ export function useSetSetMembers() {
     }) => {
       const before = await api.listSetMembers(setId);
       if (sameMembers(before, memberIds)) return;
-      await useUndoStore.getState().run({
-        label: `Edit set${setName ? ` "${setName}"` : ""}`,
-        redo: async () => {
-          await api.setSetMembers(setId, memberIds);
-          invalidate(setId);
-        },
-        undo: async () => {
-          await api.setSetMembers(setId, before);
-          invalidate(setId);
-        },
-      });
+      await api.setSetMembers(setId, memberIds);
     },
+    onSuccess: (_r, { setId }) => invalidate(setId),
   });
 }
 
@@ -150,7 +105,6 @@ export function useAddToSet() {
     mutationFn: async ({
       setId,
       memberId,
-      label,
     }: {
       setId: string;
       memberId: string;
@@ -158,45 +112,18 @@ export function useAddToSet() {
     }) => {
       const before = await api.listSetMembers(setId);
       if (before.includes(memberId)) return;
-      await useUndoStore.getState().run({
-        label: label ?? "Add to set",
-        redo: async () => {
-          await api.addToSet(setId, memberId);
-          invalidate(setId);
-        },
-        undo: async () => {
-          await api.removeFromSet(setId, memberId);
-          invalidate(setId);
-        },
-      });
+      await api.addToSet(setId, memberId);
     },
+    onSuccess: (_r, { setId }) => invalidate(setId),
   });
 }
 
 export function useRemoveFromSet() {
   const invalidate = useInvalidateSets();
   return useMutation({
-    mutationFn: async ({
-      setId,
-      memberId,
-      label,
-    }: {
-      setId: string;
-      memberId: string;
-      label?: string;
-    }) => {
-      await useUndoStore.getState().run({
-        label: label ?? "Remove from set",
-        redo: async () => {
-          await api.removeFromSet(setId, memberId);
-          invalidate(setId);
-        },
-        undo: async () => {
-          await api.addToSet(setId, memberId);
-          invalidate(setId);
-        },
-      });
-    },
+    mutationFn: ({ setId, memberId }: { setId: string; memberId: string; label?: string }) =>
+      api.removeFromSet(setId, memberId),
+    onSuccess: (_r, { setId }) => invalidate(setId),
   });
 }
 
@@ -216,53 +143,19 @@ function useInvalidateSavedFilters() {
  */
 export function useSaveFilter() {
   const invalidate = useInvalidateSavedFilters();
-  const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ name, filter }: { name: string; filter: ExcerptFilter }) => {
-      const before = (
-        qc.getQueryData<Awaited<ReturnType<typeof api.listSavedFilters>>>(keys.savedFilters) ?? []
-      ).find((f) => f.name.toLowerCase() === name.trim().toLowerCase());
-      let saved: SavedFilter | null = null;
-      await useUndoStore.getState().run({
-        label: `Save filter "${name.trim()}"`,
-        redo: async () => {
-          saved = await api.saveFilter(name, filter);
-          invalidate();
-        },
-        undo: async () => {
-          if (before) await api.saveFilter(before.name, before.filter);
-          else if (saved) await api.deleteSavedFilter(saved.id);
-          invalidate();
-        },
-      });
-      return saved as SavedFilter | null;
-    },
+    mutationFn: ({ name, filter }: { name: string; filter: ExcerptFilter }) =>
+      api.saveFilter(name, filter),
+    onSuccess: invalidate,
   });
 }
 
-/**
- * Delete a saved filter. Undo re-saves it under the same name; the name is
- * the identity users see, so the row coming back with a fresh id is fine.
- */
+/** Delete a saved filter. Undo re-saves it with the same id. */
 export function useDeleteSavedFilter() {
   const invalidate = useInvalidateSavedFilters();
   return useMutation({
-    mutationFn: async (saved: SavedFilter) => {
-      await useUndoStore.getState().run({
-        label: `Delete filter "${saved.name}"`,
-        redo: async () => {
-          const current = (await api.listSavedFilters()).find(
-            (f) => f.name.toLowerCase() === saved.name.toLowerCase(),
-          );
-          if (current) await api.deleteSavedFilter(current.id);
-          invalidate();
-        },
-        undo: async () => {
-          await api.saveFilter(saved.name, saved.filter);
-          invalidate();
-        },
-      });
-    },
+    mutationFn: (saved: { id: string }) => api.deleteSavedFilter(saved.id),
+    onSuccess: invalidate,
   });
 }
 

@@ -68,7 +68,7 @@ export function ImportCodebookDialog({
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent
         title="Import codebook"
-        description={`This cannot be undone yet. Importing ${fileName ?? path}.`}
+        description={`Importing ${fileName ?? path}. You can undo the whole import from History.`}
       >
         <div className="space-y-4">
           {preview.ok ? (

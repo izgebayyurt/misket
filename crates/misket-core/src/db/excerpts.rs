@@ -11,7 +11,8 @@ use super::{
 use crate::error::{AppError, Result};
 use crate::models::{
     ApplyCodesInput, ApplyResult, DescriptorFilter, ExcerptDetail, ExcerptFilter, ExcerptPage,
-    ExcerptRow, ExcerptSnapshot, ExcerptWithCodes, MergeResult, Rect, TagRow,
+    ExcerptRow, ExcerptSnapshot, ExcerptWithCodes, InVivoResult, MergeResult, NewCode, Rect,
+    TagRow,
 };
 
 const CONTEXT_CHARS: i64 = 120;
@@ -529,6 +530,50 @@ pub fn remove_code(conn: &Connection, id: &str, code_id: &str) -> Result<Excerpt
     )?;
     tx.commit()?;
     get(conn, id)
+}
+
+/// In vivo coding: create a code named after the selected text and apply it
+/// to that selection.
+///
+/// Two writes, and both belong to the one thing the user did — so they go in
+/// a group and come off together. Undoing it can never leave a stray empty
+/// code behind, and redoing it brings back the same code id, which anything
+/// that named the code in the meantime still points at.
+pub fn in_vivo_code(
+    conn: &Connection,
+    document_id: &str,
+    start_pos: i64,
+    end_pos: i64,
+    name: &str,
+    parent_id: Option<&str>,
+) -> Result<InVivoResult> {
+    let tx = util::tx(conn)?;
+    let result = history::group(&tx, &format!("Coded in vivo: \"{}\"", name.trim()), |tx| {
+        let code = codes::create(
+            tx,
+            NewCode {
+                name: name.to_string(),
+                parent_id: parent_id.map(String::from),
+                ..Default::default()
+            },
+        )?;
+        let applied = apply_codes(
+            tx,
+            ApplyCodesInput {
+                document_id: document_id.to_string(),
+                start_pos: Some(start_pos),
+                end_pos: Some(end_pos),
+                code_ids: vec![code.id.clone()],
+                ..Default::default()
+            },
+        )?;
+        Ok(InVivoResult {
+            code,
+            excerpt: applied.excerpt,
+        })
+    })?;
+    tx.commit()?;
+    Ok(result)
 }
 
 /// Everything needed to put one excerpt back exactly as it stands: the row,

@@ -1,6 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as api from "@/api/backup";
-import { useUndoStore } from "@/state/undoStore";
 import { useWorkspace } from "@/state/workspace";
 import { keys } from "./keys";
 
@@ -12,14 +11,16 @@ export function useSaveProjectCopy() {
   return useMutation({ mutationFn: api.saveProjectCopy });
 }
 
-/** Replaces the whole open project: resets the workspace and all queries,
- * and (not undoable across a file swap) clears the undo stack. */
+/**
+ * Replaces the whole open project with a copy from disk: the workspace and
+ * every query start again. This is the one change that is not undoable — the
+ * history in the file goes with the file.
+ */
 export function useRestoreBackup() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: api.restoreBackup,
     onSuccess: () => {
-      useUndoStore.getState().clear();
       useWorkspace.getState().reset();
       qc.resetQueries();
     },
