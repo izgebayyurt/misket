@@ -17,6 +17,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   coderId: null,
   coderColor: null,
   lanesByCoder: false,
+  ocrLanguages: [],
 };
 
 const SAVE_DEBOUNCE_MS = 400;
