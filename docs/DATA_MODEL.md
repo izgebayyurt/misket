@@ -95,6 +95,124 @@ second coder agrees — and adds `codings: [{codeId, coderId}]`, one entry per
 in the file, including an id that appears on a coding but has no `coders` row
 of its own, named by its id so nothing is invisible to a filter.
 
+## Pulling another copy
+
+Misket has no server, so a team is a shared folder with one file per coder —
+`study.ada.misket`, `study.bob.misket` — and "Pull from another copy"
+(`crates/misket-core/src/db/merge.rs`) is how their work gets into yours. It
+opens the other file with its own **read-only** connection, never migrates it
+(a file older than this build is refused with "ask its owner to open it once";
+a newer one is `AppError::NewerSchema`), and never writes a byte to it. A pull
+only ever **adds**: no row of ours is deleted, ever, which is what makes it
+safe to run on a whim.
+
+### Matching
+
+Identity first, then the one fallback each kind of row can justify:
+
+| Thing              | Matched by                                                      |
+| ------------------ | --------------------------------------------------------------- |
+| documents          | id, else `content_hash` — the same source imported separately   |
+| codes              | id, else the same name (NOCASE) under the same parent           |
+| excerpts           | id (and the same document), else the same range or rectangle    |
+| codings            | `(excerpt, code, coder)`, which is `excerpt_codes`' primary key |
+| memos              | id                                                              |
+| descriptor fields  | id, else name; values by `(document, field)`                    |
+| sets               | id, else `(kind, name)`; members are unioned                    |
+| saved filters      | id, else name                                                   |
+| framework matrices | id, else name; cells by `(matrix, row key, code)`               |
+| coders             | id                                                              |
+
+Every match records their id against ours, and those maps are applied on the
+way in: a document matched by hash takes their excerpts onto _our_ document,
+a code matched by name takes their codings onto _our_ code, and a framework
+cell whose `row_key` is a document id is rewritten the same way. The codes are
+walked parents-first so a name match is always made against the parent we have
+already decided on. Their `coders` rows are upserted (`coders::upsert`) — the
+local coder's own row is never overwritten with somebody else's idea of it.
+
+An id collision that is not a match (their excerpt id belongs to one of ours in
+another document) mints a derived id: a UUID-shaped SHA-256 of what the row
+stands for, so pulling twice makes the same one rather than a second copy.
+"Keep both" on a memo conflict uses the same trick.
+
+### The three-way rule, and the base
+
+A union has nothing to say about a _scalar_ both files can edit: code name,
+colour, description, inclusion, exclusion, parent and sort order; memo title
+and body; descriptor values; framework cell summaries; document name; set
+name; transcript format. For those, a pull is a three-way merge against a
+stored base:
+
+- ours unchanged since the base → **take theirs**
+- theirs unchanged since the base → **keep ours**
+- both changed, differently → **ask**
+
+`sync_points` (schema 12) is the base: one row per copy we have ever pulled
+from, keyed by that file's `project_id` and the coder it writes as, with
+`base_json` — a compact snapshot of exactly those scalars, keyed by _our_ ids —
+written at the end of every pull. `our_node_id` and `their_node_id` record how
+far each history had run, for diagnostics only.
+
+The **first** pull from a copy has no base. Then ours wins for every scalar and
+the differences are listed in `MergePlan.notes` rather than asked about, which
+is the conservative reading of "I have never merged with this person before".
+The same holds for a row that is in both files but not in the base: it grew on
+both sides independently and there is no telling who moved what.
+
+Which coder is "them" is `merge::their_coder`: the most recent non-empty
+`history.coder_id` in their file — whoever last worked in it — falling back to
+the `coders` row with the most codings, and then to the first row there. The
+local coder id lives in the app's settings and not in the file, so this is what
+a file can say about itself. A copy nobody has written in yet answers with
+whoever wrote it last, which is harmless: it has nothing new to give.
+
+### Conflicts
+
+`MergeConflict { id, kind, title, field, ours, theirs, choices, default }`, with
+ids stable between a preview and the apply that follows it (`<kind>:<target>`),
+so the dialog's answers line up with a plan computed twice:
+
+| `kind`             | Asked when                                                      | Choices                                                        |
+| ------------------ | --------------------------------------------------------------- | -------------------------------------------------------------- |
+| `code.scalar`      | a code was renamed, moved or redescribed both sides             | keep ours / take theirs (all their scalar fields at once)      |
+| `code.deletedHere` | a code is in the base and theirs but not ours, and they used it | restore it with their codings / leave it deleted and drop them |
+| `memo`             | a memo was edited both sides                                    | keep both / keep ours / take theirs                            |
+| `descriptor.value` | a value differs both sides                                      | keep ours / take theirs                                        |
+| `framework.cell`   | a summary was written both sides                                | keep ours / take theirs                                        |
+
+Defaults lose nothing: `restore`, `both`, and otherwise "keep ours". Document
+name, set name and transcript format are three-way merged but never raise a
+question — both sides changed means ours stands, with a note. A code's shortcut
+is never taken if the key is already used here, also with a note.
+
+### One history step
+
+`apply` runs inside `history::group(conn, "Pulled from <name>'s copy", …)` and
+inside one savepoint, so a failure half-way leaves nothing behind. Every write
+it makes is an ordinary node in the vocabularies above — `document.imported`
+carrying a `DocumentOp::Restore` (with the text and pixels in the node's
+blobs), `code.created` carrying a `CodeOp::Restore`, `excerpt.restored` and
+`bulk.codes_added` carrying `ExcerptChange`s, `memo.created` a `MemoChange`,
+and so on — recorded and then run through `history::apply_forward`, exactly as
+a redo would run it. So the inverse of a pull is written by the same code that
+writes the inverse of everything else, and one Ctrl-Z takes the whole thing
+back: a test asserts the project is byte-for-byte what it was in every user
+table.
+
+Two nodes are the pull's own bookkeeping, both speaking `PullChange` (coder
+rows and sync point rows, in both directions): `project.pulled` leads the group
+and carries the counts in its `detail_json`, and `project.sync_point` closes it
+by writing the base for next time. Because the sync point is inside the group,
+undoing a pull takes it back too, and the next pull behaves as though the first
+had never happened.
+
+The label is rewritten with `relabel_group` once the counts are known:
+"Pulled from Bob's copy: 143 codings, 12 excerpts, 2 codes".
+
+Pulling is what puts two people's codings in one file; **Reliability** below is
+what compares them once they are there.
+
 ## Reliability
 
 Inter-rater agreement (`crates/misket-core/src/db/irr.rs`) is **computed, never

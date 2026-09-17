@@ -15,6 +15,7 @@ pub mod framework;
 pub mod history;
 pub mod irr;
 pub mod memos;
+pub mod merge;
 pub mod migrations;
 pub mod query_expr;
 pub mod search;
@@ -279,7 +280,8 @@ mod tests {
             let p = OpenProject::create(&path, "Old", "0.1.0").unwrap();
             p.conn
                 .execute_batch(
-                    "DROP INDEX memos_coder_idx;
+                    "DROP TABLE sync_points;
+                     DROP INDEX memos_coder_idx;
                      ALTER TABLE memos DROP COLUMN coder_id;
                      DROP INDEX excerpt_codes_coder_idx;
                      DROP INDEX excerpt_codes_code_idx;

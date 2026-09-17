@@ -8,12 +8,14 @@ import { describe } from "@/core/keymap";
 import { ExportMenu } from "./ExportMenu";
 import { AboutDialog } from "./AboutDialog";
 import { BackupsDialog } from "./BackupsDialog";
+import { PullDialog } from "@/components/merge/PullDialog";
 
 export function StatusBar({ project }: { project: ProjectInfo }) {
   const close = useCloseProject();
   const lastLabel = useUndoStore((s) => s.lastLabel);
   const [about, setAbout] = useState(false);
   const [backups, setBackups] = useState(false);
+  const [pull, setPull] = useState(false);
   const setSettingsOpen = useWorkspace((s) => s.setSettingsOpen);
   const setShortcutsHelpOpen = useWorkspace((s) => s.setShortcutsHelpOpen);
   const lastAppliedCodeId = useWorkspace((s) => s.lastAppliedCodeId);
@@ -45,6 +47,14 @@ export function StatusBar({ project }: { project: ProjectInfo }) {
       >
         ?
       </button>
+      <button
+        className="hover:text-fg"
+        onClick={() => setPull(true)}
+        title="Merge another researcher's copy of this project into yours"
+        data-testid="open-pull"
+      >
+        Pull from a copy…
+      </button>
       <button className="hover:text-fg" onClick={() => setBackups(true)}>
         Backups…
       </button>
@@ -59,6 +69,7 @@ export function StatusBar({ project }: { project: ProjectInfo }) {
       </button>
       {about ? <AboutDialog onClose={() => setAbout(false)} /> : null}
       {backups ? <BackupsDialog onClose={() => setBackups(false)} /> : null}
+      {pull ? <PullDialog onClose={() => setPull(false)} /> : null}
     </footer>
   );
 }
