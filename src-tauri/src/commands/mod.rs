@@ -15,6 +15,7 @@ pub mod irr;
 pub mod memos;
 pub mod merge;
 pub mod project;
+pub mod refi;
 pub mod search;
 pub mod sets;
 pub mod settings;

@@ -1,6 +1,7 @@
 import { save } from "@tauri-apps/plugin-dialog";
 import { Download } from "lucide-react";
 import * as api from "@/api/export";
+import { exportRefi } from "@/api/refi";
 import { useSaveProjectCopy } from "@/queries/backup";
 import {
   DropdownMenu,
@@ -19,20 +20,40 @@ function stem(project: ProjectInfo) {
 export function ExportMenu({ project }: { project: ProjectInfo }) {
   const saveCopy = useSaveProjectCopy();
 
-  async function run(kind: "codebook" | "codebookJson" | "excerpts" | "project" | "activity") {
-    const ext = kind === "codebookJson" || kind === "project" ? "json" : "csv";
-    const suffix = kind === "codebookJson" ? "codebook" : kind;
+  async function run(
+    kind: "codebook" | "codebookJson" | "excerpts" | "project" | "activity" | "refi",
+  ) {
+    const ext =
+      kind === "refi" ? "qdpx" : kind === "codebookJson" || kind === "project" ? "json" : "csv";
+    const suffix = kind === "codebookJson" ? "codebook" : kind === "refi" ? "refi-qda" : kind;
     try {
       const path = await save({
         defaultPath: `${stem(project)}-${suffix}.${ext}`,
-        filters: [{ name: ext.toUpperCase(), extensions: [ext] }],
+        filters: [
+          kind === "refi"
+            ? { name: "REFI-QDA project", extensions: ["qdpx"] }
+            : { name: ext.toUpperCase(), extensions: [ext] },
+        ],
       });
       if (!path) return;
       if (kind === "codebook") await api.exportCodebookCsv(path);
       else if (kind === "codebookJson") await api.exportCodebookJson(path);
       else if (kind === "excerpts") await api.exportExcerptsCsv(path, {});
       else if (kind === "activity") await api.exportActivityCsv(path);
-      else await api.exportProjectJson(path);
+      else if (kind === "refi") {
+        const report = await exportRefi(path);
+        const what = [
+          `${report.textSources + report.pictureSources} sources`,
+          `${report.codes} codes`,
+          `${report.codings} codings`,
+        ].join(", ");
+        toast.info(
+          report.skipped.length > 0
+            ? `Exported ${what}; left behind: ${report.skipped.join("; ")}`
+            : `Exported ${what} to ${path.split(/[\\/]/).pop()}`,
+        );
+        return;
+      } else await api.exportProjectJson(path);
       toast.info(`Exported ${suffix} to ${path.split(/[\\/]/).pop()}`);
     } catch (e) {
       toast.error(e);
@@ -68,6 +89,10 @@ export function ExportMenu({ project }: { project: ProjectInfo }) {
         <DropdownMenuItem onSelect={() => run("excerpts")}>All excerpts (CSV)</DropdownMenuItem>
         <DropdownMenuItem onSelect={() => run("activity")}>Activity log (CSV)</DropdownMenuItem>
         <DropdownMenuItem onSelect={() => run("project")}>Whole project (JSON)</DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={() => run("refi")} data-testid="export-refi">
+          REFI-QDA (.qdpx)…
+        </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={() => void runSaveCopy()}>Save a copy as…</DropdownMenuItem>
       </DropdownMenuContent>
