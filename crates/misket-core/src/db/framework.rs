@@ -12,12 +12,27 @@ use std::collections::{HashMap, HashSet};
 
 use rusqlite::{params, Connection, OptionalExtension, Row};
 
-use super::{codes, descriptors, documents, export, sets, util};
+use super::history::FrameworkOp;
+use super::{activity, codes, descriptors, documents, export, history, sets, util};
 use crate::error::{AppError, Result};
 use crate::models::{
     FrameworkCell, FrameworkMatrix, FrameworkMatrixInput, FrameworkMatrixView,
     FrameworkMatrixWithCells, FrameworkRow,
 };
+use serde_json::json;
+
+/// The configuration of a matrix as [`create_matrix`] and [`update_matrix`]
+/// take it, so a payload can replay either.
+fn input_of(m: &FrameworkMatrix) -> FrameworkMatrixInput {
+    FrameworkMatrixInput {
+        name: m.name.clone(),
+        row_kind: m.row_kind.clone(),
+        row_field_id: m.row_field_id.clone(),
+        row_set_id: m.row_set_id.clone(),
+        code_set_id: m.code_set_id.clone(),
+        code_ids: m.code_ids.clone(),
+    }
+}
 
 pub const ROW_KINDS: [&str; 2] = ["document", "descriptor_value"];
 
@@ -122,7 +137,25 @@ pub fn create_matrix(
         ],
     )
     .map_err(|e| map_unique(e, &name))?;
-    get(conn, &id)
+    let matrix = get(conn, &id)?;
+    activity::record(
+        conn,
+        "framework.matrix_created",
+        "framework_matrix",
+        Some(&matrix.id),
+        format!("Created framework matrix \"{}\"", matrix.name),
+        json!({ "name": matrix.name, "rowKind": matrix.row_kind, "codeIds": matrix.code_ids }),
+        Some(history::payload(&FrameworkOp::Restore {
+            saved: Box::new(FrameworkMatrixWithCells {
+                matrix: matrix.clone(),
+                cells: vec![],
+            }),
+        })),
+        Some(history::payload(&FrameworkOp::Drop {
+            matrix_id: matrix.id.clone(),
+        })),
+    )?;
+    Ok(matrix)
 }
 
 /// Replace a matrix's whole configuration: its name, its row grouping and its
@@ -133,7 +166,7 @@ pub fn update_matrix(
     input: &FrameworkMatrixInput,
 ) -> Result<FrameworkMatrix> {
     let (name, row_kind) = validate(input)?;
-    get(conn, id)?;
+    let before = get(conn, id)?;
     let code_ids_json = serde_json::to_string(&input.code_ids)?;
     conn.execute(
         "UPDATE framework_matrices
@@ -152,7 +185,35 @@ pub fn update_matrix(
         ],
     )
     .map_err(|e| map_unique(e, &name))?;
-    get(conn, id)
+    let after = get(conn, id)?;
+    if input_of(&after) != input_of(&before) {
+        activity::record(
+            conn,
+            "framework.matrix_updated",
+            "framework_matrix",
+            Some(id),
+            if before.name != after.name {
+                format!(
+                    "Renamed framework matrix \"{}\" to \"{}\"",
+                    before.name, after.name
+                )
+            } else {
+                format!("Changed framework matrix \"{}\"", after.name)
+            },
+            json!({ "name": activity::change(before.name.clone(), after.name.clone()) }),
+            Some(history::payload(&FrameworkOp::Configure {
+                matrix_id: id.to_string(),
+                input: Box::new(input_of(&after)),
+                updated_at: after.updated_at.clone(),
+            })),
+            Some(history::payload(&FrameworkOp::Configure {
+                matrix_id: id.to_string(),
+                input: Box::new(input_of(&before)),
+                updated_at: before.updated_at.clone(),
+            })),
+        )?;
+    }
+    Ok(after)
 }
 
 /// Delete a matrix and hand back everything it held, so undo can restore it
@@ -160,7 +221,27 @@ pub fn update_matrix(
 pub fn delete_matrix(conn: &Connection, id: &str) -> Result<FrameworkMatrixWithCells> {
     let matrix = get(conn, id)?;
     let cells = stored_cells(conn, id)?;
-    conn.execute("DELETE FROM framework_matrices WHERE id = ?1", [id])?;
+    let saved = FrameworkMatrixWithCells {
+        matrix: matrix.clone(),
+        cells: cells.clone(),
+    };
+    let tx = util::tx(conn)?;
+    tx.execute("DELETE FROM framework_matrices WHERE id = ?1", [id])?;
+    activity::record(
+        &tx,
+        "framework.matrix_deleted",
+        "framework_matrix",
+        Some(id),
+        format!("Deleted framework matrix \"{}\"", matrix.name),
+        json!({ "name": matrix.name, "cellCount": cells.len() }),
+        Some(history::payload(&FrameworkOp::Drop {
+            matrix_id: id.to_string(),
+        })),
+        Some(history::payload(&FrameworkOp::Restore {
+            saved: Box::new(saved),
+        })),
+    )?;
+    tx.commit()?;
     Ok(FrameworkMatrixWithCells { matrix, cells })
 }
 
@@ -190,24 +271,28 @@ pub fn restore_matrix(
         ],
     )
     .map_err(|e| map_unique(e, &m.name))?;
-    let now = util::now();
-    for (row_key, code_id, summary) in &saved.cells {
+    for (row_key, code_id, summary, updated_at) in &saved.cells {
         tx.execute(
             "INSERT INTO framework_cells (matrix_id, row_key, code_id, summary, updated_at)
              VALUES (?1, ?2, ?3, ?4, ?5)",
-            params![m.id, row_key, code_id, summary, now],
+            params![m.id, row_key, code_id, summary, updated_at],
         )?;
     }
     tx.commit()?;
     get(conn, &m.id)
 }
 
-fn stored_cells(conn: &Connection, matrix_id: &str) -> Result<Vec<(String, String, String)>> {
+fn stored_cells(
+    conn: &Connection,
+    matrix_id: &str,
+) -> Result<Vec<(String, String, String, String)>> {
     let mut stmt = conn.prepare(
-        "SELECT row_key, code_id, summary FROM framework_cells
+        "SELECT row_key, code_id, summary, updated_at FROM framework_cells
          WHERE matrix_id = ?1 ORDER BY row_key, code_id",
     )?;
-    let rows = stmt.query_map([matrix_id], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?;
+    let rows = stmt.query_map([matrix_id], |r| {
+        Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))
+    })?;
     Ok(rows.collect::<rusqlite::Result<_>>()?)
 }
 
@@ -221,15 +306,16 @@ pub fn set_cell_summary(
     code_id: &str,
     summary: &str,
 ) -> Result<String> {
-    get(conn, matrix_id)?;
-    let previous: Option<String> = conn
+    let matrix = get(conn, matrix_id)?;
+    let before: Option<(String, String)> = conn
         .query_row(
-            "SELECT summary FROM framework_cells
+            "SELECT summary, updated_at FROM framework_cells
              WHERE matrix_id = ?1 AND row_key = ?2 AND code_id = ?3",
             params![matrix_id, row_key, code_id],
-            |r| r.get(0),
+            |r| Ok((r.get(0)?, r.get(1)?)),
         )
         .optional()?;
+    let previous: Option<String> = before.as_ref().map(|(s, _)| s.clone());
     if summary.trim().is_empty() {
         conn.execute(
             "DELETE FROM framework_cells WHERE matrix_id = ?1 AND row_key = ?2 AND code_id = ?3",
@@ -244,7 +330,54 @@ pub fn set_cell_summary(
             params![matrix_id, row_key, code_id, summary, util::now()],
         )?;
     }
-    Ok(previous.unwrap_or_default())
+    let previous = previous.unwrap_or_default();
+    if previous != summary {
+        let now = conn
+            .query_row(
+                "SELECT updated_at FROM framework_cells
+                  WHERE matrix_id = ?1 AND row_key = ?2 AND code_id = ?3",
+                params![matrix_id, row_key, code_id],
+                |r| r.get::<_, String>(0),
+            )
+            .optional()?
+            .unwrap_or_default();
+        let step = |text: &str, at: &str| {
+            history::payload(&FrameworkOp::Cell {
+                matrix_id: matrix_id.to_string(),
+                row_key: row_key.to_string(),
+                code_id: code_id.to_string(),
+                summary: text.to_string(),
+                updated_at: at.to_string(),
+            })
+        };
+        activity::record(
+            conn,
+            "framework.cell_set",
+            "framework_matrix",
+            Some(matrix_id),
+            format!(
+                "Wrote a summary for \"{}\" in matrix \"{}\"",
+                activity::code_name(conn, code_id),
+                matrix.name
+            ),
+            json!({
+                "name": matrix.name,
+                "rowKey": row_key,
+                "codeId": code_id,
+                "codeName": activity::code_name(conn, code_id),
+                "summary": activity::change(previous.clone(), summary.to_string()),
+            }),
+            Some(step(summary, &now)),
+            Some(step(
+                &previous,
+                before
+                    .as_ref()
+                    .map(|(_, at)| at.as_str())
+                    .unwrap_or_default(),
+            )),
+        )?;
+    }
+    Ok(previous)
 }
 
 // --------------------------------------------------------------------- view
@@ -430,7 +563,7 @@ pub fn get_matrix(conn: &Connection, id: &str) -> Result<FrameworkMatrixView> {
     let counts = counts_by_column(conn, &columns)?;
     let summaries: HashMap<(String, String), String> = stored_cells(conn, id)?
         .into_iter()
-        .map(|(row_key, code_id, summary)| ((row_key, code_id), summary))
+        .map(|(row_key, code_id, summary, _)| ((row_key, code_id), summary))
         .collect();
 
     let mut cells = Vec::with_capacity(rows.len() * columns.len());
@@ -851,13 +984,14 @@ mod tests {
 
         let saved = delete_matrix(conn, &m.id).unwrap();
         assert_eq!(saved.matrix.id, m.id);
+        assert_eq!(saved.cells.len(), 1);
         assert_eq!(
-            saved.cells,
-            vec![(
-                f.doc1.clone(),
-                f.access.clone(),
-                "Waits months.".to_string()
-            )]
+            (
+                &saved.cells[0].0,
+                &saved.cells[0].1,
+                saved.cells[0].2.as_str()
+            ),
+            (&f.doc1, &f.access, "Waits months.")
         );
         assert!(list_matrices(conn).unwrap().is_empty());
 

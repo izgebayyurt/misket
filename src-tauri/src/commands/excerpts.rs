@@ -1,8 +1,8 @@
 use misket_core::db::{bulk, excerpts};
 use misket_core::models::{
     ApplyCodesInput, ApplyResult, AutoCodeHit, AutoCodeReport, BulkCodeReport, ExcerptDetail,
-    ExcerptFilter, ExcerptPage, ExcerptSnapshot, ExcerptWithCodes, MergeResult, RetagReport,
-    SplitResult,
+    ExcerptFilter, ExcerptPage, ExcerptSnapshot, ExcerptWithCodes, InVivoResult, MergeResult,
+    RetagReport, SplitResult,
 };
 use misket_core::Result;
 use tauri::State;
@@ -12,6 +12,29 @@ use crate::state::AppState;
 #[tauri::command]
 pub fn apply_codes(state: State<'_, AppState>, input: ApplyCodesInput) -> Result<ApplyResult> {
     state.with_project(|p| excerpts::apply_codes(&p.conn, input))
+}
+
+/// Create a code named after the selected text and apply it to that
+/// selection: one command, so it is one step in the history.
+#[tauri::command]
+pub fn in_vivo_code(
+    state: State<'_, AppState>,
+    document_id: String,
+    start_pos: i64,
+    end_pos: i64,
+    name: String,
+    parent_id: Option<String>,
+) -> Result<InVivoResult> {
+    state.with_project(|p| {
+        excerpts::in_vivo_code(
+            &p.conn,
+            &document_id,
+            start_pos,
+            end_pos,
+            &name,
+            parent_id.as_deref(),
+        )
+    })
 }
 
 #[tauri::command]

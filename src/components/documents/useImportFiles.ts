@@ -19,7 +19,7 @@ import { useCreateDocument, useCreateImageDocument } from "@/queries/documents";
 import { useWorkspace } from "@/state/workspace";
 import { toast } from "@/state/toasts";
 import { isAppError } from "@/api/client";
-import { useUndoStore } from "@/state/undoStore";
+import { historyBeginGroup, historyEndGroup } from "@/api/history";
 import { analyzeWhitespace, tidyText } from "@/core/importers/tidy";
 import { loadRememberedTidyChoice, useTidyPromptStore, type TidyChoice } from "@/state/tidyPrompt";
 
@@ -71,46 +71,57 @@ export function useImportFiles() {
           .map((f) => f.parsed),
       );
 
-      for (const file of planned) {
-        try {
-          if (file.kind === "image") {
-            // The bytes stay out of the IPC bridge: the backend reads them
-            // from `sourcePath` and copies them into the project file.
-            const doc = await createImage.mutateAsync({
-              name: file.name,
-              sourcePath: file.path,
-              mime: file.mime,
-              width: file.width,
-              height: file.height,
-            });
-            lastId = doc.id;
-          } else {
-            if (file.parsed.text.length > 2_000_000) {
-              toast.info(`${file.parsed.name} is very large; the document view may be slow.`);
+      // A batch of files is one thing the user did, so it is one step to
+      // undo — however many documents it creates. Always closed, or the next
+      // edit would be swallowed into the import.
+      if (planned.length) {
+        const what =
+          planned.length === 1
+            ? `Imported "${nameOf(planned[0]!)}"`
+            : `Imported ${planned.length} documents`;
+        await historyBeginGroup(what);
+      }
+      try {
+        for (const file of planned) {
+          try {
+            if (file.kind === "image") {
+              // The bytes stay out of the IPC bridge: the backend reads them
+              // from `sourcePath` and copies them into the project file.
+              const doc = await createImage.mutateAsync({
+                name: file.name,
+                sourcePath: file.path,
+                mime: file.mime,
+                width: file.width,
+                height: file.height,
+              });
+              lastId = doc.id;
+            } else {
+              if (file.parsed.text.length > 2_000_000) {
+                toast.info(`${file.parsed.name} is very large; the document view may be slow.`);
+              }
+              const doc = await create.mutateAsync({
+                name: file.parsed.name,
+                sourcePath: file.path,
+                sourceFormat: file.parsed.sourceFormat,
+                text: file.parsed.text,
+              });
+              lastId = doc.id;
             }
-            const doc = await create.mutateAsync({
-              name: file.parsed.name,
-              sourcePath: file.path,
-              sourceFormat: file.parsed.sourceFormat,
-              text: file.parsed.text,
-            });
-            lastId = doc.id;
-          }
-          imported++;
-        } catch (e) {
-          if (isAppError(e, "Conflict")) {
-            toast.info(
-              `Skipped ${file.path.split(/[\\/]/).pop()}: identical document already imported.`,
-            );
-          } else {
-            toast.error(e);
+            imported++;
+          } catch (e) {
+            if (isAppError(e, "Conflict")) {
+              toast.info(
+                `Skipped ${file.path.split(/[\\/]/).pop()}: identical document already imported.`,
+              );
+            } else {
+              toast.error(e);
+            }
           }
         }
+      } finally {
+        if (planned.length) await historyEndGroup();
       }
-      if (imported > 0) {
-        useUndoStore.getState().clear();
-        if (lastId) openDocument(lastId);
-      }
+      if (imported > 0 && lastId) openDocument(lastId);
     },
     [create, createImage, openDocument],
   );
@@ -201,6 +212,11 @@ async function maybeTidy(parsed: ImportedDocument[]): Promise<void> {
       f.parsed.text = tidyText(f.parsed.text, choice.options);
     }
   }
+}
+
+/** What a planned file will be called once imported. */
+function nameOf(file: Planned): string {
+  return file.kind === "image" ? file.name : file.parsed.name;
 }
 
 /** "name", then "name (2)", "name (3)"… until unused. */

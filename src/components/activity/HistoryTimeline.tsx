@@ -1,6 +1,18 @@
+import { MapPin } from "lucide-react";
 import { useCodeHistory, useExcerptHistory } from "@/queries/activity";
 import { absoluteTime, kindLabel, relativeTime } from "@/core/activity";
+import { checkoutHistoryNode } from "@/queries/history";
+import { toast } from "@/state/toasts";
+import { Button } from "@/components/ui/button";
 import type { ActivityEntry } from "@/api/types";
+
+async function goToPoint(id: number) {
+  try {
+    await checkoutHistoryNode(id);
+  } catch (e) {
+    toast.error(e);
+  }
+}
 
 /** One code's life in the codebook: the "living codebook" trail. */
 export function CodeHistory({ codeId }: { codeId: string }) {
@@ -45,12 +57,26 @@ function Timeline({
       ) : (
         <ol className="ml-1 space-y-2 border-l border-border pl-3">
           {entries.map((e) => (
-            <li key={e.id} className="relative text-xs" data-testid="history-entry">
+            <li key={e.id} className="group relative text-xs" data-testid="history-entry">
               <span
                 className="absolute -left-[17px] top-1 size-1.5 rounded-full bg-border"
                 aria-hidden
               />
-              <div className="text-fg">{e.summary}</div>
+              <div className="flex items-start justify-between gap-2">
+                <div className="text-fg">{e.summary}</div>
+                {e.isHead ? null : (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-5 shrink-0 px-1 text-[10px] opacity-0 group-hover:opacity-100"
+                    title="Go to this point"
+                    onClick={() => void goToPoint(e.id)}
+                    data-testid="history-go-to-point"
+                  >
+                    <MapPin className="size-3" /> Go to this point
+                  </Button>
+                )}
+              </div>
               <div className="text-fg-muted" title={absoluteTime(e.at)}>
                 {kindLabel(e.kind)} · {relativeTime(e.at)}
                 {e.actor ? ` · ${e.actor}` : ""}

@@ -11,7 +11,8 @@ use std::collections::BTreeMap;
 use rusqlite::{params, Connection, OptionalExtension, Row};
 use serde_json::{json, Value};
 
-use super::{activity, documents, util};
+use super::history::DescriptorOp;
+use super::{activity, documents, history, util};
 use crate::error::{AppError, Result};
 use crate::models::{
     DescriptorField, DescriptorFieldPatch, DescriptorMatrix, DescriptorMatrixRow, DescriptorValue,
@@ -209,6 +210,7 @@ pub fn create_field(conn: &Connection, input: NewDescriptorField) -> Result<Desc
     )
     .map_err(|e| map_unique(e, name))?;
     let field = get_field(conn, &id)?;
+    let order = order_of(conn)?;
     activity::record(
         conn,
         "descriptor.field_created",
@@ -219,14 +221,22 @@ pub fn create_field(conn: &Connection, input: NewDescriptorField) -> Result<Desc
             field.name, field.kind
         ),
         json!({ "name": field.name, "kind": field.kind, "options": field.options }),
-        None,
-        None,
+        Some(history::payload(&DescriptorOp::Field {
+            field: Box::new(field.clone()),
+            values: Some(vec![]),
+            order: order.clone(),
+        })),
+        Some(history::payload(&DescriptorOp::DropField {
+            field_id: field.id.clone(),
+            order: order.into_iter().filter(|f| *f != field.id).collect(),
+        })),
     )?;
     Ok(field)
 }
 
-/// Rename a field, change its options, or (only while it has no values)
-/// change its kind.
+/// Rename a field, change its options, or change its kind — which converts
+/// the values documents already have where the new kind can hold them and
+/// drops the ones it cannot. Undo restores every one of them.
 pub fn update_field(
     conn: &Connection,
     id: &str,
@@ -238,18 +248,7 @@ pub fn update_field(
         None => current.name.clone(),
     };
     let kind = match &patch.kind {
-        Some(k) => {
-            let k = validate_kind(k)?;
-            if k != current.kind && current.value_count > 0 {
-                return Err(AppError::Validation(format!(
-                    "{:?} already has {} value{}; clear them before changing its type",
-                    current.name,
-                    current.value_count,
-                    if current.value_count == 1 { "" } else { "s" }
-                )));
-            }
-            k.to_string()
-        }
+        Some(k) => validate_kind(k)?.to_string(),
         None => current.kind.clone(),
     };
     let options = match &patch.options {
@@ -273,13 +272,40 @@ pub fn update_field(
             )));
         }
     }
-    conn.execute(
+    // Changing the kind is allowed even when documents already have values:
+    // the ones the new kind can hold are kept in its canonical form, the
+    // rest are dropped — and every one of them is in the inverse payload, so
+    // undo puts the field back with all of them.
+    let before_values = values_of(conn, id)?;
+    let tx = util::tx(conn)?;
+    tx.execute(
         "UPDATE descriptor_fields SET name = ?2, kind = ?3, options_json = ?4, updated_at = ?5
          WHERE id = ?1",
         params![id, name, kind, options_json, util::now()],
     )
     .map_err(|e| map_unique(e, &name))?;
-    let after = get_field(conn, id)?;
+    if kind != current.kind {
+        let converted = get_field(&tx, id)?;
+        for (document_id, value) in &before_values {
+            match canonical_value(&converted, value) {
+                Ok(v) if v != *value => {
+                    tx.execute(
+                        "UPDATE descriptor_values SET value = ?3
+                          WHERE document_id = ?1 AND field_id = ?2",
+                        params![document_id, id, v],
+                    )?;
+                }
+                Ok(_) => {}
+                Err(_) => {
+                    tx.execute(
+                        "DELETE FROM descriptor_values WHERE document_id = ?1 AND field_id = ?2",
+                        params![document_id, id],
+                    )?;
+                }
+            }
+        }
+    }
+    let after = get_field(&tx, id)?;
     let mut detail = serde_json::Map::new();
     let mut fields: Vec<&str> = vec![];
     if current.name != after.name {
@@ -318,22 +344,34 @@ pub fn update_field(
             )
         };
         activity::record(
-            conn,
+            &tx,
             "descriptor.field_updated",
             "descriptor_field",
             Some(&after.id),
             summary,
             Value::Object(detail),
-            None,
-            None,
+            Some(history::payload(&DescriptorOp::Field {
+                field: Box::new(after.clone()),
+                values: Some(values_of(&tx, id)?),
+                order: vec![],
+            })),
+            Some(history::payload(&DescriptorOp::Field {
+                field: Box::new(current.clone()),
+                values: Some(before_values),
+                order: vec![],
+            })),
         )?;
     }
-    Ok(after)
+    tx.commit()?;
+    get_field(conn, id)
 }
 
-/// Delete a field; its values go with it.
+/// Delete a field; its values go with it, into the history so undo can bring
+/// both back.
 pub fn delete_field(conn: &Connection, id: &str) -> Result<DescriptorField> {
     let field = get_field(conn, id)?;
+    let values = values_of(conn, id)?;
+    let before = order_of(conn)?;
     let tx = util::tx(conn)?;
     tx.execute("DELETE FROM descriptor_fields WHERE id = ?1", [id])?;
     renumber(&tx)?;
@@ -349,11 +387,33 @@ pub fn delete_field(conn: &Connection, id: &str) -> Result<DescriptorField> {
             "options": field.options,
             "valueCount": field.value_count,
         }),
-        None,
-        None,
+        Some(history::payload(&DescriptorOp::DropField {
+            field_id: id.to_string(),
+            order: order_of(&tx)?,
+        })),
+        Some(history::payload(&DescriptorOp::Field {
+            field: Box::new(field.clone()),
+            values: Some(values),
+            order: before,
+        })),
     )?;
     tx.commit()?;
     Ok(field)
+}
+
+/// Every field id in sort order — what a payload has to restore, because
+/// deleting or adding a field renumbers the rest.
+fn order_of(conn: &Connection) -> Result<Vec<String>> {
+    Ok(list_fields(conn)?.into_iter().map(|f| f.id).collect())
+}
+
+/// The `(documentId, value)` pairs stored for one field.
+fn values_of(conn: &Connection, field_id: &str) -> Result<Vec<(String, String)>> {
+    let mut stmt = conn.prepare(
+        "SELECT document_id, value FROM descriptor_values WHERE field_id = ?1 ORDER BY document_id",
+    )?;
+    let rows = stmt.query_map([field_id], |r| Ok((r.get(0)?, r.get(1)?)))?;
+    Ok(rows.collect::<rusqlite::Result<_>>()?)
 }
 
 fn renumber(conn: &Connection) -> Result<()> {
@@ -377,6 +437,7 @@ fn renumber(conn: &Connection) -> Result<()> {
 pub fn reorder_fields(conn: &Connection, ids: &[String]) -> Result<Vec<DescriptorField>> {
     let tx = util::tx(conn)?;
     let existing = list_fields(&tx)?;
+    let before: Vec<String> = existing.iter().map(|f| f.id.clone()).collect();
     let mut order: Vec<String> = ids
         .iter()
         .filter(|id| existing.iter().any(|f| &&f.id == id))
@@ -391,6 +452,22 @@ pub fn reorder_fields(conn: &Connection, ids: &[String]) -> Result<Vec<Descripto
         tx.execute(
             "UPDATE descriptor_fields SET sort_order = ?2 WHERE id = ?1",
             params![id, i as i64],
+        )?;
+    }
+    if order != before {
+        activity::record(
+            &tx,
+            "descriptor.fields_reordered",
+            "descriptor_field",
+            None,
+            "Reordered descriptor fields",
+            json!({ "count": order.len() }),
+            Some(history::payload(&DescriptorOp::ReorderFields {
+                ids: order.clone(),
+            })),
+            Some(history::payload(&DescriptorOp::ReorderFields {
+                ids: before.clone(),
+            })),
         )?;
     }
     tx.commit()?;
@@ -461,6 +538,13 @@ fn log_value(
     before: Option<&str>,
     after: Option<&str>,
 ) -> Result<()> {
+    let step = |value: Option<&str>| {
+        history::payload(&DescriptorOp::SetValue {
+            document_id: document_id.to_string(),
+            field_id: field.id.clone(),
+            value: value.map(String::from),
+        })
+    };
     let doc_name = activity::document_name(conn, document_id);
     let summary = match after {
         Some(v) => format!("Set {} of \"{doc_name}\" to \"{v}\"", field.name),
@@ -479,8 +563,8 @@ fn log_value(
             "fieldName": field.name,
             "value": activity::change(before.map(String::from), after.map(String::from)),
         }),
-        None,
-        None,
+        Some(step(after)),
+        Some(step(before)),
     )
 }
 
@@ -745,19 +829,39 @@ pub(crate) mod tests {
         .unwrap();
 
         set_value(&p.conn, &doc, &c.id, Some("North")).unwrap();
-        // Now the kind is frozen…
-        assert!(matches!(
-            update_field(
-                &p.conn,
-                &c.id,
-                DescriptorFieldPatch {
-                    kind: Some("text".into()),
-                    ..Default::default()
-                }
-            ),
-            Err(AppError::Validation(_))
-        ));
-        // …restating the same kind is not a change.
+        // A kind change with values in place keeps the ones the new kind can
+        // hold; "North" is still text, so it survives as text.
+        let as_text = update_field(
+            &p.conn,
+            &c.id,
+            DescriptorFieldPatch {
+                kind: Some("text".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(as_text.kind, "text");
+        assert_eq!(as_text.value_count, 1);
+        // Becoming a number drops it: "North" is not one.
+        let as_number = update_field(
+            &p.conn,
+            &c.id,
+            DescriptorFieldPatch {
+                kind: Some("number".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(as_number.value_count, 0);
+        // Undo brings the choice field back with the value it had.
+        crate::db::history::undo(&p.conn).unwrap().unwrap();
+        crate::db::history::undo(&p.conn).unwrap().unwrap();
+        assert_eq!(get_field(&p.conn, &c.id).unwrap().kind, "choice");
+        assert_eq!(
+            values_for_document(&p.conn, &doc).unwrap()[0].value,
+            "North"
+        );
+        // Restating the same kind is not a change.
         assert!(update_field(
             &p.conn,
             &c.id,

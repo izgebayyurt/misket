@@ -1,13 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as api from "@/api/framework";
-import type {
-  FrameworkMatrix,
-  FrameworkMatrixInput,
-  FrameworkMatrixView,
-  FrameworkMatrixWithCells,
-} from "@/api/types";
+import type { FrameworkMatrix, FrameworkMatrixInput, FrameworkMatrixView } from "@/api/types";
 import { keys } from "./keys";
-import { useUndoStore } from "@/state/undoStore";
 
 /** The saved matrix configurations (the picker). */
 export function useFrameworkMatrices() {
@@ -33,6 +27,7 @@ function useInvalidateFramework() {
   return (id?: string) => {
     qc.invalidateQueries({ queryKey: keys.frameworkMatrices });
     if (id) qc.invalidateQueries({ queryKey: keys.frameworkMatrix(id) });
+    qc.invalidateQueries({ queryKey: keys.history });
   };
 }
 
@@ -43,54 +38,25 @@ function useInvalidateFramework() {
 export function useCreateFrameworkMatrix() {
   const invalidate = useInvalidateFramework();
   return useMutation({
-    mutationFn: async (input: FrameworkMatrixInput) => {
-      let created: FrameworkMatrix | null = null;
-      await useUndoStore.getState().run({
-        label: `Create matrix "${input.name.trim()}"`,
-        redo: async () => {
-          created = await api.createFrameworkMatrix(input, created?.id);
-          invalidate(created.id);
-        },
-        undo: async () => {
-          if (created) await api.deleteFrameworkMatrix(created.id);
-          invalidate(created?.id);
-        },
-      });
-      return created as FrameworkMatrix | null;
-    },
+    mutationFn: (input: FrameworkMatrixInput) => api.createFrameworkMatrix(input),
+    onSuccess: (created) => invalidate(created.id),
   });
 }
 
-/**
- * Replace a matrix's configuration. `previous` is the whole configuration as
- * it was, so undo is the same call the other way round.
- */
+/** Replace a matrix's configuration. Undo is the same call the other way. */
 export function useUpdateFrameworkMatrix() {
   const invalidate = useInvalidateFramework();
   return useMutation({
-    mutationFn: async ({
+    mutationFn: ({
       id,
       input,
-      previous,
-      label,
     }: {
       id: string;
       input: FrameworkMatrixInput;
-      previous: FrameworkMatrixInput;
+      previous?: FrameworkMatrixInput;
       label?: string;
-    }) => {
-      await useUndoStore.getState().run({
-        label: label ?? `Edit matrix "${previous.name}"`,
-        redo: async () => {
-          await api.updateFrameworkMatrix(id, input);
-          invalidate(id);
-        },
-        undo: async () => {
-          await api.updateFrameworkMatrix(id, previous);
-          invalidate(id);
-        },
-      });
-    },
+    }) => api.updateFrameworkMatrix(id, input),
+    onSuccess: (_r, { id }) => invalidate(id),
   });
 }
 
@@ -98,20 +64,8 @@ export function useUpdateFrameworkMatrix() {
 export function useDeleteFrameworkMatrix() {
   const invalidate = useInvalidateFramework();
   return useMutation({
-    mutationFn: async (matrix: FrameworkMatrix) => {
-      let saved: FrameworkMatrixWithCells | null = null;
-      await useUndoStore.getState().run({
-        label: `Delete matrix "${matrix.name}"`,
-        redo: async () => {
-          saved = await api.deleteFrameworkMatrix(matrix.id);
-          invalidate(matrix.id);
-        },
-        undo: async () => {
-          if (saved) await api.restoreFrameworkMatrix(saved);
-          invalidate(matrix.id);
-        },
-      });
-    },
+    mutationFn: (matrix: FrameworkMatrix) => api.deleteFrameworkMatrix(matrix.id),
+    onSuccess: (_r, matrix) => invalidate(matrix.id),
   });
 }
 
@@ -126,43 +80,29 @@ function patchCell(view: FrameworkMatrixView, rowKey: string, codeId: string, su
 }
 
 /**
- * Save one cell's summary, undoably. The command is recorded once per
- * committed edit (the editor debounces keystrokes, like `MemoEditor`), and
- * the cache is patched in place rather than invalidated so typing in one cell
- * never re-renders the rest of the grid.
+ * Save one cell's summary. The backend records the previous text, so undo
+ * takes the edit back; the cache is patched in place rather than invalidated
+ * so typing in one cell never re-renders the rest of the grid.
  */
 export function useSetFrameworkCell() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({
+    mutationFn: ({
       matrixId,
       rowKey,
       codeId,
       summary,
-      label,
     }: {
       matrixId: string;
       rowKey: string;
       codeId: string;
       summary: string;
       label?: string;
-    }) => {
-      const patch = (text: string) =>
-        qc.setQueryData<FrameworkMatrixView>(keys.frameworkMatrix(matrixId), (view) =>
-          view ? patchCell(view, rowKey, codeId, text) : view,
-        );
-      let previous = "";
-      await useUndoStore.getState().run({
-        label: label ?? "Edit summary",
-        redo: async () => {
-          previous = await api.setFrameworkCell(matrixId, rowKey, codeId, summary);
-          patch(summary);
-        },
-        undo: async () => {
-          await api.setFrameworkCell(matrixId, rowKey, codeId, previous);
-          patch(previous);
-        },
-      });
+    }) => api.setFrameworkCell(matrixId, rowKey, codeId, summary),
+    onSuccess: (_r, { matrixId, rowKey, codeId, summary }) => {
+      qc.setQueryData<FrameworkMatrixView>(keys.frameworkMatrix(matrixId), (view) =>
+        view ? patchCell(view, rowKey, codeId, summary) : view,
+      );
     },
   });
 }

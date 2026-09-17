@@ -1,4 +1,4 @@
--- Misket project schema, version 9: speaker-aware transcripts.
+-- Misket project schema, version 10: speaker-aware transcripts.
 -- Applied inside a transaction by db::migrate().
 --
 -- `transcript_json` remembers how a document marks who is speaking, so the

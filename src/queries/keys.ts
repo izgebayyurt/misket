@@ -61,4 +61,6 @@ export const keys = {
   allTranscripts: ["transcript"] as const,
   transcriptDefault: ["transcriptDefault"] as const,
   projectSpeakers: ["projectSpeakers"] as const,
+  /** The whole undo tree, as the history view's branch graph reads it. */
+  history: ["history", "tree"] as const,
 };

@@ -3,10 +3,14 @@
 use rusqlite::{params, Connection, OptionalExtension, Row};
 use serde_json::json;
 
+use super::history::DocumentOp;
 use super::transcripts::{self, StoredTranscript};
-use super::{activity, text, util};
+use super::{activity, excerpts, history, memos, text, util};
 use crate::error::{AppError, Result};
-use crate::models::{Document, DocumentSummary, MediaInfo, NewDocument, NewImageDocument};
+use crate::models::{
+    Document, DocumentSnapshot, DocumentSummary, FrameworkCellRow, MediaInfo, MemoTarget,
+    NewDocument, NewImageDocument,
+};
 
 const SUMMARY_COLUMNS: &str =
     "d.id, d.kind, d.name, d.source_path, d.source_format, d.text_length, d.media_json, d.sort_order,
@@ -96,29 +100,215 @@ pub fn create(conn: &Connection, input: NewDocument) -> Result<Document> {
     // Work out how this document marks its speakers once, at import, so the
     // listing and the document view can both read the answer (`db::transcripts`).
     transcripts::ensure(conn, &id)?;
-    let doc = get(conn, &id)?;
-    log_import(conn, &doc.summary)?;
-    Ok(doc)
+    log_import(conn, &id)?;
+    get(conn, &id)
 }
 
 /// One entry per imported document, whatever its kind.
-fn log_import(conn: &Connection, doc: &DocumentSummary) -> Result<()> {
-    activity::record(
+///
+/// The forward payload is the whole document, bytes and all, so redoing an
+/// undone import brings it back with the same id — which every excerpt cut
+/// from it before the undo still points at.
+fn log_import(conn: &Connection, id: &str) -> Result<()> {
+    let doc = get_summary(conn, id)?;
+    let (snapshot, text, media) = snapshot(conn, id)?;
+    let mut blobs: Vec<(&str, &[u8])> = vec![];
+    if let Some(t) = text.as_deref() {
+        blobs.push(("text", t.as_bytes()));
+    }
+    if let Some(m) = media.as_deref() {
+        blobs.push(("media", m));
+    }
+    history::record_with_blobs(
         conn,
+        &activity::actor(conn),
         "document.imported",
         "document",
         Some(&doc.id),
-        format!("Imported {} document \"{}\"", doc.kind, doc.name),
-        json!({
+        &format!("Imported {} document \"{}\"", doc.kind, doc.name),
+        &json!({
             "name": doc.name,
             "documentKind": doc.kind,
             "sourceFormat": doc.source_format,
             "sourcePath": doc.source_path,
             "textLength": doc.text_length,
         }),
-        None,
-        None,
-    )
+        Some(history::payload(&DocumentOp::Restore {
+            snapshot: Box::new(snapshot),
+        })),
+        Some(history::payload(&DocumentOp::Drop {
+            document_id: doc.id.clone(),
+        })),
+        &blobs,
+    )?;
+    Ok(())
+}
+
+/// Everything a document holds, with its text and image bytes handed back
+/// separately so they can be stored beside the history node rather than in it.
+pub fn snapshot(
+    conn: &Connection,
+    id: &str,
+) -> Result<(DocumentSnapshot, Option<String>, Option<Vec<u8>>)> {
+    let mut snapshot = conn
+        .query_row(
+            "SELECT id, kind, name, source_path, source_format, content_hash, media_json,
+                    text_length, sort_order, created_at, updated_at, transcript_json
+               FROM documents WHERE id = ?1",
+            [id],
+            |r| {
+                Ok(DocumentSnapshot {
+                    id: r.get(0)?,
+                    kind: r.get(1)?,
+                    name: r.get(2)?,
+                    source_path: r.get(3)?,
+                    source_format: r.get(4)?,
+                    content_hash: r.get(5)?,
+                    media_json: r.get(6)?,
+                    media_mime: None,
+                    text_length: r.get(7)?,
+                    sort_order: r.get(8)?,
+                    created_at: r.get(9)?,
+                    updated_at: r.get(10)?,
+                    transcript_json: r.get(11)?,
+                    ..Default::default()
+                })
+            },
+        )
+        .optional()?
+        .ok_or_else(|| AppError::NotFound(format!("document {id} not found")))?;
+
+    for e in excerpts::list_for_document(conn, id)? {
+        snapshot.excerpts.push(excerpts::snapshot(conn, &e.id)?);
+    }
+    let mut stmt = conn.prepare(
+        "SELECT field_id, value FROM descriptor_values WHERE document_id = ?1 ORDER BY field_id",
+    )?;
+    snapshot.descriptor_values = stmt
+        .query_map([id], |r| Ok((r.get(0)?, r.get(1)?)))?
+        .collect::<rusqlite::Result<_>>()?;
+    let mut stmt =
+        conn.prepare("SELECT set_id FROM set_members WHERE member_id = ?1 ORDER BY set_id")?;
+    snapshot.set_members = stmt
+        .query_map([id], |r| r.get(0))?
+        .collect::<rusqlite::Result<_>>()?;
+    let mut stmt = conn.prepare(
+        "SELECT matrix_id, row_key, code_id, summary, updated_at FROM framework_cells
+          WHERE row_key = ?1 ORDER BY matrix_id, code_id",
+    )?;
+    snapshot.framework_cells = stmt
+        .query_map([id], |r| {
+            Ok(FrameworkCellRow {
+                matrix_id: r.get(0)?,
+                row_key: r.get(1)?,
+                code_id: r.get(2)?,
+                summary: r.get(3)?,
+                updated_at: r.get(4)?,
+            })
+        })?
+        .collect::<rusqlite::Result<_>>()?;
+    snapshot.memos = memos::list(
+        conn,
+        &MemoTarget {
+            document_id: Some(id.to_string()),
+            ..Default::default()
+        },
+    )?;
+
+    let text: Option<String> =
+        conn.query_row("SELECT text FROM documents WHERE id = ?1", [id], |r| {
+            r.get(0)
+        })?;
+    let media = get_media(conn, id).ok();
+    if let Some((mime, _)) = &media {
+        snapshot.media_mime = Some(mime.clone());
+    }
+    Ok((snapshot, text, media.map(|(_, bytes)| bytes)))
+}
+
+/// Put a deleted document back exactly as it was, with its original id: the
+/// row, its bytes, and everything that hung off it.
+///
+/// Excerpts, descriptor values and set members whose other side is gone (a
+/// code or a set deleted since) are simply left out rather than failing.
+pub fn restore(
+    conn: &Connection,
+    snapshot: &DocumentSnapshot,
+    text: Option<&str>,
+    media: Option<&[u8]>,
+) -> Result<DocumentSummary> {
+    let tx = util::tx(conn)?;
+    tx.execute(
+        "INSERT INTO documents (id, kind, name, source_path, source_format, content_hash,
+                                text, text_length, media_json, sort_order, created_at, updated_at,
+                                transcript_json)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+        params![
+            snapshot.id,
+            snapshot.kind,
+            snapshot.name,
+            snapshot.source_path,
+            snapshot.source_format,
+            snapshot.content_hash,
+            text,
+            snapshot.text_length,
+            snapshot.media_json,
+            snapshot.sort_order,
+            snapshot.created_at,
+            snapshot.updated_at,
+            snapshot.transcript_json
+        ],
+    )?;
+    if let (Some(bytes), Some(mime)) = (media, snapshot.media_mime.as_deref()) {
+        tx.execute(
+            "INSERT INTO media_blobs (document_id, mime, bytes) VALUES (?1, ?2, ?3)",
+            params![snapshot.id, mime, bytes],
+        )?;
+    }
+    for e in &snapshot.excerpts {
+        excerpts::restore(&tx, e)?;
+    }
+    for (field_id, value) in &snapshot.descriptor_values {
+        tx.execute(
+            "INSERT OR IGNORE INTO descriptor_values (document_id, field_id, value)
+             SELECT ?1, id, ?3 FROM descriptor_fields WHERE id = ?2",
+            params![snapshot.id, field_id, value],
+        )?;
+    }
+    for set_id in &snapshot.set_members {
+        tx.execute(
+            "INSERT OR IGNORE INTO set_members (set_id, member_id)
+             SELECT id, ?2 FROM sets WHERE id = ?1",
+            params![set_id, snapshot.id],
+        )?;
+    }
+    for cell in &snapshot.framework_cells {
+        tx.execute(
+            "INSERT OR IGNORE INTO framework_cells (matrix_id, row_key, code_id, summary, updated_at)
+             SELECT ?1, ?2, ?3, ?4, ?5 WHERE EXISTS (SELECT 1 FROM framework_matrices WHERE id = ?1)
+               AND EXISTS (SELECT 1 FROM codes WHERE id = ?3)",
+            params![cell.matrix_id, cell.row_key, cell.code_id, cell.summary, cell.updated_at],
+        )?;
+    }
+    for m in &snapshot.memos {
+        tx.execute(
+            "INSERT INTO memos (id, document_id, title, body, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+             ON CONFLICT(id) DO UPDATE SET
+               document_id = excluded.document_id, title = excluded.title,
+               body = excluded.body, updated_at = excluded.updated_at",
+            params![
+                m.id,
+                snapshot.id,
+                m.title,
+                m.body,
+                m.created_at,
+                m.updated_at
+            ],
+        )?;
+    }
+    tx.commit()?;
+    get_summary(conn, &snapshot.id)
 }
 
 /// Import an image document. The bytes are stored inside the project file
@@ -206,7 +396,11 @@ pub fn create_image(conn: &Connection, input: NewImageDocument) -> Result<Docume
         "INSERT INTO media_blobs (document_id, mime, bytes) VALUES (?1, ?2, ?3)",
         params![id, mime, bytes],
     )?;
-    log_import(&tx, &get_summary(&tx, &id)?)?;
+    // An image has no text to read speakers out of, but it gets the same
+    // "looked at, not a transcript" answer as any other document, so the
+    // column is set before the import is snapshotted for the history.
+    transcripts::ensure(&tx, &id)?;
+    log_import(&tx, &id)?;
     tx.commit()?;
     get(conn, &id)
 }
@@ -283,8 +477,16 @@ pub fn rename(conn: &Connection, id: &str, name: &str) -> Result<DocumentSummary
             Some(id),
             format!("Renamed document \"{}\" to \"{name}\"", before.name),
             json!({ "name": activity::change(before.name.clone(), name.to_string()) }),
-            None,
-            None,
+            Some(history::payload(&DocumentOp::Rename {
+                document_id: id.to_string(),
+                name: name.to_string(),
+                updated_at: get_summary(conn, id)?.updated_at,
+            })),
+            Some(history::payload(&DocumentOp::Rename {
+                document_id: id.to_string(),
+                name: before.name.clone(),
+                updated_at: before.updated_at.clone(),
+            })),
         )?;
     }
     get_summary(conn, id)
@@ -294,6 +496,7 @@ pub fn rename(conn: &Connection, id: &str, name: &str) -> Result<DocumentSummary
 pub fn reorder(conn: &Connection, ids: &[String]) -> Result<()> {
     let tx = util::tx(conn)?;
     let existing = list(&tx)?;
+    let before: Vec<String> = existing.iter().map(|d| d.id.clone()).collect();
     let mut order: Vec<String> = ids.to_vec();
     for d in existing {
         if !order.contains(&d.id) {
@@ -306,30 +509,62 @@ pub fn reorder(conn: &Connection, ids: &[String]) -> Result<()> {
             params![id, i as i64],
         )?;
     }
+    if order != before {
+        activity::record(
+            &tx,
+            "document.reordered",
+            "document",
+            None,
+            "Reordered documents",
+            json!({ "count": order.len() }),
+            Some(history::payload(&DocumentOp::Reorder {
+                ids: order.clone(),
+            })),
+            Some(history::payload(&DocumentOp::Reorder {
+                ids: before.clone(),
+            })),
+        )?;
+    }
     tx.commit()?;
     Ok(())
 }
 
+/// Delete a document and everything that hung off it, keeping a full
+/// snapshot in the history so undo puts all of it back.
 pub fn delete(conn: &Connection, id: &str) -> Result<()> {
     let doc = get_summary(conn, id)?;
+    let (snapshot, text, media) = snapshot(conn, id)?;
     let tx = util::tx(conn)?;
     let n = tx.execute("DELETE FROM documents WHERE id = ?1", [id])?;
     if n == 0 {
         return Err(AppError::NotFound(format!("document {id} not found")));
     }
-    activity::record(
+    let mut blobs: Vec<(&str, &[u8])> = vec![];
+    if let Some(t) = text.as_deref() {
+        blobs.push(("text", t.as_bytes()));
+    }
+    if let Some(m) = media.as_deref() {
+        blobs.push(("media", m));
+    }
+    history::record_with_blobs(
         &tx,
+        &activity::actor(&tx),
         "document.deleted",
         "document",
         Some(id),
-        format!("Deleted document \"{}\"", doc.name),
-        json!({
+        &format!("Deleted document \"{}\"", doc.name),
+        &json!({
             "name": doc.name,
             "documentKind": doc.kind,
             "excerptCount": doc.excerpt_count,
         }),
-        None,
-        None,
+        Some(history::payload(&DocumentOp::Drop {
+            document_id: id.to_string(),
+        })),
+        Some(history::payload(&DocumentOp::Restore {
+            snapshot: Box::new(snapshot),
+        })),
+        &blobs,
     )?;
     tx.commit()?;
     Ok(())

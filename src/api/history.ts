@@ -26,3 +26,14 @@ export const historyRenameBranch = (id: number, name: string | null) =>
 
 /** Throw away everything before `id`, making it the new root. */
 export const historyCompact = (id: number) => invoke<CompactReport>("history_compact", { id });
+
+/**
+ * Bracket several calls into one step in the history, for what the user did
+ * once but the frontend has to make several commands for (importing a batch
+ * of files). Always end in a `finally`: leaving a group open would swallow
+ * the next edit into it.
+ */
+export const historyBeginGroup = (summary: string) =>
+  invoke<void>("history_begin_group", { summary });
+
+export const historyEndGroup = () => invoke<void>("history_end_group");

@@ -48,6 +48,7 @@
           <li><a href="#memos">Memos</a></li>
           <li><a href="#analysis">Analysis views</a></li>
           <li><a href="#framework">Framework matrices</a></li>
+          <li><a href="#history">Undo, redo and history</a></li>
           <li><a href="#export">Export and backups</a></li>
         </ul>
       </nav>
@@ -329,6 +330,34 @@
         Export the finished matrix as CSV for a spreadsheet, or as a Markdown table to paste into a
         report.
       </p>
+
+      <h2 id="history">Undo, redo and history</h2>
+      <p>
+        <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>Z</kbd> and
+        <kbd>Shift</kbd>+<kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>Z</kbd>
+        undo and redo any change — coding, editing the codebook, writing a memo — and survive
+        closing the app, because the whole undo tree lives in the project file rather than in
+        memory. Editing again after an undo does not throw the redone-away steps out: it starts a
+        new branch alongside them, so nothing you tried is ever really lost.
+      </p>
+      <p>
+        Open the <strong>History</strong> view with
+        <kbd>Shift</kbd>+<kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>Y</kbd>, or the "Open History" button on
+        the overview, to see that tree as a branch graph: every step, newest at the top, with a lane
+        per branch. Click any step to jump the project straight to it — no need to undo one change
+        at a time. From a step's menu you can name a branch ("Fork here…"), rename one later, or
+        compact everything before a step away once you are sure you will not need it, to keep a long
+        project's history down to size.
+      </p>
+      <figure>
+        <img
+          src="../screenshots/history.png"
+          alt="The History view in Misket, showing the undo tree as a branch graph with two lanes."
+          width="1280"
+          height="820"
+        />
+        <figcaption>The History view: a branch graph over the undo tree</figcaption>
+      </figure>
 
       <h2 id="export">Export and backups</h2>
       <p>

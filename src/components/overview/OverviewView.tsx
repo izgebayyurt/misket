@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { Check, Copy, Highlighter, Plus, Tag, Upload } from "lucide-react";
+import { Check, Copy, History, Highlighter, Plus, Tag, Upload } from "lucide-react";
 import { useProjectInfo, useProjectStats, useRenameProject } from "@/queries/project";
 import { useDocuments } from "@/queries/documents";
 import { useCodes, useCodeTree } from "@/queries/codes";
@@ -36,6 +36,7 @@ export function OverviewView() {
   const { pickAndImport } = useImportFiles();
   const openDocument = useWorkspace((s) => s.openDocument);
   const openExcerpts = useWorkspace((s) => s.openExcerpts);
+  const setView = useWorkspace((s) => s.setView);
 
   if (!project) return null;
 
@@ -149,9 +150,19 @@ export function OverviewView() {
         </section>
 
         <section>
-          <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-fg-muted">
-            Activity
-          </h2>
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <h2 className="text-xs font-semibold uppercase tracking-wide text-fg-muted">
+              Activity
+            </h2>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setView({ kind: "history" })}
+              data-testid="open-history-from-overview"
+            >
+              <History /> Open History
+            </Button>
+          </div>
           <ActivityFeed />
         </section>
 

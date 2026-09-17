@@ -157,10 +157,36 @@ impl OpenProject {
         if name.is_empty() {
             return Err(AppError::Validation("project name is required".into()));
         }
-        self.conn.execute(
+        let before = meta(&self.conn, "name")?;
+        let tx = util::tx(&self.conn)?;
+        tx.execute(
             "UPDATE project_meta SET value = ?1 WHERE key = 'name'",
             [name],
         )?;
+        if before.as_deref() != Some(name) {
+            let step = |value: Option<&str>| {
+                history::payload(&history::ProjectOp::SetMeta {
+                    key: "name".into(),
+                    value: value.map(String::from),
+                })
+            };
+            activity::record(
+                &tx,
+                "project.renamed",
+                "project",
+                None,
+                format!(
+                    "Renamed the project \"{}\" to \"{name}\"",
+                    before.clone().unwrap_or_default()
+                ),
+                serde_json::json!({
+                    "name": activity::change(before.clone(), name.to_string()),
+                }),
+                Some(step(Some(name))),
+                Some(step(before.as_deref())),
+            )?;
+        }
+        tx.commit()?;
         self.info()
     }
 }

@@ -15,6 +15,7 @@ export type Action =
   | "newProject"
   | "import"
   | "overview"
+  | "history"
   | "excerptBrowser"
   | "analysis"
   | "tabDocuments"
@@ -64,6 +65,7 @@ export const SHORTCUTS: Record<Action, Shortcut> = {
   newProject: { key: "n", mod: true, global: true },
   import: { key: "i", mod: true, global: true },
   overview: { key: "h", mod: true, shift: true, global: true },
+  history: { key: "y", mod: true, shift: true, global: true },
   excerptBrowser: { key: "e", mod: true, global: true },
   analysis: { key: "a", mod: true, shift: true, global: true },
   tabDocuments: { key: "1", mod: true, global: true },
@@ -163,6 +165,7 @@ export const LABELS: Record<Action, string> = {
   newProject: "New project",
   import: "Import documents",
   overview: "Project overview",
+  history: "History",
   excerptBrowser: "Excerpt browser",
   analysis: "Analysis views",
   find: "Find in document",

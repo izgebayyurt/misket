@@ -335,6 +335,15 @@ pub struct ApplyResult {
     pub added_code_ids: Vec<String>,
 }
 
+/// What in vivo coding produced: the code named after the selected text, and
+/// the excerpt it was applied to.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct InVivoResult {
+    pub code: Code,
+    pub excerpt: ExcerptWithCodes,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct ExcerptDetail {
@@ -343,6 +352,45 @@ pub struct ExcerptDetail {
     pub document_name: String,
     pub context_before: String,
     pub context_after: String,
+    pub memos: Vec<Memo>,
+}
+
+/// Everything a deleted document took with it, so undo can put it back with
+/// its original id: the row itself, the excerpts cut from it with their codes
+/// and memos, the descriptor values that described it, the sets it belonged
+/// to, the framework summaries written against its row, and its own memos.
+///
+/// The text and the image bytes are *not* here: they go in `history_blobs`
+/// beside the node, because a JSON payload is not the place for a megabyte of
+/// interview transcript.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct DocumentSnapshot {
+    pub id: String,
+    pub kind: String,
+    pub name: String,
+    pub source_path: Option<String>,
+    pub source_format: Option<String>,
+    pub content_hash: String,
+    pub media_json: Option<String>,
+    /// The MIME of the bytes stored under the node's `media` blob.
+    pub media_mime: Option<String>,
+    pub text_length: Option<i64>,
+    pub sort_order: i64,
+    /// How the document marks who is speaking (`db::transcripts`), verbatim,
+    /// so a restore keeps a format the user chose rather than re-detecting
+    /// one. `None` means it had never been looked at.
+    #[serde(default)]
+    pub transcript_json: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+    pub excerpts: Vec<ExcerptSnapshot>,
+    /// `(fieldId, value)`.
+    pub descriptor_values: Vec<(String, String)>,
+    /// The ids of the document sets this document was a member of.
+    pub set_members: Vec<String>,
+    pub framework_cells: Vec<FrameworkCellRow>,
+    /// Memos written about the document itself.
     pub memos: Vec<Memo>,
 }
 
@@ -781,7 +829,8 @@ pub struct NewDescriptorField {
 pub struct DescriptorFieldPatch {
     #[serde(default)]
     pub name: Option<String>,
-    /// Only allowed while no document has a value for the field.
+    /// Changing it converts the values documents already have where the new
+    /// kind can hold them, and drops the rest. Undo restores them.
     #[serde(default)]
     pub kind: Option<String>,
     #[serde(default)]
@@ -1005,6 +1054,12 @@ pub struct HistoryNode {
     pub inverse: Option<serde_json::Value>,
     pub branch_name: Option<String>,
     pub preferred_child: Option<i64>,
+    /// The compound step this node belongs to, named by the id of the node
+    /// that leads it. `None` for a write that stands on its own.
+    pub group_id: Option<i64>,
+    /// Set on the leading node of a group only: the label the history view
+    /// shows in place of the steps inside it.
+    pub group_summary: Option<String>,
 }
 
 /// A node as the history view draws it: no payloads, but the shape of the
@@ -1021,6 +1076,13 @@ pub struct HistoryNodeSummary {
     pub branch_name: Option<String>,
     pub undoable: bool,
     pub is_head: bool,
+    /// Which child redo would follow from here; the graph view uses it to
+    /// tell the branch a checkout is "on" from a side branch that merely
+    /// passes through the same node.
+    pub preferred_child: Option<i64>,
+    /// How many writes this node stands for: 1 normally, more when it is a
+    /// compound step (a merge, an import of several files) shown as one.
+    pub step_count: i64,
     /// Oldest first; more than one means the tree branches here.
     pub children: Vec<i64>,
 }
@@ -1205,8 +1267,9 @@ pub struct FrameworkMatrixView {
 #[serde(rename_all = "camelCase")]
 pub struct FrameworkMatrixWithCells {
     pub matrix: FrameworkMatrix,
-    /// `(rowKey, codeId, summary)`.
-    pub cells: Vec<(String, String, String)>,
+    /// `(rowKey, codeId, summary, updatedAt)` — the timestamp too, so undo
+    /// puts the grid back exactly as it stood rather than touching every cell.
+    pub cells: Vec<(String, String, String, String)>,
 }
 
 /// serde helper: distinguishes "absent" from "present but null".

@@ -6,10 +6,11 @@ import { toast } from "./toasts";
 /**
  * Undo and redo, over the history tree in the project file.
  *
- * There is no stack here any more: the project knows which step it is on, so
- * this store only has to call the command, refresh everything and say what
- * happened. That is what makes undo survive closing the window — and what
- * makes deleting or merging a code undoable like any other edit.
+ * There is no stack here, and no closures: every mutation records its own
+ * inverse as it writes, so this store only has to call the command, refresh
+ * everything and say what happened. That is what makes undo survive closing
+ * the window — and what makes deleting a document, changing a descriptor's
+ * type or importing a codebook undoable like any other edit.
  */
 interface UndoStore {
   busy: boolean;
@@ -17,20 +18,6 @@ interface UndoStore {
   lastLabel: string | null;
   undo: () => Promise<void>;
   redo: () => Promise<void>;
-  /**
-   * Run a command and remember its label. Kept for the mutations whose undo
-   * has not moved into the backend yet — descriptors, sets, framework
-   * matrices, documents, the project itself, backups and codebook import —
-   * which still hand in an inverse this no longer uses. Phase 2 removes it
-   * along with those closures.
-   */
-  run: (cmd: {
-    label: string;
-    redo: () => Promise<void>;
-    undo?: () => Promise<void>;
-  }) => Promise<void>;
-  /** A no-op, for the same callers. Nothing needs clearing any more. */
-  clear: () => void;
 }
 
 /** An undo can move any part of the project, so nothing is still known fresh. */
@@ -75,14 +62,4 @@ export const useUndoStore = create<UndoStore>((set, get) => ({
       set({ busy: false });
     }
   },
-  run: async (cmd) => {
-    set({ busy: true });
-    try {
-      await cmd.redo();
-      set({ lastLabel: cmd.label });
-    } finally {
-      set({ busy: false });
-    }
-  },
-  clear: () => {},
 }));
