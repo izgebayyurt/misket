@@ -1,5 +1,5 @@
 import { invoke } from "./client";
-import type { CompactReport, HistoryNode, HistoryNodeSummary } from "./types";
+import type { CompactReport, HistoryNode, HistoryNodeDetail, HistoryNodeSummary } from "./types";
 
 /**
  * The undo tree lives in the project file, so undo and redo are ordinary
@@ -17,6 +17,13 @@ export const historyRedo = (child?: number) =>
 export const historyCheckout = (id: number) => invoke<HistoryNode>("history_checkout", { id });
 
 export const historyTree = () => invoke<HistoryNodeSummary[]>("history_tree");
+
+/**
+ * One step in full: its `detail` payload, the references it names resolved
+ * against the project as it is now, and the members of a compound step. Any
+ * node of a group answers for the whole step.
+ */
+export const historyNode = (id: number) => invoke<HistoryNodeDetail>("history_node", { id });
 
 /** Name the current node, so the branch growing from it can be found again. */
 export const historyFork = (name: string) => invoke<HistoryNode>("history_fork", { name });

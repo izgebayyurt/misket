@@ -1,70 +1,139 @@
+import { useEffect, useState } from "react";
+import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import type { AnalysisTab } from "@/state/workspace";
 import { useWorkspace } from "@/state/workspace";
 import { cn } from "@/lib/utils";
-import { CodeFrequencies } from "./CodeFrequencies";
-import { CoOccurrenceMatrix } from "./CoOccurrenceMatrix";
-import { CodeByDocumentMatrix } from "./CodeByDocumentMatrix";
-import { FrameworkMatrixView } from "./FrameworkMatrixView";
-import { CodeByDescriptorMatrix } from "./CodeByDescriptorMatrix";
-import { WordFrequencies } from "./WordFrequencies";
-import { WeightsView } from "./WeightsView";
-import { CodeTreemap } from "./CodeTreemap";
-import { CodeClustering } from "./CodeClustering";
+import { ANALYSES, ANALYSIS_GROUPS, analysisEntry } from "./registry";
 
-const TABS: { id: AnalysisTab; label: string }[] = [
-  { id: "frequencies", label: "Frequencies" },
-  { id: "cooccurrence", label: "Co-occurrence" },
-  { id: "matrix", label: "Code × document" },
-  { id: "framework", label: "Framework" },
-  { id: "descriptor", label: "By descriptor" },
-  { id: "words", label: "Words" },
-  { id: "weights", label: "Weights" },
-  { id: "treemap", label: "Treemap" },
-  { id: "clustering", label: "Clustering" },
-];
+const COLLAPSED_KEY = "misket:analysisNavCollapsed";
 
+/** Best effort: blocked or full storage just means the list forgets. */
+function readCollapsed(): boolean {
+  try {
+    return localStorage.getItem(COLLAPSED_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The analysis workbench: a list of analyses down the left, the chosen one
+ * filling the rest.
+ *
+ * This used to be a row of tabs across the top, which ran out of room at six
+ * and left nowhere obvious for the seventh. The list grows downward instead,
+ * gathers related analyses under small headings, and collapses to icons when
+ * the analysis itself needs the width. Each analysis keeps its own toolbar:
+ * the document, set and coder filters stay in the content header, next to the
+ * numbers they narrow.
+ */
 export function AnalysisView({ tab }: { tab: AnalysisTab }) {
   const setView = useWorkspace((s) => s.setView);
+  const [collapsed, setCollapsed] = useState(readCollapsed);
+  const entry = analysisEntry(tab);
+  const Body = entry.component;
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(COLLAPSED_KEY, collapsed ? "1" : "0");
+    } catch {
+      // Not worth telling anyone about.
+    }
+  }, [collapsed]);
+
   return (
-    <div className="flex h-full flex-col" data-testid="analysis-view">
-      <div className="flex items-center gap-4 border-b border-border bg-panel px-4 pt-2">
-        <h2 className="font-serif text-lg font-medium">Analysis</h2>
-        <div className="flex gap-1 text-sm">
-          {TABS.map((t) => (
-            <button
-              key={t.id}
-              className={cn(
-                "-mb-px border-b-2 border-transparent px-2 py-1 text-fg-muted hover:text-fg",
-                tab === t.id && "border-accent font-medium text-fg",
-              )}
-              onClick={() => setView({ kind: "analysis", tab: t.id })}
-              data-testid={`analysis-tab-${t.id}`}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
-      </div>
-      <div className="min-h-0 flex-1">
-        {tab === "frequencies" ? (
-          <CodeFrequencies />
-        ) : tab === "cooccurrence" ? (
-          <CoOccurrenceMatrix />
-        ) : tab === "matrix" ? (
-          <CodeByDocumentMatrix />
-        ) : tab === "framework" ? (
-          <FrameworkMatrixView />
-        ) : tab === "descriptor" ? (
-          <CodeByDescriptorMatrix />
-        ) : tab === "weights" ? (
-          <WeightsView />
-        ) : tab === "treemap" ? (
-          <CodeTreemap />
-        ) : tab === "clustering" ? (
-          <CodeClustering />
-        ) : (
-          <WordFrequencies />
+    <div className="flex h-full min-h-0" data-testid="analysis-view">
+      <nav
+        className={cn(
+          "flex shrink-0 flex-col overflow-y-auto border-r border-border bg-panel",
+          collapsed ? "w-12" : "w-48",
         )}
+        aria-label="Analyses"
+        data-testid="analysis-nav"
+        data-collapsed={collapsed || undefined}
+      >
+        <div
+          className={cn(
+            "flex items-center gap-1 border-b border-border px-2 py-2",
+            collapsed && "justify-center",
+          )}
+        >
+          {collapsed ? null : (
+            <h2 className="min-w-0 flex-1 truncate font-serif text-base font-medium">Analysis</h2>
+          )}
+          <button
+            type="button"
+            onClick={() => setCollapsed((c) => !c)}
+            className="rounded p-1 text-fg-muted hover:bg-muted hover:text-fg"
+            title={collapsed ? "Show analysis names" : "Collapse to icons"}
+            aria-label={collapsed ? "Show analysis names" : "Collapse to icons"}
+            data-testid="analysis-nav-collapse"
+          >
+            {collapsed ? (
+              <PanelLeftOpen className="size-4" />
+            ) : (
+              <PanelLeftClose className="size-4" />
+            )}
+          </button>
+        </div>
+        <ul className="min-h-0 flex-1 py-1">
+          {ANALYSIS_GROUPS.map((group) => {
+            const items = ANALYSES.filter((a) => a.group === group.id);
+            if (items.length === 0) return null;
+            return (
+              <li key={group.id}>
+                {collapsed ? (
+                  <div className="mx-2 my-1 border-t border-border" aria-hidden />
+                ) : (
+                  <h3 className="px-3 pb-0.5 pt-2 text-[10px] font-medium uppercase tracking-wide text-fg-muted">
+                    {group.label}
+                  </h3>
+                )}
+                <ul>
+                  {items.map((a) => {
+                    const Icon = a.icon;
+                    const selected = a.id === entry.id;
+                    return (
+                      <li key={a.id}>
+                        <button
+                          type="button"
+                          onClick={() => setView({ kind: "analysis", tab: a.id })}
+                          aria-current={selected ? "true" : undefined}
+                          title={collapsed ? a.label : undefined}
+                          className={cn(
+                            "flex w-full items-center gap-2 border-l-2 border-transparent py-1.5 text-left text-sm text-fg-muted hover:bg-muted hover:text-fg",
+                            collapsed ? "justify-center px-0" : "px-3",
+                            selected && "border-accent bg-muted/70 font-medium text-fg",
+                          )}
+                          data-testid={`analysis-tab-${a.id}`}
+                        >
+                          <Icon className="size-4 shrink-0" />
+                          {collapsed ? (
+                            <span className="sr-only">{a.label}</span>
+                          ) : (
+                            <>
+                              <span className="min-w-0 flex-1 truncate">{a.label}</span>
+                              {a.shortcut ? (
+                                <span className="shrink-0 text-[10px] text-fg-muted">
+                                  {a.shortcut}
+                                </span>
+                              ) : null}
+                            </>
+                          )}
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </li>
+            );
+          })}
+        </ul>
+      </nav>
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col" data-testid="analysis-body">
+        {/* Remount when the analysis changes: each one holds its own filters
+            and sort, and none of them means anything to the next. */}
+        <Body key={entry.id} />
       </div>
     </div>
   );

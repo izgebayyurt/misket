@@ -87,3 +87,4 @@ export, open-by-double-click, dark mode, cross-platform CI and release builds.
 | 31  | [#32](https://github.com/izgebayyurt/misket/issues/32) **Sample project** bundled for first run ("Try Misket with sample data")                          | done   |
 | 32  | [#33](https://github.com/izgebayyurt/misket/issues/33) **Website and docs** on GitHub Pages: install guide, coding tutorial, keyboard cheatsheet         | done   |
 | 33  | [#34](https://github.com/izgebayyurt/misket/issues/34) **Large-document virtualisation** (only if a real transcript proves slow; 2 MB measured fine)     | later  |
+| 45  | **UI feedback pass**: history grouped by day, inspect-first detail panel, visible forks; one toast per repeat, nudged not stacked; analysis as a list    | done   |

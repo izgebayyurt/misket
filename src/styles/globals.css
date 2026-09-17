@@ -307,3 +307,55 @@ textarea {
     fill-opacity: 0.16;
   }
 }
+
+/* --- toasts ------------------------------------------------------------- */
+
+/* A keyed toast raised again while it is still up flashes red and shakes
+   once, instead of a second copy stacking behind it (src/state/toasts.ts). */
+.toast-nudge {
+  animation: toast-nudge 300ms ease-in-out;
+}
+
+@keyframes toast-nudge {
+  0% {
+    transform: translateX(0);
+    border-color: var(--danger);
+    background-color: color-mix(in srgb, var(--danger) 22%, var(--bg-panel));
+  }
+  20% {
+    transform: translateX(-5px);
+  }
+  40% {
+    transform: translateX(5px);
+  }
+  60% {
+    transform: translateX(-3px);
+  }
+  80% {
+    transform: translateX(2px);
+    border-color: var(--danger);
+    background-color: color-mix(in srgb, var(--danger) 22%, var(--bg-panel));
+  }
+  100% {
+    transform: translateX(0);
+  }
+}
+
+/* Same signal, no movement, for anyone who asked for less of it. */
+@media (prefers-reduced-motion: reduce) {
+  .toast-nudge {
+    animation: toast-flash 300ms ease-in-out;
+  }
+}
+
+@keyframes toast-flash {
+  0%,
+  80% {
+    border-color: var(--danger);
+    background-color: color-mix(in srgb, var(--danger) 22%, var(--bg-panel));
+  }
+  100% {
+    border-color: var(--border);
+    background-color: var(--bg-panel);
+  }
+}

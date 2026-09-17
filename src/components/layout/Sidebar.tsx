@@ -7,7 +7,7 @@ import { DocumentList } from "@/components/documents/DocumentList";
 import { CodeTree } from "@/components/codebook/CodeTree";
 import { Button } from "@/components/ui/button";
 import { DescriptorsDialog } from "@/components/descriptors/DescriptorsDialog";
-import { BarChart3, History, Home, List, Scale, Search, Settings2, Tags } from "lucide-react";
+import { BarChart3, History, Home, List, Search, Settings2, Tags } from "lucide-react";
 
 export function Sidebar({ project }: { project: ProjectInfo }) {
   const tab = useWorkspace((s) => s.sidebarTab);
@@ -98,14 +98,6 @@ export function Sidebar({ project }: { project: ProjectInfo }) {
         >
           <BarChart3 /> Analysis
           <span className="ml-auto text-xs text-fg-muted">{describe("analysis")}</span>
-        </Button>
-        <Button
-          variant={view.kind === "reliability" ? "secondary" : "ghost"}
-          className="w-full justify-start"
-          onClick={() => setView({ kind: "reliability" })}
-          data-testid="open-reliability"
-        >
-          <Scale /> Reliability
         </Button>
         <Button
           variant={view.kind === "search" ? "secondary" : "ghost"}

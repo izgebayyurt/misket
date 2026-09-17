@@ -72,4 +72,6 @@ export const keys = {
   projectSpeakers: ["projectSpeakers"] as const,
   /** The whole undo tree, as the history view's branch graph reads it. */
   history: ["history", "tree"] as const,
+  /** One step in full, for the history view's detail panel. */
+  historyNode: (id: number) => ["history", "node", id] as const,
 };

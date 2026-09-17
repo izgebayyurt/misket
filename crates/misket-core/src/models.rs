@@ -1423,6 +1423,80 @@ pub struct HistoryNodeSummary {
     pub children: Vec<i64>,
 }
 
+/// Something a history step points at, named as it reads *now*.
+///
+/// The step's own `detail` carries the names things had when it was recorded;
+/// this is the same thing looked up again, so the detail panel can offer to
+/// open it — and say plainly when it cannot, because the target has since been
+/// deleted (`exists` false, and `label` says so too).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct HistoryRef {
+    /// `excerpt`, `code`, `document` or `memo`.
+    pub kind: String,
+    pub id: String,
+    /// What to show: the code's name, the document's name, the excerpt's
+    /// text — with `(since deleted)` appended when it is gone.
+    pub label: String,
+    /// Whether the target is still in the project.
+    pub exists: bool,
+    /// A code's colour, when it still exists.
+    #[serde(default)]
+    pub color: Option<String>,
+    /// A code's path through the codebook (`Parent › Child`), when it exists.
+    #[serde(default)]
+    pub path: Option<String>,
+    /// Where an excerpt sits, so the panel can open the document there.
+    #[serde(default)]
+    pub document_id: Option<String>,
+    #[serde(default)]
+    pub start_pos: Option<i64>,
+    #[serde(default)]
+    pub end_pos: Option<i64>,
+}
+
+/// One write inside a compound step, for the detail panel's list of members.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct HistoryStepMember {
+    pub id: i64,
+    pub kind: String,
+    pub summary: String,
+}
+
+/// One history step, with everything the detail panel needs to describe it:
+/// the stored `detail`, the references it points at resolved against the
+/// project as it is now, and — for a compound step — the writes it stands for.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct HistoryNodeDetail {
+    pub id: i64,
+    pub parent_id: Option<i64>,
+    pub at: String,
+    pub actor: String,
+    #[serde(default)]
+    pub coder_id: String,
+    pub kind: String,
+    pub target_kind: String,
+    pub target_id: Option<String>,
+    pub summary: String,
+    pub detail: serde_json::Value,
+    pub branch_name: Option<String>,
+    pub undoable: bool,
+    pub is_head: bool,
+    /// Whether this step is in force: the project sits at it or below it.
+    /// A step the project has undone past, or one on a branch it is not on,
+    /// is not applied, and a reference of its that cannot be found says so
+    /// rather than claiming the target was deleted.
+    pub applied: bool,
+    /// How many writes this step stands for: 1 normally, more for a group.
+    pub step_count: i64,
+    /// Resolved references, the step's own target first.
+    pub refs: Vec<HistoryRef>,
+    /// The writes of a compound step, oldest first; empty for a plain one.
+    pub members: Vec<HistoryStepMember>,
+}
+
 /// What [`crate::db::history::compact_before`] threw away.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]

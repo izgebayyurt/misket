@@ -6,7 +6,7 @@ import { useCodes, useCodeTree, useCreateCode } from "@/queries/codes";
 import { useAddExcerptCodes, useApplyCodes } from "@/queries/excerpts";
 import { flattenTree, inVivoName, pathOf } from "@/core/codeTree";
 import { ColorDot } from "@/components/codebook/ColorSwatch";
-import { toast } from "@/state/toasts";
+import { TOAST_KEYS, toast } from "@/state/toasts";
 import { useDocument } from "@/queries/documents";
 import { cpToUtf16, buildOffsetMap } from "@/core/offsets";
 import { useDocumentExcerpts } from "@/queries/excerpts";
@@ -120,7 +120,9 @@ function PaletteBody({ close }: { close: () => void }) {
           codeIds: [codeId],
         });
       } else {
-        toast.info("Select some text, draw a region, or focus an excerpt first.");
+        toast.info("Select some text, draw a region, or focus an excerpt first.", {
+          key: TOAST_KEYS.codeTarget,
+        });
       }
       if (!keepOpen) close();
       else setQuery("");

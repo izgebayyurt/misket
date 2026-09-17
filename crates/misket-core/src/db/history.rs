@@ -22,12 +22,13 @@ use rusqlite::{params, Connection, OptionalExtension, Row};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
-use super::{codes, documents, excerpts, framework, transcripts, util};
+use super::{activity, codes, documents, excerpts, framework, transcripts, util};
 use crate::error::{AppError, Result};
 use crate::models::{
     ChildrenStrategy, CodePatch, CodeTreeSnapshot, Coder, CompactReport, DescriptorField,
-    DocumentSnapshot, ExcerptSnapshot, FrameworkMatrixWithCells, HistoryNode, HistoryNodeSummary,
-    Memo, SavedFilter, SetWithMembers, SyncPoint, TagRow, WeightScale,
+    DocumentSnapshot, ExcerptSnapshot, FrameworkMatrixWithCells, HistoryNode, HistoryNodeDetail,
+    HistoryNodeSummary, HistoryRef, HistoryStepMember, Memo, SavedFilter, SetWithMembers,
+    SyncPoint, TagRow, WeightScale,
 };
 use crate::text::TranscriptFormat;
 
@@ -1714,6 +1715,372 @@ pub fn tree(conn: &Connection) -> Result<Vec<HistoryNodeSummary>> {
     Ok(out)
 }
 
+// ------------------------------------------------------ one step in detail
+
+/// How a reference reads when it cannot be found.
+///
+/// Two different absences, and saying which is the whole point: a step *on
+/// the way to where the project is* whose target is missing had it deleted
+/// since, while a step the project has undone past, or one on another branch,
+/// simply has not been applied — its excerpt is not there because that
+/// coding is not in force, not because anyone threw it away.
+const DELETED_SUFFIX: &str = "(since deleted)";
+const UNAPPLIED_SUFFIX: &str = "(not in the project right now)";
+
+fn missing(label: &str, applied: bool) -> String {
+    let suffix = if applied {
+        DELETED_SUFFIX
+    } else {
+        UNAPPLIED_SUFFIX
+    };
+    let label = label.trim();
+    if label.is_empty() {
+        suffix.to_string()
+    } else {
+        format!("{label} {suffix}")
+    }
+}
+
+/// A string field of a `detail` payload, whether it was written plainly or as
+/// an [`activity::change`] pair (then its `to` side: the value after the step).
+fn detail_str(detail: &Value, key: &str) -> Option<String> {
+    match detail.get(key)? {
+        Value::String(s) => Some(s.clone()),
+        Value::Object(o) => o.get("to")?.as_str().map(str::to_string),
+        _ => None,
+    }
+}
+
+fn detail_i64(detail: &Value, key: &str) -> Option<i64> {
+    match detail.get(key)? {
+        Value::Number(n) => n.as_i64(),
+        Value::Object(o) => o.get("to")?.as_i64(),
+        _ => None,
+    }
+}
+
+/// A code's place in the codebook, `Parent > Child`, as it is now.
+fn code_path(conn: &Connection, id: &str) -> Option<String> {
+    let mut parts: Vec<String> = vec![];
+    let mut cur = Some(id.to_string());
+    // The codebook is a tree, but a corrupt parent chain must not hang here.
+    for _ in 0..64 {
+        let Some(this) = cur else { break };
+        let row: Option<(String, Option<String>)> = conn
+            .query_row(
+                "SELECT name, parent_id FROM codes WHERE id = ?1",
+                [&this],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .optional()
+            .ok()
+            .flatten();
+        let Some((name, parent)) = row else { break };
+        parts.push(name);
+        cur = parent;
+    }
+    if parts.is_empty() {
+        return None;
+    }
+    parts.reverse();
+    Some(parts.join(" \u{203a} "))
+}
+
+/// Look one reference up. `recorded` is the name the step itself wrote down,
+/// used when the target is no longer there.
+fn resolve_ref(
+    conn: &Connection,
+    kind: &str,
+    id: &str,
+    recorded: Option<String>,
+    detail: &Value,
+    applied: bool,
+) -> Option<HistoryRef> {
+    let plain = |label: String, exists: bool| HistoryRef {
+        kind: kind.to_string(),
+        id: id.to_string(),
+        label,
+        exists,
+        color: None,
+        path: None,
+        document_id: None,
+        start_pos: None,
+        end_pos: None,
+    };
+    match kind {
+        "code" => {
+            let row: Option<(String, String)> = conn
+                .query_row("SELECT name, color FROM codes WHERE id = ?1", [id], |r| {
+                    Ok((r.get(0)?, r.get(1)?))
+                })
+                .optional()
+                .ok()
+                .flatten();
+            Some(match row {
+                Some((name, color)) => HistoryRef {
+                    color: Some(color),
+                    path: code_path(conn, id),
+                    ..plain(name, true)
+                },
+                None => plain(
+                    missing(&recorded.unwrap_or_else(|| "This code".into()), applied),
+                    false,
+                ),
+            })
+        }
+        "document" => {
+            let name: Option<String> = conn
+                .query_row("SELECT name FROM documents WHERE id = ?1", [id], |r| {
+                    r.get(0)
+                })
+                .optional()
+                .ok()
+                .flatten();
+            Some(match name {
+                Some(name) => plain(name, true),
+                None => plain(
+                    missing(&recorded.unwrap_or_else(|| "This document".into()), applied),
+                    false,
+                ),
+            })
+        }
+        "memo" => {
+            let row: Option<(String, String)> = conn
+                .query_row("SELECT title, body FROM memos WHERE id = ?1", [id], |r| {
+                    Ok((r.get(0)?, r.get(1)?))
+                })
+                .optional()
+                .ok()
+                .flatten();
+            Some(match row {
+                Some((title, body)) => plain(
+                    if title.trim().is_empty() {
+                        activity::elide(&body, 60)
+                    } else {
+                        title
+                    },
+                    true,
+                ),
+                None => plain(
+                    missing(&recorded.unwrap_or_else(|| "This memo".into()), applied),
+                    false,
+                ),
+            })
+        }
+        "excerpt" => {
+            type ExcerptRow = (String, Option<i64>, Option<i64>, Option<String>, String);
+            let row: Option<ExcerptRow> = conn
+                .query_row(
+                    "SELECT document_id, start_pos, end_pos, snapshot, kind
+                     FROM excerpts WHERE id = ?1",
+                    [id],
+                    |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)),
+                )
+                .optional()
+                .ok()
+                .flatten();
+            Some(match row {
+                Some((document_id, start_pos, end_pos, snapshot, kind_of)) => {
+                    let label = match snapshot.as_deref() {
+                        Some(text) if !text.trim().is_empty() => activity::elide(text, 240),
+                        _ => format!("a {} excerpt", kind_of.replace('_', " ")),
+                    };
+                    HistoryRef {
+                        document_id: Some(document_id),
+                        start_pos,
+                        end_pos,
+                        ..plain(label, true)
+                    }
+                }
+                // Gone, but the step wrote down where it was: enough to open
+                // the document at the passage, if the document is still there.
+                None => {
+                    let start = detail_i64(detail, "startPos");
+                    let end = detail_i64(detail, "endPos");
+                    // The text it held, if the step recorded it; failing
+                    // that, where in the document it was; failing that,
+                    // nothing more than that it was an excerpt.
+                    let what = recorded
+                        .or_else(|| match (start, end) {
+                            (Some(s), Some(e)) => Some(format!("the text at {s}\u{2013}{e}")),
+                            _ => None,
+                        })
+                        .unwrap_or_else(|| "This excerpt".into());
+                    HistoryRef {
+                        document_id: detail_str(detail, "documentId"),
+                        start_pos: start,
+                        end_pos: end,
+                        ..plain(missing(&what, applied), false)
+                    }
+                }
+            })
+        }
+        // A set, a saved filter, a descriptor field, a framework matrix or
+        // the project itself: nothing to open, so the panel shows the step's
+        // own detail fields instead.
+        _ => None,
+    }
+}
+
+/// Every reference one node points at, its own target first.
+fn node_refs(conn: &Connection, node: &HistoryNode, applied: bool) -> Vec<HistoryRef> {
+    let detail = &node.detail;
+    let mut out: Vec<HistoryRef> = vec![];
+    fn push(out: &mut Vec<HistoryRef>, r: HistoryRef) {
+        if !out.iter().any(|x| x.kind == r.kind && x.id == r.id) {
+            out.push(r);
+        }
+    }
+
+    if let Some(id) = node.target_id.as_deref() {
+        let recorded = match node.target_kind.as_str() {
+            "excerpt" => detail_str(detail, "snapshot"),
+            "memo" => detail_str(detail, "title"),
+            _ => detail_str(detail, "name"),
+        };
+        if let Some(r) = resolve_ref(conn, &node.target_kind, id, recorded, detail, applied) {
+            push(&mut out, r);
+        }
+    }
+
+    // The codes a coding step applied or took away, in the order recorded,
+    // paired with the names they had at the time.
+    let names = detail.get("codeNames").and_then(Value::as_array);
+    if let Some(ids) = detail.get("codeIds").and_then(Value::as_array) {
+        for (i, id) in ids.iter().filter_map(Value::as_str).enumerate() {
+            let recorded = names
+                .and_then(|n| n.get(i))
+                .and_then(Value::as_str)
+                .map(str::to_string);
+            if let Some(r) = resolve_ref(conn, "code", id, recorded, detail, applied) {
+                push(&mut out, r);
+            }
+        }
+    }
+
+    // The other side of a merge, a memo's own code, a moved code's new parent.
+    for (key, name_key) in [
+        ("codeId", "codeName"),
+        ("targetId", "targetName"),
+        ("sourceId", "sourceName"),
+        ("parentId", "parentName"),
+    ] {
+        let about_a_code = node.target_kind == "code" || node.kind.starts_with("code.");
+        if !about_a_code && key != "codeId" {
+            continue;
+        }
+        if let Some(id) = detail_str(detail, key) {
+            if let Some(r) = resolve_ref(
+                conn,
+                "code",
+                &id,
+                detail_str(detail, name_key),
+                detail,
+                applied,
+            ) {
+                push(&mut out, r);
+            }
+        }
+    }
+
+    // The document a coding, a memo or an import happened in.
+    if let Some(id) = detail_str(detail, "documentId") {
+        if let Some(r) = resolve_ref(
+            conn,
+            "document",
+            &id,
+            detail_str(detail, "documentName"),
+            detail,
+            applied,
+        ) {
+            push(&mut out, r);
+        }
+    }
+    if let Some(id) = detail_str(detail, "excerptId") {
+        if let Some(r) = resolve_ref(conn, "excerpt", &id, None, detail, applied) {
+            push(&mut out, r);
+        }
+    }
+    if let Some(id) = detail_str(detail, "memoId") {
+        if let Some(r) = resolve_ref(
+            conn,
+            "memo",
+            &id,
+            detail_str(detail, "title"),
+            detail,
+            applied,
+        ) {
+            push(&mut out, r);
+        }
+    }
+    out
+}
+
+/// One step of the history, as the view's detail panel shows it.
+///
+/// `id` may name any node of a compound step; the answer always describes the
+/// whole step, led by its first node, with the members listed and every
+/// member's references gathered. The references are resolved against the
+/// project as it is *now*, which is the point: a step that coded an excerpt
+/// someone has since deleted says so rather than offering a dead link.
+pub fn node_detail(conn: &Connection, id: i64) -> Result<HistoryNodeDetail> {
+    let member_ids = step_of(conn, id)?;
+    let leader = member_ids.first().copied().unwrap_or(id);
+    let node = get(conn, leader)?;
+    let head = head(conn)?;
+    // Is this step in force? It is exactly when the project sits at it or
+    // below it: anything the project has undone past, and every step of a
+    // branch it is not on, has not been applied.
+    let applied = head.is_some_and(|h| descendants(conn, leader).is_ok_and(|d| d.contains(&h)));
+
+    let mut undoable = true;
+    let mut is_head = false;
+    let mut members: Vec<HistoryStepMember> = vec![];
+    let mut refs: Vec<HistoryRef> = vec![];
+    for member_id in &member_ids {
+        let member = get(conn, *member_id)?;
+        undoable &= member.inverse.is_some();
+        is_head |= head == Some(member.id);
+        members.push(HistoryStepMember {
+            id: member.id,
+            kind: member.kind.clone(),
+            summary: member.summary.clone(),
+        });
+        for r in node_refs(conn, &member, applied) {
+            if !refs.iter().any(|x| x.kind == r.kind && x.id == r.id) {
+                refs.push(r);
+            }
+        }
+    }
+
+    Ok(HistoryNodeDetail {
+        id: node.id,
+        parent_id: node.parent_id,
+        at: node.at.clone(),
+        actor: node.actor.clone(),
+        coder_id: node.coder_id.clone(),
+        kind: node.kind.clone(),
+        target_kind: node.target_kind.clone(),
+        target_id: node.target_id.clone(),
+        summary: node
+            .group_summary
+            .clone()
+            .unwrap_or_else(|| node.summary.clone()),
+        detail: node.detail.clone(),
+        branch_name: node.branch_name.clone(),
+        undoable,
+        is_head,
+        applied,
+        step_count: member_ids.len() as i64,
+        refs,
+        members: if member_ids.len() > 1 {
+            members
+        } else {
+            vec![]
+        },
+    })
+}
+
 /// Throw away everything before `node_id`, making it a new root.
 ///
 /// Everything that is not `node_id` or under it goes: the steps that led here
@@ -3395,5 +3762,214 @@ pub(crate) mod tests {
         assert_eq!(redo(c, None).unwrap().unwrap().id, left);
         // A node that is not a child of the head is refused.
         assert!(matches!(redo(c, Some(fork)), Err(AppError::Validation(_))));
+    }
+
+    // ------------------------------------------- one step, in detail
+
+    /// The step at the head, as the detail panel would read it.
+    fn detail_of_head(c: &Connection) -> HistoryNodeDetail {
+        node_detail(c, head(c).unwrap().unwrap()).unwrap()
+    }
+
+    fn find_ref<'a>(d: &'a HistoryNodeDetail, kind: &str) -> &'a HistoryRef {
+        d.refs
+            .iter()
+            .find(|r| r.kind == kind)
+            .unwrap_or_else(|| panic!("no {kind} reference in {:?}", d.refs))
+    }
+
+    #[test]
+    fn node_detail_resolves_a_codings_excerpt_codes_and_document() {
+        let f = Fixture::new();
+        let c = f.conn();
+        let parent = f.code("Themes", None);
+        let code = f.code("Access", Some(&parent));
+        let excerpt = f.excerpt(0, 10, std::slice::from_ref(&code));
+
+        let d = detail_of_head(c);
+        assert_eq!(d.step_count, 1);
+        assert!(d.is_head);
+        assert!(d.undoable);
+        assert!(d.members.is_empty(), "a plain step has no members to list");
+
+        let e = find_ref(&d, "excerpt");
+        assert_eq!(e.id, excerpt);
+        assert!(e.exists);
+        // The snippet, so the panel can quote what was coded.
+        assert_eq!(e.label, "Alpha beta");
+        assert_eq!(e.document_id.as_deref(), Some(f.doc.as_str()));
+        assert_eq!(e.start_pos, Some(0));
+        assert_eq!(e.end_pos, Some(10));
+
+        let k = find_ref(&d, "code");
+        assert_eq!(k.id, code);
+        assert!(k.exists);
+        assert_eq!(k.label, "Access");
+        assert_eq!(k.path.as_deref(), Some("Themes \u{203a} Access"));
+        assert!(k.color.is_some());
+
+        let doc = find_ref(&d, "document");
+        assert_eq!(doc.label, documents::get_summary(c, &f.doc).unwrap().name);
+        assert!(doc.exists);
+    }
+
+    #[test]
+    fn node_detail_says_when_a_target_has_since_been_deleted() {
+        let f = Fixture::new();
+        let c = f.conn();
+        let code = f.code("Access", None);
+        let excerpt = f.excerpt(0, 10, std::slice::from_ref(&code));
+        let coding = head(c).unwrap().unwrap();
+
+        // Both the excerpt and the code the step points at go away.
+        excerpts::delete(c, &excerpt).unwrap();
+        let deletion = head(c).unwrap().unwrap();
+        codes::delete(c, &code, ChildrenStrategy::Delete).unwrap();
+
+        // The deletion step did write the text down, so it quotes it.
+        let gone = node_detail(c, deletion).unwrap();
+        let quoted = find_ref(&gone, "excerpt");
+        assert!(!quoted.exists);
+        assert_eq!(quoted.label, "Alpha beta (since deleted)");
+
+        let d = node_detail(c, coding).unwrap();
+        assert!(!d.is_head, "the head has moved on to the deletions");
+
+        let e = find_ref(&d, "excerpt");
+        assert!(!e.exists);
+        // The coding step did not write the text down, so it says where the
+        // passage was instead.
+        assert_eq!(e.label, "the text at 0\u{2013}10 (since deleted)");
+        // Where it was is still known, so the document can still be opened
+        // at the passage.
+        assert_eq!(e.document_id.as_deref(), Some(f.doc.as_str()));
+        assert_eq!(e.start_pos, Some(0));
+
+        let k = find_ref(&d, "code");
+        assert!(!k.exists);
+        assert_eq!(k.label, "Access (since deleted)");
+        assert!(k.path.is_none());
+        assert!(k.color.is_none());
+    }
+
+    #[test]
+    fn node_detail_tells_an_unapplied_step_apart_from_a_deleted_target() {
+        let f = Fixture::new();
+        let c = f.conn();
+        let code = f.code("Access", None);
+        f.excerpt(0, 10, std::slice::from_ref(&code));
+        let coding = head(c).unwrap().unwrap();
+
+        // Applied and present.
+        let now = node_detail(c, coding).unwrap();
+        assert!(now.applied);
+        assert!(find_ref(&now, "excerpt").exists);
+
+        // Undone: the excerpt is not there, but nobody deleted it — the
+        // project is simply at an earlier step.
+        undo(c).unwrap();
+        let undone = node_detail(c, coding).unwrap();
+        assert!(!undone.applied);
+        let e = find_ref(&undone, "excerpt");
+        assert!(!e.exists);
+        assert_eq!(
+            e.label,
+            "the text at 0\u{2013}10 (not in the project right now)"
+        );
+        // The code itself is still there, so it still reads normally.
+        assert!(find_ref(&undone, "code").exists);
+    }
+
+    #[test]
+    fn node_detail_names_a_deleted_target_it_never_wrote_a_name_for() {
+        let f = Fixture::new();
+        let c = f.conn();
+        let code = f.code("Access", None);
+        let excerpt = f.excerpt(0, 10, std::slice::from_ref(&code));
+        // The delete step's own target is the excerpt, and its detail keeps
+        // the snapshot; drop that to stand for an older payload without one.
+        excerpts::delete(c, &excerpt).unwrap();
+        let deletion = head(c).unwrap().unwrap();
+        c.execute(
+            "UPDATE history SET detail_json = '{}' WHERE id = ?1",
+            [deletion],
+        )
+        .unwrap();
+
+        let d = node_detail(c, deletion).unwrap();
+        let e = find_ref(&d, "excerpt");
+        assert!(!e.exists);
+        assert_eq!(e.label, "This excerpt (since deleted)");
+        assert!(e.document_id.is_none(), "nothing left to say where it was");
+    }
+
+    #[test]
+    fn node_detail_describes_a_compound_step_and_lists_its_members() {
+        let f = Fixture::new();
+        let c = f.conn();
+        let code = f.code("Access", None);
+        let excerpt = f.excerpt(0, 20, std::slice::from_ref(&code));
+        // A split records two nodes as one step.
+        excerpts::split(c, &excerpt, 10).unwrap();
+
+        let d = detail_of_head(c);
+        assert_eq!(d.step_count, 2);
+        assert_eq!(d.members.len(), 2);
+        assert!(d.members.iter().all(|m| !m.summary.is_empty()));
+        // The step wears the group's own label, not its first node's.
+        assert!(d.summary.to_lowercase().contains("split"));
+
+        // Any node of the group answers for the whole step.
+        let second = d.members[1].id;
+        assert_eq!(node_detail(c, second).unwrap().id, d.id);
+    }
+
+    #[test]
+    fn node_detail_resolves_both_sides_of_a_code_merge() {
+        let f = Fixture::new();
+        let c = f.conn();
+        let source = f.code("Access", None);
+        let target = f.code("Barriers", None);
+        f.excerpt(0, 10, std::slice::from_ref(&source));
+        codes::merge(c, &source, &target).unwrap();
+
+        let d = detail_of_head(c);
+        // The source is gone; the target is not.
+        let labels: Vec<(&str, bool)> = d
+            .refs
+            .iter()
+            .filter(|r| r.kind == "code")
+            .map(|r| (r.label.as_str(), r.exists))
+            .collect();
+        assert!(labels.contains(&("Barriers", true)), "{labels:?}");
+        assert!(
+            labels
+                .iter()
+                .any(|(l, exists)| !exists && l.starts_with("Access")),
+            "{labels:?}",
+        );
+    }
+
+    #[test]
+    fn node_detail_carries_the_payload_and_the_branch_name() {
+        let f = Fixture::new();
+        let c = f.conn();
+        f.code("Access", None);
+        fork_here(c, "second pass").unwrap();
+
+        let d = detail_of_head(c);
+        assert_eq!(d.branch_name.as_deref(), Some("second pass"));
+        assert_eq!(d.kind, "code.created");
+        assert_eq!(d.detail.get("name").and_then(Value::as_str), Some("Access"));
+        assert_eq!(d.actor, "Ada");
+    }
+
+    #[test]
+    fn node_detail_is_not_found_for_a_node_that_is_not_there() {
+        let f = Fixture::new();
+        assert!(matches!(
+            node_detail(f.conn(), 9_999),
+            Err(AppError::NotFound(_))
+        ));
     }
 }
