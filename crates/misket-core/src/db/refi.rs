@@ -2104,7 +2104,12 @@ fn execute_import(
                 });
             }
             other => unsupported.push(format!(
-                "{shown}: a {other} — Misket imports text and picture sources"
+                "{shown}: {} {other} — Misket imports text and picture sources",
+                if other.starts_with(['A', 'E', 'I', 'O', 'U']) {
+                    "an"
+                } else {
+                    "a"
+                }
             )),
         }
     }
@@ -2627,14 +2632,19 @@ fn execute_import(
         )?;
     }
 
-    for (element, what) in [("Links", "link"), ("Graphs", "graph")] {
+    for (element, what, kept) in [
+        (
+            "Cases",
+            "case",
+            " (Misket has no cases; their variable values became document attributes)",
+        ),
+        ("Links", "link", " (Misket has no equivalent)"),
+        ("Graphs", "graph", " (Misket has no equivalent)"),
+    ] {
         if let Some(el) = root.first(element) {
             let n = el.kids.len();
             if n > 0 {
-                unsupported.push(format!(
-                    "{n} {what}{} (Misket has no equivalent)",
-                    if n == 1 { "" } else { "s" }
-                ));
+                unsupported.push(format!("{n} {what}{}{kept}", if n == 1 { "" } else { "s" }));
             }
         }
     }
@@ -3532,6 +3542,141 @@ mod tests {
             Err(AppError::Conflict(_))
         ));
         assert!(preview_refi(&p.conn, &path).unwrap().project_has_content);
+    }
+
+    /// A `project.qde` in the shapes other tools really write, which our own
+    /// export never produces: a namespace *prefix* rather than a default
+    /// namespace, GUIDs in braces, a lower-case `sources` folder (MAXQDA's
+    /// spelling), the text inline in `PlainTextContent`, a category
+    /// (`isCodable="false"`), a `Coding` on the source itself, a `Case`
+    /// carrying the document's variables, and sources Misket cannot hold.
+    ///
+    /// A file exported by NVivo or MAXQDA would be the better test, but
+    /// qdasoftware.org is not reachable from this machine and no vendor
+    /// `.qdpx` is published in a public repository, so the conventions are
+    /// reproduced here from the standard and from QualCoder's reader.
+    #[test]
+    fn imports_the_conventions_other_tools_write() {
+        let dir = tempfile::tempdir().unwrap();
+        let qde = format!(
+            r###"<?xml version="1.0" encoding="utf-8"?>
+<qda:Project xmlns:qda="{NS}" name="Rival export" origin="MAXQDA 2022">
+  <qda:Users>
+    <qda:User guid="{{{ADA}}}" name="AL"/>
+  </qda:Users>
+  <qda:CodeBook>
+    <qda:Codes>
+      <qda:Code guid="{{AAAAAAAA-0000-4000-8000-0000000000A1}}" name="Themes" isCodable="false">
+        <qda:Code guid="{{AAAAAAAA-0000-4000-8000-0000000000A2}}" name="Trust" isCodable="true"/>
+      </qda:Code>
+    </qda:Codes>
+  </qda:CodeBook>
+  <qda:Variables>
+    <qda:Variable guid="{{BBBBBBBB-0000-4000-8000-0000000000B1}}" name="Wave" typeOfVariable="Integer"/>
+  </qda:Variables>
+  <qda:Cases>
+    <qda:Case guid="{{CACACACA-0000-4000-8000-0000000000C0}}" name="P1">
+      <qda:SourceRef targetGUID="{{CCCCCCCC-0000-4000-8000-0000000000C1}}"/>
+      <qda:VariableValue>
+        <qda:VariableRef targetGUID="{{BBBBBBBB-0000-4000-8000-0000000000B1}}"/>
+        <qda:IntegerValue>2</qda:IntegerValue>
+      </qda:VariableValue>
+    </qda:Case>
+  </qda:Cases>
+  <qda:Sources>
+    <qda:TextSource guid="{{CCCCCCCC-0000-4000-8000-0000000000C1}}" name="Inline">
+      <qda:PlainTextContent>Trust came up twice &amp; again.</qda:PlainTextContent>
+      <qda:Coding guid="{{EEEEEEEE-0000-4000-8000-0000000000E1}}" creatingUser="{{{ADA}}}">
+        <qda:CodeRef targetGUID="{{AAAAAAAA-0000-4000-8000-0000000000A2}}"/>
+      </qda:Coding>
+    </qda:TextSource>
+    <qda:TextSource guid="{{CCCCCCCC-0000-4000-8000-0000000000C2}}" name="From a file"
+                    plainTextPath="internal://lower.txt"/>
+    <qda:TextSource guid="{{CCCCCCCC-0000-4000-8000-0000000000C3}}" name="Rich only"
+                    richTextPath="internal://rich.docx"/>
+    <qda:PDFSource guid="{{CCCCCCCC-0000-4000-8000-0000000000C4}}" name="A report"
+                   path="internal://report.pdf"/>
+    <qda:AudioSource guid="{{CCCCCCCC-0000-4000-8000-0000000000C5}}" name="Tape 1"
+                     path="internal://tape.wav"/>
+  </qda:Sources>
+</qda:Project>
+"###
+        );
+        let path = dir.path().join("rival.qdpx");
+        // MAXQDA spells the folder in lower case, so the container is built
+        // by hand here rather than through `write_qdpx`.
+        {
+            let mut zip = zip::ZipWriter::new(std::fs::File::create(&path).unwrap());
+            let options = zip::write::SimpleFileOptions::default();
+            zip.start_file(QDE, options).unwrap();
+            zip.write_all(qde.as_bytes()).unwrap();
+            zip.start_file("sources/lower.txt", options).unwrap();
+            zip.write_all("A second file, from the sources folder.\r\n".as_bytes())
+                .unwrap();
+            zip.finish().unwrap();
+        }
+
+        let p = OpenProject::in_memory("dest").unwrap();
+        coders::ensure_local(&p.conn, "33333333-3333-4333-8333-333333333333", "Cleo", "").unwrap();
+        let preview = preview_refi(&p.conn, &path).unwrap();
+        assert_eq!(preview.project_name, "Rival export");
+        assert_eq!(preview.origin, "MAXQDA 2022");
+        assert_eq!(preview.text_sources, 2, "the rich-text-only one is not one");
+        assert_eq!(preview.codes, 2);
+        assert_eq!(preview.users, 1);
+
+        let report = import_refi(&p.conn, &path, RefiImportMode::Merge).unwrap();
+        assert_eq!(report.documents, 2);
+        assert_eq!(report.codes, 2);
+        // The `Coding` on the source codes the whole document.
+        assert_eq!(report.excerpts, 1);
+        assert_eq!(report.codings, 1);
+        assert_eq!(report.descriptor_fields, 1);
+        assert_eq!(report.descriptor_values, 1, "from the Case");
+
+        let docs = documents::list(&p.conn).unwrap();
+        let inline = docs.iter().find(|d| d.name == "Inline").unwrap();
+        assert_eq!(
+            documents::get_text(&p.conn, &inline.id).unwrap().0,
+            "Trust came up twice & again."
+        );
+        let from_file = docs.iter().find(|d| d.name == "From a file").unwrap();
+        assert_eq!(
+            documents::get_text(&p.conn, &from_file.id).unwrap().0,
+            "A second file, from the sources folder.\n"
+        );
+        let whole = excerpts::list_for_document(&p.conn, &inline.id).unwrap();
+        assert_eq!((whole[0].start_pos, whole[0].end_pos), (Some(0), Some(28)));
+        assert_eq!(whole[0].codings[0].coder_id, ADA);
+
+        // The braced GUIDs became our ids, lower-cased.
+        assert!(codes::list(&p.conn)
+            .unwrap()
+            .iter()
+            .any(|c| c.id == "aaaaaaaa-0000-4000-8000-0000000000a2"));
+        // An Integer variable is a number here, and the Case's value landed.
+        let field = descriptors::list_fields(&p.conn).unwrap().remove(0);
+        assert_eq!(
+            (field.name.as_str(), field.kind.as_str()),
+            ("Wave", "number")
+        );
+        assert_eq!(
+            descriptors::values_for_document(&p.conn, &from_file.id).unwrap(),
+            vec![]
+        );
+        assert_eq!(
+            descriptors::values_for_document(&p.conn, &inline.id).unwrap()[0].value,
+            "2"
+        );
+
+        // And everything it could not take is named rather than dropped.
+        let said = report.unsupported.join("\n");
+        for expected in ["Rich only", "A report", "Tape 1", "is a category", "1 case"] {
+            assert!(
+                said.contains(expected),
+                "{expected:?} missing from:\n{said}"
+            );
+        }
     }
 
     #[test]
