@@ -1,7 +1,7 @@
 use misket_core::db::analysis;
 use misket_core::models::{
-    CoOccurrence, CodeByDescriptor, CodeByDocument, CodeFrequency, CrosstabRequest, WordFrequency,
-    WordFrequencyOptions, WordFrequencyScope,
+    CoOccurrence, CodeByDescriptor, CodeByDocument, CodeFrequency, CrosstabRequest, ExcerptFilter,
+    WeightSummary, WordFrequency, WordFrequencyOptions, WordFrequencyScope,
 };
 use misket_core::Result;
 use tauri::State;
@@ -88,4 +88,15 @@ pub fn code_by_descriptor(
     request: CrosstabRequest,
 ) -> Result<CodeByDescriptor> {
     state.with_project(|p| analysis::code_by_descriptor(&p.conn, &request))
+}
+
+/// Summary statistics for one weighted code's codings; see
+/// `misket_core::db::analysis::weight_summary`.
+#[tauri::command]
+pub fn weight_summary(
+    state: State<'_, AppState>,
+    code_id: String,
+    filter: ExcerptFilter,
+) -> Result<WeightSummary> {
+    state.with_project(|p| analysis::weight_summary(&p.conn, &code_id, &filter))
 }

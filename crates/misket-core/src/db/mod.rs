@@ -318,6 +318,7 @@ mod tests {
                      ALTER TABLE codes DROP COLUMN example_excerpt_id;
                      ALTER TABLE codes DROP COLUMN exclusion;
                      ALTER TABLE codes DROP COLUMN inclusion;
+                     ALTER TABLE codes DROP COLUMN weight_scale_json;
                      PRAGMA user_version = 1;",
                 )
                 .unwrap();

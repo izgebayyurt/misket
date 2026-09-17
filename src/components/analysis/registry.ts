@@ -9,6 +9,7 @@ import {
   Table2,
   Tags,
   Type,
+  Weight,
 } from "lucide-react";
 import type { AnalysisTab } from "@/state/workspace";
 import { CodeFrequencies } from "./CodeFrequencies";
@@ -19,6 +20,7 @@ import { CodeByDescriptorMatrix } from "./CodeByDescriptorMatrix";
 import { WordFrequencies } from "./WordFrequencies";
 import { CodeTreemap } from "./CodeTreemap";
 import { CodeClustering } from "./CodeClustering";
+import { WeightsView } from "./WeightsView";
 import { ReliabilityView } from "./ReliabilityView";
 
 /**
@@ -112,8 +114,10 @@ export const ANALYSES: AnalysisEntry[] = [
     icon: Scale,
     component: ReliabilityView,
   },
-  // Excerpt weights/ratings go here, as the only entry in the "mixed" group:
-  //   { id: "weights", label: "Weights", group: "mixed", icon: Weight, component: WeightsView },
+  { id: "weights", label: "Weights", group: "mixed", icon: Weight, component: WeightsView },
+  // Another analysis that crosses the qualitative and the countable goes
+  // here, in the "mixed" group — one entry, plus its id in `AnalysisTab`
+  // (`src/state/workspace.ts`) and nothing else.
 ];
 
 /**

@@ -49,7 +49,16 @@ export type Action =
   | "jumpTop"
   | "jumpBottom"
   | "goToParagraph"
-  | "escape";
+  | "escape"
+  | "setWeight1"
+  | "setWeight2"
+  | "setWeight3"
+  | "setWeight4"
+  | "setWeight5"
+  | "setWeight6"
+  | "setWeight7"
+  | "setWeight8"
+  | "setWeight9";
 
 export interface Shortcut {
   key: string;
@@ -112,6 +121,18 @@ export const SHORTCUTS: Record<Action, Shortcut> = {
   jumpBottom: { key: "End", mod: true },
   goToParagraph: { key: "g", mod: true },
   escape: { key: "Escape", global: true },
+  // With an excerpt focused, `1`-`9` rate the last applied code on its
+  // weight scale (a no-op if it has none). Not `global`: a text field's own
+  // digits take priority, same reasoning as `quickCode`'s full stop.
+  setWeight1: { key: "1" },
+  setWeight2: { key: "2" },
+  setWeight3: { key: "3" },
+  setWeight4: { key: "4" },
+  setWeight5: { key: "5" },
+  setWeight6: { key: "6" },
+  setWeight7: { key: "7" },
+  setWeight8: { key: "8" },
+  setWeight9: { key: "9" },
 };
 
 /**
@@ -202,6 +223,19 @@ export const LABELS: Record<Action, string> = {
   jumpBottom: "Jump to the bottom of the document",
   goToParagraph: "Go to paragraph",
   escape: "Cancel / close",
+  // One shared sentence across all nine digits: they are one control, not
+  // nine different shortcuts, and the docs site's cheatsheet only has to
+  // carry this string once for the keymap test to consider every one of
+  // them documented.
+  setWeight1: "Rate the last applied code, with an excerpt focused (1–9)",
+  setWeight2: "Rate the last applied code, with an excerpt focused (1–9)",
+  setWeight3: "Rate the last applied code, with an excerpt focused (1–9)",
+  setWeight4: "Rate the last applied code, with an excerpt focused (1–9)",
+  setWeight5: "Rate the last applied code, with an excerpt focused (1–9)",
+  setWeight6: "Rate the last applied code, with an excerpt focused (1–9)",
+  setWeight7: "Rate the last applied code, with an excerpt focused (1–9)",
+  setWeight8: "Rate the last applied code, with an excerpt focused (1–9)",
+  setWeight9: "Rate the last applied code, with an excerpt focused (1–9)",
 };
 
 export function label(action: Action): string {

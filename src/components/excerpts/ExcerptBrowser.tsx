@@ -193,6 +193,8 @@ export function ExcerptBrowser() {
         onSpeakers={(speakers) => update({ speakers })}
         coderIds={state.coderIds}
         onCoderIds={(coderIds) => update({ coderIds })}
+        weightRange={state.weightRange}
+        onWeightRange={(weightRange) => update({ weightRange })}
         filter={filter}
         onApplyFilter={applyFilter}
         total={data?.total ?? 0}

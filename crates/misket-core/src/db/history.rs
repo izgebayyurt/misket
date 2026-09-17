@@ -28,7 +28,7 @@ use crate::models::{
     ChildrenStrategy, CodePatch, CodeTreeSnapshot, Coder, CompactReport, DescriptorField,
     DocumentSnapshot, ExcerptSnapshot, FrameworkMatrixWithCells, HistoryNode, HistoryNodeDetail,
     HistoryNodeSummary, HistoryRef, HistoryStepMember, Memo, SavedFilter, SetWithMembers,
-    SyncPoint, TagRow,
+    SyncPoint, TagRow, WeightScale,
 };
 use crate::text::TranscriptFormat;
 
@@ -535,6 +535,18 @@ pub enum CodeOp {
         #[serde(default)]
         memos: Vec<Memo>,
     },
+    /// Give a code a weight scale, change it, or clear it
+    /// (`db::codes::set_weight_scale`). `weights` forces exactly the rows a
+    /// scale change no longer fits: `None` going forward (clearing them),
+    /// their exact prior value coming back on undo — a plain re-check
+    /// against `scale` would not tell "still None" from "was 5, now None".
+    WeightScale {
+        code_id: String,
+        scale: Option<WeightScale>,
+        updated_at: String,
+        #[serde(default)]
+        weights: Vec<WeightRow>,
+    },
 }
 
 /// One `excerpts` row's boundaries and quoted text.
@@ -565,6 +577,21 @@ pub struct Touch {
     pub updated_at: String,
 }
 
+/// Force one `excerpt_codes` row's weight to an exact value (not a relative
+/// change), so replaying is idempotent regardless of what is there when it
+/// runs. Used both for a plain `excerpt.weight_set` and for the weights a
+/// code's own scale change forces to `None` (`CodeOp::WeightScale`); a row
+/// that no longer exists (the coding was removed since) is silently skipped
+/// rather than failing the replay.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct WeightRow {
+    pub excerpt_id: String,
+    pub code_id: String,
+    pub coder_id: String,
+    pub weight: Option<f64>,
+}
+
 /// Everything the excerpt and bulk operations do, in one shape. The steps run
 /// in the order the fields are declared, which is the order that keeps every
 /// case legal: memos leave a row before it is deleted, and a range is freed
@@ -579,6 +606,7 @@ pub struct ExcerptChange {
     pub remove_tags: Vec<TagRow>,
     pub add_tags: Vec<TagRow>,
     pub touch: Vec<Touch>,
+    pub weights: Vec<WeightRow>,
 }
 
 /// Setting which transcript format a document is read with, or the
@@ -1138,6 +1166,35 @@ impl CodeOp {
                 }
                 .run(conn)
             }
+            CodeOp::WeightScale {
+                code_id,
+                scale,
+                updated_at,
+                weights,
+            } => {
+                // The raw write, not `codes::set_weight_scale`: that function
+                // recomputes which weights no longer fit from what is in the
+                // table *now*, which is exactly wrong for undo — it would see
+                // the forward run's `None`s and have nothing to put back.
+                // `weights` already says exactly what every affected row
+                // should become in this direction.
+                conn.execute(
+                    "UPDATE codes SET weight_scale_json = ?2, updated_at = ?3 WHERE id = ?1",
+                    params![
+                        code_id,
+                        scale.as_ref().map(serde_json::to_string).transpose()?,
+                        updated_at
+                    ],
+                )?;
+                for w in weights {
+                    conn.execute(
+                        "UPDATE excerpt_codes SET weight = ?4
+                          WHERE excerpt_id = ?1 AND code_id = ?2 AND coder_id = ?3",
+                        params![w.excerpt_id, w.code_id, w.coder_id, w.weight],
+                    )?;
+                }
+                Ok(())
+            }
         }
     }
 }
@@ -1212,9 +1269,16 @@ impl ExcerptChange {
         for t in &self.add_tags {
             // A code deleted in the meantime simply keeps its tag off.
             conn.execute(
-                "INSERT OR IGNORE INTO excerpt_codes (excerpt_id, code_id, coder_id, created_at)
-                 SELECT ?1, ?2, ?3, ?4 WHERE EXISTS (SELECT 1 FROM codes WHERE id = ?2)",
-                params![t.excerpt_id, t.code_id, tag_coder(conn, t), t.created_at],
+                "INSERT OR IGNORE INTO excerpt_codes (excerpt_id, code_id, coder_id, created_at, weight)
+                 SELECT ?1, ?2, ?3, ?4, ?5 WHERE EXISTS (SELECT 1 FROM codes WHERE id = ?2)",
+                params![t.excerpt_id, t.code_id, tag_coder(conn, t), t.created_at, t.weight],
+            )?;
+        }
+        for w in &self.weights {
+            conn.execute(
+                "UPDATE excerpt_codes SET weight = ?4
+                  WHERE excerpt_id = ?1 AND code_id = ?2 AND coder_id = ?3",
+                params![w.excerpt_id, w.code_id, w.coder_id, w.weight],
             )?;
         }
         for t in &self.touch {
@@ -1285,8 +1349,13 @@ fn apply(conn: &Connection, node_id: i64, kind: &str, payload: &Value) -> Result
         return Ok(());
     }
     match kind {
-        "code.created" | "code.updated" | "code.moved" | "code.deleted" | "code.merged_into"
-        | "code.merged_from" => serde_json::from_value::<CodeOp>(payload.clone())?.run(conn),
+        "code.created"
+        | "code.updated"
+        | "code.moved"
+        | "code.deleted"
+        | "code.merged_into"
+        | "code.merged_from"
+        | "code.weight_scale_set" => serde_json::from_value::<CodeOp>(payload.clone())?.run(conn),
         "excerpt.created"
         | "excerpt.codes_added"
         | "excerpt.code_removed"
@@ -1297,11 +1366,13 @@ fn apply(conn: &Connection, node_id: i64, kind: &str, payload: &Value) -> Result
         | "excerpt.merged_into"
         | "excerpt.deleted"
         | "excerpt.restored"
+        | "excerpt.weight_set"
         | "bulk.excerpts_deleted"
         | "bulk.codes_added"
         | "bulk.codes_removed"
         | "bulk.retagged"
-        | "bulk.auto_coded" => serde_json::from_value::<ExcerptChange>(payload.clone())?.run(conn),
+        | "bulk.auto_coded"
+        | "bulk.weights_set" => serde_json::from_value::<ExcerptChange>(payload.clone())?.run(conn),
         "memo.created" | "memo.updated" | "memo.deleted" | "memo.restored" => {
             serde_json::from_value::<MemoChange>(payload.clone())?.run(conn)
         }
@@ -2311,6 +2382,42 @@ pub(crate) mod tests {
         assert_round_trip(c, "move back to the top level", |c| {
             codes::move_code(c, &trust, None, 1).unwrap();
         });
+    }
+
+    /// A code's weight scale: giving it one (which rates every coding at the
+    /// default), rating one excerpt by hand, then clearing the scale, which
+    /// has to null every weight under it — and undo has to bring back the
+    /// exact values, not just the old scale over now-empty weights.
+    #[test]
+    fn round_trips_a_weight_scale_and_the_weights_it_forces_to_null() {
+        let f = Fixture::new();
+        let c = f.conn();
+        let intensity = f.code("Intensity", None);
+        let scale = WeightScale {
+            min: 1.0,
+            max: 5.0,
+            step: 1.0,
+            default: 3.0,
+            labels: Default::default(),
+        };
+        assert_round_trip(c, "give it a scale", |c| {
+            codes::set_weight_scale(c, &intensity, Some(scale.clone())).unwrap();
+        });
+        let e = f.excerpt(0, 5, std::slice::from_ref(&intensity));
+        // Applying a scaled code rates it at the default automatically; that
+        // insert is folded into `apply_codes`'s own step, so a fresh
+        // round-trip check here would find nothing left to undo — the
+        // fixture just leans on it and checks the value directly.
+        assert_eq!(excerpts::get(c, &e).unwrap().codings[0].weight, Some(3.0));
+        assert_round_trip(c, "rate it by hand", |c| {
+            excerpts::set_weight(c, &e, &intensity, None, Some(5.0)).unwrap();
+        });
+        assert_eq!(excerpts::get(c, &e).unwrap().codings[0].weight, Some(5.0));
+        assert_round_trip(c, "clear the scale, nulling the weight", |c| {
+            codes::set_weight_scale(c, &intensity, None).unwrap();
+        });
+        assert_eq!(excerpts::get(c, &e).unwrap().codings[0].weight, None);
+        assert!(codes::get(c, &intensity).unwrap().weight_scale.is_none());
     }
 
     /// Deleting a code with `promote` keeps its children, one level up. Undo

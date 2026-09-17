@@ -8,9 +8,11 @@ import {
   useDocumentExcerpts,
   useInVivoCode,
   useMergeExcerpts,
+  useSetExcerptWeight,
   useSplitExcerpt,
   useUpdateExcerptRange,
 } from "@/queries/excerpts";
+import { snapWeight } from "@/core/weights";
 import type { ExcerptWithCodes } from "@/api/types";
 import { buildOffsetMap, codePointCount, cpToUtf16, utf16ToCp } from "@/core/offsets";
 import {
@@ -965,6 +967,52 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
       },
     });
   }, [applyCodeToTarget]);
+
+  // With an excerpt focused, digit keys rate the last applied code on its
+  // weight scale (snapped to the nearest step). A no-op — with a hint —
+  // whenever there is no excerpt focused, no last code, no scale, or the
+  // focused excerpt does not carry that code at all.
+  const setWeight = useSetExcerptWeight();
+  useEffect(() => {
+    const rate = (value: number) => {
+      if (!focusedId) {
+        toast.info("Focus an excerpt to rate it.");
+        return;
+      }
+      const codeId = useWorkspace.getState().lastAppliedCodeId;
+      const code = codeId ? (codes ?? []).find((c) => c.id === codeId) : undefined;
+      if (!code) {
+        toast.info("No code has been applied yet — pick one from the palette first.");
+        return;
+      }
+      if (!code.weightScale) {
+        toast.info(`"${code.name}" has no weight scale.`);
+        return;
+      }
+      const excerpt = excerptById.get(focusedId);
+      if (!excerpt?.codeIds.includes(code.id)) {
+        toast.info(`Apply "${code.name}" to this excerpt before rating it.`);
+        return;
+      }
+      setWeight.mutate({
+        id: focusedId,
+        documentId,
+        codeId: code.id,
+        weight: snapWeight(code.weightScale, value),
+      });
+    };
+    return useShortcutActions.getState().register({
+      setWeight1: () => rate(1),
+      setWeight2: () => rate(2),
+      setWeight3: () => rate(3),
+      setWeight4: () => rate(4),
+      setWeight5: () => rate(5),
+      setWeight6: () => rate(6),
+      setWeight7: () => rate(7),
+      setWeight8: () => rate(8),
+      setWeight9: () => rate(9),
+    });
+  }, [codes, documentId, excerptById, focusedId, setWeight]);
 
   function onSegmentClick(e: React.MouseEvent, seg: Segment) {
     if (seg.excerptIds.length === 0) return;

@@ -15,7 +15,8 @@ export type AnalysisTab =
   | "descriptor"
   | "framework"
   | "words"
-  | "reliability";
+  | "reliability"
+  | "weights";
 
 export type View =
   | { kind: "document"; documentId: string; focusExcerptId?: string; scrollToOffset?: number }
