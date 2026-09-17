@@ -150,13 +150,15 @@ pub fn add_codes_many(
     let now = util::now();
     let tx = util::tx(conn)?;
     let was = updated_at_of(&tx, &ids)?;
+    let coder = history::local_coder(&tx);
     let mut report = BulkCodeReport::default();
     for id in &ids {
         let before = report.pairs.len();
         for code_id in &code_ids {
             let inserted = tx.execute(
-                "INSERT OR IGNORE INTO excerpt_codes (excerpt_id, code_id, created_at) VALUES (?1, ?2, ?3)",
-                params![id, code_id, now],
+                "INSERT OR IGNORE INTO excerpt_codes (excerpt_id, code_id, coder_id, created_at)
+                 VALUES (?1, ?2, ?3, ?4)",
+                params![id, code_id, coder, now],
             )?;
             if inserted > 0 {
                 report.pairs.push((id.clone(), code_id.clone()));
@@ -170,7 +172,7 @@ pub fn add_codes_many(
             )?;
         }
     }
-    let tags = tag_rows(&report, &now);
+    let tags = tag_rows(&report, &coder, &now);
     let changed = touched(&report);
     log_bulk_codes(
         &tx,
@@ -194,14 +196,16 @@ pub fn add_codes_many(
 }
 
 /// The `(excerpt, code)` tags a report inserted, stamped with the time the
-/// operation ran, so a redo writes the same rows the first run did.
-fn tag_rows(report: &BulkCodeReport, at: &str) -> Vec<TagRow> {
+/// operation ran and the coder who ran it, so a redo writes the same rows the
+/// first run did.
+fn tag_rows(report: &BulkCodeReport, coder_id: &str, at: &str) -> Vec<TagRow> {
     report
         .pairs
         .iter()
         .map(|(excerpt_id, code_id)| TagRow {
             excerpt_id: excerpt_id.clone(),
             code_id: code_id.clone(),
+            coder_id: coder_id.to_string(),
             created_at: at.to_string(),
         })
         .collect()
@@ -265,6 +269,10 @@ pub fn remove_codes_many(
     let now = util::now();
     let tx = util::tx(conn)?;
     let was = updated_at_of(&tx, &ids)?;
+    // Only the local coder's rows: taking a code off in bulk takes back your
+    // own work, the same as removing one in the inspector, and leaves a
+    // colleague's coding of the same passage alone.
+    let coder = history::local_coder(&tx);
     let mut removed_tags = vec![];
     let mut report = BulkCodeReport::default();
     for id in &ids {
@@ -274,20 +282,23 @@ pub fn remove_codes_many(
             // row back exactly as it stood.
             let created_at: Option<String> = tx
                 .query_row(
-                    "SELECT created_at FROM excerpt_codes WHERE excerpt_id = ?1 AND code_id = ?2",
-                    params![id, code_id],
+                    "SELECT created_at FROM excerpt_codes
+                      WHERE excerpt_id = ?1 AND code_id = ?2 AND coder_id = ?3",
+                    params![id, code_id, coder],
                     |r| r.get(0),
                 )
                 .optional()?;
             let removed = tx.execute(
-                "DELETE FROM excerpt_codes WHERE excerpt_id = ?1 AND code_id = ?2",
-                params![id, code_id],
+                "DELETE FROM excerpt_codes
+                  WHERE excerpt_id = ?1 AND code_id = ?2 AND coder_id = ?3",
+                params![id, code_id, coder],
             )?;
             if removed > 0 {
                 report.pairs.push((id.clone(), code_id.clone()));
                 removed_tags.push(TagRow {
                     excerpt_id: id.clone(),
                     code_id: code_id.clone(),
+                    coder_id: coder.clone(),
                     created_at: created_at.unwrap_or_else(|| now.clone()),
                 });
             }
@@ -339,61 +350,71 @@ pub fn retag_code(conn: &Connection, from_code_id: &str, to_code_id: &str) -> Re
     codes::get(conn, to_code_id)?;
 
     let tx = util::tx(conn)?;
+    // One row per (excerpt, coder) carrying the source code: a retag moves
+    // each person's coding as theirs, so rolling a sub-code up into its
+    // parent never quietly reassigns a colleague's work to whoever ran it.
     let mut stmt = tx.prepare(
-        "SELECT ec.excerpt_id,
+        "SELECT ec.excerpt_id, ec.coder_id, ec.created_at,
                 EXISTS (SELECT 1 FROM excerpt_codes t
-                        WHERE t.excerpt_id = ec.excerpt_id AND t.code_id = ?2)
+                        WHERE t.excerpt_id = ec.excerpt_id AND t.code_id = ?2
+                          AND t.coder_id = ec.coder_id)
          FROM excerpt_codes ec JOIN excerpts e ON e.id = ec.excerpt_id
          WHERE ec.code_id = ?1
-         ORDER BY e.document_id, e.start_pos, ec.excerpt_id",
+         ORDER BY e.document_id, e.start_pos, ec.excerpt_id, ec.coder_id",
     )?;
-    let targets: Vec<(String, bool)> = stmt
+    let targets: Vec<(String, String, String, bool)> = stmt
         .query_map(params![from_code_id, to_code_id], |r| {
-            Ok((r.get(0)?, r.get(1)?))
+            Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))
         })?
         .collect::<rusqlite::Result<_>>()?;
     drop(stmt);
 
     let now = util::now();
-    let all_ids: Vec<String> = targets.iter().map(|(id, _)| id.clone()).collect();
+    let mut all_ids: Vec<String> = vec![];
+    for (id, ..) in &targets {
+        if !all_ids.contains(id) {
+            all_ids.push(id.clone());
+        }
+    }
     let was = updated_at_of(&tx, &all_ids)?;
-    // Every excerpt gives the source back on undo, with the tag's own
+    // Every coding gives the source back on undo, with the tag's own
     // timestamp; only the ones that gained the target lose it again.
     let mut source_tags = vec![];
     let mut target_tags = vec![];
     let mut report = RetagReport::default();
-    for (excerpt_id, already_tagged) in targets {
-        let created_at: Option<String> = tx
-            .query_row(
-                "SELECT created_at FROM excerpt_codes WHERE excerpt_id = ?1 AND code_id = ?2",
-                params![excerpt_id, from_code_id],
-                |r| r.get(0),
-            )
-            .optional()?;
+    for (excerpt_id, coder_id, created_at, already_tagged) in targets {
         source_tags.push(TagRow {
             excerpt_id: excerpt_id.clone(),
             code_id: from_code_id.to_string(),
-            created_at: created_at.unwrap_or_else(|| now.clone()),
+            coder_id: coder_id.clone(),
+            created_at,
         });
-        if !already_tagged {
+        if already_tagged {
+            // The excerpt only counts as "already had" when nothing about it
+            // moved; a second coder's row may still be moving.
+            if !report.moved.contains(&excerpt_id) && !report.already_had.contains(&excerpt_id) {
+                report.already_had.push(excerpt_id.clone());
+            }
+        } else {
             target_tags.push(TagRow {
                 excerpt_id: excerpt_id.clone(),
                 code_id: to_code_id.to_string(),
+                coder_id: coder_id.clone(),
                 created_at: now.clone(),
             });
-        }
-        if already_tagged {
-            report.already_had.push(excerpt_id.clone());
-        } else {
             tx.execute(
-                "INSERT INTO excerpt_codes (excerpt_id, code_id, created_at) VALUES (?1, ?2, ?3)",
-                params![excerpt_id, to_code_id, now],
+                "INSERT INTO excerpt_codes (excerpt_id, code_id, coder_id, created_at)
+                 VALUES (?1, ?2, ?3, ?4)",
+                params![excerpt_id, to_code_id, coder_id, now],
             )?;
-            report.moved.push(excerpt_id.clone());
+            report.already_had.retain(|id| id != &excerpt_id);
+            if !report.moved.contains(&excerpt_id) {
+                report.moved.push(excerpt_id.clone());
+            }
         }
         tx.execute(
-            "DELETE FROM excerpt_codes WHERE excerpt_id = ?1 AND code_id = ?2",
-            params![excerpt_id, from_code_id],
+            "DELETE FROM excerpt_codes WHERE excerpt_id = ?1 AND code_id = ?2 AND coder_id = ?3",
+            params![excerpt_id, from_code_id, coder_id],
         )?;
         tx.execute(
             "UPDATE excerpts SET updated_at = ?2 WHERE id = ?1",
@@ -450,6 +471,7 @@ pub fn auto_code(conn: &Connection, hits: &[AutoCodeHit], code_id: &str) -> Resu
     codes::get(conn, code_id)?;
     let now = util::now();
     let tx = util::tx(conn)?;
+    let coder = history::local_coder(&tx);
     let mut report = AutoCodeReport::default();
     let mut reused_was: HashMap<String, String> = HashMap::new();
     // A bulk call is usually every match in one or a handful of documents,
@@ -492,15 +514,17 @@ pub fn auto_code(conn: &Connection, hits: &[AutoCodeHit], code_id: &str) -> Resu
                     params![id, hit.document_id, hit.start_pos, hit.end_pos, snapshot, now],
                 )?;
                 tx.execute(
-                    "INSERT INTO excerpt_codes (excerpt_id, code_id, created_at) VALUES (?1, ?2, ?3)",
-                    params![id, code_id, now],
+                    "INSERT INTO excerpt_codes (excerpt_id, code_id, coder_id, created_at)
+                     VALUES (?1, ?2, ?3, ?4)",
+                    params![id, code_id, coder, now],
                 )?;
                 report.created_excerpt_ids.push(id);
             }
             Some(id) => {
                 let already_coded: bool = tx.query_row(
-                    "SELECT EXISTS (SELECT 1 FROM excerpt_codes WHERE excerpt_id = ?1 AND code_id = ?2)",
-                    params![id, code_id],
+                    "SELECT EXISTS (SELECT 1 FROM excerpt_codes
+                      WHERE excerpt_id = ?1 AND code_id = ?2 AND coder_id = ?3)",
+                    params![id, code_id, coder],
                     |r| r.get(0),
                 )?;
                 if already_coded {
@@ -508,8 +532,9 @@ pub fn auto_code(conn: &Connection, hits: &[AutoCodeHit], code_id: &str) -> Resu
                 } else {
                     reused_was.extend(updated_at_of(&tx, std::slice::from_ref(&id))?);
                     tx.execute(
-                        "INSERT INTO excerpt_codes (excerpt_id, code_id, created_at) VALUES (?1, ?2, ?3)",
-                        params![id, code_id, now],
+                        "INSERT INTO excerpt_codes (excerpt_id, code_id, coder_id, created_at)
+                         VALUES (?1, ?2, ?3, ?4)",
+                        params![id, code_id, coder, now],
                     )?;
                     tx.execute(
                         "UPDATE excerpts SET updated_at = ?2 WHERE id = ?1",
@@ -533,6 +558,7 @@ pub fn auto_code(conn: &Connection, hits: &[AutoCodeHit], code_id: &str) -> Resu
         .map(|excerpt_id| TagRow {
             excerpt_id: excerpt_id.clone(),
             code_id: code_id.to_string(),
+            coder_id: coder.clone(),
             created_at: now.clone(),
         })
         .collect();

@@ -63,6 +63,36 @@ fn set_head(conn: &Connection, id: Option<i64>) -> Result<()> {
     )
 }
 
+// ------------------------------------------------------- the local coder
+
+/// Remember which coder this connection writes as, for the rest of its life.
+///
+/// A `TEMP` table, like the actor name: per connection, outside the database
+/// file, so two people opening the same project never see each other's id.
+/// [`crate::db::coders::ensure_local`] sets it; the domain functions read it
+/// with [`local_coder`] rather than taking a parameter each.
+pub fn set_local_coder(conn: &Connection, coder_id: &str) -> Result<()> {
+    conn.execute_batch("CREATE TEMP TABLE IF NOT EXISTS local_coder (id TEXT NOT NULL)")?;
+    conn.execute("DELETE FROM temp.local_coder", [])?;
+    conn.execute(
+        "INSERT INTO temp.local_coder (id) VALUES (?1)",
+        [coder_id.trim()],
+    )?;
+    Ok(())
+}
+
+/// The id [`set_local_coder`] stored on this connection, or `""` when none
+/// was set — a test, or any code path that opens a project without the
+/// desktop app. An empty coder is written as an empty string, which is
+/// exactly what a pre-schema-11 row holds, and
+/// [`crate::db::coders::backfill`] claims those for whoever opens next.
+pub fn local_coder(conn: &Connection) -> String {
+    conn.query_row("SELECT id FROM temp.local_coder LIMIT 1", [], |r| {
+        r.get::<_, String>(0)
+    })
+    .unwrap_or_default()
+}
+
 // ------------------------------------------------- per-connection state
 
 /// Two things that are true of a connection rather than of the project: is it
@@ -257,13 +287,14 @@ pub fn record(
         None
     };
     conn.execute(
-        "INSERT INTO history (parent_id, at, actor, kind, target_kind, target_id,
+        "INSERT INTO history (parent_id, at, actor, coder_id, kind, target_kind, target_id,
                               summary, detail_json, forward_json, inverse_json, group_id)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
         params![
             parent,
             util::now(),
             actor,
+            local_coder(conn),
             kind,
             target_kind,
             target_id,
@@ -357,7 +388,7 @@ pub fn blob(conn: &Connection, node_id: i64, name: &str) -> Result<Option<Vec<u8
 
 pub(super) const COLUMNS: &str = "id, parent_id, at, actor, kind, target_kind, target_id,
      summary, detail_json, forward_json, inverse_json, branch_name, preferred_child,
-     group_id, group_summary";
+     group_id, group_summary, coder_id";
 
 fn json_or_empty(s: String) -> Value {
     // A payload written by a newer build (or hand-edited) reads back as an
@@ -383,6 +414,7 @@ pub(super) fn node_from_row(r: &Row) -> rusqlite::Result<HistoryNode> {
         preferred_child: r.get(12)?,
         group_id: r.get(13)?,
         group_summary: r.get(14)?,
+        coder_id: r.get(15)?,
     })
 }
 
@@ -992,8 +1024,9 @@ impl CodeOp {
                 place(conn, reparent)?;
                 for t in remove_tags {
                     conn.execute(
-                        "DELETE FROM excerpt_codes WHERE excerpt_id = ?1 AND code_id = ?2",
-                        params![t.excerpt_id, t.code_id],
+                        "DELETE FROM excerpt_codes
+                          WHERE excerpt_id = ?1 AND code_id = ?2 AND coder_id = ?3",
+                        params![t.excerpt_id, t.code_id, tag_coder(conn, t)],
                     )?;
                 }
                 // The recorded sibling order is the last word, after the
@@ -1057,6 +1090,18 @@ fn place(conn: &Connection, moves: &[Reparent]) -> Result<()> {
 }
 
 /// Replaying restores the state, which includes when each row last changed.
+/// Which coder a replayed tag belongs to. A payload written before schema 11
+/// carries no coder; those rows were the local coder's (a project file only
+/// ever had one person in it), and the backfill already claimed them, so
+/// replaying one names the local coder too.
+pub(super) fn tag_coder(conn: &Connection, tag: &TagRow) -> String {
+    if tag.coder_id.is_empty() {
+        local_coder(conn)
+    } else {
+        tag.coder_id.clone()
+    }
+}
+
 fn set_updated_at(conn: &Connection, code_id: &str, at: &str) -> Result<()> {
     conn.execute(
         "UPDATE codes SET updated_at = ?2 WHERE id = ?1",
@@ -1094,16 +1139,17 @@ impl ExcerptChange {
         }
         for t in &self.remove_tags {
             conn.execute(
-                "DELETE FROM excerpt_codes WHERE excerpt_id = ?1 AND code_id = ?2",
-                params![t.excerpt_id, t.code_id],
+                "DELETE FROM excerpt_codes
+                  WHERE excerpt_id = ?1 AND code_id = ?2 AND coder_id = ?3",
+                params![t.excerpt_id, t.code_id, tag_coder(conn, t)],
             )?;
         }
         for t in &self.add_tags {
             // A code deleted in the meantime simply keeps its tag off.
             conn.execute(
-                "INSERT OR IGNORE INTO excerpt_codes (excerpt_id, code_id, created_at)
-                 SELECT ?1, ?2, ?3 WHERE EXISTS (SELECT 1 FROM codes WHERE id = ?2)",
-                params![t.excerpt_id, t.code_id, t.created_at],
+                "INSERT OR IGNORE INTO excerpt_codes (excerpt_id, code_id, coder_id, created_at)
+                 SELECT ?1, ?2, ?3, ?4 WHERE EXISTS (SELECT 1 FROM codes WHERE id = ?2)",
+                params![t.excerpt_id, t.code_id, tag_coder(conn, t), t.created_at],
             )?;
         }
         for t in &self.touch {
@@ -1124,12 +1170,13 @@ impl MemoChange {
         for m in &self.restore {
             conn.execute(
                 "INSERT INTO memos (id, document_id, code_id, excerpt_id, title, body,
-                                    created_at, updated_at)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+                                    coder_id, created_at, updated_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
                  ON CONFLICT(id) DO UPDATE SET
                    document_id = excluded.document_id, code_id = excluded.code_id,
                    excerpt_id = excluded.excerpt_id, title = excluded.title,
-                   body = excluded.body, updated_at = excluded.updated_at",
+                   body = excluded.body, coder_id = excluded.coder_id,
+                   updated_at = excluded.updated_at",
                 params![
                     m.id,
                     m.document_id,
@@ -1137,6 +1184,11 @@ impl MemoChange {
                     m.excerpt_id,
                     m.title,
                     m.body,
+                    if m.coder_id.is_empty() {
+                        local_coder(conn)
+                    } else {
+                        m.coder_id.clone()
+                    },
                     m.created_at,
                     m.updated_at
                 ],
@@ -1410,11 +1462,11 @@ pub fn tree(conn: &Connection) -> Result<Vec<HistoryNodeSummary>> {
     let head = head(conn)?;
     let mut stmt = conn.prepare(
         "SELECT id, parent_id, at, actor, kind, summary, branch_name,
-                inverse_json IS NOT NULL, group_id, group_summary, preferred_child
+                inverse_json IS NOT NULL, group_id, group_summary, preferred_child, coder_id
          FROM history ORDER BY id",
     )?;
     /// id, parent, at, actor, kind, summary, branch name, undoable, group,
-    /// group summary, preferred child.
+    /// group summary, preferred child, coder.
     type TreeRow = (
         i64,
         Option<i64>,
@@ -1427,6 +1479,7 @@ pub fn tree(conn: &Connection) -> Result<Vec<HistoryNodeSummary>> {
         Option<i64>,
         Option<String>,
         Option<i64>,
+        String,
     );
     let rows: Vec<TreeRow> = stmt
         .query_map([], |r| {
@@ -1442,6 +1495,7 @@ pub fn tree(conn: &Connection) -> Result<Vec<HistoryNodeSummary>> {
                 r.get(8)?,
                 r.get(9)?,
                 r.get(10)?,
+                r.get(11)?,
             ))
         })?
         .collect::<rusqlite::Result<_>>()?;
@@ -1451,11 +1505,11 @@ pub fn tree(conn: &Connection) -> Result<Vec<HistoryNodeSummary>> {
     let rep = |group: Option<i64>, id: i64| group.unwrap_or(id);
     let leader_of: HashMap<i64, i64> = rows
         .iter()
-        .map(|(id, _, _, _, _, _, _, _, group, _, _)| (*id, rep(*group, *id)))
+        .map(|(id, _, _, _, _, _, _, _, group, _, _, _)| (*id, rep(*group, *id)))
         .collect();
 
     let mut children: HashMap<i64, Vec<i64>> = HashMap::new();
-    for (id, parent, .., group, _, _) in &rows {
+    for (id, parent, .., group, _, _, _) in &rows {
         let me = rep(*group, *id);
         let Some(parent) = parent else { continue };
         let parent = leader_of.get(parent).copied().unwrap_or(*parent);
@@ -1481,6 +1535,7 @@ pub fn tree(conn: &Connection) -> Result<Vec<HistoryNodeSummary>> {
         group,
         group_summary,
         preferred_child,
+        coder_id,
     ) in &rows
     {
         // Redo from a collapsed step continues from its last member, so the
@@ -1504,6 +1559,7 @@ pub fn tree(conn: &Connection) -> Result<Vec<HistoryNodeSummary>> {
             parent_id: parent_id.map(|p| leader_of.get(&p).copied().unwrap_or(p)),
             at: at.clone(),
             actor: actor.clone(),
+            coder_id: coder_id.clone(),
             kind: kind.clone(),
             summary: group_summary.clone().unwrap_or_else(|| summary.clone()),
             branch_name: branch_name.clone(),
@@ -1950,7 +2006,7 @@ mod tests {
             .unwrap();
         });
         assert_round_trip(c, "remove_code", |c| {
-            excerpts::remove_code(c, &e, &b).unwrap();
+            excerpts::remove_code(c, &e, &b, None).unwrap();
         });
         assert_round_trip(c, "add_codes", |c| {
             excerpts::add_codes(c, &e, std::slice::from_ref(&b)).unwrap();

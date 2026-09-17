@@ -19,7 +19,8 @@ pub const PALETTE: [&str; 12] = [
 
 const COLUMNS: &str = "c.id, c.parent_id, c.name, c.color, c.description,
      c.inclusion, c.exclusion, c.example_excerpt_id, c.shortcut, c.sort_order,
-     (SELECT count(*) FROM excerpt_codes ec WHERE ec.code_id = c.id) AS excerpt_count,
+     (SELECT count(DISTINCT ec.excerpt_id) FROM excerpt_codes ec
+        WHERE ec.code_id = c.id) AS excerpt_count,
      c.created_at, c.updated_at";
 
 fn from_row(r: &Row) -> rusqlite::Result<Code> {
@@ -593,22 +594,24 @@ pub fn snapshot_codes(conn: &Connection, ids: &[String]) -> Result<CodeTreeSnaps
     }
 
     let mut stmt = conn.prepare(&format!(
-        "SELECT excerpt_id, code_id, created_at FROM excerpt_codes
-          WHERE code_id IN ({list}) ORDER BY excerpt_id, code_id"
+        "SELECT excerpt_id, code_id, coder_id, created_at FROM excerpt_codes
+          WHERE code_id IN ({list}) ORDER BY excerpt_id, code_id, coder_id"
     ))?;
     snap.excerpt_codes = stmt
         .query_map(args(), |r| {
             Ok(TagRow {
                 excerpt_id: r.get(0)?,
                 code_id: r.get(1)?,
-                created_at: r.get(2)?,
+                coder_id: r.get(2)?,
+                created_at: r.get(3)?,
             })
         })?
         .collect::<rusqlite::Result<_>>()?;
     drop(stmt);
 
     let mut stmt = conn.prepare(&format!(
-        "SELECT id, document_id, code_id, excerpt_id, title, body, created_at, updated_at
+        "SELECT id, document_id, code_id, excerpt_id, title, body, coder_id,
+                created_at, updated_at
          FROM memos WHERE code_id IN ({list}) ORDER BY id"
     ))?;
     snap.memos = stmt
@@ -697,9 +700,14 @@ pub fn restore_subtree(conn: &Connection, snap: &CodeTreeSnapshot) -> Result<()>
     }
     for t in &snap.excerpt_codes {
         tx.execute(
-            "INSERT OR IGNORE INTO excerpt_codes (excerpt_id, code_id, created_at)
-             SELECT ?1, ?2, ?3 WHERE EXISTS (SELECT 1 FROM excerpts WHERE id = ?1)",
-            params![t.excerpt_id, t.code_id, t.created_at],
+            "INSERT OR IGNORE INTO excerpt_codes (excerpt_id, code_id, coder_id, created_at)
+             SELECT ?1, ?2, ?3, ?4 WHERE EXISTS (SELECT 1 FROM excerpts WHERE id = ?1)",
+            params![
+                t.excerpt_id,
+                t.code_id,
+                history::tag_coder(&tx, t),
+                t.created_at
+            ],
         )?;
     }
     for m in &snap.memos {
@@ -813,14 +821,18 @@ fn places_of(conn: &Connection, ids: &[String]) -> Result<Vec<Reparent>> {
 /// leaves alone the excerpts that already had the target.
 fn tags_gained(conn: &Connection, source_id: &str, target_id: &str) -> Result<Vec<TagRow>> {
     let mut stmt = conn.prepare(
-        "SELECT excerpt_id FROM excerpt_codes WHERE code_id = ?1
-           AND excerpt_id NOT IN (SELECT excerpt_id FROM excerpt_codes WHERE code_id = ?2)
-         ORDER BY excerpt_id",
+        "SELECT s.excerpt_id, s.coder_id FROM excerpt_codes s
+          WHERE s.code_id = ?1
+            AND NOT EXISTS (SELECT 1 FROM excerpt_codes t
+                             WHERE t.code_id = ?2 AND t.excerpt_id = s.excerpt_id
+                               AND t.coder_id = s.coder_id)
+          ORDER BY s.excerpt_id, s.coder_id",
     )?;
     let rows = stmt.query_map(params![source_id, target_id], |r| {
         Ok(TagRow {
             excerpt_id: r.get(0)?,
             code_id: target_id.to_string(),
+            coder_id: r.get(1)?,
             created_at: String::new(),
         })
     })?;
@@ -871,7 +883,7 @@ pub fn delete(conn: &Connection, id: &str, children: ChildrenStrategy) -> Result
         }
         ChildrenStrategy::Promote => {
             let affected: i64 = tx.query_row(
-                "SELECT count(*) FROM excerpt_codes WHERE code_id = ?1",
+                "SELECT count(DISTINCT excerpt_id) FROM excerpt_codes WHERE code_id = ?1",
                 [id],
                 |r| r.get(0),
             )?;
@@ -956,9 +968,11 @@ pub fn merge(conn: &Connection, source_id: &str, target_id: &str) -> Result<Code
     let snapshot = snapshot_codes(&tx, &[source_id.to_string()])?;
     let reparent = child_places(&tx, source_id)?;
     let gained = tags_gained(&tx, source_id, target_id)?;
+    // Each coding moves as its own coder's, so merging two codes never
+    // reassigns somebody else's work to whoever ran the merge.
     let moved_excerpts = tx.execute(
-        "INSERT OR IGNORE INTO excerpt_codes (excerpt_id, code_id, created_at)
-         SELECT excerpt_id, ?2, created_at FROM excerpt_codes WHERE code_id = ?1",
+        "INSERT OR IGNORE INTO excerpt_codes (excerpt_id, code_id, coder_id, created_at)
+         SELECT excerpt_id, ?2, coder_id, created_at FROM excerpt_codes WHERE code_id = ?1",
         params![source_id, target_id],
     )? as i64;
     let base = next_sort_order(&tx, Some(target_id))?;

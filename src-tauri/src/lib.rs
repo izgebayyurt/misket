@@ -120,6 +120,8 @@ pub fn run() {
             commands::transcripts::list_project_speakers,
             commands::documents::delete_document,
             commands::documents::list_importable_files,
+            commands::coders::list_coders,
+            commands::coders::local_coder_id,
             commands::codes::list_codes,
             commands::codes::create_code,
             commands::codes::update_code,

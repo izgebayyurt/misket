@@ -13,12 +13,14 @@ pub fn code_frequencies(
     state: State<'_, AppState>,
     document_ids: Option<Vec<String>>,
     document_set_ids: Option<Vec<String>>,
+    coder_ids: Option<Vec<String>>,
 ) -> Result<Vec<CodeFrequency>> {
     state.with_project(|p| {
         analysis::code_frequencies(
             &p.conn,
             document_ids.as_deref(),
             document_set_ids.as_deref(),
+            coder_ids.as_deref(),
         )
     })
 }
@@ -28,19 +30,24 @@ pub fn co_occurrence(
     state: State<'_, AppState>,
     document_ids: Option<Vec<String>>,
     document_set_ids: Option<Vec<String>>,
+    coder_ids: Option<Vec<String>>,
 ) -> Result<CoOccurrence> {
     state.with_project(|p| {
         analysis::co_occurrence(
             &p.conn,
             document_ids.as_deref(),
             document_set_ids.as_deref(),
+            coder_ids.as_deref(),
         )
     })
 }
 
 #[tauri::command]
-pub fn code_by_document(state: State<'_, AppState>) -> Result<CodeByDocument> {
-    state.with_project(|p| analysis::code_by_document(&p.conn))
+pub fn code_by_document(
+    state: State<'_, AppState>,
+    coder_ids: Option<Vec<String>>,
+) -> Result<CodeByDocument> {
+    state.with_project(|p| analysis::code_by_document(&p.conn, coder_ids.as_deref()))
 }
 
 #[tauri::command]

@@ -11,9 +11,9 @@ use super::{
 };
 use crate::error::{AppError, Result};
 use crate::models::{
-    ApplyCodesInput, ApplyResult, DescriptorFilter, ExcerptDetail, ExcerptFilter, ExcerptPage,
-    ExcerptRow, ExcerptSnapshot, ExcerptWithCodes, InVivoResult, MergeResult, NewCode, Rect,
-    TagRow,
+    ApplyCodesInput, ApplyResult, Coding, DescriptorFilter, ExcerptDetail, ExcerptFilter,
+    ExcerptPage, ExcerptRow, ExcerptSnapshot, ExcerptWithCodes, InVivoResult, MergeResult, NewCode,
+    Rect, TagRow,
 };
 
 const CONTEXT_CHARS: i64 = 120;
@@ -62,42 +62,70 @@ fn from_row(r: &Row) -> rusqlite::Result<ExcerptWithCodes> {
         geometry: r.get(5)?,
         snapshot: r.get(6)?,
         code_ids: vec![],
+        codings: vec![],
         memo_count: r.get(7)?,
         created_at: r.get(8)?,
         updated_at: r.get(9)?,
     })
 }
 
-fn code_ids_for(conn: &Connection, excerpt_id: &str) -> Result<Vec<String>> {
+/// `(code_ids, codings)` for one excerpt: the codes once each, whoever
+/// applied them, and every `excerpt_codes` row behind them.
+fn codings_for(conn: &Connection, excerpt_id: &str) -> Result<(Vec<String>, Vec<Coding>)> {
     let mut stmt = conn.prepare(
-        "SELECT ec.code_id FROM excerpt_codes ec JOIN codes c ON c.id = ec.code_id
-         WHERE ec.excerpt_id = ?1 ORDER BY c.sort_order, c.name",
+        "SELECT ec.code_id, ec.coder_id FROM excerpt_codes ec JOIN codes c ON c.id = ec.code_id
+         WHERE ec.excerpt_id = ?1 ORDER BY c.sort_order, c.name, ec.coder_id",
     )?;
-    let ids = stmt
-        .query_map([excerpt_id], |r| r.get(0))?
+    let codings: Vec<Coding> = stmt
+        .query_map([excerpt_id], |r| {
+            Ok(Coding {
+                code_id: r.get(0)?,
+                coder_id: r.get(1)?,
+            })
+        })?
         .collect::<rusqlite::Result<_>>()?;
-    Ok(ids)
+    Ok((unique_code_ids(&codings), codings))
 }
 
-/// Fill `code_ids` for a batch of excerpts with one query.
+/// The codes in `codings`, once each, in the order they first appear.
+fn unique_code_ids(codings: &[Coding]) -> Vec<String> {
+    let mut seen = std::collections::HashSet::new();
+    codings
+        .iter()
+        .filter(|c| seen.insert(c.code_id.as_str()))
+        .map(|c| c.code_id.clone())
+        .collect()
+}
+
+/// Fill `code_ids` and `codings` for a batch of excerpts with one query.
 fn attach_codes(conn: &Connection, excerpts: &mut [ExcerptWithCodes]) -> Result<()> {
     if excerpts.is_empty() {
         return Ok(());
     }
     let mut stmt = conn.prepare(
-        "SELECT ec.excerpt_id, ec.code_id FROM excerpt_codes ec JOIN codes c ON c.id = ec.code_id
-         ORDER BY c.sort_order, c.name",
+        "SELECT ec.excerpt_id, ec.code_id, ec.coder_id
+         FROM excerpt_codes ec JOIN codes c ON c.id = ec.code_id
+         ORDER BY c.sort_order, c.name, ec.coder_id",
     )?;
-    let pairs: Vec<(String, String)> = stmt
-        .query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?
+    let rows: Vec<(String, Coding)> = stmt
+        .query_map([], |r| {
+            Ok((
+                r.get(0)?,
+                Coding {
+                    code_id: r.get(1)?,
+                    coder_id: r.get(2)?,
+                },
+            ))
+        })?
         .collect::<rusqlite::Result<_>>()?;
-    let mut by_excerpt: std::collections::HashMap<String, Vec<String>> = Default::default();
-    for (eid, cid) in pairs {
-        by_excerpt.entry(eid).or_default().push(cid);
+    let mut by_excerpt: std::collections::HashMap<String, Vec<Coding>> = Default::default();
+    for (eid, coding) in rows {
+        by_excerpt.entry(eid).or_default().push(coding);
     }
     for e in excerpts.iter_mut() {
-        if let Some(ids) = by_excerpt.remove(&e.id) {
-            e.code_ids = ids;
+        if let Some(codings) = by_excerpt.remove(&e.id) {
+            e.code_ids = unique_code_ids(&codings);
+            e.codings = codings;
         }
     }
     Ok(())
@@ -112,7 +140,7 @@ pub fn get(conn: &Connection, id: &str) -> Result<ExcerptWithCodes> {
         )
         .optional()?
         .ok_or_else(|| AppError::NotFound(format!("excerpt {id} not found")))?;
-    e.code_ids = code_ids_for(conn, id)?;
+    (e.code_ids, e.codings) = codings_for(conn, id)?;
     Ok(e)
 }
 
@@ -314,11 +342,16 @@ pub fn apply_codes(conn: &Connection, input: ApplyCodesInput) -> Result<ApplyRes
             |r| r.get(0),
         )?)
     };
+    // Everything this call writes is the local coder's. Somebody else's
+    // coding of the same passage with the same code is a different row, so
+    // agreeing with a colleague adds a coding rather than doing nothing.
+    let coder = history::local_coder(&tx);
     let mut added = vec![];
     for code_id in &input.code_ids {
         let n = tx.execute(
-            "INSERT OR IGNORE INTO excerpt_codes (excerpt_id, code_id, created_at) VALUES (?1, ?2, ?3)",
-            params![id, code_id, now],
+            "INSERT OR IGNORE INTO excerpt_codes (excerpt_id, code_id, coder_id, created_at)
+             VALUES (?1, ?2, ?3, ?4)",
+            params![id, code_id, coder, now],
         )?;
         if n > 0 {
             added.push(code_id.clone());
@@ -336,6 +369,7 @@ pub fn apply_codes(conn: &Connection, input: ApplyCodesInput) -> Result<ApplyRes
             .map(|code_id| TagRow {
                 excerpt_id: id.clone(),
                 code_id: code_id.clone(),
+                coder_id: coder.clone(),
                 created_at: now.clone(),
             })
             .collect();
@@ -419,16 +453,19 @@ pub fn add_codes(conn: &Connection, id: &str, code_ids: &[String]) -> Result<Exc
     let tx = util::tx(conn)?;
     // Only the tags that were really missing: undo must not strip a code the
     // excerpt already carried.
+    let coder = history::local_coder(&tx);
     let mut tags = vec![];
     for code_id in code_ids {
         let inserted = tx.execute(
-            "INSERT OR IGNORE INTO excerpt_codes (excerpt_id, code_id, created_at) VALUES (?1, ?2, ?3)",
-            params![id, code_id, now],
+            "INSERT OR IGNORE INTO excerpt_codes (excerpt_id, code_id, coder_id, created_at)
+             VALUES (?1, ?2, ?3, ?4)",
+            params![id, code_id, coder, now],
         )?;
         if inserted > 0 {
             tags.push(TagRow {
                 excerpt_id: id.to_string(),
                 code_id: code_id.clone(),
+                coder_id: coder.clone(),
                 created_at: now.clone(),
             });
         }
@@ -471,30 +508,48 @@ pub fn add_codes(conn: &Connection, id: &str, code_ids: &[String]) -> Result<Exc
     get(conn, id)
 }
 
-pub fn remove_code(conn: &Connection, id: &str, code_id: &str) -> Result<ExcerptWithCodes> {
+/// Take one coding off an excerpt.
+///
+/// `coder_id` says whose coding: `None` means the local coder, which is what
+/// the inspector's "remove this code" does — you take back your own work, and
+/// a colleague's coding of the same passage stays. Pass `Some(id)` to remove
+/// somebody else's on purpose ("Remove Bob's coding"). Deleting the whole
+/// excerpt still takes every coder's rows with it.
+pub fn remove_code(
+    conn: &Connection,
+    id: &str,
+    code_id: &str,
+    coder_id: Option<&str>,
+) -> Result<ExcerptWithCodes> {
     let before = get(conn, id)?;
     let name = activity::code_name(conn, code_id);
     let now = util::now();
     let tx = util::tx(conn)?;
+    let coder = match coder_id {
+        Some(c) => c.to_string(),
+        None => history::local_coder(&tx),
+    };
     // The tag's own `created_at`, so putting it back restores the row as it
     // was rather than one that claims to have been made today.
     let tags: Vec<TagRow> = tx
         .query_row(
-            "SELECT created_at FROM excerpt_codes WHERE excerpt_id = ?1 AND code_id = ?2",
-            params![id, code_id],
+            "SELECT created_at FROM excerpt_codes
+              WHERE excerpt_id = ?1 AND code_id = ?2 AND coder_id = ?3",
+            params![id, code_id, coder],
             |r| r.get::<_, String>(0),
         )
         .optional()?
         .map(|created_at| TagRow {
             excerpt_id: id.to_string(),
             code_id: code_id.to_string(),
+            coder_id: coder.clone(),
             created_at,
         })
         .into_iter()
         .collect();
     tx.execute(
-        "DELETE FROM excerpt_codes WHERE excerpt_id = ?1 AND code_id = ?2",
-        params![id, code_id],
+        "DELETE FROM excerpt_codes WHERE excerpt_id = ?1 AND code_id = ?2 AND coder_id = ?3",
+        params![id, code_id, coder],
     )?;
     tx.execute(
         "UPDATE excerpts SET updated_at = ?2 WHERE id = ?1",
@@ -510,6 +565,7 @@ pub fn remove_code(conn: &Connection, id: &str, code_id: &str) -> Result<Excerpt
             let mut d = where_json(&tx, &before);
             d["codeIds"] = json!([code_id]);
             d["codeNames"] = json!([name]);
+            d["coderId"] = json!(coder);
             d
         },
         Some(history::payload(&ExcerptChange {
@@ -582,15 +638,16 @@ pub fn in_vivo_code(
 pub fn snapshot(conn: &Connection, id: &str) -> Result<ExcerptSnapshot> {
     let excerpt = get(conn, id)?;
     let mut stmt = conn.prepare(
-        "SELECT excerpt_id, code_id, created_at FROM excerpt_codes
-          WHERE excerpt_id = ?1 ORDER BY code_id",
+        "SELECT excerpt_id, code_id, coder_id, created_at FROM excerpt_codes
+          WHERE excerpt_id = ?1 ORDER BY code_id, coder_id",
     )?;
     let tags: Vec<TagRow> = stmt
         .query_map([id], |r| {
             Ok(TagRow {
                 excerpt_id: r.get(0)?,
                 code_id: r.get(1)?,
-                created_at: r.get(2)?,
+                coder_id: r.get(2)?,
+                created_at: r.get(3)?,
             })
         })?
         .collect::<rusqlite::Result<_>>()?;
@@ -671,33 +728,52 @@ pub fn restore(conn: &Connection, snapshot: &ExcerptSnapshot) -> Result<ExcerptW
     })?;
     // A snapshot taken since schema 8 carries each tag's own timestamp;
     // an older one only has the code ids, so they all get the excerpt's.
-    let tags: Vec<(&String, &String)> = if snapshot.tags.is_empty() {
-        e.code_ids.iter().map(|c| (c, &e.updated_at)).collect()
-    } else {
-        snapshot
-            .tags
+    let local = history::local_coder(&tx);
+    let tags: Vec<TagRow> = if snapshot.tags.is_empty() {
+        e.codings
             .iter()
-            .map(|t| (&t.code_id, &t.created_at))
+            .map(|c| TagRow {
+                excerpt_id: e.id.clone(),
+                code_id: c.code_id.clone(),
+                coder_id: c.coder_id.clone(),
+                created_at: e.updated_at.clone(),
+            })
             .collect()
+    } else {
+        snapshot.tags.clone()
     };
-    for (code_id, created_at) in tags {
+    for t in &tags {
         // Codes deleted in the meantime are silently dropped.
+        let coder = if t.coder_id.is_empty() {
+            local.clone()
+        } else {
+            t.coder_id.clone()
+        };
         tx.execute(
-            "INSERT OR IGNORE INTO excerpt_codes (excerpt_id, code_id, created_at)
-             SELECT ?1, id, ?3 FROM codes WHERE id = ?2",
-            params![e.id, code_id, created_at],
+            "INSERT OR IGNORE INTO excerpt_codes (excerpt_id, code_id, coder_id, created_at)
+             SELECT ?1, id, ?3, ?4 FROM codes WHERE id = ?2",
+            params![e.id, t.code_id, coder, t.created_at],
         )?;
     }
     for m in &snapshot.memos {
         // `ON CONFLICT` covers undoing a merge: the memos were re-pointed to
         // the survivor rather than deleted, so they are moved back here.
         tx.execute(
-            "INSERT INTO memos (id, excerpt_id, title, body, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+            "INSERT INTO memos (id, excerpt_id, title, body, coder_id, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
              ON CONFLICT(id) DO UPDATE SET
                excerpt_id = excluded.excerpt_id, title = excluded.title,
-               body = excluded.body, updated_at = excluded.updated_at",
-            params![m.id, e.id, m.title, m.body, m.created_at, m.updated_at],
+               body = excluded.body, coder_id = excluded.coder_id,
+               updated_at = excluded.updated_at",
+            params![
+                m.id,
+                e.id,
+                m.title,
+                m.body,
+                memos::memo_coder(&tx, m),
+                m.created_at,
+                m.updated_at
+            ],
         )?;
     }
     activity::record(
@@ -883,10 +959,13 @@ pub fn split(conn: &Connection, id: &str, at: i64) -> Result<(ExcerptWithCodes, 
             now
         ],
     )?;
-    for code_id in &excerpt.code_ids {
+    // Both halves keep the whole coding, coder by coder: splitting a passage
+    // does not make somebody else's code yours.
+    for coding in &excerpt.codings {
         tx.execute(
-            "INSERT OR IGNORE INTO excerpt_codes (excerpt_id, code_id, created_at) VALUES (?1, ?2, ?3)",
-            params![right_id, code_id, now],
+            "INSERT OR IGNORE INTO excerpt_codes (excerpt_id, code_id, coder_id, created_at)
+             VALUES (?1, ?2, ?3, ?4)",
+            params![right_id, coding.code_id, coding.coder_id, now],
         )?;
     }
     // One entry per half: the right half is a new excerpt whose history would
@@ -976,11 +1055,17 @@ pub fn merge_adjacent(conn: &Connection, left_id: &str, right_id: &str) -> Resul
     }
     let removed = snapshot(conn, right_id)?;
     let moved_memo_ids: Vec<String> = removed.memos.iter().map(|m| m.id.clone()).collect();
-    let added: Vec<String> = right
-        .code_ids
+    // Codings, not codes: the survivor gains the ones it does not already
+    // have from that coder, and each keeps whoever made it.
+    let added_codings: Vec<Coding> = right
+        .codings
         .iter()
-        .filter(|c| !left.code_ids.contains(c))
+        .filter(|c| !left.codings.contains(c))
         .cloned()
+        .collect();
+    let added: Vec<String> = unique_code_ids(&added_codings)
+        .into_iter()
+        .filter(|c| !left.code_ids.contains(c))
         .collect();
     let now = util::now();
     let tx = util::tx(conn)?;
@@ -990,10 +1075,11 @@ pub fn merge_adjacent(conn: &Connection, left_id: &str, right_id: &str) -> Resul
         params![left_id, right_id, now],
     )?;
     tx.execute("DELETE FROM excerpts WHERE id = ?1", [right_id])?;
-    for code_id in &added {
+    for coding in &added_codings {
         tx.execute(
-            "INSERT OR IGNORE INTO excerpt_codes (excerpt_id, code_id, created_at) VALUES (?1, ?2, ?3)",
-            params![left_id, code_id, now],
+            "INSERT OR IGNORE INTO excerpt_codes (excerpt_id, code_id, coder_id, created_at)
+             VALUES (?1, ?2, ?3, ?4)",
+            params![left_id, coding.code_id, coding.coder_id, now],
         )?;
     }
     tx.execute(
@@ -1024,11 +1110,12 @@ pub fn merge_adjacent(conn: &Connection, left_id: &str, right_id: &str) -> Resul
         quoted(&right),
         quoted(&survivor)
     );
-    let added_tags: Vec<TagRow> = added
+    let added_tags: Vec<TagRow> = added_codings
         .iter()
-        .map(|code_id| TagRow {
+        .map(|coding| TagRow {
             excerpt_id: left_id.to_string(),
-            code_id: code_id.clone(),
+            code_id: coding.code_id.clone(),
+            coder_id: coding.coder_id.clone(),
             created_at: now.clone(),
         })
         .collect();
@@ -1269,6 +1356,17 @@ pub fn query(conn: &Connection, filter: &ExcerptFilter) -> Result<ExcerptPage> {
     if filter.uncoded_only {
         where_clauses
             .push("NOT EXISTS (SELECT 1 FROM excerpt_codes ec WHERE ec.excerpt_id = e.id)".into());
+    }
+    // "Whose coding to look at": an excerpt is in when one of these coders
+    // has coded it. It narrows the excerpts, not the codes shown on them —
+    // the inspector still says who applied what.
+    if let Some(coder_ids) = filter.coder_ids.as_deref().filter(|ids| !ids.is_empty()) {
+        let ph = coder_ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+        where_clauses.push(format!(
+            "EXISTS (SELECT 1 FROM excerpt_codes ec
+                      WHERE ec.excerpt_id = e.id AND ec.coder_id IN ({ph}))"
+        ));
+        args.extend(coder_ids.iter().cloned().map(rusqlite::types::Value::from));
     }
     if let Some(other_code) = &filter.overlaps_code_id {
         // Only text excerpts overlap in this sense (`co_occurrence` never
@@ -1519,7 +1617,7 @@ mod tests {
         let id = r.excerpt.id.clone();
         let e = add_codes(&p.conn, &id, std::slice::from_ref(&b)).unwrap();
         assert_eq!(e.code_ids.len(), 2);
-        let e = remove_code(&p.conn, &id, &a).unwrap();
+        let e = remove_code(&p.conn, &id, &a, None).unwrap();
         assert_eq!(e.code_ids, vec![b.clone()]);
         memos::create(
             &p.conn,
@@ -1693,7 +1791,7 @@ mod tests {
 
         // Undo, exactly as the frontend does it.
         for c in &r.added_code_ids {
-            remove_code(&p.conn, &left, c).unwrap();
+            remove_code(&p.conn, &left, c, None).unwrap();
         }
         update_range(&p.conn, &left, r.previous_start_pos, r.previous_end_pos).unwrap();
         let back = restore(&p.conn, &r.removed).unwrap();
@@ -2471,7 +2569,10 @@ mod tests {
         let b = mk_code(&p.conn, "B", None).id;
         let with_b = add_codes(&p.conn, &e.id, std::slice::from_ref(&b)).unwrap();
         assert_eq!(with_b.code_ids.len(), 2);
-        assert_eq!(remove_code(&p.conn, &e.id, &a).unwrap().code_ids, vec![b]);
+        assert_eq!(
+            remove_code(&p.conn, &e.id, &a, None).unwrap().code_ids,
+            vec![b]
+        );
 
         // Deleting the image takes its excerpt (and blob) with it.
         documents::delete(&p.conn, &doc).unwrap();

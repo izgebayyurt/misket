@@ -311,6 +311,16 @@ pub struct ApplyCodesInput {
     pub code_ids: Vec<String>,
 }
 
+/// One `excerpt_codes` row as the frontend reads it: a code applied to this
+/// excerpt by one coder. Two coders who applied the same code are two
+/// codings and one entry in `code_ids`.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[serde(rename_all = "camelCase")]
+pub struct Coding {
+    pub code_id: String,
+    pub coder_id: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct ExcerptWithCodes {
@@ -321,7 +331,14 @@ pub struct ExcerptWithCodes {
     pub end_pos: Option<i64>,
     pub geometry: Option<String>,
     pub snapshot: Option<String>,
+    /// Every code on this excerpt, once, whoever applied it. Rendering and
+    /// the document view's lanes read this, so they do not change when a
+    /// second coder agrees.
     pub code_ids: Vec<String>,
+    /// The same codings with their coders, one entry per `excerpt_codes` row.
+    /// Absent in a payload written before schema 11.
+    #[serde(default)]
+    pub codings: Vec<Coding>,
     pub memo_count: i64,
     pub created_at: String,
     pub updated_at: String,
@@ -520,6 +537,12 @@ pub struct ExcerptFilter {
     /// list is no filter at all.
     #[serde(default)]
     pub speakers: Option<Vec<String>>,
+    /// Only excerpts that carry a coding by one of these coders
+    /// (`db::coders`). `None` or empty means everyone, which is the default:
+    /// the browser shows the whole project's coding unless asked otherwise.
+    /// It narrows which excerpts come back, not which codes they show.
+    #[serde(default)]
+    pub coder_ids: Option<Vec<String>>,
     #[serde(default = "default_limit")]
     pub limit: i64,
     #[serde(default)]
@@ -547,6 +570,7 @@ impl Default for ExcerptFilter {
             descriptors: None,
             query: None,
             speakers: None,
+            coder_ids: None,
             limit: default_limit(),
             offset: 0,
         }
@@ -732,6 +756,9 @@ pub struct CrosstabRequest {
     /// Document sets; unioned into `document_ids`, as everywhere else.
     #[serde(default)]
     pub document_set_ids: Option<Vec<String>>,
+    /// Whose coding to count (`db::coders`); everyone when absent or empty.
+    #[serde(default)]
+    pub coder_ids: Option<Vec<String>>,
     /// Number fields only: how many equal-width bins to cut the range into
     /// (default [`crate::db::analysis::DEFAULT_NUMBER_BINS`]).
     #[serde(default)]
@@ -749,6 +776,7 @@ impl Default for CrosstabRequest {
             include_descendants: true,
             document_ids: None,
             document_set_ids: None,
+            coder_ids: None,
             bins: None,
             mode: None,
         }
@@ -911,6 +939,34 @@ pub struct SavedFilter {
     pub updated_at: String,
 }
 
+// ------------------------------------------------------------------- coders
+
+/// One coder: an install of Misket, identified by a UUID generated once and
+/// kept in the app's settings. See `db::coders`.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct Coder {
+    pub id: String,
+    pub name: String,
+    /// A hex colour, so codings can be told apart at a glance.
+    pub color: String,
+    pub created_at: String,
+}
+
+/// A coder with how much of the project is theirs.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct CoderSummary {
+    pub id: String,
+    pub name: String,
+    pub color: String,
+    /// `excerpt_codes` rows, not distinct excerpts.
+    pub coding_count: i64,
+    pub memo_count: i64,
+    /// Whether this is the coder this connection writes as.
+    pub is_local: bool,
+}
+
 // -------------------------------------------------------------------- memos
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
@@ -933,6 +989,10 @@ pub struct Memo {
     pub excerpt_id: Option<String>,
     pub title: String,
     pub body: String,
+    /// Who wrote it (`db::coders`). Empty in a payload written before
+    /// schema 11.
+    #[serde(default)]
+    pub coder_id: String,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -1045,6 +1105,9 @@ pub struct HistoryNode {
     pub parent_id: Option<i64>,
     pub at: String,
     pub actor: String,
+    /// Which coder made this edit (`db::coders`); empty before schema 11.
+    #[serde(default)]
+    pub coder_id: String,
     pub kind: String,
     pub target_kind: String,
     pub target_id: Option<String>,
@@ -1071,6 +1134,10 @@ pub struct HistoryNodeSummary {
     pub parent_id: Option<i64>,
     pub at: String,
     pub actor: String,
+    /// Which coder made this edit (`db::coders`); empty for a node recorded
+    /// before schema 11.
+    #[serde(default)]
+    pub coder_id: String,
     pub kind: String,
     pub summary: String,
     pub branch_name: Option<String>,
@@ -1126,12 +1193,17 @@ pub struct SiblingGroup {
     pub ids: Vec<String>,
 }
 
-/// One `excerpt_codes` row.
+/// One `excerpt_codes` row, with the coder it belongs to, so undo and redo
+/// put a coding back under the name that made it. `coder_id` is empty in a
+/// payload written before schema 11; replaying one of those stamps the local
+/// coder, which is who wrote it.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct TagRow {
     pub excerpt_id: String,
     pub code_id: String,
+    #[serde(default)]
+    pub coder_id: String,
     pub created_at: String,
 }
 

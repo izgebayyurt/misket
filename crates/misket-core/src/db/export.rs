@@ -6,10 +6,10 @@ use std::io::Write;
 use rusqlite::Connection;
 use serde::Serialize;
 
-use super::{activity, codes, descriptors, documents, excerpts, memos, sets};
+use super::{activity, coders, codes, descriptors, documents, excerpts, memos, sets};
 use crate::error::Result;
 use crate::models::{
-    ActivityEntry, Code, CodebookJsonCode, DescriptorField, DescriptorValue, ExcerptFilter,
+    ActivityEntry, Code, CodebookJsonCode, Coder, DescriptorField, DescriptorValue, ExcerptFilter,
     ExcerptWithCodes, Memo, SavedFilter, SetWithMembers,
 };
 
@@ -169,6 +169,14 @@ pub fn excerpts_csv<W: Write>(conn: &Connection, filter: &ExcerptFilter, w: W) -
     }
     drop(stmt);
 
+    // Coder names for the `coders` column, by id; an id with no row of its
+    // own (work pulled from a copy) shows as the id, which is at least
+    // something to match on.
+    let coder_names: HashMap<String, String> = coders::list(conn)?
+        .into_iter()
+        .map(|c| (c.id, c.name))
+        .collect();
+
     let mut wtr = csv::Writer::from_writer(w);
     let mut header = vec![
         "excerpt_id".to_string(),
@@ -178,6 +186,7 @@ pub fn excerpts_csv<W: Write>(conn: &Connection, filter: &ExcerptFilter, w: W) -
         "geometry".into(),
         "text".into(),
         "codes".into(),
+        "coders".into(),
         "memo_count".into(),
         "created_at".into(),
     ];
@@ -191,6 +200,19 @@ pub fn excerpts_csv<W: Write>(conn: &Connection, filter: &ExcerptFilter, w: W) -
             .map(|id| paths.get(id).cloned().unwrap_or_else(|| id.clone()))
             .collect::<Vec<_>>()
             .join("; ");
+        // One row per excerpt, as before: `codes` lists every code on it once
+        // and `coders` lists everyone who coded it, both "; "-separated. Who
+        // applied which code is in the project JSON export, not here.
+        let mut coder_list: Vec<&str> = vec![];
+        for coding in &e.codings {
+            let name = coder_names
+                .get(&coding.coder_id)
+                .map(String::as_str)
+                .unwrap_or(coding.coder_id.as_str());
+            if !name.is_empty() && !coder_list.contains(&name) {
+                coder_list.push(name);
+            }
+        }
         let mut record = vec![
             e.id.clone(),
             row.document_name.clone(),
@@ -199,6 +221,7 @@ pub fn excerpts_csv<W: Write>(conn: &Connection, filter: &ExcerptFilter, w: W) -
             e.geometry.clone().unwrap_or_default(),
             e.snapshot.clone().unwrap_or_default(),
             code_list,
+            coder_list.join("; "),
             e.memo_count.to_string(),
             e.created_at.clone(),
         ];
@@ -222,6 +245,9 @@ struct ProjectJson {
     meta: HashMap<String, String>,
     documents: Vec<crate::models::Document>,
     codes: Vec<Code>,
+    /// Everyone whose work is in the file. Codings carry `coderId` inside
+    /// each excerpt's `codings`, and memos carry theirs directly.
+    coders: Vec<Coder>,
     excerpts: Vec<ExcerptWithCodes>,
     memos: Vec<Memo>,
     descriptor_fields: Vec<DescriptorField>,
@@ -265,12 +291,22 @@ pub fn project_json<W: Write>(conn: &Connection, w: W) -> Result<()> {
             all_sets.push(SetWithMembers { set, member_ids });
         }
     }
+    let all_coders: Vec<Coder> = coders::list(conn)?
+        .into_iter()
+        .map(|c| Coder {
+            id: c.id,
+            name: c.name,
+            color: c.color,
+            created_at: String::new(),
+        })
+        .collect();
     let out = ProjectJson {
         format: "misket-project",
         format_version: 1,
         meta,
         documents: docs,
         codes: codes::list(conn)?,
+        coders: all_coders,
         excerpts: all_excerpts,
         memos: all_memos,
         descriptor_fields: descriptors::list_fields(conn)?,
@@ -294,6 +330,7 @@ mod tests {
 
     fn populated() -> OpenProject {
         let p = OpenProject::in_memory("Export me").unwrap();
+        coders::ensure_local(&p.conn, "ada", "Ada", "#D9534F").unwrap();
         let doc = documents::create(&p.conn, new_doc("He said \"hi\",\nthen left.")).unwrap();
         let a = mk_code(&p.conn, "Greeting", None);
         let b = mk_code(&p.conn, "Formal, sort of", Some(&a.id));
@@ -411,7 +448,8 @@ mod tests {
         // One column per descriptor field, after the fixed columns.
         assert!(
             s.starts_with(
-                "excerpt_id,document,start,end,geometry,text,codes,memo_count,created_at,Site,Age\n"
+                "excerpt_id,document,start,end,geometry,text,codes,coders,memo_count,created_at,\
+                 Site,Age\n"
             ),
             "{s}"
         );
@@ -422,7 +460,8 @@ mod tests {
         // Both code paths, semicolon-separated, then the memo count.
         assert!(s.contains("Greeting / Formal, sort of"), "{s}");
         assert!(s.contains("; Greeting"), "{s}");
-        assert!(s.contains("\",1,"), "{s}");
+        // Then who coded it, then the memo count.
+        assert!(s.contains("\",Ada,1,"), "{s}");
     }
 
     #[test]

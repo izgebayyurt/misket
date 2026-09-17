@@ -43,6 +43,27 @@ fn document_clause(
     ))
 }
 
+/// ` AND ec.coder_id IN (…)` with its arguments, for "whose coding to
+/// count". An absent or empty list is no filter at all: analysis speaks for
+/// the whole project unless it is asked about particular people.
+///
+/// Every count in this module is over distinct `(excerpt, code)` pairs, not
+/// over `excerpt_codes` rows, so a passage two people coded the same way
+/// counts once. Narrowing to one coder is therefore the only way to ask "how
+/// much did *they* code".
+fn coder_clause(coder_ids: Option<&[String]>) -> (String, Vec<Value>) {
+    match coder_ids.filter(|ids| !ids.is_empty()) {
+        None => (String::new(), vec![]),
+        Some(ids) => {
+            let ph = ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+            (
+                format!(" AND ec.coder_id IN ({ph})"),
+                ids.iter().cloned().map(Value::from).collect(),
+            )
+        }
+    }
+}
+
 /// Position of every document in project order, for stable output.
 fn document_order(conn: &Connection) -> Result<(Vec<String>, HashMap<String, usize>)> {
     let ids: Vec<String> = documents::list(conn)?.into_iter().map(|d| d.id).collect();
@@ -64,14 +85,19 @@ pub fn code_frequencies(
     conn: &Connection,
     document_ids: Option<&[String]>,
     document_set_ids: Option<&[String]>,
+    coder_ids: Option<&[String]>,
 ) -> Result<Vec<CodeFrequency>> {
     let all = codes::list(conn)?;
     let (_, doc_index) = document_order(conn)?;
-    let (doc_sql, args) = document_clause(conn, document_ids, document_set_ids)?;
+    let (doc_sql, mut args) = document_clause(conn, document_ids, document_set_ids)?;
+    let (coder_sql, coder_args) = coder_clause(coder_ids);
+    args.extend(coder_args);
+    // DISTINCT, so a passage two coders tagged with the same code is one
+    // excerpt under that code rather than two.
     let mut stmt = conn.prepare(&format!(
-        "SELECT ec.code_id, ec.excerpt_id, e.document_id
+        "SELECT DISTINCT ec.code_id, ec.excerpt_id, e.document_id
          FROM excerpt_codes ec JOIN excerpts e ON e.id = ec.excerpt_id
-         WHERE 1 = 1{doc_sql}"
+         WHERE 1 = 1{doc_sql}{coder_sql}"
     ))?;
     let tags: Vec<(String, String, String)> = stmt
         .query_map(rusqlite::params_from_iter(args.iter()), |r| {
@@ -140,6 +166,7 @@ pub fn co_occurrence(
     conn: &Connection,
     document_ids: Option<&[String]>,
     document_set_ids: Option<&[String]>,
+    coder_ids: Option<&[String]>,
 ) -> Result<CoOccurrence> {
     let code_ids: Vec<String> = codes::list(conn)?.into_iter().map(|c| c.id).collect();
     let index: HashMap<&str, usize> = code_ids
@@ -165,9 +192,14 @@ pub fn co_occurrence(
         })?
         .collect::<rusqlite::Result<_>>()?;
 
-    let mut stmt = conn.prepare("SELECT excerpt_id, code_id FROM excerpt_codes")?;
+    let (coder_sql, coder_args) = coder_clause(coder_ids);
+    let mut stmt = conn.prepare(&format!(
+        "SELECT DISTINCT ec.excerpt_id, ec.code_id FROM excerpt_codes ec WHERE 1 = 1{coder_sql}"
+    ))?;
     let mut codes_of: HashMap<String, Vec<usize>> = HashMap::new();
-    for row in stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))? {
+    for row in stmt.query_map(rusqlite::params_from_iter(coder_args.iter()), |r| {
+        Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
+    })? {
         let (excerpt_id, code_id) = row?;
         if let Some(i) = index.get(code_id.as_str()) {
             codes_of.entry(excerpt_id).or_default().push(*i);
@@ -228,7 +260,7 @@ pub fn co_occurrence(
 
 /// Excerpts per (document, code), counting direct tags only. Aggregating
 /// sub-codes is left to the caller, which already has the code tree.
-pub fn code_by_document(conn: &Connection) -> Result<CodeByDocument> {
+pub fn code_by_document(conn: &Connection, coder_ids: Option<&[String]>) -> Result<CodeByDocument> {
     let (document_ids, doc_index) = document_order(conn)?;
     let code_ids: Vec<String> = codes::list(conn)?.into_iter().map(|c| c.id).collect();
     let code_index: HashMap<&str, usize> = code_ids
@@ -237,13 +269,17 @@ pub fn code_by_document(conn: &Connection) -> Result<CodeByDocument> {
         .map(|(i, c)| (c.as_str(), i))
         .collect();
 
-    let mut stmt = conn.prepare(
-        "SELECT e.document_id, ec.code_id, count(*) FROM excerpt_codes ec
+    let (coder_sql, coder_args) = coder_clause(coder_ids);
+    let mut stmt = conn.prepare(&format!(
+        "SELECT e.document_id, ec.code_id, count(DISTINCT ec.excerpt_id) FROM excerpt_codes ec
          JOIN excerpts e ON e.id = ec.excerpt_id
-         GROUP BY e.document_id, ec.code_id",
-    )?;
+         WHERE 1 = 1{coder_sql}
+         GROUP BY e.document_id, ec.code_id"
+    ))?;
     let mut cells: Vec<(String, String, i64)> = stmt
-        .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?
+        .query_map(rusqlite::params_from_iter(coder_args.iter()), |r| {
+            Ok((r.get(0)?, r.get(1)?, r.get(2)?))
+        })?
         .collect::<rusqlite::Result<_>>()?;
     cells.sort_by_key(|(d, c, _)| {
         (
@@ -700,11 +736,13 @@ fn crosstab_mode(req: &CrosstabRequest) -> Result<&str> {
 fn code_by_speaker(conn: &Connection, req: &CrosstabRequest) -> Result<CodeByDescriptor> {
     let mode = crosstab_mode(req)?;
     let include_descendants = req.include_descendants;
-    let (doc_sql, doc_args) = document_clause(
+    let (doc_sql, mut doc_args) = document_clause(
         conn,
         req.document_ids.as_deref(),
         req.document_set_ids.as_deref(),
     )?;
+    let (coder_sql, coder_args) = coder_clause(req.coder_ids.as_deref());
+    doc_args.extend(coder_args);
 
     // Documents in scope, in project order, exactly as `code_by_descriptor`
     // works them out.
@@ -778,11 +816,12 @@ fn code_by_speaker(conn: &Connection, req: &CrosstabRequest) -> Result<CodeByDes
         .map(|c| c.id)
         .collect();
 
-    // Every tag once, with the position that decides which column it lands in.
+    // Every (excerpt, code) once, with the position that decides which column
+    // it lands in.
     let mut stmt = conn.prepare(&format!(
-        "SELECT ec.code_id, ec.excerpt_id, e.document_id, e.start_pos
+        "SELECT DISTINCT ec.code_id, ec.excerpt_id, e.document_id, e.start_pos
          FROM excerpt_codes ec JOIN excerpts e ON e.id = ec.excerpt_id
-         WHERE 1 = 1{doc_sql}"
+         WHERE 1 = 1{doc_sql}{coder_sql}"
     ))?;
     let tags: Vec<(String, String, String, Option<i64>)> = stmt
         .query_map(rusqlite::params_from_iter(doc_args.iter()), |r| {
@@ -890,13 +929,15 @@ pub fn code_by_descriptor(conn: &Connection, req: &CrosstabRequest) -> Result<Co
         include_descendants,
         document_ids,
         document_set_ids,
+        coder_ids,
         bins,
         ..
     } = req;
-    let (code_ids, document_ids, document_set_ids) = (
+    let (code_ids, document_ids, document_set_ids, coder_ids) = (
         code_ids.as_deref(),
         document_ids.as_deref(),
         document_set_ids.as_deref(),
+        coder_ids.as_deref(),
     );
     let include_descendants = *include_descendants;
     let mode = crosstab_mode(req)?;
@@ -918,7 +959,9 @@ pub fn code_by_descriptor(conn: &Connection, req: &CrosstabRequest) -> Result<Co
         .map(|d| d.id)
         .collect();
     let in_scope: HashSet<&str> = scope.iter().map(String::as_str).collect();
-    let (doc_sql, doc_args) = document_clause(conn, document_ids, document_set_ids)?;
+    let (doc_sql, mut doc_args) = document_clause(conn, document_ids, document_set_ids)?;
+    let (coder_sql, coder_args) = coder_clause(coder_ids);
+    doc_args.extend(coder_args);
 
     let mut stmt =
         conn.prepare("SELECT document_id, value FROM descriptor_values WHERE field_id = ?1")?;
@@ -986,11 +1029,11 @@ pub fn code_by_descriptor(conn: &Connection, req: &CrosstabRequest) -> Result<Co
         .map(|c| c.id)
         .collect();
 
-    // Every tag once: code -> (excerpt, document).
+    // Every (excerpt, code) once: code -> (excerpt, document).
     let mut stmt = conn.prepare(&format!(
-        "SELECT ec.code_id, ec.excerpt_id, e.document_id
+        "SELECT DISTINCT ec.code_id, ec.excerpt_id, e.document_id
          FROM excerpt_codes ec JOIN excerpts e ON e.id = ec.excerpt_id
-         WHERE 1 = 1{doc_sql}"
+         WHERE 1 = 1{doc_sql}{coder_sql}"
     ))?;
     let tags: Vec<(String, String, String)> = stmt
         .query_map(rusqlite::params_from_iter(doc_args.iter()), |r| {
@@ -1139,7 +1182,7 @@ mod tests {
     #[test]
     fn frequencies_count_own_descendants_and_documents() {
         let f = fixture();
-        let rows = code_frequencies(&f.project.conn, None, None).unwrap();
+        let rows = code_frequencies(&f.project.conn, None, None, None).unwrap();
         assert_eq!(rows.len(), 4);
 
         let a = freq(&rows, &f.a);
@@ -1163,15 +1206,20 @@ mod tests {
     #[test]
     fn frequencies_honour_the_document_filter() {
         let f = fixture();
-        let rows =
-            code_frequencies(&f.project.conn, Some(std::slice::from_ref(&f.doc2)), None).unwrap();
+        let rows = code_frequencies(
+            &f.project.conn,
+            Some(std::slice::from_ref(&f.doc2)),
+            None,
+            None,
+        )
+        .unwrap();
         let a = freq(&rows, &f.a);
         assert_eq!((a.own, a.with_descendants, a.document_count), (0, 1, 1));
         assert_eq!(a.per_document, vec![(f.doc2.clone(), 1)]);
         assert_eq!(freq(&rows, &f.c).own, 0);
         assert!(freq(&rows, &f.c).per_document.is_empty());
         // An empty list is not a filter.
-        let all = code_frequencies(&f.project.conn, Some(&[]), None).unwrap();
+        let all = code_frequencies(&f.project.conn, Some(&[]), None, None).unwrap();
         assert_eq!(freq(&all, &f.a).with_descendants, 3);
     }
 
@@ -1192,6 +1240,7 @@ mod tests {
             &f.project.conn,
             None,
             Some(std::slice::from_ref(&doc2_set.id)),
+            None,
         )
         .unwrap();
         let a = freq(&rows, &f.a);
@@ -1202,6 +1251,7 @@ mod tests {
             &f.project.conn,
             Some(std::slice::from_ref(&f.doc1)),
             Some(std::slice::from_ref(&doc2_set.id)),
+            None,
         )
         .unwrap();
         let a = freq(&rows, &f.a);
@@ -1215,17 +1265,18 @@ mod tests {
             &f.project.conn,
             None,
             Some(std::slice::from_ref(&empty_set.id)),
+            None,
         )
         .unwrap();
         assert_eq!(freq(&rows, &f.a).with_descendants, 0);
-        let rows = code_frequencies(&f.project.conn, None, Some(&["nope".into()])).unwrap();
+        let rows = code_frequencies(&f.project.conn, None, Some(&["nope".into()]), None).unwrap();
         assert_eq!(freq(&rows, &f.a).with_descendants, 0);
     }
 
     #[test]
     fn co_occurrence_counts_overlapping_pairs_once() {
         let f = fixture();
-        let m = co_occurrence(&f.project.conn, None, None).unwrap();
+        let m = co_occurrence(&f.project.conn, None, None, None).unwrap();
         assert_eq!(m.code_ids.len(), 4);
         let cells = &m.cells;
 
@@ -1246,12 +1297,18 @@ mod tests {
 
         // Touching ranges do not overlap: [0,5) and [5,9) are disjoint.
         apply(&f.project.conn, &f.doc1, 5, 9, &[&f.c]);
-        let m = co_occurrence(&f.project.conn, None, None).unwrap();
+        let m = co_occurrence(&f.project.conn, None, None, None).unwrap();
         assert_eq!(cell(&m.cells, &f.a, &f.c), 0);
         assert_eq!(cell(&m.cells, &f.b, &f.c), 1); // [3,8) and [5,9) do overlap
 
         // Document filter.
-        let m = co_occurrence(&f.project.conn, Some(std::slice::from_ref(&f.doc2)), None).unwrap();
+        let m = co_occurrence(
+            &f.project.conn,
+            Some(std::slice::from_ref(&f.doc2)),
+            None,
+            None,
+        )
+        .unwrap();
         assert_eq!(cell(&m.cells, &f.a, &f.b), 0);
         assert_eq!(cell(&m.cells, &f.a1, &f.a1), 1);
 
@@ -1268,6 +1325,7 @@ mod tests {
             &f.project.conn,
             None,
             Some(std::slice::from_ref(&doc2_set.id)),
+            None,
         )
         .unwrap();
         assert_eq!(cell(&m.cells, &f.a, &f.b), 0);
@@ -1290,7 +1348,13 @@ mod tests {
         .id;
         apply(&f.project.conn, &doc, 0, 10, &[&f.a, &f.b]);
         apply(&f.project.conn, &doc, 5, 15, &[&f.a, &f.b]);
-        let m = co_occurrence(&f.project.conn, Some(std::slice::from_ref(&doc)), None).unwrap();
+        let m = co_occurrence(
+            &f.project.conn,
+            Some(std::slice::from_ref(&doc)),
+            None,
+            None,
+        )
+        .unwrap();
         // Once per excerpt (both codes on one excerpt) + once for the pair.
         assert_eq!(cell(&m.cells, &f.a, &f.b), 3);
         assert_eq!(cell(&m.cells, &f.a, &f.a), 2);
@@ -1299,7 +1363,7 @@ mod tests {
     #[test]
     fn code_by_document_counts_direct_tags() {
         let f = fixture();
-        let m = code_by_document(&f.project.conn).unwrap();
+        let m = code_by_document(&f.project.conn, None).unwrap();
         assert_eq!(m.document_ids, vec![f.doc1.clone(), f.doc2.clone()]);
         assert_eq!(m.code_ids.len(), 4);
         assert_eq!(cell(&m.cells, &f.doc1, &f.a), 1);
@@ -1569,10 +1633,12 @@ mod tests {
     #[test]
     fn empty_project_is_empty_everywhere() {
         let p = OpenProject::in_memory("t").unwrap();
-        assert!(code_frequencies(&p.conn, None, None).unwrap().is_empty());
-        let m = co_occurrence(&p.conn, None, None).unwrap();
+        assert!(code_frequencies(&p.conn, None, None, None)
+            .unwrap()
+            .is_empty());
+        let m = co_occurrence(&p.conn, None, None, None).unwrap();
         assert!(m.code_ids.is_empty() && m.cells.is_empty());
-        let m = code_by_document(&p.conn).unwrap();
+        let m = code_by_document(&p.conn, None).unwrap();
         assert!(m.document_ids.is_empty() && m.cells.is_empty());
         assert!(word_frequencies(
             &p.conn,
