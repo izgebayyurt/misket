@@ -107,6 +107,8 @@ pub fn run() {
             commands::project::write_text_file,
             commands::project::write_binary_file,
             commands::project::take_pending_open_path,
+            commands::ocr::list_tessdata_languages,
+            commands::ocr::ensure_tessdata_file,
             commands::documents::create_document,
             commands::documents::create_image_document,
             commands::documents::list_documents,

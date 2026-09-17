@@ -42,6 +42,19 @@ describe("importers", () => {
     const doc = await importFile("sample.pdf", read("sample.pdf"));
     expect(doc.sourceFormat).toBe("pdf");
     expect(doc.text).toBe("Hello from a PDF.\nSecond line on page one.\n\nPage two starts here.\n");
+    // A normal PDF's text layer classifies as "text", not scanned.
+    expect(doc.pdfQuality?.classification).toBe("text");
+  });
+
+  it("classifies a scanned PDF (image page, no text layer) as empty", async () => {
+    const doc = await importFile("scanned.pdf", read("scanned.pdf"));
+    expect(doc.sourceFormat).toBe("pdf");
+    expect(doc.text.trim()).toBe("");
+    expect(doc.pdfQuality?.classification).toBe("empty");
+    expect(doc.pdfQuality?.totalPages).toBe(1);
+    expect(doc.pdfQuality?.emptyPages).toBe(1);
+    // Kept around so the import flow can offer OCR on it.
+    expect(doc.pdfBytes?.length).toBeGreaterThan(0);
   });
 
   it("groups positioned runs into lines with spaces at gaps", () => {

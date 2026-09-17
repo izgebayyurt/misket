@@ -5,6 +5,8 @@ import { Workspace } from "@/components/layout/Workspace";
 import { Toaster } from "@/components/layout/Toaster";
 import { useImportFiles } from "@/components/documents/useImportFiles";
 import { TidyImportDialog } from "@/components/documents/TidyImportDialog";
+import { OcrPromptDialog } from "@/components/documents/OcrPromptDialog";
+import { OcrProgressDialog } from "@/components/documents/OcrProgressDialog";
 import { useE2eBootstrap } from "@/components/project/useE2eBootstrap";
 import { useOpenFileRequests } from "@/components/project/useOpenFileRequests";
 import { useSettings } from "@/state/settings";
@@ -25,6 +27,8 @@ export default function App() {
       {isLoading ? null : project ? <Workspace project={project} /> : <StartScreen />}
       <Toaster />
       <TidyImportDialog />
+      <OcrPromptDialog />
+      <OcrProgressDialog />
     </>
   );
 }

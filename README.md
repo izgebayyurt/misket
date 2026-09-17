@@ -14,13 +14,16 @@ keyboard-friendly interface without a subscription.
 
 ## What it does today
 
-- **Import** plain text, Markdown, Word (`.docx`), PDF (text only) and image
-  (PNG, JPEG, WebP) documents, one at a time or a whole folder at once
-  ("Import folder…", optionally including subfolders).
+- **Import** plain text, Markdown, Word (`.docx`), PDF and image (PNG, JPEG,
+  WebP) documents, one at a time or a whole folder at once ("Import folder…",
+  optionally including subfolders).
   If a file has blank-line gaps, trailing spaces or other likely-accidental
   whitespace, Misket offers to tidy it up before import (document text is
   immutable once imported). Check "Remember my choice" in that dialog to skip
   it on future imports; its "Ask again on import" link resets that.
+  A PDF with no text layer (a scan) is detected on import and offered OCR —
+  recognised entirely on-device, no upload — instead of silently importing an
+  empty document; see [docs/OCR.md](docs/OCR.md).
 - **Build a codebook**: nested codes with colors, single-key hotkeys,
   drag-and-drop reordering, merge and delete with impact preview, and
   "Move excerpts to…" to hand one code's excerpts to another without losing

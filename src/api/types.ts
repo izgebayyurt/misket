@@ -75,6 +75,10 @@ export interface AppSettings {
   /** Colour the document view's underline lanes by who applied the code
    * rather than by the code itself. */
   lanesByCoder: boolean;
+  /** Extra Tesseract language codes to use for PDF OCR, on top of the
+   * bundled `eng`. Each one needs a matching `<code>.traineddata` file
+   * dropped into the app's tessdata folder (Settings shows the path). */
+  ocrLanguages: string[];
 }
 
 export type DocumentKind = "text" | "image" | "video";

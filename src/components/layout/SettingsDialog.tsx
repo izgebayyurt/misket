@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ColorPicker } from "@/components/codebook/ColorSwatch";
 import { useSettings } from "@/state/settings";
+import { useTessdataLanguages } from "@/queries/ocr";
 import type { Theme } from "@/api/types";
 
 const THEME_OPTIONS: { value: Theme; label: string }[] = [
@@ -137,6 +138,8 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
             />
           </section>
 
+          <OcrLanguagesSection />
+
           <section>
             <h3 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-fg-muted">
               You
@@ -196,5 +199,83 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/**
+ * PDF OCR always has the bundled `eng`; extra languages come from
+ * `<code>.traineddata` files dropped into the tessdata folder (see
+ * `docs/OCR.md`) — this just lists what's there and lets a person pick
+ * which of them to actually use.
+ */
+function OcrLanguagesSection() {
+  const settings = useSettings((s) => s.settings);
+  const update = useSettings((s) => s.update);
+  const { data, isLoading, refetch, isFetching } = useTessdataLanguages();
+
+  const toggle = (lang: string, on: boolean) => {
+    const next = on
+      ? [...settings.ocrLanguages, lang]
+      : settings.ocrLanguages.filter((l) => l !== lang);
+    update({ ocrLanguages: next });
+  };
+
+  return (
+    <section>
+      <h3 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-fg-muted">
+        OCR languages
+      </h3>
+      <p className="mb-2 text-xs text-fg-muted">
+        Scanned PDFs are recognised with on-device OCR. English (<code>eng</code>) is built in; for
+        another language, download its <code>.traineddata</code> file from the{" "}
+        <a
+          href="https://github.com/tesseract-ocr/tessdata_fast"
+          target="_blank"
+          rel="noreferrer"
+          className="underline"
+        >
+          tessdata_fast
+        </a>{" "}
+        project and drop it into this folder, then reopen Settings:
+      </p>
+      <div className="flex items-center gap-2">
+        <Input
+          readOnly
+          value={isLoading ? "Loading…" : (data?.dir ?? "")}
+          className="font-mono text-xs"
+          onFocus={(e) => e.currentTarget.select()}
+          data-testid="settings-tessdata-dir"
+        />
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => void refetch()}
+          disabled={isFetching}
+        >
+          Refresh
+        </Button>
+      </div>
+      <ul className="mt-2 space-y-1 text-sm">
+        <li className="flex items-center gap-2 text-fg-muted">
+          <input type="checkbox" checked readOnly disabled />
+          eng (bundled)
+        </li>
+        {data?.languages.map((lang) => (
+          <li key={lang} className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={settings.ocrLanguages.includes(lang)}
+              onChange={(e) => toggle(lang, e.target.checked)}
+              data-testid={`settings-ocr-lang-${lang}`}
+            />
+            {lang}
+          </li>
+        ))}
+      </ul>
+      {!isLoading && data?.languages.length === 0 ? (
+        <p className="mt-1 text-xs text-fg-muted">No additional languages found yet.</p>
+      ) : null}
+    </section>
   );
 }

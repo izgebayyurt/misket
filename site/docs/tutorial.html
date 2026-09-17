@@ -64,9 +64,8 @@
       <h2 id="import">Import documents</h2>
       <p>
         Use <strong>Import documents</strong> (<kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>I</kbd>) to add
-        plain text, Markdown, Word (<code>.docx</code>) and PDF (text only) files, one at a time or
-        a whole folder at once with <strong>Import folder…</strong> (optionally including
-        subfolders).
+        plain text, Markdown, Word (<code>.docx</code>) and PDF files, one at a time or a whole
+        folder at once with <strong>Import folder…</strong> (optionally including subfolders).
       </p>
       <p>
         If a file has likely-accidental whitespace — runs of blank lines, trailing spaces, or
@@ -74,6 +73,17 @@
         This only happens at import time: document text is immutable afterwards, so it cannot be
         fixed later. Check <strong>Remember my choice</strong> in that dialog to skip the prompt on
         future imports; its <strong>Ask again on import</strong> link undoes that.
+      </p>
+      <p>
+        A PDF that is really a scan — no text layer pdf.js can pull out — is detected on import
+        instead of silently becoming an empty document: Misket offers
+        <strong>Recognise text (OCR)</strong>, entirely on-device with no upload, alongside
+        <strong>Import what was found</strong> and <strong>Skip</strong>. Importing several scans at
+        once only asks once — tick <strong>Apply to the rest of this import</strong> to use the same
+        choice for the rest of the batch. An OCR'd document shows an <strong>OCR</strong> badge in
+        the document list instead of <strong>PDF</strong>. English is built in;
+        <strong>Settings → OCR languages</strong> shows where to drop additional
+        <code>.traineddata</code> files for other languages.
       </p>
 
       <h2 id="codebook">Build a codebook</h2>
