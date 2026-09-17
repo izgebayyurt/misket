@@ -129,6 +129,8 @@ keyboard-friendly interface without a subscription.
   log)"; without one Misket uses your computer's user name.
 - **Undo/redo**: every change is undoable, including deleting or merging codes;
   history is kept in the project file, so it survives closing the app.
+- **History view**: see every change as a branch graph, jump to any point,
+  fork and name branches, compact old history.
 - **Export** the codebook as CSV or a reusable JSON file, excerpts as CSV, the
   activity log as CSV, or the whole project as JSON.
 
@@ -158,6 +160,7 @@ keyboard-friendly interface without a subscription.
 | Extend the selection by a word                         | `Alt` + `Shift` + `←` / `→`                   |
 | New memo on the current document, code or excerpt      | `Ctrl`/`⌘` + `M`                              |
 | Project overview                                       | `Shift` + `Ctrl`/`⌘` + `H`                    |
+| History (the branch graph)                             | `Shift` + `Ctrl`/`⌘` + `Y`                    |
 | Excerpt browser                                        | `Ctrl`/`⌘` + `E`                              |
 | Analysis views                                         | `Shift` + `Ctrl`/`⌘` + `A`                    |
 | Find in the current document                           | `Ctrl`/`⌘` + `F`                              |

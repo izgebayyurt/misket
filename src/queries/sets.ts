@@ -36,6 +36,7 @@ export function useInvalidateSets() {
     else qc.invalidateQueries({ queryKey: keys.allSetMembers });
     // Sets are filter inputs, so anything filtered by one is now stale.
     qc.invalidateQueries({ queryKey: keys.excerptQueries });
+    qc.invalidateQueries({ queryKey: keys.history });
   };
 }
 

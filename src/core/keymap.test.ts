@@ -32,6 +32,7 @@ describe("keymap", () => {
     expect(matchAction(ev({ key: "f", ctrlKey: true }))).toBe("find");
     expect(matchAction(ev({ key: "f", ctrlKey: true, shiftKey: true }))).toBe("findInProject");
     expect(matchAction(ev({ key: "h", ctrlKey: true, shiftKey: true }))).toBe("overview");
+    expect(matchAction(ev({ key: "Y", ctrlKey: true, shiftKey: true }))).toBe("history");
   });
 
   it("only fires global shortcuts inside text fields", () => {

@@ -489,6 +489,25 @@ can show where the project currently stands.
 Ordering is by `id`, never by `at`: `util::now()` formats RFC 3339 with
 trailing zeros trimmed, so `…:00Z` sorts _after_ `…:00.5Z` as a string.
 
+### History view
+
+The History view (`src/components/history/HistoryView.tsx`) draws the whole
+tree from one `history_tree()` call: `src/core/historyGraph.ts` is a pure
+layout that turns the flat `HistoryNodeSummary[]` into rows (newest at the
+top; a node always sorts above its parent, since child ids are always
+greater) and lanes. The main line is the path from the root through each
+node's `preferredChild` — the same field `next_child` reads when redo has no
+argument — falling back to the newest child, so it always lands in lane 0;
+every other child at a fork opens a lane at the point it diverges and gives
+it back once it rejoins, so unrelated forks made at different times can share
+a column without a line ever being drawn through an unrelated dot. Clicking a
+row calls `history_checkout`; the row menu offers "Fork here…" (checks out
+the node, then `history_fork`), "Rename branch…" (`history_rename_branch`)
+and "Compact history before here…" (`history_compact`, refused up front —
+with the same message the backend would give — when the head is not on or
+under the chosen node). The view reads `history_tree()` fresh on every
+mutation and on window focus, the same way the activity feed already did.
+
 ## Queries worth knowing
 
 - Descendants of a code use a recursive CTE, not a materialized path:

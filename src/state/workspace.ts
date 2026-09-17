@@ -19,6 +19,8 @@ export type View =
   | { kind: "descriptorTable" }
   /** The project's home screen; the default view when a project opens. */
   | { kind: "overview" }
+  /** The branch graph over the undo tree: jump to, fork or name any point. */
+  | { kind: "history" }
   /** Nothing to show (e.g. the open document was just deleted). */
   | { kind: "empty" };
 

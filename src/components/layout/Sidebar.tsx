@@ -7,7 +7,7 @@ import { DocumentList } from "@/components/documents/DocumentList";
 import { CodeTree } from "@/components/codebook/CodeTree";
 import { Button } from "@/components/ui/button";
 import { DescriptorsDialog } from "@/components/descriptors/DescriptorsDialog";
-import { BarChart3, Home, List, Search, Settings2, Tags } from "lucide-react";
+import { BarChart3, History, Home, List, Search, Settings2, Tags } from "lucide-react";
 
 export function Sidebar({ project }: { project: ProjectInfo }) {
   const tab = useWorkspace((s) => s.sidebarTab);
@@ -49,6 +49,15 @@ export function Sidebar({ project }: { project: ProjectInfo }) {
         >
           <Home /> Overview
           <span className="ml-auto text-xs text-fg-muted">{describe("overview")}</span>
+        </Button>
+        <Button
+          variant={view.kind === "history" ? "secondary" : "ghost"}
+          className="w-full justify-start"
+          onClick={() => setView({ kind: "history" })}
+          data-testid="open-history"
+        >
+          <History /> History
+          <span className="ml-auto text-xs text-fg-muted">{describe("history")}</span>
         </Button>
         {tab === "documents" ? (
           <div className="flex gap-1">
