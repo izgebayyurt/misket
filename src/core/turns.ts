@@ -62,7 +62,8 @@ export function clipToSpokenText(range: Range, turns: TurnRange[]): Range | null
 
 /**
  * Where a turn's label should be cut so the speaker and the timestamp become
- * two segments — the two lines of the gutter.
+ * two segments — the two lines of the gutter. It takes a whole `Turn`, and
+ * reads its **label** range: the spoken text holds neither part.
  *
  * The cut goes between them, whichever way round the format writes them:
  * `Alice ` / `(00:12): ` for `Name (00:12):`, `[00:12:03] ` / `Alice: ` for
@@ -76,21 +77,21 @@ export function clipToSpokenText(range: Range, turns: TurnRange[]): Range | null
  */
 export function labelCut(
   text: string,
-  label: { start: number; end: number; speaker: string; time?: string | null },
+  turn: { labelStart: number; labelEnd: number; speaker: string; time?: string | null },
 ): number | null {
-  if (!label.time) return null;
-  const raw = text.slice(label.start, label.end);
-  const timeAt = raw.indexOf(label.time);
-  const speakerAt = raw.indexOf(label.speaker);
+  if (!turn.time) return null;
+  const raw = text.slice(turn.labelStart, turn.labelEnd);
+  const timeAt = raw.indexOf(turn.time);
+  const speakerAt = raw.indexOf(turn.speaker);
   if (timeAt === -1 || speakerAt === -1) return null;
   let cut: number;
   if (timeAt > speakerAt) {
     // Name first: cut just after it, taking the space with the name so the
     // second line starts at the timestamp's own punctuation.
-    cut = label.start + speakerAt + label.speaker.length;
-    while (cut < label.end && text[cut] === " ") cut++;
+    cut = turn.labelStart + speakerAt + turn.speaker.length;
+    while (cut < turn.labelEnd && text[cut] === " ") cut++;
   } else {
-    cut = label.start + speakerAt;
+    cut = turn.labelStart + speakerAt;
   }
-  return cut > label.start && cut < label.end ? cut : null;
+  return cut > turn.labelStart && cut < turn.labelEnd ? cut : null;
 }

@@ -61,22 +61,39 @@ describe("clipToSpokenText", () => {
 describe("labelCut", () => {
   it("cuts before the timestamp when the name comes first", () => {
     const text = "Alice (00:12): Hi there.\n";
-    expect(labelCut(text, { start: 0, end: 15, speaker: "Alice", time: "00:12" })).toBe(6);
+    expect(labelCut(text, { labelStart: 0, labelEnd: 15, speaker: "Alice", time: "00:12" })).toBe(6);
     expect(text.slice(0, 6)).toBe("Alice ");
     expect(text.slice(6, 15)).toBe("(00:12): ");
   });
 
   it("cuts before the name when the timestamp comes first", () => {
     const text = "[00:12:03] Alice: Hi there.\n";
-    expect(labelCut(text, { start: 0, end: 18, speaker: "Alice", time: "00:12:03" })).toBe(11);
+    expect(labelCut(text, { labelStart: 0, labelEnd: 18, speaker: "Alice", time: "00:12:03" })).toBe(11);
     expect(text.slice(0, 11)).toBe("[00:12:03] ");
     expect(text.slice(11, 18)).toBe("Alice: ");
   });
 
+  it("reads the label range, not the spoken text", () => {
+    // The turn's own `start`/`end` cover what was said, where neither the
+    // name nor the time appears; passing the whole turn must still work.
+    const text = "P1 (00:07): Frustrated, mostly.\n";
+    const turn = {
+      speaker: "P1",
+      time: "00:07",
+      labelStart: 0,
+      labelEnd: 12,
+      start: 12,
+      end: 30,
+    };
+    expect(labelCut(text, turn)).toBe(3);
+    expect(text.slice(0, 3)).toBe("P1 ");
+    expect(text.slice(3, 12)).toBe("(00:07): ");
+  });
+
   it("has nothing to cut without a timestamp, or when the parts are not in the label", () => {
-    expect(labelCut(TEXT, { start: 0, end: 7, speaker: "Alice", time: null })).toBe(null);
-    expect(labelCut(TEXT, { start: 0, end: 7, speaker: "Alice" })).toBe(null);
+    expect(labelCut(TEXT, { labelStart: 0, labelEnd: 7, speaker: "Alice", time: null })).toBe(null);
+    expect(labelCut(TEXT, { labelStart: 0, labelEnd: 7, speaker: "Alice" })).toBe(null);
     // A custom pattern whose capture is not literally in the label.
-    expect(labelCut("<A> Hi.\n", { start: 0, end: 4, speaker: "Alice", time: "00:12" })).toBe(null);
+    expect(labelCut("<A> Hi.\n", { labelStart: 0, labelEnd: 4, speaker: "Alice", time: "00:12" })).toBe(null);
   });
 });
