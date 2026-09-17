@@ -212,6 +212,7 @@ The label is rewritten with `relabel_group` once the counts are known:
 
 Pulling is what puts two people's codings in one file; **Reliability** below is
 what compares them once they are there.
+
 ## Reliability
 
 Inter-rater agreement (`crates/misket-core/src/db/irr.rs`) is **computed, never

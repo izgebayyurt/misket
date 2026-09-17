@@ -60,13 +60,13 @@ export, open-by-double-click, dark mode, cross-platform CI and release builds.
 
 ## v0.5 Teams and rigour
 
-| #   | Feature                                                                                                                                                                                            | Status |
-| --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
-| 20  | [#21](https://github.com/izgebayyurt/misket/issues/21) **Multiple coders**: coder identity on every excerpt, per-coder colours, filter by coder                                                    | done   |
-| 21  | [#22](https://github.com/izgebayyurt/misket/issues/22) **Inter-rater reliability**: compare two coders on the same documents, Cohen's kappa per code and pooled, disagreement list with resolution | done   |
-| 22  | [#23](https://github.com/izgebayyurt/misket/issues/23) **Pull from another copy**: merge another `.misket` — documents matched by content hash, codebooks by name, codings by coder — as one undoable step   | done   |
-| 23  | [#24](https://github.com/izgebayyurt/misket/issues/24) **REFI-QDA (.qdpx) import and export** for interoperability with NVivo, ATLAS.ti and MAXQDA                                                 | later  |
-| 24  | [#25](https://github.com/izgebayyurt/misket/issues/25) **Change log**: who did what and when, per project                                                                                          | later  |
+| #   | Feature                                                                                                                                                                                                    | Status |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| 20  | [#21](https://github.com/izgebayyurt/misket/issues/21) **Multiple coders**: coder identity on every excerpt, per-coder colours, filter by coder                                                            | done   |
+| 21  | [#22](https://github.com/izgebayyurt/misket/issues/22) **Inter-rater reliability**: compare two coders on the same documents, Cohen's kappa per code and pooled, disagreement list with resolution         | done   |
+| 22  | [#23](https://github.com/izgebayyurt/misket/issues/23) **Pull from another copy**: merge another `.misket` — documents matched by content hash, codebooks by name, codings by coder — as one undoable step | done   |
+| 23  | [#24](https://github.com/izgebayyurt/misket/issues/24) **REFI-QDA (.qdpx) import and export** for interoperability with NVivo, ATLAS.ti and MAXQDA                                                         | later  |
+| 24  | [#25](https://github.com/izgebayyurt/misket/issues/25) **Change log**: who did what and when, per project                                                                                                  | later  |
 
 ## v0.6 Assistance (all opt-in, never on by default)
 
