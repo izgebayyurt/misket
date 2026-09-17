@@ -67,7 +67,7 @@ use std::collections::{HashMap, HashSet};
 
 use rusqlite::Connection;
 
-use super::{coders, codes, documents, export, text, transcripts};
+use super::{coders, codes, documents, export, sets, text, transcripts};
 use crate::error::{AppError, Result};
 use crate::models::{IrrCodeRow, IrrDisagreement, IrrDocumentRow, IrrReport, IrrRequest, IrrUnit};
 
@@ -313,11 +313,20 @@ fn paragraph_spans(chars: &[char], doc_text: &str) -> Vec<(i64, i64, Option<Stri
 /// The documents to compare: the ones asked for, or — with none asked for —
 /// every document both coders have at least one coding in.
 fn scope_documents(conn: &Connection, req: &IrrRequest) -> Result<Vec<String>> {
-    let picked: Option<HashSet<String>> = req
-        .document_ids
-        .as_ref()
-        .filter(|ids| !ids.is_empty())
-        .map(|ids| ids.iter().cloned().collect());
+    // Explicit ids plus every id the picked sets expand to, exactly like the
+    // other analysis views.
+    let expanded = sets::union_with_sets(
+        conn,
+        req.document_ids.as_deref(),
+        req.document_set_ids.as_deref().unwrap_or_default(),
+    )?;
+    let asked = req.document_ids.as_ref().is_some_and(|ids| !ids.is_empty())
+        || req
+            .document_set_ids
+            .as_ref()
+            .is_some_and(|ids| !ids.is_empty());
+    let picked: Option<HashSet<String>> =
+        asked.then(|| expanded.into_iter().collect::<HashSet<String>>());
     let shared: HashSet<String> = if picked.is_some() {
         HashSet::new()
     } else {
@@ -1040,6 +1049,21 @@ mod tests {
         let both = compare(conn, &q).unwrap();
         assert_eq!(both.documents.len(), 2);
         assert_eq!(both.units, 8);
+
+        // A document set stands for its members, as in every other view.
+        let set = crate::db::sets::create_set(
+            conn,
+            "document",
+            "Wave 1",
+            std::slice::from_ref(&solo),
+            None,
+        )
+        .unwrap();
+        let mut q = req(IrrUnit::Paragraph);
+        q.document_set_ids = Some(vec![set.id]);
+        let via_set = compare(conn, &q).unwrap();
+        assert_eq!(via_set.documents.len(), 1);
+        assert_eq!(via_set.documents[0].document_id, solo);
     }
 
     #[test]

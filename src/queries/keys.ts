@@ -2,6 +2,7 @@ import type {
   ActivityFilter,
   CrosstabRequest,
   ExcerptFilter,
+  IrrRequest,
   MemoTarget,
   SetKind,
   TimelineBucket,
@@ -45,6 +46,9 @@ export const keys = {
   frameworkMatrix: (id: string) => ["analysis", "framework", id] as const,
   codeByDescriptor: (request: CrosstabRequest) =>
     ["analysis", "codeByDescriptor", request] as const,
+  /** One inter-rater comparison. Under "analysis" so adopting or removing a
+   * coding from the reliability view refetches it. */
+  irr: (request: IrrRequest) => ["analysis", "irr", request] as const,
   memos: (target: MemoTarget) => ["memos", target] as const,
   allMemos: ["memos"] as const,
   sets: (kind: SetKind) => ["sets", kind] as const,

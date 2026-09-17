@@ -13,6 +13,9 @@ export type View =
    */
   | { kind: "excerpts"; initialFilter?: ExcerptFilter; review?: { parentCodeId: string } }
   | { kind: "analysis"; tab: AnalysisTab }
+  /** Two coders side by side: Cohen's kappa, percent agreement and every
+   * disagreement between them. */
+  | { kind: "reliability" }
   /** `query` seeds the search box when it mounts (e.g. clicking a term in
    * the word-frequency view). */
   | { kind: "search"; query?: string }

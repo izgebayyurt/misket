@@ -867,6 +867,9 @@ pub struct IrrRequest {
     /// coding in — the documents they actually double-coded.
     #[serde(default)]
     pub document_ids: Option<Vec<String>>,
+    /// Document sets; unioned into `document_ids`, as everywhere else.
+    #[serde(default)]
+    pub document_set_ids: Option<Vec<String>>,
     #[serde(default)]
     pub unit: IrrUnit,
     /// How much of a unit an excerpt must cover (or vice versa) for its code
@@ -886,6 +889,7 @@ impl Default for IrrRequest {
             coder_a: String::new(),
             coder_b: String::new(),
             document_ids: None,
+            document_set_ids: None,
             unit: IrrUnit::default(),
             overlap_threshold: default_overlap_threshold(),
             code_ids: None,
