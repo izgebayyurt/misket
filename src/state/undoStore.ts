@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { historyRedo, historyUndo } from "@/api/history";
 import { queryClient } from "@/queries/client";
-import { toast } from "./toasts";
+import { TOAST_KEYS, toast } from "./toasts";
 
 /**
  * Undo and redo, over the history tree in the project file.
@@ -23,6 +23,13 @@ interface UndoStore {
 /** An undo can move any part of the project, so nothing is still known fresh. */
 const refresh = () => queryClient.invalidateQueries();
 
+/**
+ * Undo, redo and a history checkout all share one toast: holding the shortcut
+ * updates the message in place, and running off the end of the line nudges
+ * that same toast instead of stacking "Nothing to redo" a dozen times.
+ */
+const timeTravel = { key: TOAST_KEYS.timeTravel };
+
 export const useUndoStore = create<UndoStore>((set, get) => ({
   busy: false,
   lastLabel: null,
@@ -34,12 +41,12 @@ export const useUndoStore = create<UndoStore>((set, get) => ({
       await refresh();
       if (node) {
         set({ lastLabel: node.summary });
-        toast.info(`Undid: ${node.summary}`);
+        toast.info(`Undid: ${node.summary}`, timeTravel);
       } else {
-        toast.info("Nothing left to undo");
+        toast.info("Nothing left to undo", timeTravel);
       }
     } catch (e) {
-      toast.error(e);
+      toast.error(e, timeTravel);
     } finally {
       set({ busy: false });
     }
@@ -52,12 +59,12 @@ export const useUndoStore = create<UndoStore>((set, get) => ({
       await refresh();
       if (node) {
         set({ lastLabel: node.summary });
-        toast.info(`Redid: ${node.summary}`);
+        toast.info(`Redid: ${node.summary}`, timeTravel);
       } else {
-        toast.info("Nothing to redo");
+        toast.info("Nothing to redo", timeTravel);
       }
     } catch (e) {
-      toast.error(e);
+      toast.error(e, timeTravel);
     } finally {
       set({ busy: false });
     }

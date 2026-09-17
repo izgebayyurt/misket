@@ -9,7 +9,7 @@ import { isTextField, mod } from "@/core/keymap";
 import { useWorkspace } from "@/state/workspace";
 import { useShortcutActions } from "@/state/shortcutActions";
 import { useSettings } from "@/state/settings";
-import { toast } from "@/state/toasts";
+import { TOAST_KEYS, toast } from "@/state/toasts";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { DocumentTitle } from "./DocumentTitle";
 import { ExcerptPopover } from "./ExcerptPopover";
@@ -472,10 +472,15 @@ export function ImageView({ documentId, focusExcerptId }: Props) {
       quickCode: () => {
         const codeId = useWorkspace.getState().lastAppliedCodeId;
         if (!codeId) {
-          toast.info("No code has been applied yet — pick one from the palette first.");
+          toast.info("No code has been applied yet — pick one from the palette first.", {
+            key: TOAST_KEYS.quickCode,
+          });
           return;
         }
-        if (!applyCodeToTarget(codeId)) toast.info("Draw a region or focus one to code it first.");
+        if (!applyCodeToTarget(codeId))
+          toast.info("Draw a region or focus one to code it first.", {
+            key: TOAST_KEYS.codeTarget,
+          });
       },
     });
   }, [applyCodeToTarget]);

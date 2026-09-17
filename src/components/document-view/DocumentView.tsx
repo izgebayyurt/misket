@@ -40,7 +40,7 @@ import { SpeakersMenu } from "./SpeakersMenu";
 import { TranscriptChip } from "./TranscriptChip";
 import { FindBar } from "./FindBar";
 import { GoToParagraphBar } from "./GoToParagraphBar";
-import { toast } from "@/state/toasts";
+import { TOAST_KEYS, toast } from "@/state/toasts";
 import { cn } from "@/lib/utils";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
@@ -605,7 +605,9 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
       if (!ex) return;
       const point = at ?? caretOffset();
       if (point === null || point <= ex.startPos! || point >= ex.endPos!) {
-        toast.info("Put the cursor inside the excerpt to split it there.");
+        toast.info("Put the cursor inside the excerpt to split it there.", {
+          key: TOAST_KEYS.splitExcerpt,
+        });
         return;
       }
       setPopover(null);
@@ -911,13 +913,13 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
     const ws = useWorkspace.getState();
     const p = ws.pendingSelection;
     if (p?.kind !== "text" || p.documentId !== documentId) {
-      toast.info("Select some text to name a code after it.");
+      toast.info("Select some text to name a code after it.", { key: TOAST_KEYS.inVivo });
       return;
     }
     const quoted = text.slice(cpToUtf16(offsetMap, p.start), cpToUtf16(offsetMap, p.end));
     const base = inVivoName(quoted);
     if (!base) {
-      toast.info("That selection has no words to name a code after.");
+      toast.info("That selection has no words to name a code after.", { key: TOAST_KEYS.inVivo });
       return;
     }
     const parentId =
@@ -951,11 +953,15 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
       quickCode: () => {
         const codeId = useWorkspace.getState().lastAppliedCodeId;
         if (!codeId) {
-          toast.info("No code has been applied yet — pick one from the palette first.");
+          toast.info("No code has been applied yet — pick one from the palette first.", {
+            key: TOAST_KEYS.quickCode,
+          });
           return;
         }
         if (!applyCodeToTarget(codeId))
-          toast.info("Select some text or focus an excerpt to code first.");
+          toast.info("Select some text or focus an excerpt to code first.", {
+            key: TOAST_KEYS.codeTarget,
+          });
       },
     });
   }, [applyCodeToTarget]);
