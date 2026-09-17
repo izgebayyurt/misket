@@ -169,6 +169,8 @@ pub fn run() {
             commands::framework::set_framework_cell,
             commands::framework::export_framework_csv,
             commands::analysis::code_by_descriptor,
+            commands::irr::irr_compare,
+            commands::irr::irr_export_csv,
             commands::search::search_project,
             commands::sets::list_sets,
             commands::sets::create_set,

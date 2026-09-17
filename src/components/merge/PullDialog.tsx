@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
+import { getE2eConfig } from "@/api/e2e";
 import { mergePreview } from "@/api/merge";
 import type { MergeConflict, MergeCount, MergePlan } from "@/api/types";
 import { initialsOf } from "@/core/coders";
@@ -10,8 +11,14 @@ import { Dialog, DialogContent, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "@/state/toasts";
 import { cn } from "@/lib/utils";
 
-/** The file picker every "another copy" path comes from. */
+/**
+ * The file picker every "another copy" path comes from — unless the app was
+ * launched with `MISKET_E2E_PULL`, which names one so the smoke test never
+ * has to drive a native file chooser (see `src-tauri/src/commands/e2e.rs`).
+ */
 async function pickAnotherCopy(): Promise<string | null> {
+  const configured = await getE2eConfig().catch(() => null);
+  if (configured?.pullPath) return configured.pullPath;
   const picked = await open({
     multiple: false,
     directory: false,
@@ -144,7 +151,8 @@ export function PullDialog({ onClose }: { onClose: () => void }) {
                 <p className="mb-2 font-medium">From {plan.otherName}'s copy</p>
                 {nothingToDo(plan) ? (
                   <p className="text-fg-muted" data-testid="pull-nothing">
-                    Nothing new — you already have everything in {fileName}.
+                    Nothing new — you already have everything in {fileName}. Reliability in the
+                    sidebar compares what the two of you coded.
                   </p>
                 ) : (
                   <ul className="space-y-0.5" data-testid="pull-counts">

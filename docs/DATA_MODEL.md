@@ -210,6 +210,53 @@ had never happened.
 The label is rewritten with `relabel_group` once the counts are known:
 "Pulled from Bob's copy: 143 codings, 12 excerpts, 2 codes".
 
+Pulling is what puts two people's codings in one file; **Reliability** below is
+what compares them once they are there.
+## Reliability
+
+Inter-rater agreement (`crates/misket-core/src/db/irr.rs`) is **computed, never
+stored**: two coder ids, a unit of analysis and a scope in, a report out. It
+needs no table of its own because `excerpt_codes.coder_id` already says who
+did what.
+
+The **unit of analysis** is the thing agreement is about, and it is a choice
+the researcher makes rather than one Misket makes for them:
+
+| Unit        | A unit is…                                                                                 |
+| ----------- | ------------------------------------------------------------------------------------------ |
+| `paragraph` | the document text split on `\n`, as the viewer shows it; each non-blank line, trimmed      |
+| `turn`      | one speaker turn (`db::transcripts`); a document with no transcript format uses paragraphs |
+| `excerpt`   | one distinct range either coder marked — the union of their excerpts, and the strictest    |
+
+In an image document a unit is one image-region excerpt either coder coded,
+under every mode. Units are the denominator whether or not anything in them is
+coded, which is what makes the "neither" cell — and so kappa — meaningful.
+
+A code is **present** for a coder on a unit when, for `paragraph` and `turn`,
+that coder has a coding of it on an excerpt that overlaps the unit by at least
+`overlapThreshold` of the _unit_ **or** by at least `overlapThreshold` of the
+_excerpt_ (code points, non-zero overlap required either way). The second half
+is what lets a one-sentence excerpt inside a long paragraph count. For
+`excerpt` units and image regions the match is exact — same range, same region
+— and the threshold does not apply.
+
+Each code then has a 2×2 table over the units, and from it percent agreement
+`(both + neither) / units` and two-rater binary **Cohen's kappa**:
+
+```
+po = (both + neither) / n      pa = (both + a_only) / n      pb = (both + b_only) / n
+pe = pa·pb + (1 − pa)·(1 − pb)
+κ  = (po − pe) / (1 − pe)
+```
+
+κ is **null, not 0**, wherever it is undefined: no units, or `pe = 1` (neither
+coder ever applied the code, or both applied it to every unit). Two pooled
+figures come back, because they answer different questions: kappa over every
+(code × unit) decision concatenated, which the most-used codes dominate, and
+the unweighted mean of the per-code kappas. Bands are Landis & Koch (1977) and
+are produced in two places that must agree — `db::irr::interpretation` for the
+CSV and `kappaBand` in `src/core/irr.ts` for the view.
+
 ## Images
 
 An image document (`kind = 'image'`) has no `text`; its size and MIME type are

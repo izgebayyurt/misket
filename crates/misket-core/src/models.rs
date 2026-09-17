@@ -823,6 +823,176 @@ pub struct CodeByDescriptor {
     pub mode: String,
 }
 
+// -------------------------------------------------- inter-rater reliability
+
+/// The unit of analysis an inter-rater comparison counts over. See
+/// [`crate::db::irr`] for how each one is built and what "present" means.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub enum IrrUnit {
+    /// The document text split on `\n`, exactly as the viewer shows it; each
+    /// non-blank paragraph, trimmed, is one unit.
+    #[default]
+    Paragraph,
+    /// Speaker turns, for documents that have a transcript format; documents
+    /// that do not fall back to paragraphs.
+    Turn,
+    /// The union of both coders' excerpt ranges — one unit per distinct
+    /// range, and the strictest of the three.
+    Excerpt,
+}
+
+impl IrrUnit {
+    pub fn label(self) -> &'static str {
+        match self {
+            IrrUnit::Paragraph => "Paragraph",
+            IrrUnit::Turn => "Speaker turn",
+            IrrUnit::Excerpt => "Excerpt",
+        }
+    }
+}
+
+fn default_overlap_threshold() -> f64 {
+    0.5
+}
+
+/// What to compare: two coders, over which documents, in which unit, with
+/// which codes.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct IrrRequest {
+    pub coder_a: String,
+    pub coder_b: String,
+    /// `None` (or empty) means every document both coders have at least one
+    /// coding in — the documents they actually double-coded.
+    #[serde(default)]
+    pub document_ids: Option<Vec<String>>,
+    /// Document sets; unioned into `document_ids`, as everywhere else.
+    #[serde(default)]
+    pub document_set_ids: Option<Vec<String>>,
+    #[serde(default)]
+    pub unit: IrrUnit,
+    /// How much of a unit an excerpt must cover (or vice versa) for its code
+    /// to count as present, `0..=1`. Ignored by [`IrrUnit::Excerpt`], which
+    /// matches ranges exactly.
+    #[serde(default = "default_overlap_threshold")]
+    pub overlap_threshold: f64,
+    /// `None` (or empty) means every code either coder applied anywhere in
+    /// the documents being compared.
+    #[serde(default)]
+    pub code_ids: Option<Vec<String>>,
+}
+
+impl Default for IrrRequest {
+    fn default() -> Self {
+        Self {
+            coder_a: String::new(),
+            coder_b: String::new(),
+            document_ids: None,
+            document_set_ids: None,
+            unit: IrrUnit::default(),
+            overlap_threshold: default_overlap_threshold(),
+            code_ids: None,
+        }
+    }
+}
+
+/// One code's 2×2 table and the two figures that come out of it.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct IrrCodeRow {
+    pub code_id: String,
+    pub code_name: String,
+    pub code_path: String,
+    pub color: String,
+    /// The denominator: every unit in scope, coded or not.
+    pub units: i64,
+    pub both: i64,
+    pub a_only: i64,
+    pub b_only: i64,
+    pub neither: i64,
+    /// `(both + neither) / units`, `0..=1`.
+    pub percent_agreement: f64,
+    /// Cohen's kappa, or `None` where it is undefined (no units, or expected
+    /// agreement of exactly 1 — e.g. neither coder ever applied the code).
+    pub kappa: Option<f64>,
+    /// The Landis & Koch band for `kappa`, or `""` when it is undefined.
+    pub interpretation: String,
+}
+
+/// One document's share of the comparison.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct IrrDocumentRow {
+    pub document_id: String,
+    pub document_name: String,
+    pub units: i64,
+    /// `(both + neither) / (units × codes)` for this document alone.
+    pub percent_agreement: f64,
+    pub disagreements: i64,
+}
+
+/// One unit one coder coded and the other did not.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct IrrDisagreement {
+    pub document_id: String,
+    pub document_name: String,
+    /// The unit's position in its document, from 0.
+    pub unit_index: i64,
+    /// `text` or `image_region`, matching `excerpts.kind`.
+    pub kind: String,
+    /// Code points, end-exclusive; both `0` for an image region.
+    pub start: i64,
+    pub end: i64,
+    /// The unit's text, truncated for display.
+    pub snippet: String,
+    pub code_id: String,
+    pub code_name: String,
+    pub color: String,
+    /// `a` or `b` — which of the two coders applied it.
+    pub who: String,
+    /// The coder id behind `who`, so the frontend can tell whether this is
+    /// the local coder's own coding without re-deriving it.
+    pub coder_id: String,
+    /// The excerpt whose range *is* this unit, when one exists: what "adopt"
+    /// reuses and what a jump focuses.
+    pub unit_excerpt_id: Option<String>,
+    /// The excerpts carrying the coding, in document order: what "remove
+    /// mine" takes the code off.
+    pub excerpt_ids: Vec<String>,
+}
+
+/// Everything the reliability view shows.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct IrrReport {
+    pub coder_a: String,
+    pub coder_b: String,
+    pub coder_a_name: String,
+    pub coder_b_name: String,
+    pub unit: IrrUnit,
+    pub overlap_threshold: f64,
+    /// The documents actually compared, in project order.
+    pub documents: Vec<IrrDocumentRow>,
+    /// Units summed over those documents.
+    pub units: i64,
+    /// `units × codes`: the number of yes/no decisions each coder made.
+    pub decisions: i64,
+    pub codes: Vec<IrrCodeRow>,
+    /// Cohen's kappa over every (code × unit) decision pooled together.
+    pub pooled_kappa: Option<f64>,
+    pub pooled_interpretation: String,
+    /// The unweighted mean of the per-code kappas that are defined.
+    pub mean_kappa: Option<f64>,
+    /// `(both + neither) / decisions` over everything.
+    pub percent_agreement: f64,
+    /// The first [`crate::db::irr::MAX_DISAGREEMENTS`], in document order.
+    pub disagreements: Vec<IrrDisagreement>,
+    /// How many there are in total, which `disagreements` may have truncated.
+    pub disagreement_count: i64,
+}
+
 // -------------------------------------------------------------- descriptors
 
 /// A document attribute: "Age group", "Site", "Interview wave", "Gender".

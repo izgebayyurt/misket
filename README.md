@@ -109,6 +109,16 @@ keyboard-friendly interface without a subscription.
   clicks through to the matching excerpts or a seeded project search, and
   each view exports to CSV. The overview screen's 30-day sparkline can be
   narrowed to a single code the same way.
+- **Inter-rater reliability**: compare two coders over the documents they both
+  coded — Cohen's kappa and percent agreement per code, a pooled figure and
+  the unweighted mean of the per-code kappas, with the unit of analysis
+  (paragraph, speaker turn or excerpt) an explicit control rather than a
+  hidden assumption. Kappa is blank where it is undefined instead of quietly
+  reading 0. Every disagreement is listed under its document with the passage
+  and who coded it; click to open the document there, "Adopt" to apply the
+  other coder's code yourself or "Remove mine" to take yours back, both
+  undoable. Exports a CSV carrying the table, the pooled rows and the
+  parameters a methods section has to quote.
 - **Framework matrices**: a grid of cases by themes — a row per document, per
   document in a set, or per value of a descriptor ("Site", "Wave"), and a
   column per code or per code in a set — where you write a short summary in
@@ -148,7 +158,8 @@ keyboard-friendly interface without a subscription.
   is written to their file. Misket previews what it would bring — documents,
   codes, excerpts, codings by coder, memos — and asks only about the few things
   you have both edited, with the safe answer preselected. The whole pull is one
-  undo, and pulling again later brings only what is new. See
+  undo, and pulling again later brings only what is new. Once you have each
+  other's work, the reliability view compares it. See
   [Working with a team](site/docs/data.html#working-with-a-team).
 - **Audit trail**: every change — a code created, renamed, moved or merged, an
   excerpt coded, adjusted or deleted, a memo written, a descriptor set — is
@@ -287,8 +298,7 @@ together, [docs/DATA_MODEL.md](docs/DATA_MODEL.md) for the schema, and
 
 - **Milestone 2**: image regions are in; video time ranges and transcript
   alignment are next (the data model already supports both).
-- Inter-rater reliability, full-text search, REFI-QDA import/export, project
-  sharing.
+- Full-text search, REFI-QDA import/export, project sharing.
 
 ## License
 
