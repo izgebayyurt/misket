@@ -17,6 +17,7 @@ const MIGRATIONS: &[(i64, &str)] = &[
     (10, include_str!("migrations/0010_transcripts.sql")),
     (11, include_str!("migrations/0011_coders.sql")),
     (12, include_str!("migrations/0012_sync_points.sql")),
+    (13, include_str!("migrations/0013_weights.sql")),
     (14, include_str!("migrations/0014_media_by_reference.sql")),
 ];
 
@@ -96,6 +97,7 @@ mod tests {
                bytes       BLOB NOT NULL
              );
              DROP TABLE sync_points;
+             ALTER TABLE codes DROP COLUMN weight_scale_json;
              DROP INDEX excerpt_codes_coder_idx;
              DROP INDEX excerpt_codes_code_idx;
              DROP TABLE excerpt_codes;

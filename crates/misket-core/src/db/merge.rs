@@ -68,7 +68,7 @@ use rusqlite::{params, Connection, OpenFlags, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
-use super::{activity, coders, history, migrations, transcripts, util};
+use super::{activity, coders, codes, history, migrations, transcripts, util};
 use crate::error::{AppError, Result};
 use crate::models::{
     CodePatch, CodeRow, CodeTreeSnapshot, Coder, Coding, DescriptorField, DescriptorValue,
@@ -283,7 +283,7 @@ fn read_side(conn: &Connection) -> Result<Side> {
     let codes = conn
         .prepare(
             "SELECT id, parent_id, name, color, description, inclusion, exclusion, shortcut,
-                    sort_order, created_at, updated_at
+                    sort_order, created_at, updated_at, weight_scale_json
                FROM codes ORDER BY sort_order, name",
         )?
         .query_map([], |r| {
@@ -299,6 +299,7 @@ fn read_side(conn: &Connection) -> Result<Side> {
                 sort_order: r.get(8)?,
                 created_at: r.get(9)?,
                 updated_at: r.get(10)?,
+                weight_scale: codes::parse_weight_scale(r.get(11)?),
             })
         })?
         .collect::<rusqlite::Result<Vec<_>>>()?;
@@ -331,7 +332,7 @@ fn read_side(conn: &Connection) -> Result<Side> {
 
     let tags = conn
         .prepare(
-            "SELECT excerpt_id, code_id, coder_id, created_at FROM excerpt_codes
+            "SELECT excerpt_id, code_id, coder_id, created_at, weight FROM excerpt_codes
               ORDER BY excerpt_id, code_id, coder_id",
         )?
         .query_map([], |r| {
@@ -340,6 +341,7 @@ fn read_side(conn: &Connection) -> Result<Side> {
                 code_id: r.get(1)?,
                 coder_id: r.get(2)?,
                 created_at: r.get(3)?,
+                weight: r.get(4)?,
             })
         })?
         .collect::<rusqlite::Result<Vec<_>>>()?;
@@ -1165,6 +1167,11 @@ fn build(
                 code_id: Mapping::id(&map.code, &t.code_id),
                 coder_id: t.coder_id.clone(),
                 created_at: t.created_at.clone(),
+                // Carried over as-is: reconciling it against our copy's
+                // scale (which may differ, or may not exist) is out of scope
+                // for a pull, the same way a pull never rewrites any other
+                // scalar to fit our side's rules.
+                weight: t.weight,
             })
             .collect();
         let mut code_ids: Vec<String> = vec![];
@@ -1188,6 +1195,7 @@ fn build(
                     .map(|t| Coding {
                         code_id: t.code_id.clone(),
                         coder_id: t.coder_id.clone(),
+                        weight: t.weight,
                     })
                     .collect(),
                 code_ids,
@@ -1238,6 +1246,7 @@ fn build(
             code_id,
             coder_id: t.coder_id.clone(),
             created_at: t.created_at.clone(),
+            weight: t.weight,
         });
     }
 

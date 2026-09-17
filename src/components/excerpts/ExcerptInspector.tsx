@@ -1,6 +1,12 @@
 import { X } from "lucide-react";
 import { useState } from "react";
-import { useExcerptDetail, useRemoveExcerptCode, useUpdateExcerptRange } from "@/queries/excerpts";
+import type { Coding, WeightScale } from "@/api/types";
+import {
+  useExcerptDetail,
+  useRemoveExcerptCode,
+  useSetExcerptWeight,
+  useUpdateExcerptRange,
+} from "@/queries/excerpts";
 import { useCodeTree } from "@/queries/codes";
 import { useCoders } from "@/queries/coders";
 import { CoderMark } from "@/components/coders/CoderMark";
@@ -19,9 +25,85 @@ import { ExcerptHistory } from "@/components/activity/HistoryTimeline";
 import { useWorkspace } from "@/state/workspace";
 import { toast } from "@/state/toasts";
 import { formatTimecode, parseTimecode } from "@/core/media";
+import { formatWeightWithLabel, weightScaleValues } from "@/core/weights";
 import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 import { MediaThumbnail } from "./MediaThumbnail";
 import { RegionThumbnail } from "./RegionThumbnail";
+
+/**
+ * A compact segmented control for this coder's weight on one coding, plus a
+ * read-only mark for every other coder who rated the same code. A scale with
+ * more than nine values falls back to a plain number field — a row of that
+ * many buttons stops reading as one control.
+ */
+function WeightControl({
+  scale,
+  codings,
+  codeId,
+  excerptId,
+  documentId,
+  meId,
+}: {
+  scale: WeightScale;
+  codings: Coding[];
+  codeId: string;
+  excerptId: string;
+  documentId: string;
+  meId?: string;
+}) {
+  const setWeight = useSetExcerptWeight();
+  const mine = meId ? codings.find((c) => c.coderId === meId) : codings[0];
+  const others = codings.filter((c) => c !== mine);
+  const values = weightScaleValues(scale);
+  const rate = (weight: number | null) =>
+    setWeight.mutate({ id: excerptId, documentId, codeId, weight, coderId: mine?.coderId ?? meId });
+  return (
+    <div
+      className="ml-6 mt-0.5 flex flex-wrap items-center gap-1 pb-1"
+      data-testid="weight-control"
+    >
+      {values.length <= 9 ? (
+        <div className="flex items-center gap-0.5" role="group" aria-label="Weight">
+          {values.map((v) => (
+            <button
+              key={v}
+              type="button"
+              title={formatWeightWithLabel(scale, v)}
+              aria-pressed={mine?.weight === v}
+              onClick={() => rate(mine?.weight === v ? null : v)}
+              className={cn(
+                "flex h-5 min-w-5 items-center justify-center rounded border px-1 text-[10px] tabular-nums",
+                mine?.weight === v
+                  ? "border-accent bg-accent text-accent-foreground"
+                  : "border-border bg-panel text-fg-muted hover:bg-muted",
+              )}
+            >
+              {v}
+            </button>
+          ))}
+        </div>
+      ) : (
+        <input
+          type="number"
+          min={scale.min}
+          max={scale.max}
+          step={scale.step}
+          value={mine?.weight ?? ""}
+          onChange={(e) => rate(e.target.value === "" ? null : Number(e.target.value))}
+          className="h-5 w-14 rounded border border-border bg-panel px-1 text-[10px]"
+          aria-label="Weight"
+        />
+      )}
+      {others.map((c) => (
+        <span key={c.coderId} className="flex items-center gap-0.5 text-[10px] text-fg-muted">
+          <CoderMark coderId={c.coderId} />
+          {c.weight != null ? formatWeightWithLabel(scale, c.weight) : "—"}
+        </span>
+      ))}
+    </div>
+  );
+}
 
 /** Right-panel view of the focused excerpt: context, codes, memos. */
 export function ExcerptInspector({ excerptId }: { excerptId: string }) {
@@ -104,46 +186,57 @@ export function ExcerptInspector({ excerptId }: { excerptId: string }) {
               .filter((c) => c.codeId === id)
               .map((c) => c.coderId);
             const mineOnly = applied.length <= 1 && (applied.length === 0 || applied[0] === me);
+            const scale = tree.byId.get(id)?.code.weightScale;
+            const codingsForCode = (detail.codings ?? []).filter((c) => c.codeId === id);
             return (
-              <li
-                key={id}
-                className="group flex items-center gap-2 rounded px-1 py-1 text-sm hover:bg-muted"
-              >
-                <ColorDot color={tree.byId.get(id)?.code.color ?? "#999"} />
-                <span className="min-w-0 flex-1 truncate">{pathOf(tree, id)}</span>
-                {coders && coders.length > 1
-                  ? applied.map((coderId) => <CoderMark key={coderId} coderId={coderId} />)
-                  : null}
-                <UseAsExampleButton codeId={id} excerptId={detail.id} />
-                {mineOnly ? (
-                  <button
-                    className="rounded p-0.5 text-fg-muted opacity-0 hover:bg-border group-hover:opacity-100"
-                    aria-label="Remove code"
-                    onClick={() => void remove(id)}
-                  >
-                    <X className="size-3.5" />
-                  </button>
-                ) : (
-                  <DropdownMenu>
-                    <DropdownMenuTrigger
-                      className="rounded p-0.5 text-fg-muted opacity-0 hover:bg-border group-hover:opacity-100 data-[state=open]:opacity-100"
+              <li key={id} className="group rounded px-1 py-1 hover:bg-muted">
+                <div className="flex items-center gap-2 text-sm">
+                  <ColorDot color={tree.byId.get(id)?.code.color ?? "#999"} />
+                  <span className="min-w-0 flex-1 truncate">{pathOf(tree, id)}</span>
+                  {coders && coders.length > 1
+                    ? applied.map((coderId) => <CoderMark key={coderId} coderId={coderId} />)
+                    : null}
+                  <UseAsExampleButton codeId={id} excerptId={detail.id} />
+                  {mineOnly ? (
+                    <button
+                      className="rounded p-0.5 text-fg-muted opacity-0 hover:bg-border group-hover:opacity-100"
                       aria-label="Remove code"
+                      onClick={() => void remove(id)}
                     >
                       <X className="size-3.5" />
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      {applied.map((coderId) => (
-                        <DropdownMenuItem
-                          key={coderId}
-                          danger
-                          onSelect={() => void remove(id, coderId)}
-                        >
-                          Remove {nameOf(coderId)} coding
-                        </DropdownMenuItem>
-                      ))}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                )}
+                    </button>
+                  ) : (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger
+                        className="rounded p-0.5 text-fg-muted opacity-0 hover:bg-border group-hover:opacity-100 data-[state=open]:opacity-100"
+                        aria-label="Remove code"
+                      >
+                        <X className="size-3.5" />
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        {applied.map((coderId) => (
+                          <DropdownMenuItem
+                            key={coderId}
+                            danger
+                            onSelect={() => void remove(id, coderId)}
+                          >
+                            Remove {nameOf(coderId)} coding
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
+                </div>
+                {scale ? (
+                  <WeightControl
+                    scale={scale}
+                    codings={codingsForCode}
+                    codeId={id}
+                    excerptId={detail.id}
+                    documentId={detail.documentId}
+                    meId={me}
+                  />
+                ) : null}
               </li>
             );
           })}

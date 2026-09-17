@@ -15,6 +15,7 @@ pub mod irr;
 pub mod media;
 pub mod memos;
 pub mod merge;
+pub mod ocr;
 pub mod project;
 pub mod refi;
 pub mod search;

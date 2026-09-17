@@ -146,6 +146,48 @@ export function useRemoveExcerptCode() {
   });
 }
 
+/**
+ * Rate one coding on its code's weight scale, or clear it (`weight: null`).
+ * `coderId` is undefined for "mine", same convention as
+ * `useRemoveExcerptCode`.
+ */
+export function useSetExcerptWeight() {
+  const invalidate = useInvalidateExcerpts();
+  return useMutation({
+    mutationFn: ({
+      id,
+      codeId,
+      weight,
+      coderId,
+    }: {
+      id: string;
+      documentId: string;
+      codeId: string;
+      weight: number | null;
+      coderId?: string | null;
+    }) => api.setExcerptWeight(id, codeId, weight, coderId ?? null),
+    onSuccess: (_r, { id, documentId }) => invalidate(documentId, id),
+  });
+}
+
+/** Set the local coder's weight on `codeId` to the same value across many
+ * excerpts (the excerpt browser's bulk-rating action). */
+export function useSetWeightsToExcerpts() {
+  const invalidate = useInvalidateExcerpts();
+  return useMutation({
+    mutationFn: ({
+      codeId,
+      ids,
+      weight,
+    }: {
+      codeId: string;
+      ids: string[];
+      weight: number | null;
+    }) => api.setWeightsToExcerpts(codeId, ids, weight),
+    onSuccess: () => invalidate(),
+  });
+}
+
 export function useDeleteExcerpt() {
   const invalidate = useInvalidateExcerpts();
   return useMutation({

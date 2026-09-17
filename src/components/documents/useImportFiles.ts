@@ -34,6 +34,15 @@ import { analyzeWhitespace, tidyText } from "@/core/importers/tidy";
 import { useMediaImportPrompt, type MediaImportFile } from "@/state/mediaImportPrompt";
 import { useSettings } from "@/state/settings";
 import { loadRememberedTidyChoice, useTidyPromptStore, type TidyChoice } from "@/state/tidyPrompt";
+import { looksScanned, scannedPdfMessage } from "@/core/importers/pdfQuality";
+import { OcrCancelledError, ocrPdf } from "@/core/importers/pdfOcr";
+import { useOcrPromptStore, type OcrDecision } from "@/state/ocrPrompt";
+import { useOcrProgressStore } from "@/state/ocrProgress";
+import { prepareOcrRuntime } from "./ocrRuntime";
+
+/** `sourceFormat` for a PDF whose text came from OCR rather than a text
+ * layer — the DocumentList format badge shows this as "OCR". */
+const OCR_SOURCE_FORMAT = "pdf-ocr";
 
 /** A file that has been read and is ready to become a document. */
 type Planned =
@@ -53,7 +62,7 @@ export function useImportFiles() {
       let lastId: string | null = null;
       let imported = 0;
       const taken = new Set((await listDocuments()).map((d) => d.name));
-      const planned: Planned[] = [];
+      let planned: Planned[] = [];
       for (const path of paths) {
         try {
           // A recording is never read into the page: it is measured where it
@@ -93,6 +102,10 @@ export function useImportFiles() {
           toast.error(e);
         }
       }
+
+      const { kept: withOcrDecided, ocrCount, skipped } = await resolveScannedPdfs(planned);
+      planned = withOcrDecided;
+      for (const name of skipped) toast.info(`Skipped ${name}: no text was imported.`);
 
       await maybeTidy(
         planned
@@ -178,6 +191,13 @@ export function useImportFiles() {
         }
       } finally {
         if (planned.length) await historyEndGroup();
+      }
+      if (ocrCount > 0) {
+        toast.info(
+          ocrCount === 1
+            ? "Recognised text in 1 scanned PDF with OCR."
+            : `Recognised text in ${ocrCount} scanned PDFs with OCR.`,
+        );
       }
       if (imported > 0 && lastId) openDocument(lastId);
     },
@@ -341,6 +361,86 @@ async function measureMedia(path: string): Promise<MediaInfo | null> {
       ? { width: measured.width, height: measured.height }
       : {}),
   };
+}
+
+/**
+ * For every PDF in the batch that looks scanned (see `pdfQuality.ts`), ask
+ * what to do: recognise it with OCR, import the (empty or sparse) text that
+ * was found, or skip it. Asked once per file, but a choice can be applied to
+ * the rest of the batch so a folder full of scanned PDFs doesn't mean a
+ * dialog per page. Runs before `maybeTidy` so tidy sees the final text,
+ * including whatever OCR produced.
+ */
+async function resolveScannedPdfs(
+  planned: Planned[],
+): Promise<{ kept: Planned[]; ocrCount: number; skipped: string[] }> {
+  const scanned = planned.filter(
+    (f): f is Extract<Planned, { kind: "text" }> =>
+      f.kind === "text" && !!f.parsed.pdfQuality && looksScanned(f.parsed.pdfQuality),
+  );
+  if (scanned.length === 0) return { kept: planned, ocrCount: 0, skipped: [] };
+
+  const toDrop = new Set<Planned>();
+  const skipped: string[] = [];
+  let ocrCount = 0;
+  let remembered: OcrDecision | null = null;
+
+  for (let i = 0; i < scanned.length; i++) {
+    const file = scanned[i]!;
+    const stats = file.parsed.pdfQuality!;
+
+    let decision: OcrDecision;
+    if (remembered) {
+      decision = remembered;
+    } else {
+      const choice = await useOcrPromptStore.getState().prompt({
+        file: { name: file.parsed.name, stats, message: scannedPdfMessage(stats) },
+        moreInBatch: i < scanned.length - 1,
+      });
+      decision = choice.decision;
+      if (choice.applyToRest) remembered = choice.decision;
+    }
+
+    if (decision === "skip") {
+      toDrop.add(file);
+      skipped.push(file.parsed.name);
+      continue;
+    }
+    if (decision === "as-is") {
+      delete file.parsed.pdfBytes;
+      continue;
+    }
+
+    // decision === "ocr"
+    const bytes = file.parsed.pdfBytes;
+    if (!bytes) continue; // shouldn't happen: pdfBytes is set alongside pdfQuality
+    const controller = new AbortController();
+    useOcrProgressStore.getState().start(file.parsed.name, () => controller.abort());
+    try {
+      const wanted = useSettings.getState().settings.ocrLanguages;
+      const { paths, languages } = await prepareOcrRuntime(wanted);
+      const text = await ocrPdf(bytes, {
+        paths,
+        languages,
+        onProgress: ({ page, pages }) => useOcrProgressStore.getState().update(page, pages),
+        signal: controller.signal,
+      });
+      file.parsed.text = text;
+      file.parsed.sourceFormat = OCR_SOURCE_FORMAT;
+      ocrCount++;
+    } catch (e) {
+      if (e instanceof OcrCancelledError) {
+        toast.info(`OCR cancelled for ${file.parsed.name}; imported the text that was found.`);
+      } else {
+        toast.error(e);
+      }
+    } finally {
+      delete file.parsed.pdfBytes;
+      useOcrProgressStore.getState().finish();
+    }
+  }
+
+  return { kept: planned.filter((f) => !toDrop.has(f)), ocrCount, skipped };
 }
 
 /**

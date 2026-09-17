@@ -2,12 +2,21 @@ import { MEDIA_EXTENSIONS, mediaMimeForExtension } from "../media";
 import { importText } from "./text";
 import { importMarkdown } from "./markdown";
 import { importDocx } from "./docx";
-import { importPdf } from "./pdf";
+import { extractPdfText } from "./pdf";
+import { classifyPdfQuality, type PdfQualityStats } from "./pdfQuality";
 
 export interface ImportedDocument {
   name: string;
   sourceFormat: string;
   text: string;
+  /** Set for PDFs only: whether the text layer looks complete, empty or
+   * scanned-and-sparse, and the per-page counts behind that call. Absent for
+   * every other format. */
+  pdfQuality?: PdfQualityStats;
+  /** The original PDF bytes, kept only so a scanned PDF can be re-rendered
+   * for OCR if the person chooses "Recognise text". Unused (and dropped)
+   * once that decision is made either way. */
+  pdfBytes?: Uint8Array;
 }
 
 /** Extensions parsed into document text. */
@@ -78,8 +87,21 @@ export async function importFile(path: string, bytes: Uint8Array): Promise<Impor
       return { name, sourceFormat: "md", text: importMarkdown(bytes) };
     case "docx":
       return { name, sourceFormat: "docx", text: await importDocx(bytes) };
-    case "pdf":
-      return { name, sourceFormat: "pdf", text: await importPdf(bytes) };
+    case "pdf": {
+      // pdf.js hands `data` off to its worker (a real one in the browser, a
+      // fake in-thread one in Node/tests) as a transferable, which detaches
+      // the original buffer — so a copy is taken first, kept only for a
+      // possible later OCR pass.
+      const pdfBytes = bytes.slice();
+      const { text, pageCharCounts } = await extractPdfText(bytes);
+      return {
+        name,
+        sourceFormat: "pdf",
+        text,
+        pdfQuality: classifyPdfQuality(pageCharCounts),
+        pdfBytes,
+      };
+    }
     default:
       throw new Error(
         `Unsupported file type ".${ext}". Supported: ${SUPPORTED_EXTENSIONS.join(", ")}.`,

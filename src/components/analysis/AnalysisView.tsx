@@ -7,6 +7,7 @@ import { CodeByDocumentMatrix } from "./CodeByDocumentMatrix";
 import { FrameworkMatrixView } from "./FrameworkMatrixView";
 import { CodeByDescriptorMatrix } from "./CodeByDescriptorMatrix";
 import { WordFrequencies } from "./WordFrequencies";
+import { WeightsView } from "./WeightsView";
 import { CodeTreemap } from "./CodeTreemap";
 import { CodeClustering } from "./CodeClustering";
 
@@ -17,6 +18,7 @@ const TABS: { id: AnalysisTab; label: string }[] = [
   { id: "framework", label: "Framework" },
   { id: "descriptor", label: "By descriptor" },
   { id: "words", label: "Words" },
+  { id: "weights", label: "Weights" },
   { id: "treemap", label: "Treemap" },
   { id: "clustering", label: "Clustering" },
 ];
@@ -54,6 +56,8 @@ export function AnalysisView({ tab }: { tab: AnalysisTab }) {
           <FrameworkMatrixView />
         ) : tab === "descriptor" ? (
           <CodeByDescriptorMatrix />
+        ) : tab === "weights" ? (
+          <WeightsView />
         ) : tab === "treemap" ? (
           <CodeTreemap />
         ) : tab === "clustering" ? (

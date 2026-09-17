@@ -20,7 +20,11 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; img-src 'self' data: blob: misket-media: http://misket-media.localhost; media-src 'self' blob: misket-media: http://misket-media.localhost http://127.0.0.1:*; style-src 'self' 'unsafe-inline'; script-src 'self'; worker-src 'self' blob:; font-src 'self' data:; connect-src 'self' blob: ipc: http://ipc.localhost misket-media: http://misket-media.localhost http://127.0.0.1:*; object-src 'none'; frame-src 'none'"
+      "csp": "default-src 'self'; img-src 'self' data: blob: misket-media: http://misket-media.localhost; media-src 'self' blob: misket-media: http://misket-media.localhost http://127.0.0.1:*; style-src 'self' 'unsafe-inline'; script-src 'self'; worker-src 'self' blob:; font-src 'self' data:; connect-src 'self' blob: ipc: http://ipc.localhost misket-media: http://misket-media.localhost http://127.0.0.1:* asset: http://asset.localhost; object-src 'none'; frame-src 'none'",
+      "assetProtocol": {
+        "enable": true,
+        "scope": ["$APPDATA/tessdata/*"]
+      }
     }
   },
   "bundle": {

@@ -8,11 +8,12 @@ use std::collections::{BTreeSet, HashMap, HashSet};
 use rusqlite::{types::Value, Connection};
 
 use super::meta;
-use super::{activity, codes, descriptors, documents, history, sets, transcripts, util};
+use super::{activity, codes, descriptors, documents, excerpts, history, sets, transcripts, util};
 use crate::error::{AppError, Result};
 use crate::models::{
     CoOccurrence, CodeByDescriptor, CodeByDocument, CodeFrequency, CrosstabColumn, CrosstabRequest,
-    CrosstabRow, DescriptorField, WordFrequency, WordFrequencyOptions, WordFrequencyScope,
+    CrosstabRow, DescriptorField, ExcerptFilter, WeightHistogramBin, WeightSummary, WordFrequency,
+    WordFrequencyOptions, WordFrequencyScope,
 };
 use crate::text::{self, stem};
 
@@ -724,6 +725,18 @@ fn crosstab_mode(req: &CrosstabRequest) -> Result<&str> {
     Ok(mode)
 }
 
+/// What a [`CrosstabRow`] cell holds: `count` (`cells`, the default) or
+/// `meanWeight` (`weightCells`, on top of `cells`).
+fn crosstab_measure(req: &CrosstabRequest) -> Result<&str> {
+    let measure = req.measure.as_deref().unwrap_or("count");
+    if measure != "count" && measure != "meanWeight" {
+        return Err(AppError::Validation(format!(
+            "unknown cross-tab measure {measure:?}; expected \"count\" or \"meanWeight\""
+        )));
+    }
+    Ok(measure)
+}
+
 /// Codes against speakers: "which themes does each participant raise".
 ///
 /// The columns are the speakers the documents in scope actually have, sorted
@@ -883,6 +896,9 @@ fn code_by_speaker(conn: &Connection, req: &CrosstabRequest) -> Result<CodeByDes
         rows.push(CrosstabRow {
             code_id: code_id.clone(),
             cells,
+            // The speaker cross-tab does not (yet) offer the weight measure;
+            // `code_by_descriptor` is where that lives.
+            weight_cells: None,
         });
     }
 
@@ -941,6 +957,7 @@ pub fn code_by_descriptor(conn: &Connection, req: &CrosstabRequest) -> Result<Co
     );
     let include_descendants = *include_descendants;
     let mode = crosstab_mode(req)?;
+    let measure = crosstab_measure(req)?;
     let field = descriptors::get_field(conn, field_id)?;
 
     // Documents in scope, in project order, and their value for the field.
@@ -1048,6 +1065,32 @@ pub fn code_by_descriptor(conn: &Connection, req: &CrosstabRequest) -> Result<Co
             .push((excerpt_id.as_str(), document_id.as_str()));
     }
 
+    // For `meanWeight`: every rated coding, not de-duplicated by excerpt —
+    // two coders' ratings of the same passage are two facts in the mean,
+    // unlike a plain count where they are one excerpt either way.
+    let weight_rows: Vec<(String, String, f64)> = if measure == "meanWeight" {
+        let mut stmt = conn.prepare(&format!(
+            "SELECT ec.code_id, e.document_id, ec.weight
+             FROM excerpt_codes ec JOIN excerpts e ON e.id = ec.excerpt_id
+             WHERE ec.weight IS NOT NULL{doc_sql}{coder_sql}"
+        ))?;
+        let rows = stmt
+            .query_map(rusqlite::params_from_iter(doc_args.iter()), |r| {
+                Ok((r.get(0)?, r.get(1)?, r.get(2)?))
+            })?
+            .collect::<rusqlite::Result<_>>()?;
+        rows
+    } else {
+        vec![]
+    };
+    let mut weights_by_code: HashMap<&str, Vec<(&str, f64)>> = HashMap::new();
+    for (code_id, document_id, weight) in &weight_rows {
+        weights_by_code
+            .entry(code_id.as_str())
+            .or_default()
+            .push((document_id.as_str(), *weight));
+    }
+
     let mut rows = Vec::with_capacity(rows_codes.len());
     for code_id in &rows_codes {
         let subtree = if include_descendants {
@@ -1074,9 +1117,28 @@ pub fn code_by_descriptor(conn: &Connection, req: &CrosstabRequest) -> Result<Co
                 }
             }
         }
+        let weight_cells = (measure == "meanWeight").then(|| {
+            let mut sums = vec![0.0f64; columns.len()];
+            let mut counts = vec![0i64; columns.len()];
+            for id in &subtree {
+                for (document_id, weight) in weights_by_code.get(id.as_str()).into_iter().flatten()
+                {
+                    let Some(i) = column_for(document_id) else {
+                        continue;
+                    };
+                    sums[i] += weight;
+                    counts[i] += 1;
+                }
+            }
+            sums.iter()
+                .zip(&counts)
+                .map(|(sum, count)| (*count > 0).then_some(sum / *count as f64))
+                .collect()
+        });
         rows.push(CrosstabRow {
             code_id: code_id.clone(),
             cells,
+            weight_cells,
         });
     }
 
@@ -1086,6 +1148,95 @@ pub fn code_by_descriptor(conn: &Connection, req: &CrosstabRequest) -> Result<Co
         rows,
         documents_per_column,
         mode: mode.to_string(),
+    })
+}
+
+/// Count, mean, median, min, max and a value histogram for one weighted
+/// code's codings, scoped exactly like the excerpt browser: `filter` is
+/// applied in full (paged through internally, ignoring its own
+/// `limit`/`offset`) with `code_id` forced on top of whatever codes it names.
+/// A coding with no weight — the code has a scale some codings simply have
+/// not been rated on — never contributes.
+pub fn weight_summary(
+    conn: &Connection,
+    code_id: &str,
+    filter: &ExcerptFilter,
+) -> Result<WeightSummary> {
+    codes::get(conn, code_id)?;
+    const PAGE: i64 = 1000;
+    let scoped = ExcerptFilter {
+        code_ids: Some(vec![code_id.to_string()]),
+        code_set_ids: None,
+        require_all_codes: false,
+        limit: PAGE,
+        ..filter.clone()
+    };
+    let mut ids: Vec<String> = vec![];
+    let mut offset = 0i64;
+    loop {
+        let page = excerpts::query(
+            conn,
+            &ExcerptFilter {
+                offset,
+                ..scoped.clone()
+            },
+        )?;
+        let got = page.rows.len() as i64;
+        ids.extend(page.rows.into_iter().map(|r| r.excerpt.id));
+        offset += PAGE;
+        if got < PAGE || offset >= page.total {
+            break;
+        }
+    }
+    if ids.is_empty() {
+        return Ok(WeightSummary::default());
+    }
+    let placeholders = ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+    let mut sql = format!(
+        "SELECT weight FROM excerpt_codes
+          WHERE code_id = ? AND weight IS NOT NULL AND excerpt_id IN ({placeholders})"
+    );
+    let mut args: Vec<rusqlite::types::Value> =
+        vec![rusqlite::types::Value::from(code_id.to_string())];
+    args.extend(ids.iter().cloned().map(rusqlite::types::Value::from));
+    if let Some(coder_ids) = filter.coder_ids.as_deref().filter(|c| !c.is_empty()) {
+        let coder_ph = coder_ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+        sql.push_str(&format!(" AND coder_id IN ({coder_ph})"));
+        args.extend(coder_ids.iter().cloned().map(rusqlite::types::Value::from));
+    }
+    let mut stmt = conn.prepare(&sql)?;
+    let mut values: Vec<f64> = stmt
+        .query_map(rusqlite::params_from_iter(args.iter()), |r| r.get(0))?
+        .collect::<rusqlite::Result<_>>()?;
+    values.sort_by(|a, b| a.partial_cmp(b).expect("weights are finite"));
+    let count = values.len() as i64;
+    if count == 0 {
+        return Ok(WeightSummary::default());
+    }
+    let sum: f64 = values.iter().sum();
+    let mid = (count / 2) as usize;
+    let median = if count % 2 == 1 {
+        values[mid]
+    } else {
+        (values[mid - 1] + values[mid]) / 2.0
+    };
+    let mut histogram: Vec<WeightHistogramBin> = vec![];
+    for v in &values {
+        match histogram.last_mut() {
+            Some(bin) if bin.value == *v => bin.count += 1,
+            _ => histogram.push(WeightHistogramBin {
+                value: *v,
+                count: 1,
+            }),
+        }
+    }
+    Ok(WeightSummary {
+        count,
+        mean: Some(sum / count as f64),
+        median: Some(median),
+        min: values.first().copied(),
+        max: values.last().copied(),
+        histogram,
     })
 }
 
@@ -1631,6 +1782,77 @@ mod tests {
     }
 
     #[test]
+    fn crosstab_mean_weight_measure_averages_ratings_per_column() {
+        let (p, docs, a, _a1) = crosstab_fixture();
+        let site = mk_field(&p.conn, "Site", "choice", &["North", "South"]);
+        set_value(&p.conn, &docs[0], &site.id, "North");
+        set_value(&p.conn, &docs[1], &site.id, "North");
+        set_value(&p.conn, &docs[2], &site.id, "South");
+        // docs[3] deliberately left with no value.
+
+        codes::set_weight_scale(
+            &p.conn,
+            &a,
+            Some(crate::models::WeightScale {
+                min: 1.0,
+                max: 5.0,
+                step: 1.0,
+                default: 3.0,
+                labels: Default::default(),
+            }),
+        )
+        .unwrap();
+        // `crosstab_fixture` already coded every document with `a` at
+        // [0,5), before the scale existed — so those codings started
+        // unrated; rate three of the four by hand and leave doc 3 alone.
+        for (doc, value) in [(&docs[0], 2.0), (&docs[1], 4.0), (&docs[2], 5.0)] {
+            let e = excerpts::list_for_document(&p.conn, doc)
+                .unwrap()
+                .into_iter()
+                .find(|e| e.code_ids.contains(&a))
+                .unwrap();
+            excerpts::set_weight(&p.conn, &e.id, &a, None, Some(value)).unwrap();
+        }
+
+        let out = code_by_descriptor(
+            &p.conn,
+            &CrosstabRequest {
+                field_id: site.id.clone(),
+                include_descendants: false,
+                measure: Some("meanWeight".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(labels(&out), vec!["North", "South", "(no value)"]);
+        let r = row(&out, &a);
+        // Counts still come along for free, next to the means.
+        assert_eq!(r.cells, vec![2, 1, 1]);
+        assert_eq!(
+            r.weight_cells,
+            Some(vec![Some(3.0), Some(5.0), None]),
+            "North averages 2 and 4; South is just the 5; \
+             doc 3's coding predates the scale and was never rated"
+        );
+
+        // The plain count request never computes weight cells at all.
+        let counted = code_by_descriptor(&p.conn, &req(&site.id)).unwrap();
+        assert_eq!(row(&counted, &a).weight_cells, None);
+
+        assert!(matches!(
+            code_by_descriptor(
+                &p.conn,
+                &CrosstabRequest {
+                    field_id: site.id,
+                    measure: Some("nope".into()),
+                    ..Default::default()
+                },
+            ),
+            Err(AppError::Validation(_))
+        ));
+    }
+
+    #[test]
     fn empty_project_is_empty_everywhere() {
         let p = OpenProject::in_memory("t").unwrap();
         assert!(code_frequencies(&p.conn, None, None, None)
@@ -2061,6 +2283,77 @@ mod tests {
                 }
             ),
             Err(AppError::Validation(_))
+        ));
+    }
+
+    fn weight_scale() -> crate::models::WeightScale {
+        crate::models::WeightScale {
+            min: 1.0,
+            max: 5.0,
+            step: 1.0,
+            default: 3.0,
+            labels: Default::default(),
+        }
+    }
+
+    #[test]
+    fn weight_summary_reports_stats_histogram_and_respects_the_filter() {
+        let f = fixture();
+        let conn = &f.project.conn;
+        codes::set_weight_scale(conn, &f.a, Some(weight_scale())).unwrap();
+        // The fixture's own doc1 [0,5) excerpt already carries `a`.
+        let e1 = excerpts::list_for_document(conn, &f.doc1)
+            .unwrap()
+            .into_iter()
+            .find(|e| e.code_ids.contains(&f.a))
+            .unwrap()
+            .id;
+        excerpts::set_weight(conn, &e1, &f.a, None, Some(5.0)).unwrap();
+        let e2 = apply(conn, &f.doc2, 20, 25, &[&f.a]);
+        excerpts::set_weight(conn, &e2, &f.a, None, Some(1.0)).unwrap();
+        let e3 = apply(conn, &f.doc1, 30, 35, &[&f.a]);
+        excerpts::set_weight(conn, &e3, &f.a, None, Some(5.0)).unwrap();
+
+        let summary = weight_summary(conn, &f.a, &ExcerptFilter::default()).unwrap();
+        assert_eq!(summary.count, 3);
+        assert_eq!(summary.mean, Some((5.0 + 1.0 + 5.0) / 3.0));
+        assert_eq!(summary.median, Some(5.0));
+        assert_eq!(summary.min, Some(1.0));
+        assert_eq!(summary.max, Some(5.0));
+        assert_eq!(
+            summary.histogram,
+            vec![
+                WeightHistogramBin {
+                    value: 1.0,
+                    count: 1
+                },
+                WeightHistogramBin {
+                    value: 5.0,
+                    count: 2
+                },
+            ]
+        );
+
+        // Scoped to doc1 only: e1 and e3, both 5.0; e2 (doc2) drops out.
+        let scoped = weight_summary(
+            conn,
+            &f.a,
+            &ExcerptFilter {
+                document_ids: Some(vec![f.doc1.clone()]),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(scoped.count, 2);
+        assert_eq!(scoped.mean, Some(5.0));
+
+        // A code nobody has rated yet reports an empty summary, not an error.
+        let unrated = weight_summary(conn, &f.b, &ExcerptFilter::default()).unwrap();
+        assert_eq!(unrated, WeightSummary::default());
+
+        assert!(matches!(
+            weight_summary(conn, "nope", &ExcerptFilter::default()),
+            Err(AppError::NotFound(_))
         ));
     }
 }

@@ -4,7 +4,7 @@
 use rusqlite::{params, Connection, OptionalExtension, Row};
 use serde_json::json;
 
-use super::history::{ExcerptChange, MemoMove, RangeRow, Touch};
+use super::history::{ExcerptChange, MemoMove, RangeRow, Touch, WeightRow};
 use super::{
     activity, codes, descriptors, documents, history, media, memos, query_expr, sets, text,
     transcripts, util,
@@ -73,7 +73,8 @@ fn from_row(r: &Row) -> rusqlite::Result<ExcerptWithCodes> {
 /// applied them, and every `excerpt_codes` row behind them.
 fn codings_for(conn: &Connection, excerpt_id: &str) -> Result<(Vec<String>, Vec<Coding>)> {
     let mut stmt = conn.prepare(
-        "SELECT ec.code_id, ec.coder_id FROM excerpt_codes ec JOIN codes c ON c.id = ec.code_id
+        "SELECT ec.code_id, ec.coder_id, ec.weight
+         FROM excerpt_codes ec JOIN codes c ON c.id = ec.code_id
          WHERE ec.excerpt_id = ?1 ORDER BY c.sort_order, c.name, ec.coder_id",
     )?;
     let codings: Vec<Coding> = stmt
@@ -81,6 +82,7 @@ fn codings_for(conn: &Connection, excerpt_id: &str) -> Result<(Vec<String>, Vec<
             Ok(Coding {
                 code_id: r.get(0)?,
                 coder_id: r.get(1)?,
+                weight: r.get(2)?,
             })
         })?
         .collect::<rusqlite::Result<_>>()?;
@@ -103,7 +105,7 @@ fn attach_codes(conn: &Connection, excerpts: &mut [ExcerptWithCodes]) -> Result<
         return Ok(());
     }
     let mut stmt = conn.prepare(
-        "SELECT ec.excerpt_id, ec.code_id, ec.coder_id
+        "SELECT ec.excerpt_id, ec.code_id, ec.coder_id, ec.weight
          FROM excerpt_codes ec JOIN codes c ON c.id = ec.code_id
          ORDER BY c.sort_order, c.name, ec.coder_id",
     )?;
@@ -114,6 +116,7 @@ fn attach_codes(conn: &Connection, excerpts: &mut [ExcerptWithCodes]) -> Result<
                 Coding {
                     code_id: r.get(1)?,
                     coder_id: r.get(2)?,
+                    weight: r.get(3)?,
                 },
             ))
         })?
@@ -434,14 +437,20 @@ pub fn apply_codes(conn: &Connection, input: ApplyCodesInput) -> Result<ApplyRes
     // agreeing with a colleague adds a coding rather than doing nothing.
     let coder = history::local_coder(&tx);
     let mut added = vec![];
+    let mut added_weights: std::collections::HashMap<String, Option<f64>> = Default::default();
     for code_id in &input.code_ids {
+        // A code with a scale starts every fresh coding at its default,
+        // rather than leaving it unrated (documented in `docs/DATA_MODEL.md`;
+        // the coder can clear it from the inspector).
+        let weight = codes::default_weight(&tx, code_id)?;
         let n = tx.execute(
-            "INSERT OR IGNORE INTO excerpt_codes (excerpt_id, code_id, coder_id, created_at)
-             VALUES (?1, ?2, ?3, ?4)",
-            params![id, code_id, coder, now],
+            "INSERT OR IGNORE INTO excerpt_codes (excerpt_id, code_id, coder_id, created_at, weight)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![id, code_id, coder, now, weight],
         )?;
         if n > 0 {
             added.push(code_id.clone());
+            added_weights.insert(code_id.clone(), weight);
         }
     }
     if !added.is_empty() && !created {
@@ -455,6 +464,7 @@ pub fn apply_codes(conn: &Connection, input: ApplyCodesInput) -> Result<ApplyRes
             .iter()
             .map(|code_id| TagRow {
                 excerpt_id: id.clone(),
+                weight: added_weights.get(code_id).copied().flatten(),
                 code_id: code_id.clone(),
                 coder_id: coder.clone(),
                 created_at: now.clone(),
@@ -543,10 +553,11 @@ pub fn add_codes(conn: &Connection, id: &str, code_ids: &[String]) -> Result<Exc
     let coder = history::local_coder(&tx);
     let mut tags = vec![];
     for code_id in code_ids {
+        let weight = codes::default_weight(&tx, code_id)?;
         let inserted = tx.execute(
-            "INSERT OR IGNORE INTO excerpt_codes (excerpt_id, code_id, coder_id, created_at)
-             VALUES (?1, ?2, ?3, ?4)",
-            params![id, code_id, coder, now],
+            "INSERT OR IGNORE INTO excerpt_codes (excerpt_id, code_id, coder_id, created_at, weight)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![id, code_id, coder, now, weight],
         )?;
         if inserted > 0 {
             tags.push(TagRow {
@@ -554,6 +565,7 @@ pub fn add_codes(conn: &Connection, id: &str, code_ids: &[String]) -> Result<Exc
                 code_id: code_id.clone(),
                 coder_id: coder.clone(),
                 created_at: now.clone(),
+                weight,
             });
         }
     }
@@ -616,21 +628,22 @@ pub fn remove_code(
         Some(c) => c.to_string(),
         None => history::local_coder(&tx),
     };
-    // The tag's own `created_at`, so putting it back restores the row as it
-    // was rather than one that claims to have been made today.
+    // The tag's own `created_at` and current weight, so putting it back
+    // restores the row exactly rather than one made today with no rating.
     let tags: Vec<TagRow> = tx
         .query_row(
-            "SELECT created_at FROM excerpt_codes
+            "SELECT created_at, weight FROM excerpt_codes
               WHERE excerpt_id = ?1 AND code_id = ?2 AND coder_id = ?3",
             params![id, code_id, coder],
-            |r| r.get::<_, String>(0),
+            |r| Ok((r.get::<_, String>(0)?, r.get::<_, Option<f64>>(1)?)),
         )
         .optional()?
-        .map(|created_at| TagRow {
+        .map(|(created_at, weight)| TagRow {
             excerpt_id: id.to_string(),
             code_id: code_id.to_string(),
             coder_id: coder.clone(),
             created_at,
+            weight,
         })
         .into_iter()
         .collect();
@@ -674,6 +687,104 @@ pub fn remove_code(
     )?;
     tx.commit()?;
     get(conn, id)
+}
+
+/// Rate one coding on its code's weight scale, or clear the rating
+/// (`weight: None`). `coder` is `None` for the local coder, same convention
+/// as [`remove_code`].
+///
+/// The code must carry a scale (`Code::weightScale`) and the coder must
+/// already have applied it to this excerpt; a value outside `[min, max]` is
+/// clamped rather than rejected, and every value is snapped to `step`
+/// (`db::codes::snap_weight`) before it is stored.
+pub fn set_weight(
+    conn: &Connection,
+    excerpt_id: &str,
+    code_id: &str,
+    coder: Option<&str>,
+    weight: Option<f64>,
+) -> Result<ExcerptWithCodes> {
+    let before = get(conn, excerpt_id)?;
+    let code = codes::get(conn, code_id)?;
+    let scale = code.weight_scale.clone().ok_or_else(|| {
+        AppError::Validation(format!("code \"{}\" has no weight scale", code.name))
+    })?;
+    let now = util::now();
+    let tx = util::tx(conn)?;
+    let coder = match coder {
+        Some(c) => c.to_string(),
+        None => history::local_coder(&tx),
+    };
+    let previous: Option<f64> = tx
+        .query_row(
+            "SELECT weight FROM excerpt_codes WHERE excerpt_id = ?1 AND code_id = ?2 AND coder_id = ?3",
+            params![excerpt_id, code_id, coder],
+            |r| r.get::<_, Option<f64>>(0),
+        )
+        .optional()?
+        .ok_or_else(|| {
+            AppError::NotFound(format!(
+                "code \"{}\" is not applied to this excerpt by that coder",
+                code.name
+            ))
+        })?;
+    let snapped = weight.map(|w| codes::snap_weight(&scale, w));
+    tx.execute(
+        "UPDATE excerpt_codes SET weight = ?4
+          WHERE excerpt_id = ?1 AND code_id = ?2 AND coder_id = ?3",
+        params![excerpt_id, code_id, coder, snapped],
+    )?;
+    tx.execute(
+        "UPDATE excerpts SET updated_at = ?2 WHERE id = ?1",
+        params![excerpt_id, now],
+    )?;
+    let summary = match snapped {
+        Some(w) => format!("Rated \"{}\" {w} on {}", code.name, quoted(&before)),
+        None => format!("Cleared the {} rating on {}", code.name, quoted(&before)),
+    };
+    activity::record(
+        &tx,
+        "excerpt.weight_set",
+        "excerpt",
+        Some(excerpt_id),
+        summary,
+        {
+            let mut d = where_json(&tx, &before);
+            d["codeId"] = json!(code_id);
+            d["codeName"] = json!(code.name);
+            d["coderId"] = json!(coder);
+            d["weight"] = activity::change(previous, snapped);
+            d
+        },
+        Some(history::payload(&ExcerptChange {
+            weights: vec![WeightRow {
+                excerpt_id: excerpt_id.to_string(),
+                code_id: code_id.to_string(),
+                coder_id: coder.clone(),
+                weight: snapped,
+            }],
+            touch: vec![Touch {
+                excerpt_id: excerpt_id.to_string(),
+                updated_at: now,
+            }],
+            ..Default::default()
+        })),
+        Some(history::payload(&ExcerptChange {
+            weights: vec![WeightRow {
+                excerpt_id: excerpt_id.to_string(),
+                code_id: code_id.to_string(),
+                coder_id: coder,
+                weight: previous,
+            }],
+            touch: vec![Touch {
+                excerpt_id: excerpt_id.to_string(),
+                updated_at: before.updated_at.clone(),
+            }],
+            ..Default::default()
+        })),
+    )?;
+    tx.commit()?;
+    get(conn, excerpt_id)
 }
 
 /// In vivo coding: create a code named after the selected text and apply it
@@ -725,7 +836,7 @@ pub fn in_vivo_code(
 pub fn snapshot(conn: &Connection, id: &str) -> Result<ExcerptSnapshot> {
     let excerpt = get(conn, id)?;
     let mut stmt = conn.prepare(
-        "SELECT excerpt_id, code_id, coder_id, created_at FROM excerpt_codes
+        "SELECT excerpt_id, code_id, coder_id, created_at, weight FROM excerpt_codes
           WHERE excerpt_id = ?1 ORDER BY code_id, coder_id",
     )?;
     let tags: Vec<TagRow> = stmt
@@ -735,6 +846,7 @@ pub fn snapshot(conn: &Connection, id: &str) -> Result<ExcerptSnapshot> {
                 code_id: r.get(1)?,
                 coder_id: r.get(2)?,
                 created_at: r.get(3)?,
+                weight: r.get(4)?,
             })
         })?
         .collect::<rusqlite::Result<_>>()?;
@@ -828,6 +940,7 @@ pub fn restore(conn: &Connection, snapshot: &ExcerptSnapshot) -> Result<ExcerptW
                 code_id: c.code_id.clone(),
                 coder_id: c.coder_id.clone(),
                 created_at: e.updated_at.clone(),
+                weight: c.weight,
             })
             .collect()
     } else {
@@ -841,9 +954,9 @@ pub fn restore(conn: &Connection, snapshot: &ExcerptSnapshot) -> Result<ExcerptW
             t.coder_id.clone()
         };
         tx.execute(
-            "INSERT OR IGNORE INTO excerpt_codes (excerpt_id, code_id, coder_id, created_at)
-             SELECT ?1, id, ?3, ?4 FROM codes WHERE id = ?2",
-            params![e.id, t.code_id, coder, t.created_at],
+            "INSERT OR IGNORE INTO excerpt_codes (excerpt_id, code_id, coder_id, created_at, weight)
+             SELECT ?1, id, ?3, ?4, ?5 FROM codes WHERE id = ?2",
+            params![e.id, t.code_id, coder, t.created_at, t.weight],
         )?;
     }
     if let Some(thumb) = &snapshot.thumbnail {
@@ -1177,11 +1290,19 @@ pub fn merge_adjacent(conn: &Connection, left_id: &str, right_id: &str) -> Resul
     let removed = snapshot(conn, right_id)?;
     let moved_memo_ids: Vec<String> = removed.memos.iter().map(|m| m.id.clone()).collect();
     // Codings, not codes: the survivor gains the ones it does not already
-    // have from that coder, and each keeps whoever made it.
+    // have from that coder, and each keeps whoever made it and its weight
+    // (same code, so the same scale — nothing to reconcile). Compared by
+    // (code, coder) rather than by the whole `Coding`, since two people can
+    // rate the very code they agree on differently.
     let added_codings: Vec<Coding> = right
         .codings
         .iter()
-        .filter(|c| !left.codings.contains(c))
+        .filter(|c| {
+            !left
+                .codings
+                .iter()
+                .any(|l| l.code_id == c.code_id && l.coder_id == c.coder_id)
+        })
         .cloned()
         .collect();
     let added: Vec<String> = unique_code_ids(&added_codings)
@@ -1198,9 +1319,9 @@ pub fn merge_adjacent(conn: &Connection, left_id: &str, right_id: &str) -> Resul
     tx.execute("DELETE FROM excerpts WHERE id = ?1", [right_id])?;
     for coding in &added_codings {
         tx.execute(
-            "INSERT OR IGNORE INTO excerpt_codes (excerpt_id, code_id, coder_id, created_at)
-             VALUES (?1, ?2, ?3, ?4)",
-            params![left_id, coding.code_id, coding.coder_id, now],
+            "INSERT OR IGNORE INTO excerpt_codes (excerpt_id, code_id, coder_id, created_at, weight)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![left_id, coding.code_id, coding.coder_id, now, coding.weight],
         )?;
     }
     tx.execute(
@@ -1238,6 +1359,7 @@ pub fn merge_adjacent(conn: &Connection, left_id: &str, right_id: &str) -> Resul
             code_id: coding.code_id.clone(),
             coder_id: coding.coder_id.clone(),
             created_at: now.clone(),
+            weight: coding.weight,
         })
         .collect();
     let forward = ExcerptChange {
@@ -1488,6 +1610,20 @@ pub fn query(conn: &Connection, filter: &ExcerptFilter) -> Result<ExcerptPage> {
                       WHERE ec.excerpt_id = e.id AND ec.coder_id IN ({ph}))"
         ));
         args.extend(coder_ids.iter().cloned().map(rusqlite::types::Value::from));
+    }
+    if let Some(range) = &filter.weight_range {
+        // A coding with no weight never matches: `weight IS NOT NULL` is
+        // implied by the `BETWEEN`, but spelled out since SQLite's `NULL
+        // BETWEEN` reads as false anyway and this is clearer to a reader.
+        where_clauses.push(
+            "EXISTS (SELECT 1 FROM excerpt_codes ec
+                      WHERE ec.excerpt_id = e.id AND ec.code_id = ?
+                        AND ec.weight IS NOT NULL AND ec.weight BETWEEN ? AND ?)"
+                .to_string(),
+        );
+        args.push(rusqlite::types::Value::from(range.code_id.clone()));
+        args.push(rusqlite::types::Value::from(range.min));
+        args.push(rusqlite::types::Value::from(range.max));
     }
     if let Some(other_code) = &filter.overlaps_code_id {
         // Only text excerpts overlap in this sense (`co_occurrence` never
@@ -2947,5 +3083,91 @@ mod tests {
             .total,
             0
         );
+    }
+
+    // -------------------------------------------------------------- weights
+
+    #[test]
+    fn set_weight_validates_snaps_and_clears() {
+        let (p, doc, a, _) = setup();
+        crate::db::codes::set_weight_scale(
+            &p.conn,
+            &a,
+            Some(crate::models::WeightScale {
+                min: 1.0,
+                max: 5.0,
+                step: 1.0,
+                default: 3.0,
+                labels: Default::default(),
+            }),
+        )
+        .unwrap();
+        let e = apply(&p.conn, &doc, 0, 5, &[&a]).excerpt.id;
+        assert_eq!(get(&p.conn, &e).unwrap().codings[0].weight, Some(3.0));
+
+        // Out of range clamps rather than erroring; between two steps snaps
+        // to the nearer one.
+        let after = set_weight(&p.conn, &e, &a, None, Some(9.0)).unwrap();
+        assert_eq!(after.codings[0].weight, Some(5.0));
+        let after = set_weight(&p.conn, &e, &a, None, Some(3.6)).unwrap();
+        assert_eq!(after.codings[0].weight, Some(4.0));
+
+        // Clearing sets it back to no rating.
+        let after = set_weight(&p.conn, &e, &a, None, None).unwrap();
+        assert_eq!(after.codings[0].weight, None);
+
+        // A code with no scale, or a coder who never applied the code,
+        // both refuse rather than silently doing nothing.
+        let (p2, doc2, plain, _) = setup();
+        let e2 = apply(&p2.conn, &doc2, 0, 4, &[&plain]).excerpt.id;
+        assert!(matches!(
+            set_weight(&p2.conn, &e2, &plain, None, Some(1.0)),
+            Err(AppError::Validation(_))
+        ));
+        assert!(matches!(
+            set_weight(&p.conn, &e, &a, Some("somebody-else"), Some(1.0)),
+            Err(AppError::NotFound(_))
+        ));
+    }
+
+    #[test]
+    fn filter_by_weight_range_matches_only_codings_in_range() {
+        let (p, doc, a, _) = setup();
+        crate::db::codes::set_weight_scale(
+            &p.conn,
+            &a,
+            Some(crate::models::WeightScale {
+                min: 1.0,
+                max: 5.0,
+                step: 1.0,
+                default: 3.0,
+                labels: Default::default(),
+            }),
+        )
+        .unwrap();
+        let low = apply(&p.conn, &doc, 0, 3, &[&a]).excerpt.id;
+        let mid = apply(&p.conn, &doc, 4, 7, &[&a]).excerpt.id;
+        let high = apply(&p.conn, &doc, 8, 11, &[&a]).excerpt.id;
+        set_weight(&p.conn, &low, &a, None, Some(1.0)).unwrap();
+        set_weight(&p.conn, &mid, &a, None, Some(3.0)).unwrap();
+        set_weight(&p.conn, &high, &a, None, Some(5.0)).unwrap();
+        // An unrated coding (a code with no scale at all) never matches.
+        let (b_conn, b_doc, b_code, _) = setup();
+        let _ = apply(&b_conn.conn, &b_doc, 0, 3, &[&b_code]);
+
+        let filter = |min: f64, max: f64| ExcerptFilter {
+            weight_range: Some(crate::models::WeightRangeFilter {
+                code_id: a.clone(),
+                min,
+                max,
+            }),
+            ..Default::default()
+        };
+        let page = query(&p.conn, &filter(2.0, 5.0)).unwrap();
+        let ids: Vec<&str> = page.rows.iter().map(|r| r.excerpt.id.as_str()).collect();
+        assert_eq!(ids, vec![mid.as_str(), high.as_str()]);
+
+        assert_eq!(query(&p.conn, &filter(1.0, 1.0)).unwrap().total, 1);
+        assert_eq!(query(&p.conn, &filter(10.0, 20.0)).unwrap().total, 0);
     }
 }

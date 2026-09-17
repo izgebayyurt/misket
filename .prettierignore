@@ -3,3 +3,5 @@ target
 node_modules
 pnpm-lock.yaml
 src-tauri/gen
+# Vendored, pre-minified tesseract.js runtime (see docs/OCR.md) — not ours to format.
+public/tesseract

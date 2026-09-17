@@ -3,13 +3,24 @@
 use rusqlite::{params, Connection, OptionalExtension, Row};
 use serde_json::{json, Value};
 
-use super::history::{CodeOp, Reparent};
+use super::history::{CodeOp, Reparent, WeightRow};
 use super::{activity, history, util};
 use crate::error::{AppError, Result};
 use crate::models::{
     ChildrenStrategy, Code, CodeImpact, CodePatch, CodeRow, CodeTreeSnapshot, DeleteCodeReport,
-    FrameworkCellRow, NewCode, SiblingGroup, TagRow,
+    FrameworkCellRow, NewCode, SiblingGroup, TagRow, WeightScale,
 };
+
+/// Parse a code's stored `weight_scale_json`. `None` when there is no scale;
+/// malformed JSON (should not happen — only `db::codes` ever writes this
+/// column) is treated the same as no scale rather than failing the read.
+pub(crate) fn parse_weight_scale(raw: Option<String>) -> Option<WeightScale> {
+    raw.and_then(|s| serde_json::from_str(&s).ok())
+}
+
+pub(crate) fn weight_scale_json(scale: Option<&WeightScale>) -> Option<String> {
+    scale.map(|s| serde_json::to_string(s).expect("WeightScale serializes"))
+}
 
 /// Twelve distinguishable highlight colors; new codes cycle through them.
 pub const PALETTE: [&str; 12] = [
@@ -21,7 +32,7 @@ const COLUMNS: &str = "c.id, c.parent_id, c.name, c.color, c.description,
      c.inclusion, c.exclusion, c.example_excerpt_id, c.shortcut, c.sort_order,
      (SELECT count(DISTINCT ec.excerpt_id) FROM excerpt_codes ec
         WHERE ec.code_id = c.id) AS excerpt_count,
-     c.created_at, c.updated_at";
+     c.created_at, c.updated_at, c.weight_scale_json";
 
 fn from_row(r: &Row) -> rusqlite::Result<Code> {
     Ok(Code {
@@ -38,6 +49,7 @@ fn from_row(r: &Row) -> rusqlite::Result<Code> {
         excerpt_count: r.get(10)?,
         created_at: r.get(11)?,
         updated_at: r.get(12)?,
+        weight_scale: parse_weight_scale(r.get(13)?),
     })
 }
 
@@ -78,6 +90,58 @@ fn validate_color(color: &str) -> Result<()> {
             "invalid color {color:?}; use #RRGGBB"
         )))
     }
+}
+
+/// `min < max`, `step > 0`, `default` within `[min, max]`.
+pub fn validate_weight_scale(scale: &WeightScale) -> Result<()> {
+    if scale.min.partial_cmp(&scale.max) != Some(std::cmp::Ordering::Less) {
+        return Err(AppError::Validation(format!(
+            "weight scale min ({}) must be less than max ({})",
+            scale.min, scale.max
+        )));
+    }
+    if scale.step.partial_cmp(&0.0) != Some(std::cmp::Ordering::Greater) {
+        return Err(AppError::Validation(format!(
+            "weight scale step ({}) must be greater than zero",
+            scale.step
+        )));
+    }
+    if scale.default < scale.min || scale.default > scale.max {
+        return Err(AppError::Validation(format!(
+            "weight scale default ({}) must be between {} and {}",
+            scale.default, scale.min, scale.max
+        )));
+    }
+    Ok(())
+}
+
+/// Snap `value` to the nearest step of `scale`, then clamp to `[min, max]`
+/// (clamping after snapping so a value just past an end lands on the end
+/// rather than one step beyond it).
+pub fn snap_weight(scale: &WeightScale, value: f64) -> f64 {
+    let steps = ((value - scale.min) / scale.step).round();
+    let snapped = scale.min + steps * scale.step;
+    snapped.clamp(scale.min, scale.max)
+}
+
+/// Whether `value` falls inside `scale`'s range, so carrying it over (a
+/// retag, a merge) needs no snapping and loses nothing.
+pub fn fits_weight_scale(scale: &WeightScale, value: f64) -> bool {
+    value >= scale.min && value <= scale.max
+}
+
+/// The default weight a fresh coding of `code_id` should start with: the
+/// scale's `default`, or `None` when the code has no scale.
+pub fn default_weight(conn: &Connection, code_id: &str) -> Result<Option<f64>> {
+    let raw: Option<String> = conn
+        .query_row(
+            "SELECT weight_scale_json FROM codes WHERE id = ?1",
+            [code_id],
+            |r| r.get::<_, Option<String>>(0),
+        )
+        .optional()?
+        .flatten();
+    Ok(parse_weight_scale(raw).map(|s| s.default))
 }
 
 fn validate_shortcut(shortcut: Option<&str>) -> Result<Option<String>> {
@@ -256,7 +320,107 @@ pub fn update(conn: &Connection, id: &str, patch: CodePatch) -> Result<Code> {
     .map_err(|e| map_unique(e, &name, shortcut.as_deref()))?;
     let updated = get(conn, id)?;
     log_update(conn, &current, &updated)?;
-    Ok(updated)
+    match patch.weight_scale {
+        Some(scale) => set_weight_scale(conn, id, scale),
+        None => Ok(updated),
+    }
+}
+
+/// Give a code a rating scale, change it, or clear it (`scale: None`).
+///
+/// Clearing a scale — or narrowing one so an already-recorded weight no
+/// longer fits — nulls exactly those weights; the inverse payload carries
+/// their exact values, so undo restores the ratings rather than merely
+/// putting the old scale back over now-empty weights. A weight that already
+/// fits an edited scale (still in `[min, max]`) is left as it is, even if it
+/// no longer sits on the new `step`.
+pub fn set_weight_scale(conn: &Connection, id: &str, scale: Option<WeightScale>) -> Result<Code> {
+    if let Some(s) = &scale {
+        validate_weight_scale(s)?;
+    }
+    let current = get(conn, id)?;
+    if current.weight_scale == scale {
+        return Ok(current);
+    }
+    let mut stmt = conn.prepare(
+        "SELECT excerpt_id, coder_id, weight FROM excerpt_codes
+          WHERE code_id = ?1 AND weight IS NOT NULL",
+    )?;
+    let existing: Vec<(String, String, f64)> = stmt
+        .query_map([id], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?
+        .collect::<rusqlite::Result<_>>()?;
+    drop(stmt);
+    let affected: Vec<(String, String, f64)> = existing
+        .into_iter()
+        .filter(|(_, _, w)| match &scale {
+            None => true,
+            Some(s) => !fits_weight_scale(s, *w),
+        })
+        .collect();
+    let now = util::now();
+    conn.execute(
+        "UPDATE codes SET weight_scale_json = ?2, updated_at = ?3 WHERE id = ?1",
+        params![id, weight_scale_json(scale.as_ref()), now],
+    )?;
+    for (excerpt_id, coder_id, _) in &affected {
+        conn.execute(
+            "UPDATE excerpt_codes SET weight = NULL
+              WHERE excerpt_id = ?1 AND code_id = ?2 AND coder_id = ?3",
+            params![excerpt_id, id, coder_id],
+        )?;
+    }
+    let cleared_weights: Vec<WeightRow> = affected
+        .iter()
+        .map(|(excerpt_id, coder_id, _)| WeightRow {
+            excerpt_id: excerpt_id.clone(),
+            code_id: id.to_string(),
+            coder_id: coder_id.clone(),
+            weight: None,
+        })
+        .collect();
+    let restored_weights: Vec<WeightRow> = affected
+        .into_iter()
+        .map(|(excerpt_id, coder_id, weight)| WeightRow {
+            excerpt_id,
+            code_id: id.to_string(),
+            coder_id,
+            weight: Some(weight),
+        })
+        .collect();
+    let summary = match &scale {
+        None => format!("Cleared the weight scale of code \"{}\"", current.name),
+        Some(_) if current.weight_scale.is_none() => {
+            format!("Gave code \"{}\" a weight scale", current.name)
+        }
+        Some(_) => format!("Changed the weight scale of code \"{}\"", current.name),
+    };
+    activity::record(
+        conn,
+        "code.weight_scale_set",
+        "code",
+        Some(id),
+        summary,
+        json!({
+            "scale": activity::change(
+                current.weight_scale.clone().map(|s| json!(s)),
+                scale.clone().map(|s| json!(s)),
+            ),
+            "clearedWeightCount": cleared_weights.len(),
+        }),
+        Some(history::payload(&CodeOp::WeightScale {
+            code_id: id.to_string(),
+            scale: scale.clone(),
+            updated_at: now,
+            weights: cleared_weights,
+        })),
+        Some(history::payload(&CodeOp::WeightScale {
+            code_id: id.to_string(),
+            scale: current.weight_scale.clone(),
+            updated_at: current.updated_at.clone(),
+            weights: restored_weights,
+        })),
+    )?;
+    get(conn, id)
 }
 
 /// One `code.updated` entry per real change, with every field that moved
@@ -351,6 +515,11 @@ fn update_op(code: &Code) -> CodeOp {
             exclusion: Some(code.exclusion.clone()),
             shortcut: Some(code.shortcut.clone()),
             example_excerpt_id: Some(code.example_excerpt_id.clone()),
+            // The weight scale has its own history kind
+            // (`code.weight_scale_set`) because clearing or narrowing it has
+            // a side effect — nulling weights — that a plain field swap
+            // cannot express; `CodeOp::Update` never touches it.
+            weight_scale: None,
         }),
         updated_at: code.updated_at.clone(),
     }
@@ -555,7 +724,7 @@ pub fn snapshot_codes(conn: &Connection, ids: &[String]) -> Result<CodeTreeSnaps
 
     let mut stmt = conn.prepare(&format!(
         "SELECT id, parent_id, name, color, description, inclusion, exclusion,
-                shortcut, sort_order, created_at, updated_at
+                shortcut, sort_order, created_at, updated_at, weight_scale_json
          FROM codes WHERE id IN ({list}) ORDER BY sort_order, created_at"
     ))?;
     let rows: Vec<CodeRow> = stmt
@@ -572,6 +741,7 @@ pub fn snapshot_codes(conn: &Connection, ids: &[String]) -> Result<CodeTreeSnaps
                 sort_order: r.get(8)?,
                 created_at: r.get(9)?,
                 updated_at: r.get(10)?,
+                weight_scale: parse_weight_scale(r.get(11)?),
             })
         })?
         .collect::<rusqlite::Result<_>>()?;
@@ -594,7 +764,7 @@ pub fn snapshot_codes(conn: &Connection, ids: &[String]) -> Result<CodeTreeSnaps
     }
 
     let mut stmt = conn.prepare(&format!(
-        "SELECT excerpt_id, code_id, coder_id, created_at FROM excerpt_codes
+        "SELECT excerpt_id, code_id, coder_id, created_at, weight FROM excerpt_codes
           WHERE code_id IN ({list}) ORDER BY excerpt_id, code_id, coder_id"
     ))?;
     snap.excerpt_codes = stmt
@@ -604,6 +774,7 @@ pub fn snapshot_codes(conn: &Connection, ids: &[String]) -> Result<CodeTreeSnaps
                 code_id: r.get(1)?,
                 coder_id: r.get(2)?,
                 created_at: r.get(3)?,
+                weight: r.get(4)?,
             })
         })?
         .collect::<rusqlite::Result<_>>()?;
@@ -673,8 +844,8 @@ pub fn restore_subtree(conn: &Connection, snap: &CodeTreeSnapshot) -> Result<()>
     for c in &snap.codes {
         tx.execute(
             "INSERT INTO codes (id, parent_id, name, color, description, inclusion, exclusion,
-                                shortcut, sort_order, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+                                shortcut, sort_order, created_at, updated_at, weight_scale_json)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
             params![
                 c.id,
                 c.parent_id,
@@ -686,7 +857,8 @@ pub fn restore_subtree(conn: &Connection, snap: &CodeTreeSnapshot) -> Result<()>
                 c.shortcut,
                 c.sort_order,
                 c.created_at,
-                c.updated_at
+                c.updated_at,
+                weight_scale_json(c.weight_scale.as_ref()),
             ],
         )
         .map_err(|e| map_unique(e, &c.name, c.shortcut.as_deref()))?;
@@ -700,13 +872,14 @@ pub fn restore_subtree(conn: &Connection, snap: &CodeTreeSnapshot) -> Result<()>
     }
     for t in &snap.excerpt_codes {
         tx.execute(
-            "INSERT OR IGNORE INTO excerpt_codes (excerpt_id, code_id, coder_id, created_at)
-             SELECT ?1, ?2, ?3, ?4 WHERE EXISTS (SELECT 1 FROM excerpts WHERE id = ?1)",
+            "INSERT OR IGNORE INTO excerpt_codes (excerpt_id, code_id, coder_id, created_at, weight)
+             SELECT ?1, ?2, ?3, ?4, ?5 WHERE EXISTS (SELECT 1 FROM excerpts WHERE id = ?1)",
             params![
                 t.excerpt_id,
                 t.code_id,
                 history::tag_coder(&tx, t),
-                t.created_at
+                t.created_at,
+                t.weight,
             ],
         )?;
     }
@@ -834,6 +1007,9 @@ fn tags_gained(conn: &Connection, source_id: &str, target_id: &str) -> Result<Ve
             code_id: target_id.to_string(),
             coder_id: r.get(1)?,
             created_at: String::new(),
+            // Only used to key a delete on undo; the weight it deletes is
+            // whatever is there at the time, not this placeholder.
+            weight: None,
         })
     })?;
     Ok(rows.collect::<rusqlite::Result<_>>()?)
@@ -953,7 +1129,7 @@ pub fn merge(conn: &Connection, source_id: &str, target_id: &str) -> Result<Code
         ));
     }
     let source = get(conn, source_id)?;
-    ensure_exists(conn, target_id)?;
+    let target = get(conn, target_id)?;
     let subtree = descendant_ids(conn, &[source_id.to_string()])?;
     if subtree.iter().any(|s| s == target_id) {
         return Err(AppError::Validation(
@@ -969,12 +1145,27 @@ pub fn merge(conn: &Connection, source_id: &str, target_id: &str) -> Result<Code
     let reparent = child_places(&tx, source_id)?;
     let gained = tags_gained(&tx, source_id, target_id)?;
     // Each coding moves as its own coder's, so merging two codes never
-    // reassigns somebody else's work to whoever ran the merge.
-    let moved_excerpts = tx.execute(
-        "INSERT OR IGNORE INTO excerpt_codes (excerpt_id, code_id, coder_id, created_at)
-         SELECT excerpt_id, ?2, coder_id, created_at FROM excerpt_codes WHERE code_id = ?1",
-        params![source_id, target_id],
-    )? as i64;
+    // reassigns somebody else's work to whoever ran the merge. A weight
+    // moves with it only when the target's scale can hold it; otherwise it
+    // is dropped rather than kept out of range (see `set_weight_scale` for
+    // the same rule applied when a code's own scale is edited).
+    let moved_excerpts = (if let Some(scale) = &target.weight_scale {
+        tx.execute(
+            "INSERT OR IGNORE INTO excerpt_codes (excerpt_id, code_id, coder_id, created_at, weight)
+             SELECT excerpt_id, ?2, coder_id, created_at,
+                    CASE WHEN weight IS NOT NULL AND weight >= ?3 AND weight <= ?4
+                         THEN weight ELSE NULL END
+             FROM excerpt_codes WHERE code_id = ?1",
+            params![source_id, target_id, scale.min, scale.max],
+        )?
+    } else {
+        tx.execute(
+            "INSERT OR IGNORE INTO excerpt_codes (excerpt_id, code_id, coder_id, created_at, weight)
+             SELECT excerpt_id, ?2, coder_id, created_at, NULL
+             FROM excerpt_codes WHERE code_id = ?1",
+            params![source_id, target_id],
+        )?
+    }) as i64;
     let base = next_sort_order(&tx, Some(target_id))?;
     let mut stmt = tx.prepare("SELECT id FROM codes WHERE parent_id = ?1 ORDER BY sort_order")?;
     let kids: Vec<String> = stmt
@@ -1384,5 +1575,151 @@ pub(crate) mod tests {
             .unwrap();
         assert_eq!(memo_code, a.id);
         assert!(matches!(get(&p.conn, &b.id), Err(AppError::NotFound(_))));
+    }
+
+    // ------------------------------------------------------------- weights
+
+    fn scale(min: f64, max: f64, step: f64, default: f64) -> crate::models::WeightScale {
+        crate::models::WeightScale {
+            min,
+            max,
+            step,
+            default,
+            labels: Default::default(),
+        }
+    }
+
+    #[test]
+    fn weight_scale_is_validated() {
+        assert!(matches!(
+            validate_weight_scale(&scale(5.0, 1.0, 1.0, 3.0)),
+            Err(AppError::Validation(_))
+        ));
+        assert!(matches!(
+            validate_weight_scale(&scale(1.0, 5.0, 0.0, 3.0)),
+            Err(AppError::Validation(_))
+        ));
+        assert!(matches!(
+            validate_weight_scale(&scale(1.0, 5.0, -1.0, 3.0)),
+            Err(AppError::Validation(_))
+        ));
+        assert!(matches!(
+            validate_weight_scale(&scale(1.0, 5.0, 1.0, 0.0)),
+            Err(AppError::Validation(_))
+        ));
+        assert!(matches!(
+            validate_weight_scale(&scale(1.0, 5.0, 1.0, 6.0)),
+            Err(AppError::Validation(_))
+        ));
+        assert!(validate_weight_scale(&scale(1.0, 5.0, 1.0, 3.0)).is_ok());
+        assert!(validate_weight_scale(&scale(-2.0, 2.0, 1.0, 0.0)).is_ok());
+    }
+
+    #[test]
+    fn snap_weight_rounds_to_the_nearest_step_and_clamps_to_range() {
+        let s = scale(1.0, 5.0, 1.0, 3.0);
+        assert_eq!(snap_weight(&s, 3.4), 3.0);
+        assert_eq!(snap_weight(&s, 3.6), 4.0);
+        assert_eq!(snap_weight(&s, 0.0), 1.0, "clamped to min");
+        assert_eq!(snap_weight(&s, 9.0), 5.0, "clamped to max");
+        let half = scale(0.0, 1.0, 0.5, 0.5);
+        assert_eq!(snap_weight(&half, 0.2), 0.0);
+        assert_eq!(snap_weight(&half, 0.3), 0.5);
+    }
+
+    #[test]
+    fn updating_a_code_gives_it_a_scale_and_can_clear_it_again() {
+        let p = OpenProject::in_memory("t").unwrap();
+        let a = mk(&p.conn, "Intensity", None);
+        assert!(a.weight_scale.is_none());
+
+        let s = scale(1.0, 5.0, 1.0, 3.0);
+        let updated = update(
+            &p.conn,
+            &a.id,
+            CodePatch {
+                weight_scale: Some(Some(s.clone())),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(updated.weight_scale, Some(s));
+
+        // An invalid scale is rejected and leaves the code untouched.
+        assert!(matches!(
+            update(
+                &p.conn,
+                &a.id,
+                CodePatch {
+                    weight_scale: Some(Some(scale(5.0, 1.0, 1.0, 3.0))),
+                    ..Default::default()
+                },
+            ),
+            Err(AppError::Validation(_))
+        ));
+        assert!(get(&p.conn, &a.id).unwrap().weight_scale.is_some());
+
+        let cleared = update(
+            &p.conn,
+            &a.id,
+            CodePatch {
+                weight_scale: Some(None),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert!(cleared.weight_scale.is_none());
+    }
+
+    #[test]
+    fn clearing_a_scale_nulls_weights_and_undo_restores_them() {
+        use crate::db::excerpts;
+        use crate::models::ApplyCodesInput;
+
+        let p = OpenProject::in_memory("t").unwrap();
+        let conn = &p.conn;
+        crate::db::documents::create(conn, crate::db::documents::tests::new_doc(&"x".repeat(20)))
+            .unwrap();
+        let doc = crate::db::documents::list(conn).unwrap()[0].id.clone();
+        let a = mk(conn, "Intensity", None);
+        set_weight_scale(conn, &a.id, Some(scale(1.0, 5.0, 1.0, 3.0))).unwrap();
+        let applied = excerpts::apply_codes(
+            conn,
+            ApplyCodesInput {
+                document_id: doc,
+                start_pos: Some(0),
+                end_pos: Some(5),
+                code_ids: vec![a.id.clone()],
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        // A fresh coding of a scaled code starts at the default.
+        assert_eq!(applied.excerpt.codings[0].weight, Some(3.0));
+        excerpts::set_weight(conn, &applied.excerpt.id, &a.id, None, Some(5.0)).unwrap();
+        assert_eq!(
+            excerpts::get(conn, &applied.excerpt.id).unwrap().codings[0].weight,
+            Some(5.0)
+        );
+
+        set_weight_scale(conn, &a.id, None).unwrap();
+        assert!(get(conn, &a.id).unwrap().weight_scale.is_none());
+        assert_eq!(
+            excerpts::get(conn, &applied.excerpt.id).unwrap().codings[0].weight,
+            None,
+            "clearing the scale nulls the weight"
+        );
+
+        let node = crate::db::history::undo(conn).unwrap().unwrap();
+        assert_eq!(node.kind, "code.weight_scale_set");
+        assert_eq!(
+            get(conn, &a.id).unwrap().weight_scale,
+            Some(scale(1.0, 5.0, 1.0, 3.0))
+        );
+        assert_eq!(
+            excerpts::get(conn, &applied.excerpt.id).unwrap().codings[0].weight,
+            Some(5.0),
+            "undo restores the exact weight, not just the scale"
+        );
     }
 }

@@ -2,6 +2,7 @@ import type { ExcerptRow as Row } from "@/api/types";
 import { useCodeTree } from "@/queries/codes";
 import { pathOf } from "@/core/codeTree";
 import { ColorDot } from "@/components/codebook/ColorSwatch";
+import { formatWeightWithLabel } from "@/core/weights";
 import { cn } from "@/lib/utils";
 import { MediaThumbnail } from "./MediaThumbnail";
 import { RegionThumbnail } from "./RegionThumbnail";
@@ -92,12 +93,29 @@ export function ExcerptRow({ row, selected = false, active, onOpen, onToggle }: 
                 {row.speaker}
               </span>
             ) : null}
-            {row.codeIds.map((id) => (
-              <span key={id} className="inline-flex items-center gap-1">
-                <ColorDot color={tree.byId.get(id)?.code.color ?? "#999"} />
-                {pathOf(tree, id)}
-              </span>
-            ))}
+            {row.codeIds.map((id) => {
+              const code = tree.byId.get(id)?.code;
+              // The first rated coding of this code, whoever made it; a
+              // passage two coders rated differently just shows one here —
+              // the inspector is where every coder's value is visible.
+              const weight = (row.codings ?? []).find(
+                (c) => c.codeId === id && c.weight != null,
+              )?.weight;
+              return (
+                <span key={id} className="inline-flex items-center gap-1">
+                  <ColorDot color={code?.color ?? "#999"} />
+                  {pathOf(tree, id)}
+                  {code?.weightScale && weight != null ? (
+                    <span
+                      className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] tabular-nums"
+                      data-testid="weight-chip"
+                    >
+                      {formatWeightWithLabel(code.weightScale, weight)}
+                    </span>
+                  ) : null}
+                </span>
+              );
+            })}
             {row.memoCount ? (
               <span>
                 {row.memoCount} memo{row.memoCount > 1 ? "s" : ""}

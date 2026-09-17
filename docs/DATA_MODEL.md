@@ -15,9 +15,9 @@ stays a single file that can be copied while open), `synchronous = NORMAL`.
 | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `project_meta`       | key/value: `schema_version`, `project_id`, `name`, `created_at`, `created_with_app_version`                                                                                                                                                                                                                                                                                                                                                                |
 | `documents`          | imported sources. `kind` is `text`, `image` or `video` (audio and video share `video`). `text` is immutable and NULL for media; `text_length` is the code point count; `media_json` holds `{mime, width?, height?, durationMs?, sizeBytes?, fileHash?, peaks?}`; `content_hash` de-duplicates imports; `source_path` is where a recording's file is, because recordings are held by reference; `transcript_json` is how the document marks who is speaking |
-| `codes`              | the codebook tree: adjacency list (`parent_id`) with `sort_order` among siblings, `color`, optional single-key `shortcut`, and the definition fields `description`, `inclusion`, `exclusion` and `example_excerpt_id`. Sibling names are unique case-insensitively                                                                                                                                                                                         |
+| `codes`              | the codebook tree: adjacency list (`parent_id`) with `sort_order` among siblings, `color`, optional single-key `shortcut`, the definition fields `description`, `inclusion`, `exclusion` and `example_excerpt_id`, and an optional `weight_scale_json` ([Weights](#weights)). Sibling names are unique case-insensitively                                                                                                                                  |
 | `excerpts`           | coded ranges. `kind` = `text` (code point `start_pos`/`end_pos`), `video_range` (milliseconds) or `image_region` (`geometry` JSON `{x,y,w,h}` normalized 0..1). `snapshot` stores the excerpted text or a description of the region. One excerpt per exact range or rectangle                                                                                                                                                                              |
-| `excerpt_codes`      | many-to-many between excerpts and codes, per coder: the primary key is `(excerpt_id, code_id, coder_id)`, so two people applying the same code to one passage are two rows                                                                                                                                                                                                                                                                                 |
+| `excerpt_codes`      | many-to-many between excerpts and codes, per coder: the primary key is `(excerpt_id, code_id, coder_id)`, so two people applying the same code to one passage are two rows. `weight` is that coder's value on the code's scale, if any ([Weights](#weights))                                                                                                                                                                                               |
 | `coders`             | who has worked on this project: `id` (a UUID an install generates once and keeps in its settings), `name`, `color`, `created_at`                                                                                                                                                                                                                                                                                                                           |
 | `media_blobs`        | small binaries kept inside the project file: an image document's pixels (`name = 'source'`, no `excerpt_id`) and the frame captured for a `video_range` excerpt (`name = 'thumbnail'`). Deleting the document or the excerpt drops them. An audio or video document's own bytes are **not** here                                                                                                                                                           |
 | `memos`              | notes with at most one target: `document_id`, `code_id`, `excerpt_id`, or none (project memo). Each target is a real foreign key so deletes cascade. `coder_id` is who wrote it                                                                                                                                                                                                                                                                            |
@@ -468,6 +468,87 @@ Only `description` is shown in the code palette, which has to stay scannable
 while coding; the full definition lives in the code dialog and in the memo
 panel, next to a quote of the example excerpt's snapshot.
 
+## Weights
+
+Schema 13 gives a code an optional numeric scale — Dedoose's "code weights":
+intensity 1..5, a -2..+2 sentiment, and so on — and each application of that
+code a value on it, for mixed-methods work (a mean per descriptor group, a
+distribution per code).
+
+`codes.weight_scale_json` is `NULL` for the overwhelming majority of codes;
+when set, it is:
+
+```jsonc
+{ "min": 1, "max": 5, "step": 1, "default": 3, "labels": { "1": "weak", "5": "strong" } }
+```
+
+Validated by `db::codes::validate_weight_scale`: `min < max`, `step > 0`,
+`default` within `[min, max]`. `labels` is optional and keys values by their
+formatted form (`db::codes::snap_weight`'s output), usually just the two ends.
+`excerpt_codes.weight` is one coder's value on their own coding — two coders
+can rate the same passage differently — `NULL` when the code has no scale, or
+has one nobody has used on this coding yet.
+
+**Default on apply.** Whenever a coding of a scaled code is freshly created —
+`apply_codes`, `add_codes`, the bulk equivalents, `auto_code`, in vivo coding
+— it starts at the scale's `default`, not unrated. This is a deliberate
+choice: Dedoose and similar tools leave a fresh coding unweighted, but an
+unrated value is indistinguishable from "not asked yet" in a distribution,
+where a sensible default is visible and one click away from being changed
+(or cleared, via the inspector or `excerpts::set_weight(… , None)`). A coding
+that existed before its code ever had a scale is _not_ retroactively given
+the default; it stays `NULL` until someone rates it.
+
+**Changing a scale.** `codes::update`'s `weight_scale` field (a double option,
+like `shortcut`) sets, edits or clears the scale. Clearing it, or narrowing it
+so an already-recorded weight no longer fits `[min, max]`, nulls exactly those
+weights — `codes::set_weight_scale` reads every affected `(excerpt, coder)`
+row before writing, so the history entry's inverse payload carries the exact
+prior values rather than the old scale over now-empty weights (a plain
+recomputation on undo cannot tell "still `NULL`" from "was 5, now `NULL`").
+This is its own history kind, `code.weight_scale_set`
+(`history::CodeOp::WeightScale`), separate from `code.updated`: a plain field
+edit has no such side effect to replay. Setting a weight on one coding is
+`excerpt.weight_set` (`history::ExcerptChange.weights`, a new
+`WeightRow { excerpt_id, code_id, coder_id, weight }` list that forces exact
+values rather than expressing a relative change, so replaying it is
+idempotent either direction); `bulk::set_weights_many` is `bulk.weights_set`.
+
+**Snapping and validation.** `excerpts::set_weight` requires the code to carry
+a scale and the coding to already exist (rating is not the same act as
+applying), then snaps the value to the nearest `step` and clamps to
+`[min, max]` (`db::codes::snap_weight`) rather than rejecting an out-of-grid
+value — the UI's digit shortcuts and sliders can hand it anything and let the
+backend make it exact. `src/core/weights.ts` mirrors `snap_weight`,
+`fits_weight_scale` and the label lookup for the frontend to show the same
+answer before the round trip confirms it.
+
+**Retag and merge.** Moving a coding from one code to another (`bulk::retag_code`,
+`codes::merge`) carries its weight over only when the _target's_ scale can
+hold it (`codes::fits_weight_scale`); otherwise the rating is dropped rather
+than clamped into a range it never earned. A code merged away restores through
+the ordinary snapshot/restore path, which now carries `weight_scale_json` and
+`excerpt_codes.weight` like every other column, so undoing a merge or a delete
+brings the scale and every rating back exactly.
+
+**Filtering and analysis.** `ExcerptFilter.weightRange { codeId, min, max }`
+matches a coding of `codeId` whose weight falls in `[min, max]`; a coding with
+no weight never matches. `db::analysis::weight_summary(code_id, filter)`
+scopes exactly like the excerpt browser (it pages through `excerpts::query`
+internally, ignoring the caller's own `limit`/`offset`) and reports count,
+mean, median, min, max and a histogram of the values actually recorded — one
+bin per distinct value, so an unused end of the scale simply has no bin.
+`CrosstabRequest.measure = "meanWeight"` gives `code_by_descriptor` a second
+number per cell, `CrosstabRow.weightCells`, alongside the ordinary count
+(`db::analysis::code_by_descriptor`'s weight query is deliberately **not**
+de-duplicated by excerpt the way the count is: two coders' ratings of the same
+passage are two facts in a mean, where they are one excerpt in a count).
+
+**Exports.** The excerpts CSV gains a `weights` column, `code=value; …` per
+rated coding (`db::export::excerpts_csv`); the project JSON export needs no
+special handling, since `Code.weightScale` and `Coding.weight` serialize like
+any other field.
+
 ## Descriptors
 
 Values are stored as canonical strings and validated by kind in Rust
@@ -528,6 +609,9 @@ and one of its sub-codes counts once — or, with `mode = "documents"`, distinct
 documents. Every document belongs to exactly one column, so a row's cells add
 up to its total either way; `documentsPerColumn` is the denominator, the
 documents in scope per column whether or not anything in them is coded.
+
+`measure = "meanWeight"` adds a mean weight per cell alongside the count, for
+codes with a scale (see [Weights](#weights)).
 
 ## Boolean and proximity queries
 
@@ -967,13 +1051,14 @@ mutation and on window focus, the same way the activity feed already did.
   codes listed parents-before-children (depth-first in path order, like the CSV).
   `example_excerpt_id` is deliberately left out of both: it points at an
   excerpt that does not exist in the importing project
-- Excerpts CSV: `excerpt_id, document, start, end, start_ms, end_ms, geometry, text, codes, coders, memo_count, created_at`
+- Excerpts CSV: `excerpt_id, document, start, end, start_ms, end_ms, geometry, text, codes, coders, weights, memo_count, created_at`
   (codes are full paths separated by `; `), then one column per descriptor
   field, named after the field, holding the excerpt's document's value.
   One row per excerpt, not per coding: `codes` lists every code on it once and
-  `coders` lists the names of everyone who coded it, both `; `-separated. Who
-  applied which code is in the project JSON, where each excerpt's `codings`
-  pairs them up.
+  `coders` lists the names of everyone who coded it, both `; `-separated;
+  `weights` lists `path=value` for every rated coding the same way, so a
+  passage two coders rated differently shows both. Who applied which code (and
+  weight) is in the project JSON, where each excerpt's `codings` pairs them up.
   `start`/`end` are the raw columns — code points for text, milliseconds for a
   recording — and are empty for image excerpts; `start_ms`/`end_ms` are filled
   only for `video_range` excerpts, so a spreadsheet never has to guess the
@@ -983,8 +1068,8 @@ mutation and on window focus, the same way the activity feed already did.
 - Activity CSV: `at, actor, kind, target_kind, target_id, summary, detail_json`, oldest first
 - Project JSON: `{ format: "misket-project", formatVersion: 1, meta, documents, codes, coders, excerpts, memos, descriptorFields, descriptorValues, sets, savedFilters, activity }`.
   `coders` is everyone whose work is in the file; each excerpt carries
-  `codings: [{codeId, coderId}]` alongside `codeIds`, and each memo its own
-  `coderId`.
+  `codings: [{codeId, coderId, weight}]` alongside `codeIds`, and each memo its
+  own `coderId`; a code with a scale carries it as `weightScale`.
   Each document carries its `media` (the parsed `media_json`: mime, duration,
   pixel size, size on disk, fingerprint and cached peaks) and `mediaMissing`.
   `sets` is `[{ set: SetInfo, memberIds }]` for every code set and document

@@ -6,29 +6,53 @@ export function configurePdfWorker(workerSrc: string) {
   pdfjs.GlobalWorkerOptions.workerSrc = workerSrc;
 }
 
-/**
- * Text-only PDF import: one paragraph per text line, pages separated by a
- * blank line. Layout, tables and images are dropped (milestone 1 limit).
- */
-export async function importPdf(bytes: Uint8Array): Promise<string> {
-  const task = pdfjs.getDocument({ data: bytes, useSystemFonts: true });
-  const doc = await task.promise;
-  const pages: string[] = [];
-  try {
-    for (let p = 1; p <= doc.numPages; p++) {
-      const page = await doc.getPage(p);
-      const content = await page.getTextContent();
-      pages.push(linesFromItems(content.items.filter((i): i is TextItem => "str" in i)));
-      page.cleanup();
-    }
-  } finally {
-    await task.destroy();
-  }
+/** The extracted text of a PDF, plus how many characters came from each page. */
+export interface PdfTextExtraction {
+  text: string;
+  /** Non-whitespace character count per page, in page order — the raw
+   * material for `classifyPdfQuality` (see `pdfQuality.ts`). */
+  pageCharCounts: number[];
+}
+
+/** Join non-empty page texts the same way for both the text and OCR import
+ * paths: a blank line between pages, no page-break characters. */
+export function joinPages(pages: string[]): string {
   return pages
     .filter((t) => t.trim().length > 0)
     .join("\n\n")
     .replace(/\n+$/, "")
     .concat("\n");
+}
+
+/**
+ * Text-only PDF import: one paragraph per text line, pages separated by a
+ * blank line. Layout, tables and images are dropped (milestone 1 limit).
+ * Also reports each page's character count, so the caller can tell a normal
+ * PDF from a scanned one with no text layer (see `pdfQuality.ts`).
+ */
+export async function extractPdfText(bytes: Uint8Array): Promise<PdfTextExtraction> {
+  const task = pdfjs.getDocument({ data: bytes, useSystemFonts: true });
+  const doc = await task.promise;
+  const pages: string[] = [];
+  const pageCharCounts: number[] = [];
+  try {
+    for (let p = 1; p <= doc.numPages; p++) {
+      const page = await doc.getPage(p);
+      const content = await page.getTextContent();
+      const pageText = linesFromItems(content.items.filter((i): i is TextItem => "str" in i));
+      pages.push(pageText);
+      pageCharCounts.push(pageText.replace(/\s+/g, "").length);
+      page.cleanup();
+    }
+  } finally {
+    await task.destroy();
+  }
+  return { text: joinPages(pages), pageCharCounts };
+}
+
+/** Back-compat wrapper for callers that only need the text. */
+export async function importPdf(bytes: Uint8Array): Promise<string> {
+  return (await extractPdfText(bytes)).text;
 }
 
 /** Group positioned text runs into lines by their baseline, in reading order. */

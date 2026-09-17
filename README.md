@@ -14,14 +14,17 @@ keyboard-friendly interface without a subscription.
 
 ## What it does today
 
-- **Import** plain text, Markdown, Word (`.docx`), PDF (text only), image
-  (PNG, JPEG, WebP), audio (MP3, WAV, M4A, AAC, OGG, FLAC) and video (MP4,
-  MOV, WebM, M4V, MKV) documents, one at a time or a whole folder at once
-  ("Import folder…", optionally including subfolders).
+- **Import** plain text, Markdown, Word (`.docx`), PDF, image (PNG, JPEG,
+  WebP), audio (MP3, WAV, M4A, AAC, OGG, FLAC) and video (MP4, MOV, WebM,
+  M4V, MKV) documents, one at a time or a whole folder at once ("Import
+  folder…", optionally including subfolders).
   If a file has blank-line gaps, trailing spaces or other likely-accidental
   whitespace, Misket offers to tidy it up before import (document text is
   immutable once imported). Check "Remember my choice" in that dialog to skip
   it on future imports; its "Ask again on import" link resets that.
+  A PDF with no text layer (a scan) is detected on import and offered OCR —
+  recognised entirely on-device, no upload — instead of silently importing an
+  empty document; see [docs/OCR.md](docs/OCR.md).
 - **Build a codebook**: nested codes with colors, single-key hotkeys,
   drag-and-drop reordering, merge and delete with impact preview, and
   "Move excerpts to…" to hand one code's excerpts to another without losing
@@ -37,6 +40,16 @@ keyboard-friendly interface without a subscription.
   panel whenever the code is selected; the palette shows only the description,
   so it stays scannable while you code. Definitions travel with the codebook
   export and import.
+- **Weight codes**: give any code a numeric scale (intensity 1–5, a -2..+2
+  sentiment, your own range and step, with optional labels for the two ends)
+  in the code dialog, and rate each application of it — a slider or a compact
+  1–9 control in the inspector, or the `1`–`9` keys with an excerpt focused.
+  A fresh coding of a scaled code starts at its default. The excerpt browser
+  shows a weight chip per rated coding and filters by "weight between"; the
+  analysis views add a Weights tab (histogram, mean, median, min, max per
+  code) and a "mean weight" measure on the code-by-descriptor cross-tab, next
+  to the ordinary counts. Retagging or merging a code keeps a weight only
+  when the target's scale can hold it.
 - **Code excerpts**: select text, press `Ctrl`/`⌘`+`K` and pick a code (type
   `>name` to create one on the spot), or press a code's hotkey. The picker
   shows each code's description and, for nested codes, its full path.
@@ -122,10 +135,13 @@ keyboard-friendly interface without a subscription.
   binned automatically, dates by month — counting excerpts or documents, and
   a word frequency view (scoped to a document/set or to the text under a
   code, with stop words and stemming as toggles, a project-editable
-  stop-word list, a sortable table and a word cloud). Every cell or word
-  clicks through to the matching excerpts or a seeded project search, and
-  each view exports to CSV. The overview screen's 30-day sparkline can be
-  narrowed to a single code the same way.
+  stop-word list, a sortable table and a word cloud), and a Weights tab (per
+  weighted code, a value histogram plus mean/median/min/max, scoped like the
+  browser) — the cross-tab also has a "mean weight" measure next to its
+  ordinary counts. Every cell or word clicks through to the matching
+  excerpts or a seeded project search, and each view exports to CSV. The
+  overview screen's 30-day sparkline can be narrowed to a single code the
+  same way.
 - **Code hierarchy treemap**: a squarified treemap of the codebook, area = a
   code's distinct excerpt count (own, or including sub-codes), colour = the
   code's own colour tinted lighter with depth. Click a code with sub-codes to
@@ -205,8 +221,9 @@ keyboard-friendly interface without a subscription.
   project to.
 - **History view**: see every change as a branch graph, jump to any point,
   fork and name branches, compact old history.
-- **Export** the codebook as CSV or a reusable JSON file, excerpts as CSV, the
-  activity log as CSV, or the whole project as JSON.
+- **Export** the codebook as CSV or a reusable JSON file, excerpts as CSV
+  (with a `weights` column for rated codings), the activity log as CSV, or the
+  whole project as JSON.
 - **REFI-QDA (`.qdpx`)**: export the whole project — sources, codebook,
   codings with the coder who made each one, memos, attributes and sets — in
   [the interchange format](https://www.qdasoftware.org/) NVivo, ATLAS.ti,
@@ -224,6 +241,7 @@ keyboard-friendly interface without a subscription.
 | Apply a code directly                                  | its hotkey (set in the code's settings)       |
 | In vivo code: name a code after the selected words     | `Ctrl`/`⌘` + `Shift` + `K`                    |
 | Apply the last code used again (quick code)            | `Ctrl`/`⌘` + `.`                              |
+| Rate the last applied code, with an excerpt focused    | `1`–`9`                                       |
 | Fit / zoom an image                                    | `0` / `+` / `-`                               |
 | Play / pause a recording                               | `Space`                                       |
 | Scrub back / forward 5 seconds                         | `J` / `L`                                     |

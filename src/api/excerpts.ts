@@ -6,6 +6,7 @@ import type {
   AutoCodeHit,
   AutoCodeReport,
   BulkCodeReport,
+  BulkWeightReport,
   ExcerptDetail,
   ExcerptFilter,
   ExcerptPage,
@@ -40,6 +41,16 @@ export const addExcerptCodes = (id: string, codeIds: string[]) =>
  */
 export const removeExcerptCode = (id: string, codeId: string, coderId: string | null = null) =>
   invoke<ExcerptWithCodes>("remove_excerpt_code", { id, codeId, coderId });
+/**
+ * Rate one coding on its code's weight scale, or clear it (`weight: null`).
+ * `coderId` is null for "mine", same convention as `removeExcerptCode`.
+ */
+export const setExcerptWeight = (
+  id: string,
+  codeId: string,
+  weight: number | null,
+  coderId: string | null = null,
+) => invoke<ExcerptWithCodes>("set_excerpt_weight", { id, codeId, coderId, weight });
 export const deleteExcerpt = (id: string) => invoke<ExcerptSnapshot>("delete_excerpt", { id });
 export const restoreExcerpt = (snapshot: ExcerptSnapshot) =>
   invoke<ExcerptWithCodes>("restore_excerpt", { snapshot });
@@ -68,3 +79,7 @@ export const retagCode = (fromCodeId: string, toCodeId: string) =>
  * sentence/paragraph) with `codeId`. */
 export const autoCode = (hits: AutoCodeHit[], codeId: string) =>
   invoke<AutoCodeReport>("auto_code", { hits, codeId });
+/** Set the local coder's weight on `codeId` to the same value across many
+ * excerpts (the browser's bulk-rating action). */
+export const setWeightsToExcerpts = (codeId: string, ids: string[], weight: number | null) =>
+  invoke<BulkWeightReport>("set_weights_to_excerpts", { codeId, ids, weight });

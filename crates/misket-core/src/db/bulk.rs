@@ -11,11 +11,12 @@ use std::collections::{HashMap, HashSet};
 use rusqlite::{params, Connection, OptionalExtension};
 use serde_json::json;
 
-use super::history::{ExcerptChange, Touch};
+use super::history::{ExcerptChange, Touch, WeightRow};
 use super::{activity, codes, documents, excerpts, history, text, util};
 use crate::error::{AppError, Result};
 use crate::models::{
-    AutoCodeHit, AutoCodeReport, BulkCodeReport, ExcerptSnapshot, RetagReport, TagRow,
+    AutoCodeHit, AutoCodeReport, BulkCodeReport, BulkWeightReport, ExcerptSnapshot, RetagReport,
+    TagRow,
 };
 
 /// De-duplicate while keeping the caller's order.
@@ -151,14 +152,21 @@ pub fn add_codes_many(
     let tx = util::tx(conn)?;
     let was = updated_at_of(&tx, &ids)?;
     let coder = history::local_coder(&tx);
+    // Fresh codings of a scaled code start at its default (documented in
+    // `docs/DATA_MODEL.md`); computed once per code rather than once per pair.
+    let mut default_weights: HashMap<&str, Option<f64>> = HashMap::new();
+    for code_id in &code_ids {
+        default_weights.insert(code_id.as_str(), codes::default_weight(&tx, code_id)?);
+    }
     let mut report = BulkCodeReport::default();
     for id in &ids {
         let before = report.pairs.len();
         for code_id in &code_ids {
+            let weight = default_weights.get(code_id.as_str()).copied().flatten();
             let inserted = tx.execute(
-                "INSERT OR IGNORE INTO excerpt_codes (excerpt_id, code_id, coder_id, created_at)
-                 VALUES (?1, ?2, ?3, ?4)",
-                params![id, code_id, coder, now],
+                "INSERT OR IGNORE INTO excerpt_codes (excerpt_id, code_id, coder_id, created_at, weight)
+                 VALUES (?1, ?2, ?3, ?4, ?5)",
+                params![id, code_id, coder, now, weight],
             )?;
             if inserted > 0 {
                 report.pairs.push((id.clone(), code_id.clone()));
@@ -172,7 +180,7 @@ pub fn add_codes_many(
             )?;
         }
     }
-    let tags = tag_rows(&report, &coder, &now);
+    let tags = tag_rows(&report, &coder, &now, &default_weights);
     let changed = touched(&report);
     log_bulk_codes(
         &tx,
@@ -196,9 +204,14 @@ pub fn add_codes_many(
 }
 
 /// The `(excerpt, code)` tags a report inserted, stamped with the time the
-/// operation ran and the coder who ran it, so a redo writes the same rows the
-/// first run did.
-fn tag_rows(report: &BulkCodeReport, coder_id: &str, at: &str) -> Vec<TagRow> {
+/// operation ran, the coder who ran it, and the weight (if any) each got, so
+/// a redo writes the same rows the first run did.
+fn tag_rows(
+    report: &BulkCodeReport,
+    coder_id: &str,
+    at: &str,
+    weights: &HashMap<&str, Option<f64>>,
+) -> Vec<TagRow> {
     report
         .pairs
         .iter()
@@ -207,6 +220,7 @@ fn tag_rows(report: &BulkCodeReport, coder_id: &str, at: &str) -> Vec<TagRow> {
             code_id: code_id.clone(),
             coder_id: coder_id.to_string(),
             created_at: at.to_string(),
+            weight: weights.get(code_id.as_str()).copied().flatten(),
         })
         .collect()
 }
@@ -278,14 +292,14 @@ pub fn remove_codes_many(
     for id in &ids {
         let before = report.pairs.len();
         for code_id in &code_ids {
-            // Read the tag's own timestamp before it goes, so undo puts the
-            // row back exactly as it stood.
-            let created_at: Option<String> = tx
+            // Read the tag's own timestamp and weight before it goes, so undo
+            // puts the row back exactly as it stood.
+            let existing: Option<(String, Option<f64>)> = tx
                 .query_row(
-                    "SELECT created_at FROM excerpt_codes
+                    "SELECT created_at, weight FROM excerpt_codes
                       WHERE excerpt_id = ?1 AND code_id = ?2 AND coder_id = ?3",
                     params![id, code_id, coder],
-                    |r| r.get(0),
+                    |r| Ok((r.get(0)?, r.get(1)?)),
                 )
                 .optional()?;
             let removed = tx.execute(
@@ -295,11 +309,13 @@ pub fn remove_codes_many(
             )?;
             if removed > 0 {
                 report.pairs.push((id.clone(), code_id.clone()));
+                let (created_at, weight) = existing.unwrap_or_else(|| (now.clone(), None));
                 removed_tags.push(TagRow {
                     excerpt_id: id.clone(),
                     code_id: code_id.clone(),
                     coder_id: coder.clone(),
-                    created_at: created_at.unwrap_or_else(|| now.clone()),
+                    created_at,
+                    weight,
                 });
             }
         }
@@ -347,14 +363,14 @@ pub fn retag_code(conn: &Connection, from_code_id: &str, to_code_id: &str) -> Re
         ));
     }
     codes::get(conn, from_code_id)?;
-    codes::get(conn, to_code_id)?;
+    let to_code = codes::get(conn, to_code_id)?;
 
     let tx = util::tx(conn)?;
     // One row per (excerpt, coder) carrying the source code: a retag moves
     // each person's coding as theirs, so rolling a sub-code up into its
     // parent never quietly reassigns a colleague's work to whoever ran it.
     let mut stmt = tx.prepare(
-        "SELECT ec.excerpt_id, ec.coder_id, ec.created_at,
+        "SELECT ec.excerpt_id, ec.coder_id, ec.created_at, ec.weight,
                 EXISTS (SELECT 1 FROM excerpt_codes t
                         WHERE t.excerpt_id = ec.excerpt_id AND t.code_id = ?2
                           AND t.coder_id = ec.coder_id)
@@ -362,9 +378,9 @@ pub fn retag_code(conn: &Connection, from_code_id: &str, to_code_id: &str) -> Re
          WHERE ec.code_id = ?1
          ORDER BY e.document_id, e.start_pos, ec.excerpt_id, ec.coder_id",
     )?;
-    let targets: Vec<(String, String, String, bool)> = stmt
+    let targets: Vec<(String, String, String, Option<f64>, bool)> = stmt
         .query_map(params![from_code_id, to_code_id], |r| {
-            Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))
+            Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?))
         })?
         .collect::<rusqlite::Result<_>>()?;
     drop(stmt);
@@ -382,12 +398,13 @@ pub fn retag_code(conn: &Connection, from_code_id: &str, to_code_id: &str) -> Re
     let mut source_tags = vec![];
     let mut target_tags = vec![];
     let mut report = RetagReport::default();
-    for (excerpt_id, coder_id, created_at, already_tagged) in targets {
+    for (excerpt_id, coder_id, created_at, weight, already_tagged) in targets {
         source_tags.push(TagRow {
             excerpt_id: excerpt_id.clone(),
             code_id: from_code_id.to_string(),
             coder_id: coder_id.clone(),
             created_at,
+            weight,
         });
         if already_tagged {
             // The excerpt only counts as "already had" when nothing about it
@@ -396,16 +413,27 @@ pub fn retag_code(conn: &Connection, from_code_id: &str, to_code_id: &str) -> Re
                 report.already_had.push(excerpt_id.clone());
             }
         } else {
+            // The weight moves with the coding only when the target's scale
+            // can hold it; otherwise the rating is dropped rather than kept
+            // out of range (same rule as `codes::merge` and
+            // `codes::set_weight_scale`).
+            let carried_weight = weight.filter(|w| {
+                to_code
+                    .weight_scale
+                    .as_ref()
+                    .is_some_and(|s| codes::fits_weight_scale(s, *w))
+            });
             target_tags.push(TagRow {
                 excerpt_id: excerpt_id.clone(),
                 code_id: to_code_id.to_string(),
                 coder_id: coder_id.clone(),
                 created_at: now.clone(),
+                weight: carried_weight,
             });
             tx.execute(
-                "INSERT INTO excerpt_codes (excerpt_id, code_id, coder_id, created_at)
-                 VALUES (?1, ?2, ?3, ?4)",
-                params![excerpt_id, to_code_id, coder_id, now],
+                "INSERT INTO excerpt_codes (excerpt_id, code_id, coder_id, created_at, weight)
+                 VALUES (?1, ?2, ?3, ?4, ?5)",
+                params![excerpt_id, to_code_id, coder_id, now, carried_weight],
             )?;
             report.already_had.retain(|id| id != &excerpt_id);
             if !report.moved.contains(&excerpt_id) {
@@ -463,6 +491,107 @@ pub fn retag_code(conn: &Connection, from_code_id: &str, to_code_id: &str) -> Re
     Ok(report)
 }
 
+/// Set the local coder's weight on `code_id` to the same value across many
+/// excerpts in one transaction (the excerpt browser's bulk-edit, and the
+/// analysis "rate all of these" action). Excerpts the local coder never
+/// applied `code_id` to are silently skipped, same as
+/// [`excerpts::set_weight`] would refuse them one at a time — a bulk call is
+/// meant to speed up rating a set someone already coded, not to code it.
+///
+/// `weight` is validated against the scale and snapped exactly like a single
+/// [`excerpts::set_weight`]; only excerpts whose value actually changes are
+/// reported, so undo (the same call, over `changed`'s previous values) never
+/// touches a row that already matched.
+pub fn set_weights_many(
+    conn: &Connection,
+    code_id: &str,
+    excerpt_ids: &[String],
+    weight: Option<f64>,
+) -> Result<BulkWeightReport> {
+    let ids = unique(excerpt_ids);
+    ensure_excerpts_exist(conn, &ids)?;
+    let code = codes::get(conn, code_id)?;
+    let scale = code.weight_scale.ok_or_else(|| {
+        AppError::Validation(format!("code \"{}\" has no weight scale", code.name))
+    })?;
+    let snapped = weight.map(|w| codes::snap_weight(&scale, w));
+    let now = util::now();
+    let tx = util::tx(conn)?;
+    let was = updated_at_of(&tx, &ids)?;
+    let coder = history::local_coder(&tx);
+    let mut changed: Vec<(String, String, Option<f64>)> = vec![];
+    for excerpt_id in &ids {
+        let previous: Option<Option<f64>> = tx
+            .query_row(
+                "SELECT weight FROM excerpt_codes
+                  WHERE excerpt_id = ?1 AND code_id = ?2 AND coder_id = ?3",
+                params![excerpt_id, code_id, coder],
+                |r| r.get::<_, Option<f64>>(0),
+            )
+            .optional()?;
+        if let Some(previous) = previous {
+            if previous != snapped {
+                tx.execute(
+                    "UPDATE excerpt_codes SET weight = ?4
+                      WHERE excerpt_id = ?1 AND code_id = ?2 AND coder_id = ?3",
+                    params![excerpt_id, code_id, coder, snapped],
+                )?;
+                tx.execute(
+                    "UPDATE excerpts SET updated_at = ?2 WHERE id = ?1",
+                    params![excerpt_id, now],
+                )?;
+                changed.push((excerpt_id.clone(), coder.clone(), previous));
+            }
+        }
+    }
+    if !changed.is_empty() {
+        let changed_ids: Vec<String> = changed.iter().map(|(e, ..)| e.clone()).collect();
+        let forward = ExcerptChange {
+            weights: changed
+                .iter()
+                .map(|(excerpt_id, coder_id, _)| WeightRow {
+                    excerpt_id: excerpt_id.clone(),
+                    code_id: code_id.to_string(),
+                    coder_id: coder_id.clone(),
+                    weight: snapped,
+                })
+                .collect(),
+            touch: touches(&changed_ids, &now),
+            ..Default::default()
+        };
+        let inverse = ExcerptChange {
+            weights: changed
+                .iter()
+                .map(|(excerpt_id, coder_id, previous)| WeightRow {
+                    excerpt_id: excerpt_id.clone(),
+                    code_id: code_id.to_string(),
+                    coder_id: coder_id.clone(),
+                    weight: *previous,
+                })
+                .collect(),
+            touch: touches_from(&changed_ids, &was),
+            ..Default::default()
+        };
+        activity::record(
+            &tx,
+            "bulk.weights_set",
+            "code",
+            Some(code_id),
+            format!("Set the {} weight on {} excerpts", code.name, changed.len()),
+            json!({
+                "codeId": code_id,
+                "codeName": code.name,
+                "weight": snapped,
+                "affected": changed.len(),
+            }),
+            Some(history::payload(&forward)),
+            Some(history::payload(&inverse)),
+        )?;
+    }
+    tx.commit()?;
+    Ok(BulkWeightReport { changed })
+}
+
 /// Auto-code every hit with `code_id`, in one transaction: a hit whose exact
 /// `[start, end)` range already has an excerpt reuses it (adding the code
 /// only if it is missing); otherwise a new text excerpt is created. See
@@ -472,6 +601,9 @@ pub fn auto_code(conn: &Connection, hits: &[AutoCodeHit], code_id: &str) -> Resu
     let now = util::now();
     let tx = util::tx(conn)?;
     let coder = history::local_coder(&tx);
+    // Every fresh coding this call makes starts at the code's scale default,
+    // same rule as a single apply (`docs/DATA_MODEL.md`).
+    let weight = codes::default_weight(&tx, code_id)?;
     let mut report = AutoCodeReport::default();
     let mut reused_was: HashMap<String, String> = HashMap::new();
     // A bulk call is usually every match in one or a handful of documents,
@@ -514,9 +646,9 @@ pub fn auto_code(conn: &Connection, hits: &[AutoCodeHit], code_id: &str) -> Resu
                     params![id, hit.document_id, hit.start_pos, hit.end_pos, snapshot, now],
                 )?;
                 tx.execute(
-                    "INSERT INTO excerpt_codes (excerpt_id, code_id, coder_id, created_at)
-                     VALUES (?1, ?2, ?3, ?4)",
-                    params![id, code_id, coder, now],
+                    "INSERT INTO excerpt_codes (excerpt_id, code_id, coder_id, created_at, weight)
+                     VALUES (?1, ?2, ?3, ?4, ?5)",
+                    params![id, code_id, coder, now, weight],
                 )?;
                 report.created_excerpt_ids.push(id);
             }
@@ -532,9 +664,9 @@ pub fn auto_code(conn: &Connection, hits: &[AutoCodeHit], code_id: &str) -> Resu
                 } else {
                     reused_was.extend(updated_at_of(&tx, std::slice::from_ref(&id))?);
                     tx.execute(
-                        "INSERT INTO excerpt_codes (excerpt_id, code_id, coder_id, created_at)
-                         VALUES (?1, ?2, ?3, ?4)",
-                        params![id, code_id, coder, now],
+                        "INSERT INTO excerpt_codes (excerpt_id, code_id, coder_id, created_at, weight)
+                         VALUES (?1, ?2, ?3, ?4, ?5)",
+                        params![id, code_id, coder, now, weight],
                     )?;
                     tx.execute(
                         "UPDATE excerpts SET updated_at = ?2 WHERE id = ?1",
@@ -560,6 +692,7 @@ pub fn auto_code(conn: &Connection, hits: &[AutoCodeHit], code_id: &str) -> Resu
             code_id: code_id.to_string(),
             coder_id: coder.clone(),
             created_at: now.clone(),
+            weight,
         })
         .collect();
     let code_name = codes::get(&tx, code_id).map(|c| c.name).unwrap_or_default();
@@ -869,6 +1002,41 @@ mod tests {
         assert!(empty.moved.is_empty() && empty.already_had.is_empty());
     }
 
+    fn scale(min: f64, max: f64) -> crate::models::WeightScale {
+        crate::models::WeightScale {
+            min,
+            max,
+            step: 1.0,
+            default: min,
+            labels: Default::default(),
+        }
+    }
+
+    /// A retag carries the weight over when the target's scale can hold it,
+    /// and drops it — rather than clamping it into range — when it cannot.
+    #[test]
+    fn retag_keeps_a_weight_only_when_the_targets_scale_fits_it() {
+        let f = setup();
+        codes::set_weight_scale(&f.p.conn, &f.a, Some(scale(1.0, 5.0))).unwrap();
+        codes::set_weight_scale(&f.p.conn, &f.b, Some(scale(1.0, 3.0))).unwrap();
+        let fits = apply(&f, 0, 3, &[&f.a]); // default weight 1, fits B's scale too
+        excerpts::set_weight(&f.p.conn, &fits, &f.a, None, Some(2.0)).unwrap();
+        let overflows = apply(&f, 4, 7, &[&f.a]);
+        excerpts::set_weight(&f.p.conn, &overflows, &f.a, None, Some(5.0)).unwrap();
+
+        retag_code(&f.p.conn, &f.a, &f.b).unwrap();
+        assert_eq!(
+            excerpts::get(&f.p.conn, &fits).unwrap().codings[0].weight,
+            Some(2.0),
+            "2 is within B's 1..3, so it comes along"
+        );
+        assert_eq!(
+            excerpts::get(&f.p.conn, &overflows).unwrap().codings[0].weight,
+            None,
+            "5 does not fit B's 1..3, so the rating is dropped rather than clamped"
+        );
+    }
+
     /// Bulk edits are about excerpts, not about text: an image region is
     /// tagged, deleted and restored like any other excerpt.
     #[test]
@@ -973,5 +1141,52 @@ mod tests {
         .unwrap();
         assert_eq!(count(&f), 1);
         assert_eq!(codes_of(&f, &existing), vec![f.b.clone()]);
+    }
+
+    #[test]
+    fn set_weights_many_snaps_reports_only_real_changes_and_is_invertible() {
+        let f = setup();
+        codes::set_weight_scale(&f.p.conn, &f.a, Some(scale(1.0, 5.0))).unwrap();
+        let e1 = apply(&f, 0, 3, &[&f.a]); // starts at the default, 1
+        let e2 = apply(&f, 4, 7, &[&f.a]);
+        excerpts::set_weight(&f.p.conn, &e2, &f.a, None, Some(4.0)).unwrap();
+        let uncoded = apply(&f, 8, 13, &[&f.b]); // never coded A: skipped
+
+        // 4.6 snaps to 5 on A's scale.
+        let report = set_weights_many(
+            &f.p.conn,
+            &f.a,
+            &[e1.clone(), e2.clone(), uncoded],
+            Some(4.6),
+        )
+        .unwrap();
+        // e2 already carried a weight, just not this one, and e1 changed from
+        // its default; the excerpt with no A coding at all is left alone.
+        assert_eq!(report.changed.len(), 2);
+        assert_eq!(
+            excerpts::get(&f.p.conn, &e1).unwrap().codings[0].weight,
+            Some(5.0)
+        );
+        assert_eq!(
+            excerpts::get(&f.p.conn, &e2).unwrap().codings[0].weight,
+            Some(5.0)
+        );
+
+        // Asking for the value it already has changes nothing.
+        let noop = set_weights_many(&f.p.conn, &f.a, std::slice::from_ref(&e1), Some(5.0)).unwrap();
+        assert!(noop.changed.is_empty());
+
+        // Undo: the same call, over the previous values the report carried.
+        for (excerpt_id, coder_id, previous) in &report.changed {
+            excerpts::set_weight(&f.p.conn, excerpt_id, &f.a, Some(coder_id), *previous).unwrap();
+        }
+        assert_eq!(
+            excerpts::get(&f.p.conn, &e1).unwrap().codings[0].weight,
+            Some(1.0)
+        );
+        assert_eq!(
+            excerpts::get(&f.p.conn, &e2).unwrap().codings[0].weight,
+            Some(4.0)
+        );
     }
 }
