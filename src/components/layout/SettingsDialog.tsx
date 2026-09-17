@@ -97,6 +97,15 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
             <label className="flex items-center gap-2 text-sm">
               <input
                 type="checkbox"
+                checked={settings.showSpeakerGutter}
+                onChange={(e) => update({ showSpeakerGutter: e.target.checked })}
+                data-testid="settings-speaker-gutter"
+              />
+              Show transcript speakers in a gutter
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
                 checked={settings.confirmDeleteExcerpt}
                 onChange={(e) => update({ confirmDeleteExcerpt: e.target.checked })}
               />

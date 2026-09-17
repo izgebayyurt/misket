@@ -2,7 +2,6 @@ use std::path::{Path, PathBuf};
 
 use misket_core::db::documents;
 use misket_core::models::{Document, DocumentSummary, NewDocument, NewImageDocument};
-use misket_core::text::{speaker_turns, Turn};
 use misket_core::{AppError, Result};
 use tauri::{AppHandle, State};
 
@@ -47,16 +46,6 @@ pub fn rename_document(
 #[tauri::command]
 pub fn reorder_documents(state: State<'_, AppState>, ids: Vec<String>) -> Result<()> {
     state.with_project(|p| documents::reorder(&p.conn, &ids))
-}
-
-/// Speaker turns detected in a text document (see `misket_core::text`), for
-/// the document header's "Speakers" menu.
-#[tauri::command]
-pub fn detect_speaker_turns(state: State<'_, AppState>, id: String) -> Result<Vec<Turn>> {
-    state.with_project(|p| {
-        let (text, _len) = documents::get_text(&p.conn, &id)?;
-        Ok(speaker_turns(&text))
-    })
 }
 
 #[tauri::command]

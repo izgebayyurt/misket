@@ -4,6 +4,7 @@ import { matrixCsv } from "@/core/csv";
 import { useCodeByDescriptor } from "@/queries/analysis";
 import { useCodeTree } from "@/queries/codes";
 import { useDescriptorFields } from "@/queries/descriptors";
+import { useProjectSpeakers } from "@/queries/transcripts";
 import { ColorDot } from "@/components/codebook/ColorSwatch";
 import { FilterPicker } from "@/components/ui/filter-picker";
 import { useWorkspace } from "@/state/workspace";
@@ -20,8 +21,16 @@ import { shade } from "./shade";
  * descriptor condition that reproduces each one, so a cell can open the
  * excerpt browser on exactly the excerpts it counted.
  */
+/**
+ * The virtual field standing for "who was speaking". It is not a descriptor —
+ * Rust special-cases the id in `code_by_descriptor` — but it belongs in the
+ * same picker, because it is one more thing to cross-tabulate codes against.
+ */
+const SPEAKER_FIELD_ID = "speaker";
+
 export function CodeByDescriptorMatrix() {
-  const { data: fields } = useDescriptorFields();
+  const { data: descriptorFields } = useDescriptorFields();
+  const { data: projectSpeakers } = useProjectSpeakers();
   const [fieldId, setFieldId] = useState<string | null>(null);
   const [codeIds, setCodeIds] = useState<string[]>([]);
   const [includeSub, setIncludeSub] = useState(true);
@@ -32,10 +41,30 @@ export function CodeByDescriptorMatrix() {
   const tree = useCodeTree();
   const openExcerpts = useWorkspace((s) => s.openExcerpts);
 
+  // "Speaker" joins the descriptors in the picker whenever the project has
+  // any transcripts at all.
+  const fields = useMemo(() => {
+    const list = [...(descriptorFields ?? [])];
+    if (projectSpeakers?.length) {
+      list.push({
+        id: SPEAKER_FIELD_ID,
+        name: "Speaker",
+        kind: "text",
+        options: projectSpeakers,
+        sortOrder: -1,
+        valueCount: projectSpeakers.length,
+        createdAt: "",
+        updatedAt: "",
+      });
+    }
+    return list;
+  }, [descriptorFields, projectSpeakers]);
+
   // The first field is the useful default: picking one is a second click
   // nobody wants when the project has only one descriptor.
-  const field = fields?.find((f) => f.id === fieldId) ?? fields?.[0];
+  const field = fields.find((f) => f.id === fieldId) ?? fields[0];
   const isNumber = field?.kind === "number";
+  const bySpeaker = field?.id === SPEAKER_FIELD_ID;
 
   const request = useMemo<CrosstabRequest | null>(
     () =>
@@ -90,7 +119,7 @@ export function CodeByDescriptorMatrix() {
         aria-label="Descriptor"
         data-testid="crosstab-field"
       >
-        {fields?.map((f) => (
+        {fields.map((f) => (
           <option key={f.id} value={f.id}>
             {f.name}
           </option>
@@ -180,12 +209,13 @@ export function CodeByDescriptorMatrix() {
     </AnalysisToolbar>
   );
 
-  if (!fields?.length) {
+  if (!fields.length) {
     return (
       <div className="flex h-full flex-col" data-testid="analysis-crosstab">
         <EmptyNote>
-          No descriptors yet. Define a document attribute — a site, an interview wave, an age group
-          — and set it on a few documents to compare codes across them.
+          Nothing to compare codes across yet. Define a document attribute — a site, an interview
+          wave, an age group — and set it on a few documents, or import a transcript and compare
+          codes across its speakers.
         </EmptyNote>
       </div>
     );
@@ -198,7 +228,9 @@ export function CodeByDescriptorMatrix() {
         <EmptyNote>
           {isPending
             ? "Counting…"
-            : `Nothing to cross-tabulate yet: give some documents a value for “${field?.name}” and code them.`}
+            : bySpeaker
+              ? "Nothing to cross-tabulate yet: code some passages in a transcript."
+              : `Nothing to cross-tabulate yet: give some documents a value for “${field?.name}” and code them.`}
         </EmptyNote>
       ) : (
         <div className="min-h-0 flex-1 overflow-auto p-3">
@@ -260,22 +292,29 @@ export function CodeByDescriptorMatrix() {
                           title={`${pathOf(tree, r.codeId)} × ${column.label}: ${n} ${unit}${
                             n === 1 ? "" : "s"
                           }`}
-                          onClick={() =>
-                            n &&
+                          onClick={() => {
+                            // The "(no speaker)" column has no filter that
+                            // reproduces it, so it carries no values and does
+                            // not open the browser.
+                            if (!n || (bySpeaker && column.values.length === 0)) return;
                             openExcerpts({
                               codeIds: [r.codeId],
                               includeDescendants: includeSub,
                               documentIds: documentIds.length ? documentIds : null,
                               documentSetIds: documentSetIds.length ? documentSetIds : null,
-                              descriptors: [
-                                {
-                                  fieldId: field!.id,
-                                  op: column.op,
-                                  values: column.values,
-                                },
-                              ],
-                            })
-                          }
+                              ...(bySpeaker
+                                ? { speakers: column.values }
+                                : {
+                                    descriptors: [
+                                      {
+                                        fieldId: field!.id,
+                                        op: column.op,
+                                        values: column.values,
+                                      },
+                                    ],
+                                  }),
+                            });
+                          }}
                           data-testid={n ? "crosstab-cell" : undefined}
                         >
                           {n || ""}
@@ -314,8 +353,11 @@ export function CodeByDescriptorMatrix() {
               ? "Each cell counts the documents with that value that carry the code at least once"
               : "Each cell counts the excerpts carrying the code in documents with that value"}
             {includeSub ? ", sub-codes included" : ""}. <em>n</em> is how many documents fall in the
-            column. A document belongs to exactly one column, so a row adds up to its total; a
-            column total counts an excerpt once per code it carries. Click a cell to browse those
+            column.{" "}
+            {bySpeaker
+              ? "An excerpt belongs to the turn it starts in, so one transcript feeds several columns and n is the documents that speaker appears in."
+              : "A document belongs to exactly one column, so a row adds up to its total;"}{" "}
+            a column total counts an excerpt once per code it carries. Click a cell to browse those
             excerpts.
           </p>
         </div>

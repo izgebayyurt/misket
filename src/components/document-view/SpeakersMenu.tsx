@@ -7,7 +7,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import type { SpeakerTurn } from "@/api/types";
-import { useSpeakerTurns } from "@/queries/documents";
+import { useTranscript } from "@/queries/transcripts";
 import { useCodeTree } from "@/queries/codes";
 import { useAutoCode } from "@/queries/excerpts";
 import { useWorkspace } from "@/state/workspace";
@@ -30,17 +30,19 @@ function groupBySpeaker(turns: SpeakerTurn[]): SpeakerGroup[] {
 }
 
 /**
- * The document header's "Speakers" menu: lists every speaker detected in the
- * transcript (see `misket_core::text::speaker_turns`) with a turn count, and
- * offers "Code all turns of <speaker> with…", auto-coding every one of their
- * turns (the spoken text, not the label) with a single chosen code.
+ * The document header's "Speakers" menu: lists every speaker in the
+ * transcript, as the document's stored format reads it (`db::transcripts`),
+ * with a turn count, and offers "Code all turns of <speaker> with…",
+ * auto-coding every one of their turns — the spoken text, never the label —
+ * with a single chosen code.
  */
 export function SpeakersMenu({ documentId }: { documentId: string }) {
-  const { data: turns } = useSpeakerTurns(documentId);
+  const { data: transcript } = useTranscript(documentId);
   const openCodePicker = useWorkspace((s) => s.openCodePicker);
   const autoCode = useAutoCode();
   const tree = useCodeTree();
 
+  const turns = transcript?.turns;
   if (!turns || turns.length === 0) return null;
   const groups = groupBySpeaker(turns);
 

@@ -22,13 +22,14 @@ use rusqlite::{params, Connection, OptionalExtension, Row};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
-use super::{codes, documents, excerpts, framework, util};
+use super::{codes, documents, excerpts, framework, transcripts, util};
 use crate::error::{AppError, Result};
 use crate::models::{
     ChildrenStrategy, CodePatch, CodeTreeSnapshot, CompactReport, DescriptorField,
     DocumentSnapshot, ExcerptSnapshot, FrameworkMatrixWithCells, HistoryNode, HistoryNodeSummary,
     Memo, SavedFilter, SetWithMembers, TagRow,
 };
+use crate::text::TranscriptFormat;
 
 // ------------------------------------------------------------- the head
 
@@ -545,6 +546,20 @@ pub struct ExcerptChange {
     pub remove_tags: Vec<TagRow>,
     pub add_tags: Vec<TagRow>,
     pub touch: Vec<Touch>,
+}
+
+/// Setting which transcript format a document is read with, or the
+/// project-level default. Both directions speak the same vocabulary — the
+/// format to put in force — so undo and redo are the same payload with
+/// different contents.
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct TranscriptChange {
+    /// The document this is the format of; absent for the project default.
+    pub document_id: Option<String>,
+    /// Absent means "detect automatically": for a document, forget the stored
+    /// answer so the next read detects one; for the project, back to `auto`.
+    pub format: Option<TranscriptFormat>,
 }
 
 /// Everything that happens to a document. `Restore` is the inverse of a
@@ -1131,6 +1146,18 @@ impl MemoChange {
     }
 }
 
+impl TranscriptChange {
+    fn run(&self, conn: &Connection) -> Result<()> {
+        match &self.document_id {
+            Some(id) => {
+                transcripts::set_format(conn, id, self.format.clone())?;
+            }
+            None => transcripts::set_default(conn, self.format.clone())?,
+        }
+        Ok(())
+    }
+}
+
 /// Run one payload, choosing the vocabulary the node's kind is written in.
 ///
 /// Anything this match does not list is a kind no inverse has been written
@@ -1160,6 +1187,9 @@ fn apply(conn: &Connection, node_id: i64, kind: &str, payload: &Value) -> Result
         | "bulk.auto_coded" => serde_json::from_value::<ExcerptChange>(payload.clone())?.run(conn),
         "memo.created" | "memo.updated" | "memo.deleted" | "memo.restored" => {
             serde_json::from_value::<MemoChange>(payload.clone())?.run(conn)
+        }
+        "transcript.format_set" | "transcript.default_set" => {
+            serde_json::from_value::<TranscriptChange>(payload.clone())?.run(conn)
         }
         "document.imported" | "document.deleted" | "document.renamed" | "document.reordered" => {
             serde_json::from_value::<DocumentOp>(payload.clone())?.run(conn, node_id)

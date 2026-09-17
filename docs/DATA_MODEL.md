@@ -11,22 +11,22 @@ stays a single file that can be copied while open), `synchronous = NORMAL`.
 
 ## Tables
 
-| Table                | Purpose                                                                                                                                                                                                                                                                       |
-| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `project_meta`       | key/value: `schema_version`, `project_id`, `name`, `created_at`, `created_with_app_version`                                                                                                                                                                                   |
-| `documents`          | imported sources. `kind` is `text` or `image` (`video` later). `text` is immutable and NULL for media; `text_length` is the code point count; `media_json` holds `{width,height,mime}`; `content_hash` de-duplicates imports                                                  |
-| `codes`              | the codebook tree: adjacency list (`parent_id`) with `sort_order` among siblings, `color`, optional single-key `shortcut`, and the definition fields `description`, `inclusion`, `exclusion` and `example_excerpt_id`. Sibling names are unique case-insensitively            |
-| `excerpts`           | coded ranges. `kind` = `text` (code point `start_pos`/`end_pos`), `video_range` (milliseconds) or `image_region` (`geometry` JSON `{x,y,w,h}` normalized 0..1). `snapshot` stores the excerpted text or a description of the region. One excerpt per exact range or rectangle |
-| `excerpt_codes`      | many-to-many between excerpts and codes                                                                                                                                                                                                                                       |
-| `media_blobs`        | the bytes of an image document, with their MIME type, one row per document. Deleting the document drops them                                                                                                                                                                  |
-| `memos`              | notes with at most one target: `document_id`, `code_id`, `excerpt_id`, or none (project memo). Each target is a real foreign key so deletes cascade                                                                                                                           |
-| `descriptor_fields`  | document attributes ("Site", "Age group"). `kind` is `text`, `number`, `choice` or `date`; `options_json` holds a choice field's options as a JSON array of strings; `sort_order` is the order they are shown in. Names are unique case-insensitively                         |
-| `descriptor_values`  | one value per (`document_id`, `field_id`), `WITHOUT ROWID`. Both foreign keys cascade, so deleting a document or a field takes its values with it                                                                                                                             |
-| `sets`               | named groups of codes or of documents. `kind` is `code` or `document`; names are unique per kind, case-insensitively, so "Round 1" can be both                                                                                                                                |
-| `set_members`        | `(set_id, member_id)`, `WITHOUT ROWID`. `member_id` is a code id or a document id depending on the set's kind, so it is not a foreign key; two triggers stand in for the cascade                                                                                              |
-| `saved_filters`      | a whole `ExcerptFilter` as JSON under a unique (case-insensitive) name                                                                                                                                                                                                        |
-| `framework_matrices` | a saved framework matrix: its name, how to make its rows (`row_kind`, `row_field_id`, `row_set_id`) and where its columns come from (`code_set_id`, or `code_ids_json`). Names are unique case-insensitively                                                                  |
-| `framework_cells`    | the written summary for one (`matrix_id`, `row_key`, `code_id`), `WITHOUT ROWID`. `row_key` is a document id or a descriptor value; a trigger stands in for the missing `code_id` cascade                                                                                     |
+| Table                | Purpose                                                                                                                                                                                                                                                                                   |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `project_meta`       | key/value: `schema_version`, `project_id`, `name`, `created_at`, `created_with_app_version`                                                                                                                                                                                               |
+| `documents`          | imported sources. `kind` is `text` or `image` (`video` later). `text` is immutable and NULL for media; `text_length` is the code point count; `media_json` holds `{width,height,mime}`; `content_hash` de-duplicates imports; `transcript_json` is how the document marks who is speaking |
+| `codes`              | the codebook tree: adjacency list (`parent_id`) with `sort_order` among siblings, `color`, optional single-key `shortcut`, and the definition fields `description`, `inclusion`, `exclusion` and `example_excerpt_id`. Sibling names are unique case-insensitively                        |
+| `excerpts`           | coded ranges. `kind` = `text` (code point `start_pos`/`end_pos`), `video_range` (milliseconds) or `image_region` (`geometry` JSON `{x,y,w,h}` normalized 0..1). `snapshot` stores the excerpted text or a description of the region. One excerpt per exact range or rectangle             |
+| `excerpt_codes`      | many-to-many between excerpts and codes                                                                                                                                                                                                                                                   |
+| `media_blobs`        | the bytes of an image document, with their MIME type, one row per document. Deleting the document drops them                                                                                                                                                                              |
+| `memos`              | notes with at most one target: `document_id`, `code_id`, `excerpt_id`, or none (project memo). Each target is a real foreign key so deletes cascade                                                                                                                                       |
+| `descriptor_fields`  | document attributes ("Site", "Age group"). `kind` is `text`, `number`, `choice` or `date`; `options_json` holds a choice field's options as a JSON array of strings; `sort_order` is the order they are shown in. Names are unique case-insensitively                                     |
+| `descriptor_values`  | one value per (`document_id`, `field_id`), `WITHOUT ROWID`. Both foreign keys cascade, so deleting a document or a field takes its values with it                                                                                                                                         |
+| `sets`               | named groups of codes or of documents. `kind` is `code` or `document`; names are unique per kind, case-insensitively, so "Round 1" can be both                                                                                                                                            |
+| `set_members`        | `(set_id, member_id)`, `WITHOUT ROWID`. `member_id` is a code id or a document id depending on the set's kind, so it is not a foreign key; two triggers stand in for the cascade                                                                                                          |
+| `saved_filters`      | a whole `ExcerptFilter` as JSON under a unique (case-insensitive) name                                                                                                                                                                                                                    |
+| `framework_matrices` | a saved framework matrix: its name, how to make its rows (`row_kind`, `row_field_id`, `row_set_id`) and where its columns come from (`code_set_id`, or `code_ids_json`). Names are unique case-insensitively                                                                              |
+| `framework_cells`    | the written summary for one (`matrix_id`, `row_key`, `code_id`), `WITHOUT ROWID`. `row_key` is a document id or a descriptor value; a trigger stands in for the missing `code_id` cascade                                                                                                 |
 
 All ids are UUID v4 strings so deleted rows can be restored with their original
 identity (undo) and so exports are stable.
@@ -68,6 +68,66 @@ region 12%×8% at (30%, 40%)
 
 The excerpt context (`contextBefore` / `contextAfter`) is empty for image
 excerpts.
+
+## Transcripts
+
+A transcript opens each turn with a speaker label — `Alice:`, `[Alice]`,
+`Alice (00:12):`, `[00:12:03] Alice:`, `00:12:03 Alice:`. Those labels are
+**part of the document text**, and they stay there: text is immutable and
+every excerpt offset is a code point into it, so moving them would invalidate
+work already done. What Misket stores is how to _find_ them.
+
+`documents.transcript_json` (schema 10) holds the `TranscriptFormat`:
+
+```jsonc
+{ "kind": "preset", "preset": "name_colon" }
+{ "kind": "regex", "pattern": "^<<(?<speaker>[^>]+)>>[ \t]*" }
+{ "kind": "none" } // looked at, and explicitly not a transcript
+```
+
+`NULL` means the document has never been looked at; the next read detects a
+format and stores the answer (`db::transcripts::ensure`, called from
+`documents::create` and `documents::get`). Stored alongside the format is a
+cache of what it finds — `speakers` and `turnCount` — which is what puts
+`speakers` on `DocumentSummary` without a listing re-scanning any text.
+Document text never changes, so that cache is valid for as long as the format
+is. `project_meta.transcript_default` is the project-level default for new
+imports: `auto`, or a serialized format.
+
+Each preset is a regex anchored at the start of a line with a named group
+`speaker` and, where the form carries one, `time`; a custom pattern is the
+user's own, validated to compile and to name `speaker`. Detection
+(`text::transcript::detect_format`) tries every preset and keeps the one that
+finds the most turns, which is conservative on purpose: a label must be one to
+four words, at most 40 characters, made of letters, digits, spaces,
+apostrophes, hyphens and dots, and it must **recur** — twice, or three times
+when it is a single letter (`Q:`) or a word documents use as an aside
+(`Note:`). A `(see notes):` parenthetical and a one-off `Note:` line stay
+ordinary text.
+
+A `Turn` carries `[labelStart, labelEnd)` — the whole label, leading spaces,
+name, timestamp, delimiter and trailing spaces — and `[start, end)`, the
+spoken text with trailing whitespace trimmed. Both are code points. That
+split is what lets the document view cut the label into its own segments and
+lay them out in a gutter, and what lets `clipToSpokenText` trim a selection
+that starts or ends inside one.
+
+`ExcerptRow.speaker` is who was speaking where the excerpt starts — the turn
+whose `[labelStart, end)` contains it, so an excerpt that swallowed a label is
+still attributed to the right person. `ExcerptFilter.speakers` narrows to what
+those speakers said; like `query`, it is not a SQL condition, so
+`excerpts::query` applies it in Rust before paging and `total` stays honest.
+Both read turns through `transcripts::TurnIndex`, which loads each document's
+transcript once however many of its excerpts are involved.
+
+`analysis::code_by_descriptor` special-cases the field id `speaker`: the
+columns become the speakers of the documents in scope (case-insensitively
+sorted), plus a trailing `(no speaker)` column for anything outside a turn.
+Unlike a descriptor, where a document belongs to exactly one column, a
+transcript feeds several, so `documentsPerColumn` is the documents that
+speaker appears in. Each column carries `op: "speaker"` and its own name in
+`values`, which is the speaker filter that reproduces it; the `(no speaker)`
+column carries none, so it does not click through.
 
 ## Code definitions
 
@@ -440,6 +500,7 @@ both directions:
 | `set.*`, `filter.*`                | a `SetOp`: `restore`, `drop`, `rename`, `members` (the whole list), `restoreFilter`, `dropFilter`                                            |
 | `framework.*`                      | a `FrameworkOp`: `restore` (the matrix and every summary), `drop`, `configure`, `cell`                                                       |
 | `project.*`, `analysis.*`          | a `ProjectOp`: one `project_meta` key and the value to put there                                                                             |
+| `transcript.*`                     | a `TranscriptChange`: the document (absent for the project default) and the format to put in force (absent meaning "detect again")           |
 | a node whose sibling does the work | `{"op":"noop"}` — the first half of a merge or a split, whose group partner undoes both (schema 8 wrote `{"op":"linked"}`; both are read)    |
 
 A `DocumentSnapshot` is everything deleting a document would take with it: the

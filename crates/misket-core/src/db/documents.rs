@@ -4,6 +4,7 @@ use rusqlite::{params, Connection, OptionalExtension, Row};
 use serde_json::json;
 
 use super::history::DocumentOp;
+use super::transcripts::{self, StoredTranscript};
 use super::{activity, excerpts, history, memos, text, util};
 use crate::error::{AppError, Result};
 use crate::models::{
@@ -14,7 +15,7 @@ use crate::models::{
 const SUMMARY_COLUMNS: &str =
     "d.id, d.kind, d.name, d.source_path, d.source_format, d.text_length, d.media_json, d.sort_order,
      (SELECT count(*) FROM excerpts e WHERE e.document_id = d.id) AS excerpt_count,
-     d.created_at, d.updated_at";
+     d.created_at, d.updated_at, d.transcript_json";
 
 /// The image types Misket imports, with the `source_format` recorded for each.
 pub const IMAGE_MIMES: [(&str, &str); 3] = [
@@ -39,6 +40,14 @@ fn summary_from_row(r: &Row) -> rusqlite::Result<DocumentSummary> {
         excerpt_count: r.get(8)?,
         created_at: r.get(9)?,
         updated_at: r.get(10)?,
+        // Read from the cache the transcript format was stored with; a
+        // document that has never been looked at simply lists no speakers
+        // until something calls `transcripts::ensure` on it.
+        speakers: r
+            .get::<_, Option<String>>(11)?
+            .and_then(|j| serde_json::from_str::<StoredTranscript>(&j).ok())
+            .map(|t| t.speakers.into_iter().map(|s| s.name).collect())
+            .unwrap_or_default(),
     })
 }
 
@@ -88,6 +97,9 @@ pub fn create(conn: &Connection, input: NewDocument) -> Result<Document> {
             now
         ],
     )?;
+    // Work out how this document marks its speakers once, at import, so the
+    // listing and the document view can both read the answer (`db::transcripts`).
+    transcripts::ensure(conn, &id)?;
     log_import(conn, &id)?;
     get(conn, &id)
 }
@@ -141,7 +153,7 @@ pub fn snapshot(
     let mut snapshot = conn
         .query_row(
             "SELECT id, kind, name, source_path, source_format, content_hash, media_json,
-                    text_length, sort_order, created_at, updated_at
+                    text_length, sort_order, created_at, updated_at, transcript_json
                FROM documents WHERE id = ?1",
             [id],
             |r| {
@@ -158,6 +170,7 @@ pub fn snapshot(
                     sort_order: r.get(8)?,
                     created_at: r.get(9)?,
                     updated_at: r.get(10)?,
+                    transcript_json: r.get(11)?,
                     ..Default::default()
                 })
             },
@@ -227,8 +240,9 @@ pub fn restore(
     let tx = util::tx(conn)?;
     tx.execute(
         "INSERT INTO documents (id, kind, name, source_path, source_format, content_hash,
-                                text, text_length, media_json, sort_order, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+                                text, text_length, media_json, sort_order, created_at, updated_at,
+                                transcript_json)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
         params![
             snapshot.id,
             snapshot.kind,
@@ -241,7 +255,8 @@ pub fn restore(
             snapshot.media_json,
             snapshot.sort_order,
             snapshot.created_at,
-            snapshot.updated_at
+            snapshot.updated_at,
+            snapshot.transcript_json
         ],
     )?;
     if let (Some(bytes), Some(mime)) = (media, snapshot.media_mime.as_deref()) {
@@ -381,6 +396,10 @@ pub fn create_image(conn: &Connection, input: NewImageDocument) -> Result<Docume
         "INSERT INTO media_blobs (document_id, mime, bytes) VALUES (?1, ?2, ?3)",
         params![id, mime, bytes],
     )?;
+    // An image has no text to read speakers out of, but it gets the same
+    // "looked at, not a transcript" answer as any other document, so the
+    // column is set before the import is snapshotted for the history.
+    transcripts::ensure(&tx, &id)?;
     log_import(&tx, &id)?;
     tx.commit()?;
     get(conn, &id)
@@ -416,6 +435,9 @@ pub fn get_summary(conn: &Connection, id: &str) -> Result<DocumentSummary> {
 }
 
 pub fn get(conn: &Connection, id: &str) -> Result<Document> {
+    // A document imported before schema 8 has no stored format; detect it now
+    // so its summary carries the speakers like every other document's.
+    transcripts::ensure(conn, id)?;
     let summary = get_summary(conn, id)?;
     let text: Option<String> =
         conn.query_row("SELECT text FROM documents WHERE id = ?1", [id], |r| {

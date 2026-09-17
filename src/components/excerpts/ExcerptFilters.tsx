@@ -1,6 +1,7 @@
 import { X } from "lucide-react";
 import { useCodeTree } from "@/queries/codes";
 import { useDocuments } from "@/queries/documents";
+import { useProjectSpeakers } from "@/queries/transcripts";
 import { useSets } from "@/queries/sets";
 import { flattenTree, pathOf } from "@/core/codeTree";
 import { ColorDot } from "@/components/codebook/ColorSwatch";
@@ -34,6 +35,9 @@ interface Props {
   /** The Boolean/proximity query, built by the "Query" chip. */
   query: Query | null;
   onQuery: (v: Query | null) => void;
+  /** Only what these speakers said; empty is no filter. */
+  speakers: string[];
+  onSpeakers: (v: string[]) => void;
   /** The filter as it stands, for "Save current filter…". */
   filter: ExcerptFilter;
   onApplyFilter: (filter: ExcerptFilter) => void;
@@ -45,6 +49,7 @@ export function ExcerptFilters(p: Props) {
   const { data: docs } = useDocuments();
   const { data: codeSets } = useSets("code");
   const { data: docSets } = useSets("document");
+  const { data: projectSpeakers } = useProjectSpeakers();
   const toggle = (list: string[], id: string) =>
     list.includes(id) ? list.filter((x) => x !== id) : [...list, id];
   const codeCount = p.codeIds.length + p.codeSetIds.length;
@@ -174,6 +179,38 @@ export function ExcerptFilters(p: Props) {
             <X className="size-3" />
           </button>
         </span>
+      ) : null}
+      {projectSpeakers?.length ? (
+        <FilterPicker
+          label={
+            p.speakers.length
+              ? `${p.speakers.length} speaker${p.speakers.length > 1 ? "s" : ""}`
+              : "Any speaker"
+          }
+          active={p.speakers.length > 0}
+          onClear={() => p.onSpeakers([])}
+          testId="filter-speakers"
+        >
+          {(query) => (
+            <>
+              {projectSpeakers
+                .filter((name) => name.toLowerCase().includes(query.toLowerCase()))
+                .map((name) => (
+                  <label
+                    key={name}
+                    className="flex cursor-default items-center gap-2 rounded px-2 py-1 hover:bg-muted"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={p.speakers.includes(name)}
+                      onChange={() => p.onSpeakers(toggle(p.speakers, name))}
+                    />
+                    <span className="truncate">{name}</span>
+                  </label>
+                ))}
+            </>
+          )}
+        </FilterPicker>
       ) : null}
       <DescriptorConditions conditions={p.descriptors} onChange={p.onDescriptors} />
       <QueryBuilder query={p.query} onChange={p.onQuery} />

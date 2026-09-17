@@ -68,6 +68,15 @@ export function ExcerptRow({ row, selected = false, active, onOpen, onToggle }: 
           )}
           <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-fg-muted">
             <span>{row.documentName}</span>
+            {row.speaker ? (
+              <span
+                className="rounded-full bg-muted px-1.5 py-0.5 text-[11px] text-fg"
+                title={`Spoken by ${row.speaker}`}
+                data-testid="excerpt-speaker"
+              >
+                {row.speaker}
+              </span>
+            ) : null}
             {row.codeIds.map((id) => (
               <span key={id} className="inline-flex items-center gap-1">
                 <ColorDot color={tree.byId.get(id)?.code.color ?? "#999"} />

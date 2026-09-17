@@ -37,6 +37,7 @@ describe("filterState", () => {
       overlapsCodeId: "c9",
       descriptors: [{ fieldId: "f", op: "eq", values: ["x"] }],
       query: QUERY,
+      speakers: ["P1"],
       limit: 10,
     });
     expect(state).toEqual({
@@ -50,6 +51,7 @@ describe("filterState", () => {
       overlapsCodeId: "c9",
       descriptors: [{ fieldId: "f", op: "eq", values: ["x"] }],
       query: QUERY,
+      speakers: ["P1"],
     });
   });
 
@@ -78,6 +80,7 @@ describe("toFilter", () => {
       overlapsCodeId: null,
       descriptors: null,
       query: null,
+      speakers: null,
       limit: 200,
       offset: 0,
     });

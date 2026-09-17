@@ -20,10 +20,19 @@ export interface Segment {
 
 export const MAX_LANES = 4;
 
+/**
+ * `cuts` are extra boundaries the caller wants segments to break at, whether
+ * or not an excerpt does — the document view passes the ends of a turn's
+ * speaker label, so the label is a segment (or two) of its own and can be
+ * lifted into the gutter. Cuts outside the paragraph are ignored, and the
+ * invariant holds either way: the segments' text, concatenated, is the
+ * paragraph's text.
+ */
 export function segmentParagraph(
   paraStart: number,
   paraEnd: number,
   excerpts: RenderableExcerpt[],
+  cuts: number[] = [],
 ): Segment[] {
   if (paraEnd < paraStart) return [];
   if (paraEnd === paraStart)
@@ -31,7 +40,7 @@ export function segmentParagraph(
   const covering = excerpts.filter(
     (e) => e.start < paraEnd && e.end > paraStart && e.end > e.start,
   );
-  if (covering.length === 0)
+  if (covering.length === 0 && cuts.length === 0)
     return [{ start: paraStart, end: paraEnd, excerptIds: [], codeIds: [] }];
 
   const bounds = new Set<number>([paraStart, paraEnd]);
@@ -39,6 +48,7 @@ export function segmentParagraph(
     if (e.start > paraStart && e.start < paraEnd) bounds.add(e.start);
     if (e.end > paraStart && e.end < paraEnd) bounds.add(e.end);
   }
+  for (const c of cuts) if (c > paraStart && c < paraEnd) bounds.add(c);
   const points = [...bounds].sort((a, b) => a - b);
   const out: Segment[] = [];
   for (let i = 0; i < points.length - 1; i++) {

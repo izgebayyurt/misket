@@ -72,6 +72,37 @@ describe("segmentParagraph", () => {
     expect(segs).toEqual([{ start: 0, end: 10, excerptIds: [], codeIds: [] }]);
   });
 
+  it("breaks at extra cut points even where no excerpt does", () => {
+    const segs = segmentParagraph(0, 10, [], [3, 7]);
+    expect(segs.map((s) => [s.start, s.end])).toEqual([
+      [0, 3],
+      [3, 7],
+      [7, 10],
+    ]);
+    expect(joined(text, 0, 10, [])).toBe(text);
+    expect(
+      segmentParagraph(0, 10, [], [3, 7])
+        .map((s) => text.slice(s.start, s.end))
+        .join(""),
+    ).toBe(text);
+  });
+
+  it("ignores cuts outside the paragraph and duplicates of existing bounds", () => {
+    const segs = segmentParagraph(10, 20, [ex("a", 10, 15)], [5, 10, 15, 20, 44]);
+    expect(segs.map((s) => [s.start, s.end, s.excerptIds])).toEqual([
+      [10, 15, ["a"]],
+      [15, 20, []],
+    ]);
+  });
+
+  it("keeps excerpt coverage on each side of a cut", () => {
+    const segs = segmentParagraph(0, 10, [ex("a", 0, 10)], [4]);
+    expect(segs.map((s) => [s.start, s.end, s.excerptIds])).toEqual([
+      [0, 4, ["a"]],
+      [4, 10, ["a"]],
+    ]);
+  });
+
   it("empty paragraph yields an empty segment", () => {
     expect(segmentParagraph(4, 4, [ex("a", 0, 10)])).toEqual([
       { start: 4, end: 4, excerptIds: [], codeIds: [] },

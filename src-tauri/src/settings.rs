@@ -49,6 +49,10 @@ pub struct AppSettings {
     /// Show a paragraph number in the document view's left gutter.
     #[serde(default = "default_true")]
     pub show_paragraph_numbers: bool,
+    /// Lay a transcript's speaker labels out in a gutter beside the text
+    /// rather than leaving them inline where the document stores them.
+    #[serde(default = "default_true")]
+    pub show_speaker_gutter: bool,
     /// The name recorded as the actor in a project's activity log. Empty (or
     /// absent) means "use the OS user name".
     #[serde(default)]
@@ -64,6 +68,7 @@ impl Default for AppSettings {
             confirm_delete_excerpt: false,
             keep_backups: default_keep_backups(),
             show_paragraph_numbers: default_true(),
+            show_speaker_gutter: default_true(),
             coder_name: None,
         }
     }
@@ -143,6 +148,7 @@ mod tests {
             confirm_delete_excerpt: true,
             keep_backups: 5,
             show_paragraph_numbers: false,
+            show_speaker_gutter: false,
             coder_name: Some("Ada".into()),
         };
         write(&path, &settings).unwrap();

@@ -56,7 +56,11 @@ export const keys = {
   activityList: (filter: ActivityFilter) => ["activity", "list", filter] as const,
   codeHistory: (id: string) => ["activity", "code", id] as const,
   excerptHistory: (id: string) => ["activity", "excerpt", id] as const,
+  /** One document's transcript: format, turns and speakers. */
+  transcript: (documentId: string) => ["transcript", documentId] as const,
+  allTranscripts: ["transcript"] as const,
+  transcriptDefault: ["transcriptDefault"] as const,
+  projectSpeakers: ["projectSpeakers"] as const,
   /** The whole undo tree, as the history view's branch graph reads it. */
   history: ["history", "tree"] as const,
-  speakerTurns: (documentId: string) => ["speakerTurns", documentId] as const,
 };

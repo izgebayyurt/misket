@@ -13,9 +13,8 @@ const MIGRATIONS: &[(i64, &str)] = &[
     (6, include_str!("migrations/0006_framework.sql")),
     (7, include_str!("migrations/0007_code_definitions.sql")),
     (8, include_str!("migrations/0008_history.sql")),
-    // 9 is the transcripts branch; a forward-only sequence keyed by
-    // `PRAGMA user_version` tolerates the gap if that branch lands later.
     (9, include_str!("migrations/0009_history_groups.sql")),
+    (10, include_str!("migrations/0010_transcripts.sql")),
 ];
 
 pub fn latest_version() -> i64 {
@@ -333,6 +332,20 @@ mod tests {
             )
             .unwrap();
         assert_eq!(triggers, 2);
+    }
+
+    #[test]
+    fn the_transcript_column_exists_at_the_latest_version() {
+        let conn = Connection::open_in_memory().unwrap();
+        migrate(&conn).unwrap();
+        let cols: Vec<String> = conn
+            .prepare("SELECT name FROM pragma_table_info('documents')")
+            .unwrap()
+            .query_map([], |r| r.get(0))
+            .unwrap()
+            .collect::<rusqlite::Result<_>>()
+            .unwrap();
+        assert!(cols.iter().any(|c| c == "transcript_json"));
     }
 
     #[test]

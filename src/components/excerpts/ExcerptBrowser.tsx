@@ -189,6 +189,8 @@ export function ExcerptBrowser() {
         onDescriptors={(descriptors) => update({ descriptors })}
         query={state.query}
         onQuery={(query) => update({ query })}
+        speakers={state.speakers}
+        onSpeakers={(speakers) => update({ speakers })}
         filter={filter}
         onApplyFilter={applyFilter}
         total={data?.total ?? 0}

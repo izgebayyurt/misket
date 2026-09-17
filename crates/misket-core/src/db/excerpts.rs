@@ -6,7 +6,8 @@ use serde_json::json;
 
 use super::history::{ExcerptChange, MemoMove, RangeRow, Touch};
 use super::{
-    activity, codes, descriptors, documents, history, memos, query_expr, sets, text, util,
+    activity, codes, descriptors, documents, history, memos, query_expr, sets, text, transcripts,
+    util,
 };
 use crate::error::{AppError, Result};
 use crate::models::{
@@ -1305,21 +1306,49 @@ pub fn query(conn: &Connection, filter: &ExcerptFilter) -> Result<ExcerptPage> {
     let limit = filter.limit.clamp(1, 1000);
     let mut offset = filter.offset.max(0);
     let total: i64;
-    if let Some(expr) = &filter.query {
-        // A Boolean/proximity query is the one condition SQL cannot express,
-        // so the candidates the rest of the filter leaves are narrowed in
-        // Rust first. That happens before paging, which keeps `total` honest;
-        // the page is then re-read by id so the row SQL stays as it is.
+    // Two conditions cannot be expressed in SQL: a Boolean/proximity query,
+    // and "spoken by", which is a question about the document's transcript
+    // format. Both narrow the candidates the rest of the filter leaves,
+    // in Rust, before paging — which keeps `total` honest.
+    let wanted_speakers: Option<&[String]> =
+        filter.speakers.as_deref().filter(|names| !names.is_empty());
+    if filter.query.is_some() || wanted_speakers.is_some() {
         let mut stmt = conn.prepare(&format!(
-            "SELECT e.id, e.document_id FROM excerpts e JOIN documents d ON d.id = e.document_id
+            "SELECT e.id, e.document_id, e.start_pos FROM excerpts e
+             JOIN documents d ON d.id = e.document_id
              WHERE {where_sql} {ORDER_SQL}"
         ))?;
-        let candidates: Vec<(String, String)> = stmt
+        let rows: Vec<(String, String, Option<i64>)> = stmt
             .query_map(rusqlite::params_from_iter(args.iter()), |r| {
-                Ok((r.get(0)?, r.get(1)?))
+                Ok((r.get(0)?, r.get(1)?, r.get(2)?))
             })?
             .collect::<rusqlite::Result<_>>()?;
-        let kept = query_expr::retain_matches(conn, expr, &candidates)?;
+        let candidates: Vec<(String, String)> = rows
+            .iter()
+            .map(|(id, doc, _)| (id.clone(), doc.clone()))
+            .collect();
+        let mut kept = match &filter.query {
+            Some(expr) => query_expr::retain_matches(conn, expr, &candidates)?,
+            None => candidates.iter().map(|(id, _)| id.clone()).collect(),
+        };
+        if let Some(names) = wanted_speakers {
+            let mut index = transcripts::TurnIndex::new();
+            let mut spoken_by: std::collections::HashMap<&str, bool> =
+                std::collections::HashMap::new();
+            for (id, document_id, start_pos) in &rows {
+                // An image region has no position in the text, so it is never
+                // "spoken by" anyone.
+                let speaker = match start_pos {
+                    Some(pos) => index.speaker_at(conn, document_id, *pos)?,
+                    None => None,
+                };
+                let matches = speaker
+                    .as_deref()
+                    .is_some_and(|s| names.iter().any(|n| n.eq_ignore_ascii_case(s)));
+                spoken_by.insert(id.as_str(), matches);
+            }
+            kept.retain(|id| spoken_by.get(id.as_str()).copied().unwrap_or(false));
+        }
         total = kept.len() as i64;
         let page: Vec<rusqlite::types::Value> = kept
             .into_iter()
@@ -1366,16 +1395,23 @@ pub fn query(conn: &Connection, filter: &ExcerptFilter) -> Result<ExcerptPage> {
         .collect::<rusqlite::Result<_>>()?;
     let mut excerpts: Vec<ExcerptWithCodes> = rows.iter().map(|(e, ..)| e.clone()).collect();
     attach_codes(conn, &mut excerpts)?;
-    let out = excerpts
-        .into_iter()
-        .zip(rows)
-        .map(|(excerpt, (_, document_name, before, after))| ExcerptRow {
+    // Who was speaking, for the page's rows only: one document's turns are
+    // worked out once however many of its excerpts are on the page.
+    let mut index = transcripts::TurnIndex::new();
+    let mut out = Vec::with_capacity(excerpts.len());
+    for (excerpt, (_, document_name, before, after)) in excerpts.into_iter().zip(rows) {
+        let speaker = match excerpt.start_pos {
+            Some(pos) => index.speaker_at(conn, &excerpt.document_id, pos)?,
+            None => None,
+        };
+        out.push(ExcerptRow {
             excerpt,
             document_name,
             context_before: before.unwrap_or_default().replace('\n', " "),
             context_after: after.unwrap_or_default().replace('\n', " "),
-        })
-        .collect();
+            speaker,
+        });
+    }
     Ok(ExcerptPage { rows: out, total })
 }
 
@@ -2466,6 +2502,93 @@ mod tests {
                 .map(|row| row.excerpt.id.clone())
                 .collect::<Vec<_>>(),
             vec![r, t]
+        );
+    }
+
+    #[test]
+    fn a_row_carries_its_speaker_and_the_speaker_filter_narrows_to_them() {
+        let p = OpenProject::in_memory("t").unwrap();
+        // "Alice: " is 7 characters, so Alice speaks 7..16 and Bob 22..28.
+        let text = "Alice: Hi there.\nBob: Hello.\nAlice: Bye.\nBob: Bye now.\n";
+        let doc = documents::create(&p.conn, new_doc(text))
+            .unwrap()
+            .summary
+            .id;
+        let a = mk_code(&p.conn, "A", None).id;
+        apply(&p.conn, &doc, 7, 16, &[&a]);
+        apply(&p.conn, &doc, 22, 28, &[&a]);
+
+        let all = query(&p.conn, &ExcerptFilter::default()).unwrap();
+        assert_eq!(
+            all.rows
+                .iter()
+                .map(|r| r.speaker.as_deref())
+                .collect::<Vec<_>>(),
+            vec![Some("Alice"), Some("Bob")]
+        );
+
+        let only_alice = ExcerptFilter {
+            speakers: Some(vec!["Alice".into()]),
+            ..Default::default()
+        };
+        let page = query(&p.conn, &only_alice).unwrap();
+        assert_eq!(page.total, 1);
+        assert_eq!(page.rows[0].speaker.as_deref(), Some("Alice"));
+        // Names are matched however they were capitalized in the filter.
+        let page = query(
+            &p.conn,
+            &ExcerptFilter {
+                speakers: Some(vec!["alice".into()]),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(page.total, 1);
+        // An empty list is no filter; an unknown speaker matches nothing.
+        assert_eq!(
+            query(
+                &p.conn,
+                &ExcerptFilter {
+                    speakers: Some(vec![]),
+                    ..Default::default()
+                }
+            )
+            .unwrap()
+            .total,
+            2
+        );
+        assert_eq!(
+            query(
+                &p.conn,
+                &ExcerptFilter {
+                    speakers: Some(vec!["Nobody".into()]),
+                    ..Default::default()
+                }
+            )
+            .unwrap()
+            .total,
+            0
+        );
+    }
+
+    #[test]
+    fn an_excerpt_in_a_document_that_is_not_a_transcript_has_no_speaker() {
+        let (p, doc, a, _) = setup();
+        apply(&p.conn, &doc, 0, 5, &[&a]);
+        let page = query(&p.conn, &ExcerptFilter::default()).unwrap();
+        assert_eq!(page.rows[0].speaker, None);
+        // …and it can never match a speaker filter.
+        assert_eq!(
+            query(
+                &p.conn,
+                &ExcerptFilter {
+                    speakers: Some(vec!["Alice".into()]),
+                    ..Default::default()
+                }
+            )
+            .unwrap()
+            .total,
+            0
         );
     }
 }

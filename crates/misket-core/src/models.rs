@@ -114,6 +114,12 @@ pub struct DocumentSummary {
     pub media: Option<MediaInfo>,
     pub sort_order: i64,
     pub excerpt_count: i64,
+    /// The speakers the document's transcript format finds, in first-seen
+    /// order; empty for anything that is not a transcript. Read from the
+    /// cache in `documents.transcript_json`, so a listing never re-scans the
+    /// text (see `db::transcripts`).
+    #[serde(default)]
+    pub speakers: Vec<String>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -371,6 +377,11 @@ pub struct DocumentSnapshot {
     pub media_mime: Option<String>,
     pub text_length: Option<i64>,
     pub sort_order: i64,
+    /// How the document marks who is speaking (`db::transcripts`), verbatim,
+    /// so a restore keeps a format the user chose rather than re-detecting
+    /// one. `None` means it had never been looked at.
+    #[serde(default)]
+    pub transcript_json: Option<String>,
     pub created_at: String,
     pub updated_at: String,
     pub excerpts: Vec<ExcerptSnapshot>,
@@ -503,6 +514,12 @@ pub struct ExcerptFilter {
     /// paging. Text excerpts only.
     #[serde(default)]
     pub query: Option<Query>,
+    /// Only excerpts spoken by one of these speakers. Like `query`, this is
+    /// not a SQL condition: it is answered from each document's transcript
+    /// format (`db::transcripts`) before paging. Text excerpts only; an empty
+    /// list is no filter at all.
+    #[serde(default)]
+    pub speakers: Option<Vec<String>>,
     #[serde(default = "default_limit")]
     pub limit: i64,
     #[serde(default)]
@@ -529,6 +546,7 @@ impl Default for ExcerptFilter {
             overlaps_code_id: None,
             descriptors: None,
             query: None,
+            speakers: None,
             limit: default_limit(),
             offset: 0,
         }
@@ -543,6 +561,10 @@ pub struct ExcerptRow {
     pub document_name: String,
     pub context_before: String,
     pub context_after: String,
+    /// Who was speaking where this excerpt starts, when the document is a
+    /// transcript (`db::transcripts`); `None` otherwise.
+    #[serde(default)]
+    pub speaker: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
