@@ -132,7 +132,14 @@ describe("averageLinkage", () => {
 
   it("handles a tie by falling back to id order deterministically", () => {
     // A-B and C-D are both the closest pair, tied at 1.
-    const tie: Record<string, number> = { "A|B": 1, "C|D": 1, "A|C": 9, "A|D": 9, "B|C": 9, "B|D": 9 };
+    const tie: Record<string, number> = {
+      "A|B": 1,
+      "C|D": 1,
+      "A|C": 9,
+      "A|D": 9,
+      "B|C": 9,
+      "B|D": 9,
+    };
     const d = (a: string, b: string) => tie[[a, b].sort().join("|")]!;
     const { merges } = averageLinkage(["A", "B", "C", "D"], d);
     // Whichever pair is found first (scan order), the run should be stable
@@ -165,9 +172,7 @@ describe("cutTree", () => {
 
   it("cuts between the first and second merge into {A,B}, {C}, {D}", () => {
     const clusters = cutTree(tree, 20).map((c) => c.slice().sort());
-    expect(clusters).toEqual(
-      expect.arrayContaining([["A", "B"], ["C"], ["D"]]),
-    );
+    expect(clusters).toEqual(expect.arrayContaining([["A", "B"], ["C"], ["D"]]));
     expect(clusters).toHaveLength(3);
   });
 

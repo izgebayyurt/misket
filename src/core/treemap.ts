@@ -4,6 +4,9 @@
  * needs on top of it. Pure geometry: no SVG, no React, no chart library.
  */
 
+import type { CodeFrequency } from "@/api/types";
+import type { CodeTree } from "./codeTree";
+
 export interface TreemapRect {
   x: number;
   y: number;
@@ -173,4 +176,33 @@ export const MIN_LABEL_SIDE = 28;
 /** Whether a cell is big enough to carry a label at all. */
 export function canLabel(cell: TreemapRect, minSide = MIN_LABEL_SIDE): boolean {
   return cell.w >= minSide && cell.h >= minSide * 0.6;
+}
+
+/**
+ * Turn the codebook tree plus a `code_frequencies` result into
+ * {@link TreemapCode} roots: one recursive tree per top-level code, each
+ * node's `value` being its own or its descendant-inclusive excerpt count
+ * per `ownOnly`. A code missing from `frequencies` (nothing coded with it
+ * yet) gets 0 either way, so it still appears in the codebook-shaped
+ * layout but contributes no area of its own.
+ */
+export function treemapForest(
+  tree: CodeTree,
+  frequencies: CodeFrequency[],
+  ownOnly: boolean,
+): TreemapCode[] {
+  const byCode = new Map(frequencies.map((f) => [f.codeId, f]));
+  const build = (nodeId: string): TreemapCode => {
+    const node = tree.byId.get(nodeId)!;
+    const f = byCode.get(nodeId);
+    const value = f ? (ownOnly ? f.own : f.withDescendants) : 0;
+    return {
+      id: node.code.id,
+      name: node.code.name,
+      color: node.code.color,
+      value,
+      children: node.children.map((c) => build(c.code.id)),
+    };
+  };
+  return tree.roots.map((n) => build(n.code.id));
 }

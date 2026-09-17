@@ -1,6 +1,6 @@
 import { save } from "@tauri-apps/plugin-dialog";
-import { Download } from "lucide-react";
-import { writeTextFile } from "@/api/project";
+import { Download, Image as ImageIcon } from "lucide-react";
+import { writeBinaryFile, writeTextFile } from "@/api/project";
 import { flattenTree, pathOf } from "@/core/codeTree";
 import { useCodeTree } from "@/queries/codes";
 import { useDocuments } from "@/queries/documents";
@@ -12,6 +12,7 @@ import { ColorDot } from "@/components/codebook/ColorSwatch";
 import { SetsPickerGroup } from "@/components/sets/SetsPickerGroup";
 import { toast } from "@/state/toasts";
 import { cn } from "@/lib/utils";
+import { currentPanelBackground, svgToPng } from "./svgExport";
 
 /**
  * A document multi-select shared by the analysis views, with the same
@@ -228,6 +229,46 @@ export function ExportCsvButton({
   return (
     <Button variant="outline" size="sm" onClick={run} disabled={disabled} data-testid="export-csv">
       <Download /> CSV
+    </Button>
+  );
+}
+
+/**
+ * Save a PNG rasterized from an on-screen `<svg>` (the treemap, the
+ * dendrogram), the same "dialog picks the path, a Rust command writes it"
+ * shape as {@link ExportCsvButton}.
+ */
+export function ExportPngButton({
+  name,
+  svgRef,
+  disabled,
+}: {
+  /** File name stem, e.g. "code-treemap". */
+  name: string;
+  svgRef: React.RefObject<SVGSVGElement | null>;
+  disabled?: boolean;
+}) {
+  const { data: project } = useProjectInfo();
+  async function run() {
+    try {
+      const svg = svgRef.current;
+      if (!svg) return;
+      const png = await svgToPng(svg, currentPanelBackground());
+      const stem = (project?.name ?? "misket").replace(/[^\w.-]+/g, "_") || "misket";
+      const path = await save({
+        defaultPath: `${stem}-${name}.png`,
+        filters: [{ name: "PNG", extensions: ["png"] }],
+      });
+      if (!path) return;
+      await writeBinaryFile(path, png);
+      toast.info(`Exported to ${path.split(/[\\/]/).pop()}`);
+    } catch (e) {
+      toast.error(e);
+    }
+  }
+  return (
+    <Button variant="outline" size="sm" onClick={run} disabled={disabled} data-testid="export-png">
+      <ImageIcon /> PNG
     </Button>
   );
 }

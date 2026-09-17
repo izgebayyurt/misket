@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
+import type { Code, CodeFrequency } from "@/api/types";
+import { buildCodeTree } from "./codeTree";
 import {
   canLabel,
   layoutLevel,
   squarify,
   squarifySorted,
   tintFor,
+  treemapForest,
   type TreemapCode,
   type TreemapLeaf,
   type TreemapRect,
@@ -17,7 +20,12 @@ function area(l: TreemapLeaf): number {
 }
 
 function overlaps(a: TreemapLeaf, b: TreemapLeaf): boolean {
-  return a.x < b.x + b.w - 1e-6 && b.x < a.x + a.w - 1e-6 && a.y < b.y + b.h - 1e-6 && b.y < a.y + a.h - 1e-6;
+  return (
+    a.x < b.x + b.w - 1e-6 &&
+    b.x < a.x + a.w - 1e-6 &&
+    a.y < b.y + b.h - 1e-6 &&
+    b.y < a.y + a.h - 1e-6
+  );
 }
 
 function within(rect: TreemapRect, outer: TreemapRect, eps = 1e-6): boolean {
@@ -198,10 +206,73 @@ describe("layoutLevel", () => {
 
   it("omits grandchildren — one drill level only", () => {
     const grandchild = leaf("grandchild", 5);
-    const child: TreemapCode = { id: "child", name: "child", color: "#000", value: 5, children: [grandchild] };
-    const node: TreemapCode = { id: "root", name: "root", color: "#000", value: 5, children: [child] };
+    const child: TreemapCode = {
+      id: "child",
+      name: "child",
+      color: "#000",
+      value: 5,
+      children: [grandchild],
+    };
+    const node: TreemapCode = {
+      id: "root",
+      name: "root",
+      color: "#000",
+      value: 5,
+      children: [child],
+    };
     const { cells } = layoutLevel(node, RECT);
     expect(cells.map((c) => c.id)).toEqual(["child"]);
+  });
+});
+
+function code(id: string, parentId: string | null, extra: Partial<Code> = {}): Code {
+  return {
+    id,
+    parentId,
+    name: id,
+    color: "#123456",
+    description: "",
+    inclusion: "",
+    exclusion: "",
+    exampleExcerptId: null,
+    shortcut: null,
+    sortOrder: 0,
+    excerptCount: 0,
+    createdAt: "2024-01-01",
+    updatedAt: "2024-01-01",
+    ...extra,
+  };
+}
+
+function freq(codeId: string, own: number, withDescendants: number): CodeFrequency {
+  return { codeId, own, withDescendants, documentCount: 0, perDocument: [] };
+}
+
+describe("treemapForest", () => {
+  it("builds one tree per root, own counts as leaves", () => {
+    const tree = buildCodeTree([code("root", null), code("child", "root")]);
+    const [forest] = treemapForest(tree, [freq("root", 2, 5), freq("child", 3, 3)], true);
+    expect(forest).toMatchObject({ id: "root", value: 2 });
+    expect(forest!.children).toMatchObject([{ id: "child", value: 3 }]);
+  });
+
+  it("uses withDescendants when ownOnly is false", () => {
+    const tree = buildCodeTree([code("root", null), code("child", "root")]);
+    const [forest] = treemapForest(tree, [freq("root", 2, 5), freq("child", 3, 3)], false);
+    expect(forest!.value).toBe(5);
+    expect(forest!.children[0]!.value).toBe(3);
+  });
+
+  it("gives a code missing from the frequency list a value of 0", () => {
+    const tree = buildCodeTree([code("lonely", null)]);
+    const [forest] = treemapForest(tree, [], true);
+    expect(forest!.value).toBe(0);
+  });
+
+  it("carries the code's own colour and name onto the treemap node", () => {
+    const tree = buildCodeTree([code("a", null, { name: "Trust", color: "#ABCDEF" })]);
+    const [forest] = treemapForest(tree, [freq("a", 1, 1)], true);
+    expect(forest).toMatchObject({ name: "Trust", color: "#ABCDEF" });
   });
 });
 

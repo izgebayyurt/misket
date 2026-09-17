@@ -115,7 +115,10 @@ export interface Clustering {
  * earlier-indexed original id, which is what makes `leafOrder` stable and
  * crossing-free.
  */
-export function averageLinkage(ids: string[], distance: (a: string, b: string) => number): Clustering {
+export function averageLinkage(
+  ids: string[],
+  distance: (a: string, b: string) => number,
+): Clustering {
   if (ids.length < 2) {
     return {
       tree: ids.length === 1 ? { type: "leaf", id: ids[0]!, members: [ids[0]!] } : null,

@@ -2,7 +2,14 @@ import { create } from "zustand";
 import type { ExcerptFilter, Rect } from "@/api/types";
 
 export type AnalysisTab =
-  "frequencies" | "cooccurrence" | "matrix" | "descriptor" | "framework" | "words";
+  | "frequencies"
+  | "cooccurrence"
+  | "matrix"
+  | "descriptor"
+  | "framework"
+  | "words"
+  | "treemap"
+  | "clustering";
 
 export type View =
   | { kind: "document"; documentId: string; focusExcerptId?: string; scrollToOffset?: number }
