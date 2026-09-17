@@ -281,6 +281,8 @@ function SummaryStrip({
   scope: string;
   note: string;
 }) {
+  // The labels are uppercased by CSS, where a "κ" would come out as a capital
+  // kappa nobody reads as the same letter; they are spelled out instead.
   const figure = (label: string, value: string, sub?: string, testId?: string) => (
     <div className="min-w-32" data-testid={testId}>
       <div className="text-xs uppercase tracking-wide text-fg-muted">{label}</div>
@@ -292,12 +294,12 @@ function SummaryStrip({
     <div className="border-b border-border bg-panel px-4 py-3">
       <div className="flex flex-wrap items-end gap-8">
         {figure(
-          "Pooled κ",
+          "Pooled kappa",
           formatKappa(pooledKappa),
           pooledKappa === null ? "Undefined" : kappaBand(pooledKappa).label,
           "irr-pooled-kappa",
         )}
-        {figure("Mean κ per code", formatKappa(meanKappa), "unweighted")}
+        {figure("Mean kappa per code", formatKappa(meanKappa), "unweighted")}
         {figure("Agreement", formatPercent(percentAgreement), "over every decision")}
       </div>
       <p className="mt-2 text-xs text-fg-muted">
