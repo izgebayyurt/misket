@@ -73,8 +73,10 @@ export const SHORTCUTS: Record<Action, Shortcut> = {
   newMemo: { key: "m", mod: true, global: true },
   palette: { key: "k", mod: true, global: true },
   // Name a code after the selected text. Not `global`: it acts on a document
-  // selection, which typing in a field does not have.
-  inVivoCode: { key: "i", mod: true, shift: true },
+  // selection, which typing in a field does not have. Not `Ctrl`/`⌘`+`Shift`+`I`:
+  // that chord opens WebKitGTK's Web Inspector in debug builds on Linux, so it
+  // never reaches the page's own key handler there.
+  inVivoCode: { key: "k", mod: true, shift: true },
   // Repeat the last code applied. Not `global`: a full stop belongs to the
   // text field the user is typing in.
   quickCode: { key: ".", mod: true },
