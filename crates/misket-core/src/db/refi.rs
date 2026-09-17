@@ -478,18 +478,18 @@ pub fn export_refi(conn: &Connection, path: &Path) -> Result<RefiExportReport> {
             } else {
                 String::new()
             };
-            x.open(
-                "Variable",
-                &attrs([
-                    ("guid", guid(&f.id)),
-                    ("name", f.name.clone()),
-                    ("typeOfVariable", variable_type(&f.kind).to_string()),
-                ]),
-            )?;
-            if !description.is_empty() {
+            let variable_attrs = attrs([
+                ("guid", guid(&f.id)),
+                ("name", f.name.clone()),
+                ("typeOfVariable", variable_type(&f.kind).to_string()),
+            ]);
+            if description.is_empty() {
+                x.empty("Variable", &variable_attrs)?;
+            } else {
+                x.open("Variable", &variable_attrs)?;
                 x.text_el("Description", &description)?;
+                x.close("Variable")?;
             }
-            x.close("Variable")?;
         }
         x.close("Variables")?;
         report.variables = fields.len() as i64;
@@ -647,31 +647,32 @@ fn write_code(
         &code.exclusion,
         &example,
     );
-    x.open(
-        "Code",
-        &attrs([
-            ("guid", guid(&code.id)),
-            ("name", code.name.clone()),
-            ("isCodable", "true".to_string()),
-            ("color", code.color.clone()),
-        ]),
-    )?;
+    let code_attrs = attrs([
+        ("guid", guid(&code.id)),
+        ("name", code.name.clone()),
+        ("isCodable", "true".to_string()),
+        ("color", code.color.clone()),
+    ]);
+    let notes = notes_by_target.get(&code.id).cloned().unwrap_or_default();
+    let children = by_parent
+        .get(&Some(code.id.clone()))
+        .cloned()
+        .unwrap_or_default();
+    report.codes += 1;
+    if description.is_empty() && notes.is_empty() && children.is_empty() {
+        return x.empty("Code", &code_attrs);
+    }
+    x.open("Code", &code_attrs)?;
     if !description.is_empty() {
         x.text_el("Description", &description)?;
     }
-    for id in notes_by_target.get(&code.id).into_iter().flatten() {
+    for id in &notes {
         x.empty("NoteRef", &attrs([("targetGUID", guid(id))]))?;
     }
-    for child in by_parent
-        .get(&Some(code.id.clone()))
-        .cloned()
-        .unwrap_or_default()
-    {
+    for child in children {
         write_code(conn, x, child, by_parent, notes_by_target, report)?;
     }
-    x.close("Code")?;
-    report.codes += 1;
-    Ok(())
+    x.close("Code")
 }
 
 #[allow(clippy::too_many_lines)]
