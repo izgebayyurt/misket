@@ -866,3 +866,91 @@ export interface CompactReport {
   droppedNodes: number;
   droppedBranches: string[];
 }
+
+// ---------------------------------------------------- pulling another copy
+
+/** How much of one kind of thing a pull found, and what it would do with it. */
+export interface MergeCount {
+  matched: number;
+  /** Matched by something other than the id: a hash, a name, a range. */
+  byName: number;
+  new: number;
+}
+
+/** One coder in the other copy, and how much of it is theirs. */
+export interface MergeCoder {
+  id: string;
+  name: string;
+  color: string;
+  /** Codings of theirs in the other file. */
+  codingCount: number;
+  /** Codings of theirs this pull would bring over. */
+  incomingCount: number;
+  /** Whether this is the coder that copy writes as. */
+  isTheirs: boolean;
+  /** Whether this is us, coming back through their copy. */
+  isLocal: boolean;
+}
+
+/** Something only the user can settle: both copies changed the same thing. */
+export interface MergeConflict {
+  id: string;
+  /** `code.scalar` | `code.deletedHere` | `memo` | `descriptor.value` | `framework.cell` */
+  kind: string;
+  title: string;
+  /** Which fields disagree, when the title alone is ambiguous. */
+  field: string;
+  ours: string;
+  theirs: string;
+  /** `[id, label]` for every way out, in the order to show them. */
+  choices: [string, string][];
+  default: string;
+}
+
+export interface MergeDecision {
+  conflictId: string;
+  choice: string;
+}
+
+/** What pulling from another copy would do, before anything is written. */
+export interface MergePlan {
+  otherName: string;
+  otherPath: string;
+  otherProjectId: string;
+  sameProject: boolean;
+  /** No sync point yet, so ours wins for anything you have both edited. */
+  firstPull: boolean;
+  otherCoders: MergeCoder[];
+  documents: MergeCount;
+  codes: MergeCount;
+  excerpts: MergeCount;
+  codings: MergeCount;
+  memos: MergeCount;
+  descriptorFields: MergeCount;
+  descriptorValues: MergeCount;
+  sets: MergeCount;
+  filters: MergeCount;
+  frameworkMatrices: MergeCount;
+  frameworkCells: MergeCount;
+  conflicts: MergeConflict[];
+  notes: string[];
+}
+
+/** What a pull did. */
+export interface MergeReport {
+  otherName: string;
+  documents: number;
+  codes: number;
+  excerpts: number;
+  codings: number;
+  memos: number;
+  descriptorFields: number;
+  descriptorValues: number;
+  sets: number;
+  filters: number;
+  frameworkMatrices: number;
+  frameworkCells: number;
+  conflictsResolved: number;
+  byCoder: MergeCoder[];
+  summary: string;
+}
