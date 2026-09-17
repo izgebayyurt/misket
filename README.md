@@ -140,6 +140,16 @@ keyboard-friendly interface without a subscription.
   everyone's share on the overview screen. Counts are over passages, not
   codings, so agreement never inflates a total. This is the groundwork for
   merging a colleague's copy of a project and for inter-rater reliability.
+- **Working with a team**: there is no server, so each researcher keeps their
+  own file in a shared folder — `study.ada.misket`, `study.bob.misket` — and
+  pulls the other's work in whenever they like ("Pull from a copy…" in the
+  status bar). A pull is a union: everything the other copy has and yours does
+  not, attributed to whoever made it. Nothing of yours is deleted and nothing
+  is written to their file. Misket previews what it would bring — documents,
+  codes, excerpts, codings by coder, memos — and asks only about the few things
+  you have both edited, with the safe answer preselected. The whole pull is one
+  undo, and pulling again later brings only what is new. See
+  [Working with a team](site/docs/data.html#working-with-a-team).
 - **Audit trail**: every change — a code created, renamed, moved or merged, an
   excerpt coded, adjusted or deleted, a memo written, a descriptor set — is
   recorded in the project file with who made it and when. The overview screen
