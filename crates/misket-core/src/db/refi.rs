@@ -1818,6 +1818,7 @@ fn execute_import(
             inclusion,
             exclusion,
             shortcut: None,
+            weight_scale: None,
             sort_order,
             created_at: now.clone(),
             updated_at: now.clone(),
@@ -2255,6 +2256,10 @@ fn execute_import(
                     code_id: code_id.clone(),
                     coder_id: coder_id.clone(),
                     created_at: at.clone(),
+                    // REFI-QDA carries no weight of its own; a scaled code's
+                    // default is for a coding made *in* Misket, not one
+                    // arriving from another tool's export.
+                    weight: None,
                 })
                 .collect();
             report.codings += tags.len() as i64;
