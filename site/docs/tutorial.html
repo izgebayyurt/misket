@@ -293,11 +293,27 @@
           "coding", "coded") under whichever form occurs most; edit the project's own stop-word list
           from the same view.
         </li>
+        <li>
+          a <strong>treemap</strong> of the code hierarchy: each code's tile area is its distinct
+          excerpt count (own, or including sub-codes — a toggle), coloured with the code's own
+          colour tinted lighter the deeper it sits. Click a code with sub-codes to drill into it — a
+          breadcrumb above the treemap goes back — and double-click any tile to open its excerpts;
+        </li>
+        <li>
+          a <strong>clustering</strong> view that groups codes by how often they are applied to the
+          same or overlapping text (Jaccard or cosine similarity, your choice), drawn as a
+          dendrogram with a cut-height slider and a similarity-matrix heatmap ordered the same way
+          as the dendrogram's leaves. Pick a cluster from the list beside it and
+          <strong>Create parent code from cluster…</strong> turns it into a new parent code with the
+          cluster's codes moved under it, as one undoable step. Needs at least two codes that
+          actually co-occur; otherwise the view explains what to do first.
+        </li>
       </ul>
       <p>
         Every cell or word clicks through — to the matching excerpts in the browser, or, for a word,
-        to a project search seeded with that term — and each view exports to CSV. The overview
-        screen's own 30-day sparkline can likewise be narrowed to one code with the picker above it.
+        to a project search seeded with that term — and each view exports to CSV (the treemap and
+        the dendrogram export as PNG too). The overview screen's own 30-day sparkline can likewise
+        be narrowed to one code with the picker above it.
       </p>
       <p>
         Both <strong>find in document</strong> (<kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>F</kbd>) and

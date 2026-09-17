@@ -1,5 +1,15 @@
 import type { ComponentType } from "react";
-import { BarChart3, Grid2x2, Scale, Table, Table2, Tags, Type } from "lucide-react";
+import {
+  BarChart3,
+  Grid2x2,
+  LayoutGrid,
+  Network,
+  Scale,
+  Table,
+  Table2,
+  Tags,
+  Type,
+} from "lucide-react";
 import type { AnalysisTab } from "@/state/workspace";
 import { CodeFrequencies } from "./CodeFrequencies";
 import { CoOccurrenceMatrix } from "./CoOccurrenceMatrix";
@@ -7,6 +17,8 @@ import { CodeByDocumentMatrix } from "./CodeByDocumentMatrix";
 import { FrameworkMatrixView } from "./FrameworkMatrixView";
 import { CodeByDescriptorMatrix } from "./CodeByDescriptorMatrix";
 import { WordFrequencies } from "./WordFrequencies";
+import { CodeTreemap } from "./CodeTreemap";
+import { CodeClustering } from "./CodeClustering";
 import { ReliabilityView } from "./ReliabilityView";
 
 /**
@@ -59,11 +71,18 @@ export const ANALYSES: AnalysisEntry[] = [
     icon: Grid2x2,
     component: CoOccurrenceMatrix,
   },
-  // The codebook-shape analyses go here, in the "codes" group, after
-  // Co-occurrence — one entry each, in this exact shape:
-  //   { id: "treemap",  label: "Treemap",  group: "codes", icon: LayoutGrid, component: CodeTreemap },
-  //   { id: "clusters", label: "Clusters", group: "codes", icon: Network,    component: CodeClusters },
-  // Each also needs its id added to `AnalysisTab` in `src/state/workspace.ts`.
+  { id: "treemap", label: "Treemap", group: "codes", icon: LayoutGrid, component: CodeTreemap },
+  {
+    id: "clustering",
+    label: "Clustering",
+    group: "codes",
+    icon: Network,
+    component: CodeClustering,
+  },
+  // Another codebook-shape analysis goes here, after Clustering, as one
+  // entry of exactly this shape — plus its id in `AnalysisTab`
+  // (`src/state/workspace.ts`) and nothing else:
+  //   { id: "overlap", label: "Overlap", group: "codes", icon: Layers, component: CodeOverlap },
   {
     id: "matrix",
     label: "By document",

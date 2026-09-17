@@ -27,7 +27,12 @@ describe("the analysis registry", () => {
 
   it("falls back to the first analysis for a tab this build does not have", () => {
     // A window restored with a tab another branch added, or one since removed.
-    expect(analysisEntry("treemap" as never)).toBe(ANALYSES[0]);
+    expect(analysisEntry("not-an-analysis" as never)).toBe(ANALYSES[0]);
+  });
+
+  it("carries the analyses merged in from other branches", () => {
+    expect(ANALYSES.map((a) => a.id)).toContain("treemap");
+    expect(ANALYSES.map((a) => a.id)).toContain("clustering");
   });
 
   it("keeps reliability in the list rather than in its own view", () => {

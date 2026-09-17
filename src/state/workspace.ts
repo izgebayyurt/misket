@@ -7,7 +7,15 @@ import type { ExcerptFilter, Rect } from "@/api/types";
  * this is only the name that travels in the view state.
  */
 export type AnalysisTab =
-  "frequencies" | "cooccurrence" | "matrix" | "descriptor" | "framework" | "words" | "reliability";
+  | "frequencies"
+  | "cooccurrence"
+  | "treemap"
+  | "clustering"
+  | "matrix"
+  | "descriptor"
+  | "framework"
+  | "words"
+  | "reliability";
 
 export type View =
   | { kind: "document"; documentId: string; focusExcerptId?: string; scrollToOffset?: number }

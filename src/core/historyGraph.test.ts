@@ -342,9 +342,7 @@ describe("collapseDays", () => {
     const { rows: display, edges } = collapseDays(rows, new Set(), now);
     // Two headers, nothing else.
     expect(display).toHaveLength(2);
-    const [newest, oldest] = display as [{ row: number }, { row: number }];
-    expect(newest.row).toBe(0);
-    expect(oldest.row).toBe(1);
+    expect(display.map((r) => r.row)).toEqual([0, 1]);
     // 4 -> 3 and 2 -> 1 collapse to nothing; 3 -> 2 joins the two headers.
     expect(edges).toHaveLength(1);
     expect(edges[0]).toMatchObject({ fromId: 3, toId: 2, fromRow: 0, toRow: 1 });

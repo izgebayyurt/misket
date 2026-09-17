@@ -109,6 +109,17 @@ keyboard-friendly interface without a subscription.
   clicks through to the matching excerpts or a seeded project search, and
   each view exports to CSV. The overview screen's 30-day sparkline can be
   narrowed to a single code the same way.
+- **Code hierarchy treemap**: a squarified treemap of the codebook, area = a
+  code's distinct excerpt count (own, or including sub-codes), colour = the
+  code's own colour tinted lighter with depth. Click a code with sub-codes to
+  drill into it (a breadcrumb goes back), double-click to open its excerpts.
+  Exports as PNG or as a CSV of the level you're looking at.
+- **Code clustering**: groups codes by how often they're applied to the same
+  or overlapping text — Jaccard or cosine similarity, average-linkage
+  hierarchical clustering — as a dendrogram with a cut-height slider, a
+  similarity-matrix heatmap ordered the same way, and a cluster list.
+  "Create parent code from cluster…" turns a cluster into a new parent code
+  and moves its members under it, one undoable step.
 - **Inter-rater reliability**: compare two coders over the documents they both
   coded — Cohen's kappa and percent agreement per code, a pooled figure and
   the unweighted mean of the per-code kappas, with the unit of analysis
