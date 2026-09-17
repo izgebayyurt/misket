@@ -28,6 +28,13 @@ export const relinkMediaDocument = (id: string, path: string) =>
 /** Cache the waveform the viewer computed for a recording. */
 export const setMediaPeaks = (id: string, peaks: number[]) =>
   invoke<DocumentSummary>("set_media_peaks", { id, peaks });
+/** Fill in a duration (and pixel size) the import could not measure. */
+export const setMediaMeasurements = (
+  id: string,
+  durationMs: number,
+  width: number,
+  height: number,
+) => invoke<DocumentSummary>("set_media_measurements", { id, durationMs, width, height });
 /** Store the frame captured at a video excerpt's in-point. */
 export const setExcerptThumbnail = (excerptId: string, mime: string, bytes: number[]) =>
   invoke<void>("set_excerpt_thumbnail", { excerptId, mime, bytes });

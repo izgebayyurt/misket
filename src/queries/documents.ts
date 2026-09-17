@@ -96,6 +96,32 @@ export function useSetMediaPeaks() {
   });
 }
 
+/**
+ * Fill in what the import could not measure. A measurement of the file, not
+ * an edit, so it is not undoable; a REFI-QDA package names a recording but
+ * records no duration, and without one there is no timeline to code against.
+ */
+export function useSetMediaMeasurements() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      id,
+      durationMs,
+      width,
+      height,
+    }: {
+      id: string;
+      durationMs: number;
+      width: number;
+      height: number;
+    }) => api.setMediaMeasurements(id, durationMs, width, height),
+    onSuccess: (_d, { id }) => {
+      qc.invalidateQueries({ queryKey: keys.document(id) });
+      qc.invalidateQueries({ queryKey: keys.documents });
+    },
+  });
+}
+
 /** Store the frame captured at a video excerpt's in-point. */
 export function useSetExcerptThumbnail() {
   return useMutation({

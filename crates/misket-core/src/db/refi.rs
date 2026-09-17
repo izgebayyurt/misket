@@ -56,7 +56,9 @@ use serde_json::{json, Value};
 
 use super::history::{CodeOp, DescriptorOp, DocumentOp, ExcerptChange, MemoChange, PullChange};
 use super::transcripts::StoredTranscript;
-use super::{activity, coders, codes, descriptors, excerpts, export, history, sets, text, util};
+use super::{
+    activity, coders, codes, descriptors, excerpts, export, history, media, sets, text, util,
+};
 use crate::error::{AppError, Result};
 use crate::models::{
     CodePatch, CodeRow, CodeTreeSnapshot, Coder, DescriptorField, DocumentSnapshot,
@@ -351,8 +353,8 @@ pub fn export_refi(conn: &Connection, path: &Path) -> Result<RefiExportReport> {
             bytes: None,
             text: None,
             excerpts: vec![],
-            width: d.media.as_ref().map(|m| m.width).unwrap_or(0),
-            height: d.media.as_ref().map(|m| m.height).unwrap_or(0),
+            width: d.media.as_ref().and_then(|m| m.width).unwrap_or(0),
+            height: d.media.as_ref().and_then(|m| m.height).unwrap_or(0),
             created_at: d.created_at.clone(),
         };
         for e in excerpts::list_for_document(conn, &d.id)? {
@@ -1097,7 +1099,20 @@ impl Package {
             }
             return None;
         }
-        // Not internal: a path on disk, absolute or relative to the .qdpx.
+        std::fs::read(self.external_path(attr)?).ok()
+    }
+
+    /// The file on disk a non-`internal://` path attribute names: absolute as
+    /// written, or relative to the `.qdpx`. `None` for an empty or internal
+    /// path, or for a file that is not there.
+    ///
+    /// Audio and video are imported **by reference**, so for them this is the
+    /// whole story: the path is what the document keeps.
+    fn external_path(&self, attr: &str) -> Option<std::path::PathBuf> {
+        let attr = attr.trim();
+        if attr.is_empty() || attr.starts_with(INTERNAL) {
+            return None;
+        }
         let cleaned = attr.trim_start_matches("file://");
         let direct = Path::new(cleaned);
         let candidate = if direct.is_absolute() {
@@ -1105,7 +1120,7 @@ impl Package {
         } else {
             self.base.join(direct)
         };
-        std::fs::read(candidate).ok()
+        candidate.is_file().then_some(candidate)
     }
 }
 
@@ -1478,6 +1493,11 @@ struct Landed<'a> {
     text: Option<IncomingText>,
     width: i64,
     height: i64,
+    /// Audio and video sources only: how long the recording is known to be,
+    /// in milliseconds. `0` means "not measured yet" — a `.qdpx` records no
+    /// duration, so the viewer fills it in the first time the document is
+    /// opened (`db::media::set_measured`).
+    duration_ms: i64,
 }
 
 /// What a memo is about: `(document, code, excerpt)`, all three absent for a
@@ -1549,6 +1569,10 @@ fn next_document_order(conn: &Connection) -> Result<i64> {
 fn range_key(e: &ExcerptWithCodes) -> String {
     match e.kind.as_str() {
         "image_region" => format!("r:{}", e.geometry.clone().unwrap_or_default()),
+        // Text offsets are code points and media offsets are milliseconds, so
+        // the two have to be told apart or a re-import of a recording would
+        // look for a text range that is not there.
+        "video_range" => format!("v:{}:{}", e.start_pos.unwrap_or(0), e.end_pos.unwrap_or(0)),
         _ => format!("t:{}:{}", e.start_pos.unwrap_or(0), e.end_pos.unwrap_or(0)),
     }
 }
@@ -1620,6 +1644,21 @@ fn whole_source_pending(
                 tags,
             }))
         }
+        // A `Coding` on the recording itself codes all of it — but only when
+        // something knows how long it is. A `.qdpx` does not say, so this is
+        // usually a document already in the project, measured before.
+        None if l.duration_ms > 0 => Ok(Some(Pending {
+            key: format!("v:0:{}", l.duration_ms),
+            kind: "video_range",
+            start: Some(0),
+            end: Some(l.duration_ms),
+            geometry: None,
+            snapshot: Some(media::range_label(0, l.duration_ms)),
+            refi_ids: vec![],
+            created_at: now.to_string(),
+            updated_at: now.to_string(),
+            tags,
+        })),
         _ => Ok(None),
     }
 }
@@ -1966,6 +2005,7 @@ fn execute_import(
                         text: Some(incoming),
                         width: 0,
                         height: 0,
+                        duration_ms: 0,
                     });
                     continue;
                 }
@@ -2015,6 +2055,7 @@ fn execute_import(
                     text: Some(incoming),
                     width: 0,
                     height: 0,
+                    duration_ms: 0,
                 });
             }
             "PictureSource" => {
@@ -2046,15 +2087,18 @@ fn execute_import(
                         text: None,
                         width,
                         height,
+                        duration_ms: 0,
                     });
                     continue;
                 }
                 let name = document_name(source, "Picture source");
                 let id = free_id(&refi_id, &mut taken_doc_ids);
                 let media = serde_json::to_string(&crate::models::MediaInfo {
-                    width,
-                    height,
+                    width: Some(width),
+                    height: Some(height),
                     mime: mime.to_string(),
+                    size_bytes: Some(bytes.len() as i64),
+                    ..Default::default()
                 })?;
                 let stored =
                     StoredTranscript::of("", crate::text::transcript::TranscriptFormat::none());
@@ -2102,10 +2146,117 @@ fn execute_import(
                     text: None,
                     width,
                     height,
+                    duration_ms: 0,
+                });
+            }
+            // Audio and video come in **by reference**: the `.qdpx` names a
+            // file, the project remembers where it is, and none of it is
+            // copied into the project file (`db::media`). A `.qdpx` records
+            // no duration, so the document starts without one and the viewer
+            // measures the file the first time it is opened.
+            "AudioSource" | "VideoSource" => {
+                let attr = source
+                    .attr("path")
+                    .or_else(|| source.attr("currentPath"))
+                    .unwrap_or("")
+                    .to_string();
+                let Some(file) = pack.external_path(&attr) else {
+                    unsupported.push(if attr.trim().is_empty() {
+                        format!("{shown}: a recording with no file path")
+                    } else if attr.trim().starts_with(INTERNAL) {
+                        format!(
+                            "{shown}: the recording is packed inside the .qdpx, and Misket keeps \
+                             audio and video on disk — unzip it and import the file"
+                        )
+                    } else {
+                        format!("{shown}: no file at {}", attr.trim())
+                    });
+                    continue;
+                };
+                let Some(mime) = media::mime_for_path(&file) else {
+                    unsupported.push(format!(
+                        "{shown}: Misket does not read {} files",
+                        file.extension()
+                            .map(|e| e.to_string_lossy().into_owned())
+                            .unwrap_or_else(|| "these".into())
+                    ));
+                    continue;
+                };
+                let hash = media::file_hash(&file)?;
+                if let Some(id) = by_hash.get(&hash).cloned() {
+                    report.matched_documents += 1;
+                    document_of.insert(refi_id, id.clone());
+                    let known = super::documents::get_summary(conn, &id)?
+                        .media
+                        .and_then(|m| m.duration_ms)
+                        .unwrap_or_default();
+                    landed.push(Landed {
+                        el: source,
+                        doc_id: id,
+                        text: None,
+                        width: 0,
+                        height: 0,
+                        duration_ms: known,
+                    });
+                    continue;
+                }
+                let name = document_name(source, "Recording");
+                let id = free_id(&refi_id, &mut taken_doc_ids);
+                let media_json = serde_json::to_string(&crate::models::MediaInfo {
+                    mime: mime.to_string(),
+                    size_bytes: file.metadata().ok().map(|m| m.len() as i64),
+                    file_hash: Some(hash.clone()),
+                    ..Default::default()
+                })?;
+                let stored =
+                    StoredTranscript::of("", crate::text::transcript::TranscriptFormat::none());
+                let snapshot = DocumentSnapshot {
+                    id: id.clone(),
+                    kind: super::documents::MEDIA_KIND.into(),
+                    name: name.clone(),
+                    source_path: Some(file.to_string_lossy().into_owned()),
+                    source_format: media::MEDIA_MIMES
+                        .iter()
+                        .find(|(m, _)| *m == mime)
+                        .map(|(_, f)| (*f).to_string()),
+                    content_hash: hash.clone(),
+                    media_json: Some(media_json),
+                    sort_order: next_document_order(conn)?,
+                    transcript_json: Some(serde_json::to_string(&stored)?),
+                    created_at: created,
+                    updated_at: updated,
+                    ..Default::default()
+                };
+                step(
+                    conn,
+                    "document.imported",
+                    "document",
+                    Some(&id),
+                    &format!("Imported the recording \u{201C}{name}\u{201D}"),
+                    json!({ "name": name, "from": label, "sourcePath": snapshot.source_path }),
+                    history::payload(&DocumentOp::Restore {
+                        snapshot: Box::new(snapshot),
+                    }),
+                    history::payload(&DocumentOp::Drop {
+                        document_id: id.clone(),
+                    }),
+                    // Nothing: the bytes never enter the project file.
+                    &[],
+                )?;
+                report.documents += 1;
+                by_hash.insert(hash, id.clone());
+                document_of.insert(refi_id, id.clone());
+                landed.push(Landed {
+                    el: source,
+                    doc_id: id,
+                    text: None,
+                    width: 0,
+                    height: 0,
+                    duration_ms: 0,
                 });
             }
             other => unsupported.push(format!(
-                "{shown}: {} {other} — Misket imports text and picture sources",
+                "{shown}: {} {other} — Misket imports text, picture, audio and video sources",
                 if other.starts_with(['A', 'E', 'I', 'O', 'U']) {
                     "an"
                 } else {
@@ -2135,6 +2286,7 @@ fn execute_import(
         }
         let mut pendings: Vec<Pending> = vec![];
         let doc_len = l.text.as_ref().map(|t| text::cp_len(&t.text)).unwrap_or(0);
+        let is_media = l.el.name == "AudioSource" || l.el.name == "VideoSource";
 
         // A `Coding` on the source itself codes the whole thing.
         let whole = codings_of(l.el, &code_of, &coder_for, &now);
@@ -2212,6 +2364,38 @@ fn execute_import(
                         tags,
                     });
                 }
+                ("AudioSelection" | "VideoSelection", _) if is_media => {
+                    let (Some(begin), Some(end)) = (sel.number("begin"), sel.number("end")) else {
+                        unsupported.push(format!(
+                            "{}: a selection with no in and out points",
+                            source_label(l.el)
+                        ));
+                        continue;
+                    };
+                    let start = begin.min(end).max(0);
+                    let stop = begin.max(end);
+                    // A `.qdpx` carries no duration, so the only bound worth
+                    // enforcing is that the stretch has a length.
+                    if stop <= start {
+                        unsupported.push(format!(
+                            "{}: an empty stretch at {begin}\u{2013}{end} ms",
+                            source_label(l.el)
+                        ));
+                        continue;
+                    }
+                    pendings.push(Pending {
+                        key: format!("v:{start}:{stop}"),
+                        kind: "video_range",
+                        start: Some(start),
+                        end: Some(stop),
+                        geometry: None,
+                        snapshot: Some(media::range_label(start, stop)),
+                        refi_ids: vec![refi_id],
+                        created_at: created,
+                        updated_at: updated,
+                        tags,
+                    });
+                }
                 (other, _) => unsupported.push(format!(
                     "{}: a {other} Misket has no place for",
                     source_label(l.el)
@@ -2280,6 +2464,9 @@ fn execute_import(
                 },
                 memos: vec![],
                 tags,
+                // An imported video range has no captured frame yet; the
+                // viewer takes one the first time the excerpt is looked at.
+                thumbnail: None,
             });
         }
     }
@@ -3450,6 +3637,140 @@ mod tests {
             sets::set_members(&p.conn, &code_sets[0].id).unwrap(),
             vec![child.id.clone()]
         );
+    }
+
+    /// A `.qdpx` that names an audio or video file imports it **by
+    /// reference**: the document remembers where the file is, its selections
+    /// become `video_range` excerpts in milliseconds, and nothing of the
+    /// recording enters the project file. A recording packed inside the
+    /// container is reported rather than unpacked.
+    #[test]
+    fn audio_and_video_sources_import_by_reference() {
+        let dir = tempfile::tempdir().unwrap();
+        // Two real files beside the .qdpx: one named relatively, one absolutely.
+        let tape = media::tests::fake_file(dir.path(), "tape.wav", 4096, 21);
+        let reel = media::tests::fake_file(dir.path(), "reel.mp4", 8192, 22);
+        let qde = format!(
+            r###"<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="{NS}" name="With media" origin="A Rival Tool 9.0">
+  <Users>
+    <User guid="{ADA}" name="Ada"/>
+  </Users>
+  <CodeBook>
+    <Codes>
+      <Code guid="AAAAAAAA-0000-4000-8000-0000000000B1" name="Turning point" isCodable="true" color="#abc"/>
+    </Codes>
+  </CodeBook>
+  <Sources>
+    <AudioSource guid="CCCCCCCC-0000-4000-8000-0000000000B1" name="Tape 1" path="tape.wav">
+      <AudioSelection guid="DDDDDDDD-0000-4000-8000-0000000000B1" begin="12000" end="19500"
+                      creatingUser="{ADA}">
+        <Coding guid="EEEEEEEE-0000-4000-8000-0000000000B1" creatingUser="{ADA}">
+          <CodeRef targetGUID="AAAAAAAA-0000-4000-8000-0000000000B1"/>
+        </Coding>
+      </AudioSelection>
+    </AudioSource>
+    <VideoSource guid="CCCCCCCC-0000-4000-8000-0000000000B2" name="Reel" path="{reel}">
+      <VideoSelection guid="DDDDDDDD-0000-4000-8000-0000000000B2" begin="4000" end="2000"
+                      creatingUser="{ADA}">
+        <Coding guid="EEEEEEEE-0000-4000-8000-0000000000B2" creatingUser="{ADA}">
+          <CodeRef targetGUID="AAAAAAAA-0000-4000-8000-0000000000B1"/>
+        </Coding>
+      </VideoSelection>
+      <VideoSelection guid="DDDDDDDD-0000-4000-8000-0000000000B3" begin="9000" end="9000"/>
+    </VideoSource>
+    <AudioSource guid="CCCCCCCC-0000-4000-8000-0000000000B3" name="Packed" path="internal://in.wav"/>
+    <VideoSource guid="CCCCCCCC-0000-4000-8000-0000000000B4" name="Gone" path="nowhere.mp4"/>
+  </Sources>
+</Project>
+"###,
+            reel = reel.to_string_lossy()
+        );
+        let path = dir.path().join("media.qdpx");
+        write_qdpx(&path, &qde, &[]);
+
+        let p = OpenProject::in_memory("dest").unwrap();
+        coders::ensure_local(&p.conn, "33333333-3333-4333-8333-333333333333", "Cleo", "").unwrap();
+        let report = import_refi(&p.conn, &path, RefiImportMode::Merge).unwrap();
+        assert_eq!(report.documents, 2, "the two resolvable recordings");
+        // The packed one and the missing one are explained, not swallowed.
+        assert_eq!(report.unsupported.len(), 3, "{:?}", report.unsupported);
+        assert!(
+            report.unsupported.iter().any(|u| u.contains("inside the")),
+            "{:?}",
+            report.unsupported
+        );
+        assert!(
+            report.unsupported.iter().any(|u| u.contains("no file at")),
+            "{:?}",
+            report.unsupported
+        );
+        // An empty stretch is reported too.
+        assert!(
+            report
+                .unsupported
+                .iter()
+                .any(|u| u.contains("empty stretch")),
+            "{:?}",
+            report.unsupported
+        );
+
+        let docs = documents::list(&p.conn).unwrap();
+        let audio = docs.iter().find(|d| d.name == "Tape 1").unwrap();
+        assert_eq!(audio.kind, "video", "audio and video share one kind");
+        assert_eq!(audio.source_format.as_deref(), Some("wav"));
+        assert_eq!(audio.source_path.as_deref(), Some(&*tape.to_string_lossy()));
+        assert!(!audio.media_missing);
+        let info = audio.media.clone().unwrap();
+        assert_eq!(info.mime, "audio/wav");
+        assert_eq!(info.size_bytes, Some(4096));
+        assert_eq!(
+            info.file_hash.as_deref(),
+            Some(&*media::file_hash(&tape).unwrap())
+        );
+        // A .qdpx says nothing about how long a recording is; the viewer
+        // measures the file the first time it is opened.
+        assert_eq!(info.duration_ms, None);
+        // And none of the bytes came along.
+        let blobs: i64 = p
+            .conn
+            .query_row("SELECT count(*) FROM media_blobs", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(blobs, 0);
+
+        let coded = excerpts::list_for_document(&p.conn, &audio.id).unwrap();
+        assert_eq!(coded.len(), 1);
+        assert_eq!(coded[0].kind, "video_range");
+        assert_eq!(
+            (coded[0].start_pos, coded[0].end_pos),
+            (Some(12_000), Some(19_500))
+        );
+        assert_eq!(coded[0].snapshot.as_deref(), Some("[0:12.0–0:19.5]"));
+        assert_eq!(coded[0].codings.len(), 1);
+
+        // An out-point before the in-point is read as the stretch between them.
+        let video = docs.iter().find(|d| d.name == "Reel").unwrap();
+        assert_eq!(video.source_format.as_deref(), Some("mp4"));
+        let coded = excerpts::list_for_document(&p.conn, &video.id).unwrap();
+        assert_eq!(coded.len(), 1);
+        assert_eq!(
+            (coded[0].start_pos, coded[0].end_pos),
+            (Some(2_000), Some(4_000))
+        );
+
+        // Importing the same package again matches the recordings by their
+        // file fingerprint rather than duplicating them.
+        let again = import_refi(&p.conn, &path, RefiImportMode::Merge).unwrap();
+        assert_eq!(again.documents, 0);
+        assert_eq!(again.matched_documents, 2);
+        assert_eq!(documents::list(&p.conn).unwrap().len(), 2);
+
+        // Undo takes an import back, recording and all, and never touches the
+        // files themselves.
+        history::undo(&p.conn).unwrap().unwrap();
+        history::undo(&p.conn).unwrap().unwrap();
+        assert_eq!(documents::list(&p.conn).unwrap().len(), 0);
+        assert!(tape.is_file() && reel.is_file());
     }
 
     #[test]

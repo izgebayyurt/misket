@@ -411,6 +411,56 @@ pub fn set_peaks(conn: &Connection, id: &str, peaks: &[f64]) -> Result<DocumentS
     documents::get_summary(conn, id)
 }
 
+/// Fill in what only a decoder knows about a recording: its duration and, for
+/// video, its pixel size.
+///
+/// The ordinary import measures the file in the webview before the document
+/// exists, so this is for the paths that cannot: a REFI-QDA package names an
+/// audio or video file but records no duration, and a relinked file keeps the
+/// duration it had. Like [`set_peaks`] it is a measurement of the file rather
+/// than an edit of the project, so it is not recorded in the history — and it
+/// only *fills in* a duration, never shortens one, because a stretch already
+/// coded must not fall outside the recording behind the coder's back.
+pub fn set_measured(
+    conn: &Connection,
+    id: &str,
+    duration_ms: i64,
+    width: i64,
+    height: i64,
+) -> Result<DocumentSummary> {
+    let summary = documents::get_summary(conn, id)?;
+    if summary.kind != documents::MEDIA_KIND {
+        return Err(AppError::Validation(format!(
+            "{:?} is not an audio or video document",
+            summary.name
+        )));
+    }
+    if duration_ms < 0 {
+        return Err(AppError::Validation(
+            "a recording cannot be shorter than nothing".into(),
+        ));
+    }
+    let mut media = summary.media.clone().unwrap_or_default();
+    let known = media.duration_ms.unwrap_or_default();
+    let mut changed = false;
+    if duration_ms > known {
+        media.duration_ms = Some(duration_ms);
+        changed = true;
+    }
+    if width > 0 && height > 0 && (media.width, media.height) != (Some(width), Some(height)) {
+        media.width = Some(width);
+        media.height = Some(height);
+        changed = true;
+    }
+    if changed {
+        conn.execute(
+            "UPDATE documents SET media_json = ?2 WHERE id = ?1",
+            params![id, serde_json::to_string(&media)?],
+        )?;
+    }
+    documents::get_summary(conn, id)
+}
+
 /// Store the frame captured for a `video_range` excerpt.
 ///
 /// A cache like [`set_peaks`]: it is derived from the media file and the
@@ -959,6 +1009,36 @@ pub(crate) mod tests {
         for (mime, _) in MEDIA_MIMES {
             assert!(format_for(mime).is_ok(), "{mime}");
         }
+    }
+
+    #[test]
+    fn set_measured_fills_a_duration_in_but_never_shortens_one() {
+        let p = OpenProject::in_memory("t").unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let path = fake_file(dir.path(), "a.mp4", 4096, 6);
+        let id = create(&p.conn, None, new_media(&path)).unwrap().summary.id;
+        // A longer measurement wins, and the pixel size arrives with it.
+        let s = set_measured(&p.conn, &id, 200_000, 1920, 1080).unwrap();
+        let media = s.media.clone().unwrap();
+        assert_eq!(media.duration_ms, Some(200_000));
+        assert_eq!((media.width, media.height), (Some(1920), Some(1080)));
+        // A shorter one does not: a coded stretch must not fall outside the
+        // recording behind the coder's back.
+        let s = set_measured(&p.conn, &id, 1_000, 0, 0).unwrap();
+        assert_eq!(s.media.as_ref().unwrap().duration_ms, Some(200_000));
+        assert_eq!(s.media.as_ref().unwrap().width, Some(1920));
+        assert!(matches!(
+            set_measured(&p.conn, &id, -1, 0, 0),
+            Err(AppError::Validation(_))
+        ));
+        let text = documents::create(&p.conn, documents::tests::new_doc("hello"))
+            .unwrap()
+            .summary
+            .id;
+        assert!(matches!(
+            set_measured(&p.conn, &text, 1_000, 0, 0),
+            Err(AppError::Validation(_))
+        ));
     }
 
     #[test]

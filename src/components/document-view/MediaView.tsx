@@ -3,7 +3,12 @@ import { AlertTriangle, Pause, Play } from "lucide-react";
 import { mediaUrl } from "@/api/media";
 import { useCodes } from "@/queries/codes";
 import { useApplyCodes, useDeleteExcerpt, useDocumentExcerpts } from "@/queries/excerpts";
-import { useDocument, useSetExcerptThumbnail, useSetMediaPeaks } from "@/queries/documents";
+import {
+  useDocument,
+  useSetExcerptThumbnail,
+  useSetMediaMeasurements,
+  useSetMediaPeaks,
+} from "@/queries/documents";
 import { useRelinkMedia } from "@/components/documents/useRelinkMedia";
 import { useProjectInfo } from "@/queries/project";
 import {
@@ -86,6 +91,7 @@ export function MediaView({ documentId, focusExcerptId }: Props) {
   const relink = useRelinkMedia();
   const setPeaks = useSetMediaPeaks();
   const setThumbnail = useSetExcerptThumbnail();
+  const setMeasurements = useSetMediaMeasurements();
 
   const rootRef = useRef<HTMLDivElement>(null);
   // The keys read the position from a ref: `timeupdate` fires several times a
@@ -215,6 +221,27 @@ export function MediaView({ documentId, focusExcerptId }: Props) {
     const raf = requestAnimationFrame(() => seekTo(band.startMs));
     return () => cancelAnimationFrame(raf);
   }, [bands, focusExcerptId, seekTo, setFocusedId]);
+
+  /**
+   * What the player now knows about the file, for a document imported
+   * without it: a REFI-QDA package names a recording but records no
+   * duration, and without one there is no timeline to code against.
+   */
+  const measured = useRef<string | null>(null);
+  const onLoadedMetadata = useCallback(() => {
+    const player = playerRef.current;
+    if (!player || measured.current === documentId) return;
+    const seconds = player.duration;
+    if (!Number.isFinite(seconds) || seconds <= 0) return;
+    const ms = Math.round(seconds * 1000);
+    const width = (player as HTMLVideoElement).videoWidth ?? 0;
+    const height = (player as HTMLVideoElement).videoHeight ?? 0;
+    const knownSize = (media?.width ?? 0) > 0;
+    if (ms <= durationMs && (knownSize || width === 0)) return;
+    measured.current = documentId;
+    setMeasurements.mutate({ id: documentId, durationMs: ms, width, height });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [documentId, durationMs, media?.width]);
 
   // --- the waveform --------------------------------------------------------
   const peaks = media?.peaks ?? null;
@@ -558,6 +585,7 @@ export function MediaView({ documentId, focusExcerptId }: Props) {
                   onClick={togglePlay}
                   onPlay={() => setPlaying(true)}
                   onPause={() => setPlaying(false)}
+                  onLoadedMetadata={onLoadedMetadata}
                   onTimeUpdate={(e) => notePosition(Math.round(e.currentTarget.currentTime * 1000))}
                   onError={() => setPlaybackError(unsupportedHint(doc.name, ext))}
                   data-testid="media-player"
@@ -571,6 +599,7 @@ export function MediaView({ documentId, focusExcerptId }: Props) {
                   preload="metadata"
                   onPlay={() => setPlaying(true)}
                   onPause={() => setPlaying(false)}
+                  onLoadedMetadata={onLoadedMetadata}
                   onTimeUpdate={(e) => notePosition(Math.round(e.currentTarget.currentTime * 1000))}
                   onError={() => setPlaybackError(unsupportedHint(doc.name, ext))}
                   data-testid="media-player"

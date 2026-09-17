@@ -1036,10 +1036,10 @@ derived from those three.
 | `example_excerpt_id`                    | `Code/Description`, an `Example:` paragraph with the quote and `[misket:excerpt:GUID]` | ✓   | ✓   | the pointer, if the excerpt is not in the same file                                             |
 | text `documents`                        | `TextSource` + `Sources/<guid>.txt` (UTF-8)                                            | ✓   | ✓   | `source_path`, and `source_format` (everything arrives as `txt`)                                |
 | image `documents` + `media_blobs`       | `PictureSource` + `Sources/<guid>.png`                                                 | ✓   | ✓   | as above; the size is re-read from the file's header                                            |
-| video `documents`                       | `VideoSource/@path` (by reference)                                                     | ✓   | —   | video import needs a media document, which this build has no writer for                         |
+| audio/video `documents`                 | `AudioSource` / `VideoSource` `@path` (by reference)                                   | ✓   | ✓   | the duration, which REFI-QDA has no attribute for: the viewer measures the file on first open   |
 | text `excerpts`                         | `PlainTextSelection` (`@startPosition`/`@endPosition`)                                 | ✓   | ✓   | —                                                                                               |
 | image region `excerpts`                 | `PictureSelection` (`@firstX`…`@secondY`, pixels)                                      | ✓   | ✓   | sub-pixel precision, since REFI-QDA counts whole pixels                                         |
-| video range `excerpts`                  | `VideoSelection` (`@begin`/`@end`, milliseconds)                                       | ✓   | —   | —                                                                                               |
+| video range `excerpts`                  | `Audio`/`VideoSelection` (`@begin`/`@end`, milliseconds)                               | ✓   | ✓   | —                                                                                               |
 | `excerpt_codes`                         | `Coding` + `CodeRef`, `@creatingUser`                                                  | ✓   | ✓   | —                                                                                               |
 | `memos`                                 | `Notes/Note` (`@name`, `PlainTextContent`) with a `NoteRef` on the target              | ✓   | ✓   | —                                                                                               |
 | `descriptor_fields`                     | `Variables/Variable`, `@typeOfVariable`                                                | ✓   | ✓   | —                                                                                               |
@@ -1050,7 +1050,11 @@ derived from those three.
 | `documents.transcript_json`             | —                                                                                      | —   | —   | re-detected on import, as for any new document                                                  |
 | `history`, `sync_points`                | —                                                                                      | —   | —   | an import is one new history step, not the file's history                                       |
 | —                                       | `Cases`                                                                                | —   | ~   | a case's `VariableValue`s land on the documents its `SourceRef`s name; the case itself does not |
-| —                                       | `Links`, `Graphs`, `PDFSource`, `AudioSource`, `Transcript`, `SyncPoint`               | —   | —   | reported in the import's `unsupported`                                                          |
+| —                                       | `Links`, `Graphs`, `PDFSource`, `Transcript`, `SyncPoint`                              | —   | —   | reported in the import's `unsupported`                                                          |
+
+A recording named with `internal://` — packed inside the `.qdpx` — is
+reported rather than unpacked: Misket keeps audio and video on disk, so the
+honest answer is to unzip the container and import the file.
 
 Descriptor kinds map `text → Text`, `number → Float`, `date → Date`; a
 `choice` field is a `Text` variable whose options are written into its

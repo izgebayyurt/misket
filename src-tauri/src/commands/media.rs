@@ -72,6 +72,19 @@ pub fn set_media_peaks(
     state.with_project(|p| media::set_peaks(&p.conn, &id, &peaks))
 }
 
+/// Fill in a duration (and, for video, a pixel size) the import could not
+/// measure — a REFI-QDA package names a file but records no duration.
+#[tauri::command]
+pub fn set_media_measurements(
+    state: State<'_, AppState>,
+    id: String,
+    duration_ms: i64,
+    width: i64,
+    height: i64,
+) -> Result<DocumentSummary> {
+    state.with_project(|p| media::set_measured(&p.conn, &id, duration_ms, width, height))
+}
+
 /// Store the frame captured at a video excerpt's in-point, shown in the
 /// excerpt browser and the inspector.
 #[tauri::command]

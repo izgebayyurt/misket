@@ -77,6 +77,7 @@ pub fn run() {
             commands::media::create_media_document,
             commands::media::relink_media_document,
             commands::media::set_media_peaks,
+            commands::media::set_media_measurements,
             commands::media::set_excerpt_thumbnail,
             commands::media::list_missing_media,
             commands::documents::list_documents,
