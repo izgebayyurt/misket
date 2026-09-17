@@ -14,13 +14,16 @@ keyboard-friendly interface without a subscription.
 
 ## What it does today
 
-- **Import** plain text, Markdown, Word (`.docx`), PDF (text only) and image
-  (PNG, JPEG, WebP) documents, one at a time or a whole folder at once
-  ("Import folder…", optionally including subfolders).
+- **Import** plain text, Markdown, Word (`.docx`), PDF and image (PNG, JPEG,
+  WebP) documents, one at a time or a whole folder at once ("Import folder…",
+  optionally including subfolders).
   If a file has blank-line gaps, trailing spaces or other likely-accidental
   whitespace, Misket offers to tidy it up before import (document text is
   immutable once imported). Check "Remember my choice" in that dialog to skip
   it on future imports; its "Ask again on import" link resets that.
+  A PDF with no text layer (a scan) is detected on import and offered OCR —
+  recognised entirely on-device, no upload — instead of silently importing an
+  empty document; see [docs/OCR.md](docs/OCR.md).
 - **Build a codebook**: nested codes with colors, single-key hotkeys,
   drag-and-drop reordering, merge and delete with impact preview, and
   "Move excerpts to…" to hand one code's excerpts to another without losing
@@ -206,6 +209,12 @@ keyboard-friendly interface without a subscription.
   the row menu.
 - **Export** the codebook as CSV or a reusable JSON file, excerpts as CSV, the
   activity log as CSV, or the whole project as JSON.
+- **REFI-QDA (`.qdpx`)**: export the whole project — sources, codebook,
+  codings with the coder who made each one, memos, attributes and sets — in
+  [the interchange format](https://www.qdasoftware.org/) NVivo, ATLAS.ti,
+  MAXQDA, QDA Miner, Quirkos and QualCoder read, and import one back the same
+  way. An import shows you what is in the file before it writes anything,
+  says what it cannot take, and arrives as a single undoable step.
 
 ![Excerpt browser](docs/screenshots/browser.png)
 

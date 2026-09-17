@@ -53,7 +53,7 @@ pub struct StoredTranscript {
 }
 
 impl StoredTranscript {
-    fn of(text: &str, format: TranscriptFormat) -> Self {
+    pub(super) fn of(text: &str, format: TranscriptFormat) -> Self {
         let turns = transcript::turns(text, &format);
         Self {
             speakers: transcript::speakers(&turns)

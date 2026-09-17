@@ -9,6 +9,7 @@ import { ExportMenu } from "./ExportMenu";
 import { AboutDialog } from "./AboutDialog";
 import { BackupsDialog } from "./BackupsDialog";
 import { PullDialog } from "@/components/merge/PullDialog";
+import { RefiImportDialog } from "@/components/refi/RefiImportDialog";
 
 export function StatusBar({ project }: { project: ProjectInfo }) {
   const close = useCloseProject();
@@ -16,6 +17,7 @@ export function StatusBar({ project }: { project: ProjectInfo }) {
   const [about, setAbout] = useState(false);
   const [backups, setBackups] = useState(false);
   const [pull, setPull] = useState(false);
+  const [refi, setRefi] = useState(false);
   const setSettingsOpen = useWorkspace((s) => s.setSettingsOpen);
   const setShortcutsHelpOpen = useWorkspace((s) => s.setShortcutsHelpOpen);
   const lastAppliedCodeId = useWorkspace((s) => s.lastAppliedCodeId);
@@ -49,6 +51,14 @@ export function StatusBar({ project }: { project: ProjectInfo }) {
       </button>
       <button
         className="hover:text-fg"
+        onClick={() => setRefi(true)}
+        title="Import a REFI-QDA (.qdpx) project from NVivo, ATLAS.ti, MAXQDA or another QDA tool"
+        data-testid="open-refi-import"
+      >
+        Import REFI-QDA…
+      </button>
+      <button
+        className="hover:text-fg"
         onClick={() => setPull(true)}
         title="Merge another researcher's copy of this project into yours"
         data-testid="open-pull"
@@ -70,6 +80,7 @@ export function StatusBar({ project }: { project: ProjectInfo }) {
       {about ? <AboutDialog onClose={() => setAbout(false)} /> : null}
       {backups ? <BackupsDialog onClose={() => setBackups(false)} /> : null}
       {pull ? <PullDialog onClose={() => setPull(false)} /> : null}
+      {refi ? <RefiImportDialog onClose={() => setRefi(false)} /> : null}
     </footer>
   );
 }

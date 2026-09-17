@@ -925,3 +925,92 @@ code gets the same next-in-palette default as a code created with no color.
 A shortcut is imported only if it is free; if it is already taken (or
 otherwise invalid), it is dropped and the code's path is added to the
 report's `skippedShortcuts` instead of failing the import.
+
+## REFI-QDA mapping
+
+`db::refi` (`crates/misket-core/src/db/refi.rs`) reads and writes
+[REFI-QDA](https://www.qdasoftware.org/) `.qdpx`: a ZIP holding `project.qde`
+(XML against the Project schema 1.0, namespace `urn:QDA-XML:project:1.0`) and
+a `Sources` folder. The vendored schema is `fixtures/refi/Project-mrt2019.xsd`;
+the export test validates against it with `xmllint` when libxml2 is installed.
+
+GUIDs are our UUIDs: upper-cased on the way out, lower-cased (and unbraced) on
+the way back, so a project exported and imported into an empty file keeps its
+own ids. Anything that is not a UUID is hashed into one, and a `Coding` — which
+Misket keys by `(excerpt, code, coder)` rather than by an id — gets a GUID
+derived from those three.
+
+| Misket                                  | REFI-QDA                                                                               | Out | In  | Lost on the way                                                                                 |
+| --------------------------------------- | -------------------------------------------------------------------------------------- | --- | --- | ----------------------------------------------------------------------------------------------- |
+| `project_meta.name`                     | `Project/@name`                                                                        | ✓   | ✓   | —                                                                                               |
+| `coders`                                | `Users/User` (`@guid`, `@name`)                                                        | ✓   | ✓   | the coder's colour (rederived from the id)                                                      |
+| `codes` (tree, colour)                  | `CodeBook/Codes/Code`, nested, `isCodable="true"`                                      | ✓   | ✓   | `shortcut`; sibling order is element order                                                      |
+| `description`                           | `Code/Description`, first paragraph                                                    | ✓   | ✓   | —                                                                                               |
+| `inclusion`, `exclusion`                | `Code/Description`, `When to apply:` / `When not to apply:` paragraphs                 | ✓   | ✓   | —                                                                                               |
+| `example_excerpt_id`                    | `Code/Description`, an `Example:` paragraph with the quote and `[misket:excerpt:GUID]` | ✓   | ✓   | the pointer, if the excerpt is not in the same file                                             |
+| text `documents`                        | `TextSource` + `Sources/<guid>.txt` (UTF-8)                                            | ✓   | ✓   | `source_path`, and `source_format` (everything arrives as `txt`)                                |
+| image `documents` + `media_blobs`       | `PictureSource` + `Sources/<guid>.png`                                                 | ✓   | ✓   | as above; the size is re-read from the file's header                                            |
+| video `documents`                       | `VideoSource/@path` (by reference)                                                     | ✓   | —   | video import needs a media document, which this build has no writer for                         |
+| text `excerpts`                         | `PlainTextSelection` (`@startPosition`/`@endPosition`)                                 | ✓   | ✓   | —                                                                                               |
+| image region `excerpts`                 | `PictureSelection` (`@firstX`…`@secondY`, pixels)                                      | ✓   | ✓   | sub-pixel precision, since REFI-QDA counts whole pixels                                         |
+| video range `excerpts`                  | `VideoSelection` (`@begin`/`@end`, milliseconds)                                       | ✓   | —   | —                                                                                               |
+| `excerpt_codes`                         | `Coding` + `CodeRef`, `@creatingUser`                                                  | ✓   | ✓   | —                                                                                               |
+| `memos`                                 | `Notes/Note` (`@name`, `PlainTextContent`) with a `NoteRef` on the target              | ✓   | ✓   | —                                                                                               |
+| `descriptor_fields`                     | `Variables/Variable`, `@typeOfVariable`                                                | ✓   | ✓   | —                                                                                               |
+| `descriptor_values`                     | `VariableValue` on each source                                                         | ✓   | ✓   | —                                                                                               |
+| `sets` / `set_members`                  | `Sets/Set` with `MemberCode` / `MemberSource`                                          | ✓   | ✓   | —                                                                                               |
+| `saved_filters`                         | —                                                                                      | —   | —   | reported in the export's `skipped`                                                              |
+| `framework_matrices`, `framework_cells` | —                                                                                      | —   | —   | reported in the export's `skipped`                                                              |
+| `documents.transcript_json`             | —                                                                                      | —   | —   | re-detected on import, as for any new document                                                  |
+| `history`, `sync_points`                | —                                                                                      | —   | —   | an import is one new history step, not the file's history                                       |
+| —                                       | `Cases`                                                                                | —   | ~   | a case's `VariableValue`s land on the documents its `SourceRef`s name; the case itself does not |
+| —                                       | `Links`, `Graphs`, `PDFSource`, `AudioSource`, `Transcript`, `SyncPoint`               | —   | —   | reported in the import's `unsupported`                                                          |
+
+Descriptor kinds map `text → Text`, `number → Float`, `date → Date`; a
+`choice` field is a `Text` variable whose options are written into its
+`Variable/Description` as an `Options: a | b | c` paragraph, so a round trip
+keeps the enumeration while another tool still sees plain text. Coming back,
+`Integer` and `Float` are `number`, `Date` is `date`, and `Boolean` and
+`DateTime` become `text` — readable, which is better than dropped.
+
+### Offsets
+
+A `PlainTextSelection` counts **UTF-16 code units** into the plain text file
+_as it sits in the ZIP_. Misket stores code point offsets into text that has
+had its BOM stripped, its CRLFs collapsed to LF and NFC applied. So:
+
+- **out**: `db::text::utf16_offsets` over the stored text, then
+  `cp_to_utf16` per boundary.
+- **in**: `utf16_to_cp` over the _raw_ file, then the index map
+  `db::text::normalize_mapped` returns — which is what makes a selection in a
+  CRLF file land on the right words rather than drifting one character per
+  line. BOM removal and the CRLF collapse are exact; NFC is mapped by
+  chunking the text before every ASCII character, which is always safe (no
+  canonical composition has an ASCII second half) and exact for any chunk
+  whose length NFC leaves alone.
+
+### Import
+
+`import_refi(path, mode)` runs inside one `history::group` led by a
+`project.refi_imported` node, built the way `db::merge` builds a pull: every
+row arrives through the same forward/inverse payloads the domain writes use
+(`DocumentOp::Restore`, `CodeOp::Restore`, `ExcerptChange`, `MemoChange`,
+`DescriptorOp`, `SetOp`, `PullChange` for the coders), so one Ctrl-Z takes a
+whole `.qdpx` back out and a redo brings it in with the same ids.
+
+- `merge` matches documents by `content_hash` of the normalized text (so the
+  same transcript imported twice is one document, and the file's codings land
+  on the copy already here, which keeps its own name), and codes by full name
+  path, case-insensitively, exactly as a codebook import does. Sets are
+  matched by kind and name and gain the file's members.
+- `replace` refuses a project that already holds documents or codes, and
+  brings everything in under the file's own GUIDs.
+
+Two selections over the same words are one excerpt with both sets of codings,
+because `excerpts` is unique on `(document, start, end)`. A `Coding` on a
+source rather than on a selection codes the whole document. A coding whose
+`creatingUser` the file never declared is attributed to the local coder; a
+coding pointing at a code that is not in the codebook is dropped. A rich-text
+source with no plain text is skipped and named in the report. Picture sizes
+are read from the PNG, JPEG or WebP header, because there is no webview here
+to measure the image in.
