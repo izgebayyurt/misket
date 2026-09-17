@@ -114,8 +114,15 @@ export function DocumentList() {
                       )}
                       <span className="truncate">{d.name}</span>
                       {d.sourceFormat ? (
-                        <span className="shrink-0 rounded border border-border px-1 text-[10px] uppercase text-fg-muted">
-                          {d.sourceFormat}
+                        <span
+                          className="shrink-0 rounded border border-border px-1 text-[10px] uppercase text-fg-muted"
+                          title={
+                            d.sourceFormat === "pdf-ocr"
+                              ? "Text recognised from a scanned PDF with OCR"
+                              : undefined
+                          }
+                        >
+                          {formatBadgeLabel(d.sourceFormat)}
                         </span>
                       ) : null}
                       <span className="ml-auto shrink-0 text-xs text-fg-muted">
@@ -217,6 +224,11 @@ function RenameDialog({ doc, onClose }: { doc: DocumentSummary; onClose: () => v
       </DialogContent>
     </Dialog>
   );
+}
+
+/** `sourceFormat` values that need a friendlier badge than their raw string. */
+function formatBadgeLabel(sourceFormat: string): string {
+  return sourceFormat === "pdf-ocr" ? "OCR" : sourceFormat;
 }
 
 function DeleteDialog({ doc, onClose }: { doc: DocumentSummary; onClose: () => void }) {
