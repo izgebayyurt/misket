@@ -178,8 +178,8 @@ pub fn list(conn: &Connection) -> Result<Vec<CoderSummary>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db::{codes, documents, excerpts, memos, OpenProject};
-    use crate::models::{ApplyCodesInput, MemoTarget};
+    use crate::db::{analysis, codes, documents, excerpts, memos, OpenProject};
+    use crate::models::{ApplyCodesInput, ExcerptFilter, MemoTarget};
 
     /// A project whose local coder is `id`, like `set_actor(conn, "Ada")`.
     pub(crate) fn as_coder(conn: &Connection, id: &str, name: &str) {
@@ -259,6 +259,117 @@ mod tests {
             )
             .unwrap();
         assert_eq!(unattributed, 0);
+    }
+
+    /// Everything two coders working on one project turns on: the primary
+    /// key, what "remove this code" takes off, and what a filter shows.
+    #[test]
+    fn two_coders_can_code_the_same_passage_and_each_owns_their_row() {
+        let p = OpenProject::in_memory("t").unwrap();
+        let c = &p.conn;
+        let doc = documents::create(c, documents::tests::new_doc("One two three four five."))
+            .unwrap()
+            .summary
+            .id;
+        let alpha = codes::tests::mk(c, "Alpha", None).id;
+        let beta = codes::tests::mk(c, "Beta", None).id;
+
+        let code_it = |code_id: &str, start, end| {
+            excerpts::apply_codes(
+                c,
+                ApplyCodesInput {
+                    document_id: doc.clone(),
+                    start_pos: Some(start),
+                    end_pos: Some(end),
+                    code_ids: vec![code_id.to_string()],
+                    ..Default::default()
+                },
+            )
+            .unwrap()
+        };
+
+        as_coder(c, "ada", "Ada");
+        let shared = code_it(&alpha, 0, 7).excerpt.id;
+        // The same coder applying the same code again is an upsert, not a
+        // second row.
+        assert!(code_it(&alpha, 0, 7).added_code_ids.is_empty());
+
+        as_coder(c, "bob", "Bob");
+        // Bob agrees with Ada, and adds a code of his own.
+        assert_eq!(code_it(&alpha, 0, 7).added_code_ids, vec![alpha.clone()]);
+        code_it(&beta, 0, 7);
+        let only_bob = code_it(&beta, 8, 13).excerpt.id;
+
+        let e = excerpts::get(c, &shared).unwrap();
+        // Two codes on the passage, three codings behind them.
+        assert_eq!(e.code_ids, vec![alpha.clone(), beta.clone()]);
+        assert_eq!(e.codings.len(), 3);
+        assert_eq!(
+            e.codings
+                .iter()
+                .filter(|x| x.code_id == alpha)
+                .map(|x| x.coder_id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["ada", "bob"]
+        );
+
+        // Filtering by coder narrows which excerpts come back.
+        let by = |ids: &[&str]| {
+            excerpts::query(
+                c,
+                &ExcerptFilter {
+                    coder_ids: Some(ids.iter().map(|s| s.to_string()).collect()),
+                    ..Default::default()
+                },
+            )
+            .unwrap()
+            .rows
+            .into_iter()
+            .map(|r| r.excerpt.id)
+            .collect::<Vec<_>>()
+        };
+        assert_eq!(by(&["bob"]).len(), 2);
+        assert_eq!(by(&["ada"]), vec![shared.clone()]);
+        assert_eq!(by(&["zoe"]), Vec::<String>::new());
+        // No filter, and an empty one, both mean everyone.
+        assert_eq!(by(&[]).len(), 2);
+        assert_eq!(
+            excerpts::query(c, &ExcerptFilter::default()).unwrap().total,
+            2
+        );
+
+        // Removing "my" coding of Alpha takes Bob's row and leaves Ada's.
+        let after = excerpts::remove_code(c, &shared, &alpha, None).unwrap();
+        assert!(after.code_ids.contains(&alpha), "Ada still has it");
+        assert_eq!(
+            after
+                .codings
+                .iter()
+                .filter(|x| x.code_id == alpha)
+                .map(|x| x.coder_id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["ada"]
+        );
+        // And naming a coder removes theirs, which is what "Remove Ada's
+        // coding" in the inspector does.
+        let after = excerpts::remove_code(c, &shared, &alpha, Some("ada")).unwrap();
+        assert!(!after.code_ids.contains(&alpha));
+
+        // Frequencies count distinct (excerpt, code) pairs, so Bob agreeing
+        // with Ada on Beta does not make it look twice as common.
+        let freq = |coders: Option<&[String]>| {
+            analysis::code_frequencies(c, None, None, coders)
+                .unwrap()
+                .into_iter()
+                .find(|f| f.code_id == beta)
+                .unwrap()
+                .own
+        };
+        as_coder(c, "ada", "Ada");
+        excerpts::add_codes(c, &only_bob, std::slice::from_ref(&beta)).unwrap();
+        assert_eq!(freq(None), 2, "two excerpts carry Beta, not three codings");
+        assert_eq!(freq(Some(&["ada".to_string()])), 1);
+        assert_eq!(freq(Some(&["bob".to_string()])), 2);
     }
 
     #[test]

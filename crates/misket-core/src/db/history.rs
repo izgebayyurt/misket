@@ -2034,6 +2034,77 @@ mod tests {
         });
     }
 
+    /// Undo has to give a coding back to whoever made it, not to whoever
+    /// pressed Ctrl+Z. `dump_state` compares `excerpt_codes` column by
+    /// column, so a coder lost on the way through a payload shows up here.
+    #[test]
+    fn round_trips_a_coding_made_by_another_coder() {
+        let f = Fixture::new();
+        let c = f.conn();
+        let a = f.code("Alpha", None);
+        let b = f.code("Beta", None);
+        crate::db::coders::ensure_local(c, "bob", "Bob", "#5CB85C").unwrap();
+        let e = f.excerpt(0, 10, std::slice::from_ref(&a));
+
+        assert_round_trip(c, "bob adds a code", |c| {
+            excerpts::add_codes(c, &e, std::slice::from_ref(&b)).unwrap();
+        });
+        assert_eq!(
+            coder_of(c, &e, &b),
+            "bob",
+            "the redo put Bob's name back on it"
+        );
+
+        // Ada comes to the same project file and agrees with Bob about Alpha.
+        crate::db::coders::ensure_local(c, "ada", "Ada", "#D9534F").unwrap();
+        assert_round_trip(c, "ada agrees", |c| {
+            excerpts::add_codes(c, &e, std::slice::from_ref(&a)).unwrap();
+        });
+        let mut coders = coders_of(c, &e, &a);
+        coders.sort();
+        assert_eq!(coders, vec!["ada", "bob"]);
+
+        // Ada undoing her own coding must not take Bob's with it.
+        excerpts::remove_code(c, &e, &a, None).unwrap();
+        assert_eq!(coders_of(c, &e, &a), vec!["bob"]);
+        undo(c).unwrap().unwrap();
+        let mut coders = coders_of(c, &e, &a);
+        coders.sort();
+        assert_eq!(coders, vec!["ada", "bob"]);
+
+        // A code merge carries each coding across as its own coder's, and
+        // undoing puts them back the same way.
+        assert_round_trip(c, "merge", |c| {
+            codes::merge(c, &b, &a).unwrap();
+        });
+        let mut coders = coders_of(c, &e, &a);
+        coders.sort();
+        assert_eq!(coders, vec!["ada", "bob"]);
+
+        // And the node itself records who made it.
+        let node = get(c, head(c).unwrap().unwrap()).unwrap();
+        assert_eq!(node.coder_id, "ada");
+        let step = tree(c).unwrap().into_iter().next_back().unwrap();
+        assert_eq!(step.coder_id, "ada");
+    }
+
+    fn coders_of(conn: &Connection, excerpt_id: &str, code_id: &str) -> Vec<String> {
+        let mut stmt = conn
+            .prepare(
+                "SELECT coder_id FROM excerpt_codes
+                  WHERE excerpt_id = ?1 AND code_id = ?2 ORDER BY coder_id",
+            )
+            .unwrap();
+        stmt.query_map(params![excerpt_id, code_id], |r| r.get(0))
+            .unwrap()
+            .collect::<rusqlite::Result<_>>()
+            .unwrap()
+    }
+
+    fn coder_of(conn: &Connection, excerpt_id: &str, code_id: &str) -> String {
+        coders_of(conn, excerpt_id, code_id).join(",")
+    }
+
     /// Offsets are code points, so a split has to land on a character
     /// boundary even when the text is emoji and combining marks.
     #[test]
