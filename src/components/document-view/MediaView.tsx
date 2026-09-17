@@ -20,9 +20,11 @@ import {
   formatTimecode,
   isCodableRange,
   isVideoMime,
+  MIN_RANGE_MS,
   setInPoint,
   setOutPoint,
   unsupportedHint,
+  waveformPath,
   type MediaRange,
 } from "@/core/media";
 import { extensionOf } from "@/core/importers";
@@ -187,14 +189,34 @@ export function MediaView({ documentId, focusExcerptId }: Props) {
     setPositionMs(ms);
   }, []);
 
+  /**
+   * The furthest the playhead goes. Not the last millisecond: seeking a
+   * WebKit media element to exactly the end makes it ask the server for
+   * `Range: bytes=<length>-`, which is by definition unsatisfiable — the
+   * loopback server answers `416`, as any HTTP server would, and WebKit
+   * turns that into `MEDIA_ERR_NETWORK` and stops playing (measured in
+   * `e2e/`). A playhead 100 ms from the end is the same thing to a coder,
+   * and an out-point can still reach the very end (`atEnd` below).
+   */
+  const playableLimit = Math.max(0, durationMs - MIN_RANGE_MS);
+
   const seekTo = useCallback(
     (ms: number) => {
       const player = playerRef.current;
-      const at = clampPosition(ms, durationMs);
+      const at = clampPosition(ms, playableLimit);
       notePosition(at);
       if (player) player.currentTime = at / 1000;
     },
-    [durationMs, notePosition],
+    [notePosition, playableLimit],
+  );
+
+  /**
+   * Where an in- or out-point goes when the playhead is as far as it can go:
+   * the coder means "the end of the recording", not "100 ms before it".
+   */
+  const markAt = useCallback(
+    () => (positionRef.current >= playableLimit ? durationMs : positionRef.current),
+    [durationMs, playableLimit],
   );
 
   const togglePlay = useCallback(() => {
@@ -479,10 +501,10 @@ export function MediaView({ documentId, focusExcerptId }: Props) {
             seekTo(at + MEDIA_STEP_MS);
             return;
           case "mediaSetIn":
-            markRange(setInPoint(range, at, durationMs));
+            markRange(setInPoint(range, markAt(), durationMs));
             return;
           case "mediaSetOut":
-            markRange(setOutPoint(range, at, durationMs));
+            markRange(setOutPoint(range, markAt(), durationMs));
             return;
         }
       }
@@ -498,6 +520,7 @@ export function MediaView({ documentId, focusExcerptId }: Props) {
     applyCodeToTarget,
     durationMs,
     hasFocus,
+    markAt,
     markRange,
     range,
     seekTo,
@@ -659,8 +682,8 @@ export function MediaView({ documentId, focusExcerptId }: Props) {
                 <span className="flex-1" />
                 <InOutControls
                   range={range}
-                  onSetIn={() => markRange(setInPoint(range, positionMs, durationMs))}
-                  onSetOut={() => markRange(setOutPoint(range, positionMs, durationMs))}
+                  onSetIn={() => markRange(setInPoint(range, markAt(), durationMs))}
+                  onSetOut={() => markRange(setOutPoint(range, markAt(), durationMs))}
                   onClear={() => markRange(null)}
                   onCode={() => setPaletteOpen(true)}
                   codable={codable}
@@ -855,15 +878,20 @@ function Timeline({
         data-testid="media-scrubber"
       >
         {peaks && peaks.length > 0 ? (
-          <div className="absolute inset-0 flex items-center gap-px px-px" aria-hidden="true">
-            {peaks.map((p, i) => (
-              <span
-                key={i}
-                className="flex-1 rounded-sm bg-fg-muted/40"
-                style={{ height: `${Math.max(2, p * 100)}%` }}
-              />
-            ))}
-          </div>
+          // One path in peak coordinates, stretched to the timeline's width:
+          // a couple of thousand peaks cannot be a couple of thousand
+          // elements in a few hundred pixels.
+          <svg
+            className="absolute inset-0 size-full"
+            viewBox={`0 0 ${peaks.length} 2`}
+            preserveAspectRatio="none"
+            aria-hidden="true"
+            data-testid="media-waveform"
+          >
+            <g transform="translate(0 1)">
+              <path d={waveformPath(peaks)} className="fill-fg-muted/50" />
+            </g>
+          </svg>
         ) : (
           <div className="absolute inset-0 flex items-center justify-center text-[11px] text-fg-muted">
             {durationMs > 0 ? "" : "no timeline"}

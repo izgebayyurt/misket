@@ -202,6 +202,30 @@ export function downsamplePeaks(samples: Float32Array | number[], count: number)
   return out;
 }
 
+/**
+ * An SVG path for a waveform, as a filled envelope around a centre line.
+ *
+ * The path is drawn in its own coordinate space — `x` from 0 to
+ * `peaks.length`, `y` from -1 to 1 — so an `<svg viewBox="0 0 N 2"
+ * preserveAspectRatio="none">` scales it to whatever width the timeline has.
+ * That matters: a waveform is a couple of thousand peaks and a timeline is a
+ * few hundred pixels, so one bar per peak cannot be drawn, while one path
+ * always can.
+ */
+export function waveformPath(peaks: readonly number[]): string {
+  if (peaks.length === 0) return "";
+  const at = (v: number) => Math.round(Math.min(1, Math.max(0, v)) * 1000) / 1000;
+  const top: string[] = [];
+  const bottom: string[] = [];
+  for (let i = 0; i < peaks.length; i++) {
+    // A silent stretch still needs a visible line through it.
+    const h = Math.max(0.02, at(peaks[i] ?? 0));
+    top.push(`${i} ${-h}`);
+    bottom.push(`${peaks.length - 1 - i} ${at(peaks[peaks.length - 1 - i] ?? 0) || 0.02}`);
+  }
+  return `M ${top.join(" L ")} L ${bottom.join(" L ")} Z`;
+}
+
 /** The peaks covering `[startMs, endMs)`, for an excerpt's waveform slice. */
 export function peakSlice(
   peaks: readonly number[] | null | undefined,

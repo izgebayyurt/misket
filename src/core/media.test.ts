@@ -13,6 +13,7 @@ import {
   parseTimecode,
   peakSlice,
   setInPoint,
+  waveformPath,
   setOutPoint,
   unsupportedHint,
 } from "./media";
@@ -154,6 +155,24 @@ describe("waveform peaks", () => {
     expect(peakSlice(null, 0, 10, 10_000)).toEqual([]);
     expect(peakSlice(peaks, 0, 10, 0)).toEqual([]);
     expect(peakSlice(peaks, 10, 10, 10_000)).toEqual([]);
+  });
+});
+
+describe("the waveform path", () => {
+  it("draws an envelope around a centre line, in peak coordinates", () => {
+    // Two peaks: the path runs along the top left-to-right, then back along
+    // the bottom, so it closes into a filled shape.
+    expect(waveformPath([1, 0.5])).toBe("M 0 -1 L 1 -0.5 L 1 0.5 L 0 1 Z");
+  });
+
+  it("keeps a silent stretch visible", () => {
+    // A flat zero would be an invisible zero-height shape.
+    expect(waveformPath([0])).toBe("M 0 -0.02 L 0 0.02 Z");
+  });
+
+  it("clamps anything out of range and draws nothing from nothing", () => {
+    expect(waveformPath([2, -1])).toBe("M 0 -1 L 1 -0.02 L 1 0.02 L 0 1 Z");
+    expect(waveformPath([])).toBe("");
   });
 });
 
