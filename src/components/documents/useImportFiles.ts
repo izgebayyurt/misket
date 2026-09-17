@@ -249,6 +249,66 @@ async function readImageSize(
   }
 }
 
+/** What `measureElement` reads off a media element once its headers arrive. */
+interface Measured {
+  durationMs: number;
+  width: number;
+  height: number;
+}
+
+/**
+ * Load `url` in a detached media element and read its metadata.
+ *
+ * The promise settles exactly once, whatever the element does: a media
+ * element that cannot load fires `error`, and letting go of the source fires
+ * another — so the listeners come off and the result is handed back *before*
+ * the source is cleared, or the two would chase each other.
+ */
+function measureElement(mime: string, url: string): Promise<Measured | null> {
+  const element = isVideoMime(mime)
+    ? document.createElement("video")
+    : document.createElement("audio");
+  element.preload = "metadata";
+  return new Promise<Measured | null>((resolve) => {
+    let settled = false;
+    const onMetadata = () => {
+      const seconds = element.duration;
+      finish(
+        Number.isFinite(seconds) && seconds > 0
+          ? {
+              durationMs: Math.round(seconds * 1000),
+              width: (element as HTMLVideoElement).videoWidth ?? 0,
+              height: (element as HTMLVideoElement).videoHeight ?? 0,
+            }
+          : null,
+      );
+    };
+    const onError = () => finish(null);
+    // A container the decoder chews on forever is a failure too.
+    const timer = setTimeout(() => finish(null), MEASURE_TIMEOUT_MS);
+    function finish(value: Measured | null) {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      element.removeEventListener("loadedmetadata", onMetadata);
+      element.removeEventListener("error", onError);
+      resolve(value);
+      try {
+        element.removeAttribute("src");
+        element.load();
+      } catch {
+        // Letting go of the file is best effort; the answer is already out.
+      }
+    }
+    element.addEventListener("loadedmetadata", onMetadata);
+    element.addEventListener("error", onError);
+    element.src = url;
+  });
+}
+
+/** How long to wait for a decoder to report a file's duration. */
+const MEASURE_TIMEOUT_MS = 20_000;
+
 /**
  * What a recording is: its MIME, size, duration and (for video) pixel size.
  *
@@ -266,35 +326,7 @@ async function measureMedia(path: string): Promise<MediaInfo | null> {
   } catch {
     return null;
   }
-  const element = isVideoMime(probe.mime)
-    ? document.createElement("video")
-    : document.createElement("audio");
-  element.preload = "metadata";
-  element.src = probeUrl(probe.token);
-  const measured = await new Promise<{ durationMs: number; width: number; height: number } | null>(
-    (resolve) => {
-      const done = (value: { durationMs: number; width: number; height: number } | null) => {
-        element.removeAttribute("src");
-        element.load();
-        resolve(value);
-      };
-      element.addEventListener("loadedmetadata", () => {
-        const seconds = element.duration;
-        if (!Number.isFinite(seconds) || seconds <= 0) {
-          done(null);
-          return;
-        }
-        done({
-          durationMs: Math.round(seconds * 1000),
-          width: (element as HTMLVideoElement).videoWidth ?? 0,
-          height: (element as HTMLVideoElement).videoHeight ?? 0,
-        });
-      });
-      element.addEventListener("error", () => done(null));
-      // A container the decoder chews on forever is a failure too.
-      setTimeout(() => done(null), 20_000);
-    },
-  );
+  const measured = await measureElement(probe.mime, probeUrl(probe.token));
   if (!measured) return null;
   return {
     mime: probe.mime,

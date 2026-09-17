@@ -74,7 +74,11 @@ function MediaImportDialogContent({ files, copyIntoProject }: MediaImportRequest
           <Button variant="ghost" onClick={() => decide({ import: false })}>
             Cancel
           </Button>
-          <Button onClick={() => decide({ import: true })} data-testid="media-import-confirm">
+          <Button
+            autoFocus
+            onClick={() => decide({ import: true })}
+            data-testid="media-import-confirm"
+          >
             Import
           </Button>
         </DialogFooter>

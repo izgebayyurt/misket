@@ -88,6 +88,9 @@ export function MediaView({ documentId, focusExcerptId }: Props) {
   const setThumbnail = useSetExcerptThumbnail();
 
   const rootRef = useRef<HTMLDivElement>(null);
+  // The keys read the position from a ref: `timeupdate` fires several times a
+  // second, and re-registering a listener that often would be silly.
+  const positionRef = useRef(0);
   const playerRef = useRef<HTMLVideoElement & HTMLAudioElement>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
 
@@ -147,14 +150,20 @@ export function MediaView({ documentId, focusExcerptId }: Props) {
 
   // --- the player ----------------------------------------------------------
 
+  /** Record where the player is, for the render and for the keys. */
+  const notePosition = useCallback((ms: number) => {
+    positionRef.current = ms;
+    setPositionMs(ms);
+  }, []);
+
   const seekTo = useCallback(
     (ms: number) => {
       const player = playerRef.current;
       const at = clampPosition(ms, durationMs);
-      setPositionMs(at);
+      notePosition(at);
       if (player) player.currentTime = at / 1000;
     },
-    [durationMs],
+    [durationMs, notePosition],
   );
 
   const togglePlay = useCallback(() => {
@@ -400,27 +409,28 @@ export function MediaView({ documentId, focusExcerptId }: Props) {
       const action = matchMediaAction(e);
       if (action) {
         e.preventDefault();
+        const at = positionRef.current;
         switch (action) {
           case "mediaPlayPause":
             togglePlay();
             return;
           case "mediaBack":
-            seekTo(positionMs - MEDIA_SEEK_MS);
+            seekTo(at - MEDIA_SEEK_MS);
             return;
           case "mediaForward":
-            seekTo(positionMs + MEDIA_SEEK_MS);
+            seekTo(at + MEDIA_SEEK_MS);
             return;
           case "mediaStepBack":
-            seekTo(positionMs - MEDIA_STEP_MS);
+            seekTo(at - MEDIA_STEP_MS);
             return;
           case "mediaStepForward":
-            seekTo(positionMs + MEDIA_STEP_MS);
+            seekTo(at + MEDIA_STEP_MS);
             return;
           case "mediaSetIn":
-            markRange(setInPoint(range, positionMs, durationMs));
+            markRange(setInPoint(range, at, durationMs));
             return;
           case "mediaSetOut":
-            markRange(setOutPoint(range, positionMs, durationMs));
+            markRange(setOutPoint(range, at, durationMs));
             return;
         }
       }
@@ -437,7 +447,6 @@ export function MediaView({ documentId, focusExcerptId }: Props) {
     durationMs,
     hasFocus,
     markRange,
-    positionMs,
     range,
     seekTo,
     shortcutToCode,
@@ -549,9 +558,7 @@ export function MediaView({ documentId, focusExcerptId }: Props) {
                   onClick={togglePlay}
                   onPlay={() => setPlaying(true)}
                   onPause={() => setPlaying(false)}
-                  onTimeUpdate={(e) =>
-                    setPositionMs(Math.round(e.currentTarget.currentTime * 1000))
-                  }
+                  onTimeUpdate={(e) => notePosition(Math.round(e.currentTarget.currentTime * 1000))}
                   onError={() => setPlaybackError(unsupportedHint(doc.name, ext))}
                   data-testid="media-player"
                 />
@@ -564,9 +571,7 @@ export function MediaView({ documentId, focusExcerptId }: Props) {
                   preload="metadata"
                   onPlay={() => setPlaying(true)}
                   onPause={() => setPlaying(false)}
-                  onTimeUpdate={(e) =>
-                    setPositionMs(Math.round(e.currentTarget.currentTime * 1000))
-                  }
+                  onTimeUpdate={(e) => notePosition(Math.round(e.currentTarget.currentTime * 1000))}
                   onError={() => setPlaybackError(unsupportedHint(doc.name, ext))}
                   data-testid="media-player"
                 />
@@ -684,7 +689,11 @@ async function computePeaks(documentId: string, sizeBytes: number): Promise<numb
     const Offline = window.OfflineAudioContext;
     if (!Offline) return null;
     const ctx = new Offline(1, 1, 8000);
-    const buffer = await ctx.decodeAudioData(joined.buffer as ArrayBuffer);
+    // Older WebKit only has the callback form; newer ones return a promise.
+    const buffer = await new Promise<AudioBuffer>((resolve, reject) => {
+      const maybe = ctx.decodeAudioData(joined.buffer as ArrayBuffer, resolve, reject);
+      if (maybe && typeof maybe.then === "function") maybe.then(resolve, reject);
+    });
     return downsamplePeaks(buffer.getChannelData(0), PEAK_COUNT);
   } catch {
     // No audio track, a codec the webview cannot decode, a file that moved
