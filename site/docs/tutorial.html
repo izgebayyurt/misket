@@ -47,6 +47,7 @@
           <li><a href="#query">Boolean and proximity queries</a></li>
           <li><a href="#memos">Memos</a></li>
           <li><a href="#analysis">Analysis views</a></li>
+          <li><a href="#reliability">Inter-rater reliability</a></li>
           <li><a href="#framework">Framework matrices</a></li>
           <li><a href="#history">Undo, redo and history</a></li>
           <li><a href="#export">Export and backups</a></li>
@@ -304,6 +305,59 @@
         (<kbd>Shift</kbd>+<kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>F</kbd>) have a
         <strong>Match word forms</strong> toggle: turn it on and a search for "code" also finds
         "coding" and "coded", using the same stemming as the word frequency view.
+      </p>
+
+      <h2 id="reliability">Inter-rater reliability</h2>
+      <p>
+        <strong>Reliability</strong> in the sidebar compares two coders on the documents they both
+        coded — the view behind the sentence &ldquo;two coders independently coded 20% of the
+        transcripts&rdquo; in a methods section. It appears once the project holds more than one
+        coder; until then it says so, because a second coder arrives with
+        <strong>File → Pull from another copy…</strong> rather than by being invented here.
+      </p>
+      <p>
+        Pick <strong>A</strong> and <strong>B</strong> (you and whoever else has coded most, to
+        begin with) and — this is the choice that matters — the <strong>unit of analysis</strong>:
+      </p>
+      <ul>
+        <li>
+          <strong>Paragraph</strong>: the document split on line breaks, exactly as the viewer shows
+          it. The usual choice for interview text.
+        </li>
+        <li>
+          <strong>Speaker turn</strong>: one turn each, for documents Misket has read a transcript
+          format for; documents without one fall back to paragraphs, so a mixed project still gives
+          one number.
+        </li>
+        <li>
+          <strong>Excerpt</strong>: every distinct range either of you marked. The strictest
+          reading, because it counts the boundaries too.
+        </li>
+      </ul>
+      <p>
+        For paragraphs and turns, the <strong>overlap</strong> slider says how much of a unit an
+        excerpt has to cover — or how much of the excerpt the unit has to cover — before the code
+        counts as present there. That second half is what lets a one-sentence excerpt inside a long
+        paragraph count for that paragraph. Excerpt units match ranges exactly and ignore the
+        slider. Narrow the documents and the codes with the same pickers the other analysis views
+        use.
+      </p>
+      <p>
+        The strip at the top is the pooled <strong>κ</strong> with its Landis &amp; Koch band, the
+        unweighted mean of the per-code kappas, and overall percent agreement. The table under it is
+        one row per code: how many units, how many both of you coded, how many only A or only B,
+        percent agreement and κ. Where κ is blank the figure is genuinely undefined — neither of you
+        ever used that code, or both of you used it everywhere — and Misket prints nothing rather
+        than a misleading 0.
+      </p>
+      <p>
+        Under the table is every <strong>disagreement</strong>, grouped by document: the passage,
+        the code, and which of you applied it. Click one to open the document there.
+        <strong>Adopt</strong> applies that code to the passage as your own coding;
+        <strong>Remove mine</strong> takes your own back. Both are ordinary codings, so
+        <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>Z</kbd> undoes them and the list refreshes. The
+        <strong>CSV</strong> button writes the table, the pooled rows and the parameters — coders,
+        unit, threshold, documents, units, codes — so the numbers can be checked later.
       </p>
 
       <h2 id="framework">Framework matrices</h2>

@@ -639,6 +639,97 @@ export interface CodeByDescriptor {
   mode: CrosstabMode;
 }
 
+// ------------------------------------------- inter-rater reliability (IRR)
+
+/**
+ * The unit of analysis an agreement figure counts over. Mirrors `IrrUnit` in
+ * `crates/misket-core/src/models.rs`; `crates/misket-core/src/db/irr.rs` has
+ * the rules.
+ */
+export type IrrUnit = "paragraph" | "turn" | "excerpt";
+
+export interface IrrRequest {
+  coderA: string;
+  coderB: string;
+  /** Absent or empty: every document both coders have coded in. */
+  documentIds?: string[] | null;
+  /** Document sets; unioned into `documentIds`, as everywhere else. */
+  documentSetIds?: string[] | null;
+  unit?: IrrUnit;
+  /** How much of a unit an excerpt must cover, or vice versa (0..1). Ignored
+   * for `excerpt` units, which match ranges exactly. */
+  overlapThreshold?: number;
+  /** Absent or empty: every code either coder applied in those documents. */
+  codeIds?: string[] | null;
+}
+
+export interface IrrCodeRow {
+  codeId: string;
+  codeName: string;
+  codePath: string;
+  color: string;
+  units: number;
+  both: number;
+  aOnly: number;
+  bOnly: number;
+  neither: number;
+  percentAgreement: number;
+  /** Null where kappa is undefined — never 0 standing in for "no idea". */
+  kappa: number | null;
+  /** The Landis & Koch band, or "" when kappa is null. */
+  interpretation: string;
+}
+
+export interface IrrDocumentRow {
+  documentId: string;
+  documentName: string;
+  units: number;
+  percentAgreement: number;
+  disagreements: number;
+}
+
+export interface IrrDisagreement {
+  documentId: string;
+  documentName: string;
+  unitIndex: number;
+  kind: "text" | "image_region";
+  /** Code points, end-exclusive; both 0 for an image region. */
+  start: number;
+  end: number;
+  snippet: string;
+  codeId: string;
+  codeName: string;
+  color: string;
+  /** Which coder applied it. */
+  who: "a" | "b";
+  coderId: string;
+  /** The excerpt whose range is this unit, when there is one. */
+  unitExcerptId: string | null;
+  /** The excerpts carrying the coding, for "remove mine". */
+  excerptIds: string[];
+}
+
+export interface IrrReport {
+  coderA: string;
+  coderB: string;
+  coderAName: string;
+  coderBName: string;
+  unit: IrrUnit;
+  overlapThreshold: number;
+  documents: IrrDocumentRow[];
+  units: number;
+  /** units x codes. */
+  decisions: number;
+  codes: IrrCodeRow[];
+  pooledKappa: number | null;
+  pooledInterpretation: string;
+  meanKappa: number | null;
+  percentAgreement: number;
+  /** Capped; `disagreementCount` is the real total. */
+  disagreements: IrrDisagreement[];
+  disagreementCount: number;
+}
+
 export interface SearchHit {
   documentId: string;
   documentName: string;

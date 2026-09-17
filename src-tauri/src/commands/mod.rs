@@ -11,6 +11,7 @@ pub mod excerpts;
 pub mod export;
 pub mod framework;
 pub mod history;
+pub mod irr;
 pub mod memos;
 pub mod project;
 pub mod search;
