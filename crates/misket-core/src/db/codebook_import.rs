@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use rusqlite::Connection;
 use serde_json::json;
 
-use super::{activity, codes, export::code_paths, util};
+use super::{activity, codes, export::code_paths, history, util};
 use crate::error::{AppError, Result};
 use crate::models::{
     CodePatch, CodebookImport, CodebookJsonCode, ImportMode, ImportReport, NewCode,
@@ -247,6 +247,10 @@ pub fn import_codebook(
     parsed.sort_by_key(|pc| pc.path.len());
 
     let tx = util::tx(conn)?;
+    // Every code this import creates or fills in records its own node, with
+    // its own inverse; the group says they were one action, so one undo takes
+    // the whole codebook back and one redo brings it all in again.
+    history::begin_group(&tx, "Imported a codebook")?;
     let mut report = ImportReport::default();
 
     let base_parent_id = match &mode {
@@ -318,19 +322,21 @@ pub fn import_codebook(
         }
     }
 
-    // The codes themselves each logged a `code.created`/`code.updated`; this
-    // is the one entry that says they arrived together, and from where.
+    // The codes themselves each logged a `code.created`/`code.updated` that
+    // carries the payloads; this is the one entry that says they arrived
+    // together, and from where.
+    let summary = format!(
+        "Imported a codebook: {} code{} created, {} matched",
+        report.created,
+        if report.created == 1 { "" } else { "s" },
+        report.matched
+    );
     activity::record(
         &tx,
         "codebook.imported",
         "codebook",
         None,
-        format!(
-            "Imported a codebook: {} code{} created, {} matched",
-            report.created,
-            if report.created == 1 { "" } else { "s" },
-            report.matched
-        ),
+        &summary,
         json!({
             "mode": match &mode {
                 ImportMode::Merge => "merge",
@@ -341,9 +347,11 @@ pub fn import_codebook(
             "matched": report.matched,
             "skippedShortcuts": report.skipped_shortcuts,
         }),
-        None,
-        None,
+        Some(history::noop()),
+        Some(history::noop()),
     )?;
+    history::relabel_group(&tx, &summary)?;
+    history::end_group(&tx)?;
     tx.commit()?;
     Ok(report)
 }

@@ -167,6 +167,25 @@ pub fn end_group(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
+/// Rename the open group, for an operation that only knows what it did once
+/// it has done it ("Imported a codebook: 12 codes created, 3 matched").
+pub fn relabel_group(conn: &Connection, summary: &str) -> Result<()> {
+    ensure_state(conn)?;
+    if state_i64(conn, "group_depth") == 0 {
+        return Ok(());
+    }
+    conn.execute(
+        "UPDATE temp.history_state SET group_summary = ?1",
+        [summary],
+    )?;
+    conn.execute(
+        "UPDATE history SET group_summary = ?1
+          WHERE id = (SELECT group_id FROM temp.history_state)",
+        [summary],
+    )?;
+    Ok(())
+}
+
 /// [`begin_group`] and [`end_group`] around `f`, closed even when it fails.
 pub fn group<T>(
     conn: &Connection,
@@ -909,6 +928,32 @@ impl FrameworkOp {
     }
 }
 
+/// Project-wide settings that live in `project_meta`: the project's name, the
+/// custom stop-word list. One key, one value, both directions.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "op", rename_all = "camelCase")]
+pub enum ProjectOp {
+    SetMeta { key: String, value: Option<String> },
+}
+
+impl ProjectOp {
+    fn run(&self, conn: &Connection) -> Result<()> {
+        match self {
+            ProjectOp::SetMeta { key, value } => {
+                match value {
+                    Some(v) => conn.execute(
+                        "INSERT INTO project_meta (key, value) VALUES (?1, ?2)
+                         ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                        params![key, v],
+                    )?,
+                    None => conn.execute("DELETE FROM project_meta WHERE key = ?1", [key])?,
+                };
+                Ok(())
+            }
+        }
+    }
+}
+
 /// Memo writes: `restore` upserts a whole row, so it covers create, edit and
 /// undelete alike.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -1119,6 +1164,9 @@ fn apply(conn: &Connection, node_id: i64, kind: &str, payload: &Value) -> Result
         "document.imported" | "document.deleted" | "document.renamed" | "document.reordered" => {
             serde_json::from_value::<DocumentOp>(payload.clone())?.run(conn, node_id)
         }
+        "project.renamed" | "analysis.stop_words_set" => {
+            serde_json::from_value::<ProjectOp>(payload.clone())?.run(conn)
+        }
         "framework.matrix_created"
         | "framework.matrix_updated"
         | "framework.matrix_deleted"
@@ -1151,11 +1199,20 @@ pub fn apply_forward(conn: &Connection, node: &HistoryNode) -> Result<()> {
 
 /// Undo one node.
 pub fn apply_inverse(conn: &Connection, node: &HistoryNode) -> Result<()> {
-    let payload = node
-        .inverse
-        .as_ref()
-        .ok_or_else(|| AppError::Validation("this step cannot be undone".into()))?;
+    let payload = node.inverse.as_ref().ok_or_else(|| no_inverse(node))?;
     with_replay(conn, |conn| apply(conn, node.id, &node.kind, payload))
+}
+
+/// Why a node has nothing to undo. Every kind Misket records now writes an
+/// inverse, so a missing one means the node is older than the undo tree —
+/// copied from the activity log by the schema-8 migration — or is the root
+/// [`compact_before`] made, whose past was deliberately thrown away.
+fn no_inverse(node: &HistoryNode) -> AppError {
+    AppError::Validation(if node.parent_id.is_none() {
+        "Nothing more to undo: this is as far back as the project's history goes.".into()
+    } else {
+        "Nothing more to undo: earlier changes were recorded before history existed.".into()
+    })
 }
 
 // ------------------------------------------------------------ walking
@@ -2393,6 +2450,75 @@ mod tests {
             .any(|cell| cell.summary == "Waits months."));
     }
 
+    // ------------------------------- codebook import, project-wide settings
+
+    /// A codebook import is one step: every code it creates or fills in
+    /// records its own node, and the group makes them a single undo.
+    #[test]
+    fn round_trips_importing_a_codebook_in_merge_mode() {
+        use crate::models::{CodebookImport, ImportMode};
+        let f = Fixture::new();
+        let c = f.conn();
+        // An existing code the import matches and fills in, and one it adds.
+        let attitudes = f.code("Attitudes", None);
+        codes::update(
+            c,
+            &attitudes,
+            CodePatch {
+                description: Some(String::new()),
+                ..Default::default()
+            },
+        )
+        .ok();
+        let csv = "name,parent,color,description,inclusion,exclusion,shortcut\n                   Attitudes,,#112233,Top-level theme,,,\n                   Positive,Attitudes,#445566,Positive framing,,,\n";
+
+        assert_round_trip(c, "import a codebook", |c| {
+            crate::db::codebook_import::import_codebook(
+                c,
+                CodebookImport::Csv { text: csv.into() },
+                ImportMode::Merge,
+            )
+            .unwrap();
+        });
+        // The redo put it back: the new code is there and the old one is
+        // filled in.
+        let by_name: std::collections::HashMap<String, crate::models::Code> = codes::list(c)
+            .unwrap()
+            .into_iter()
+            .map(|x| (x.name.clone(), x))
+            .collect();
+        assert_eq!(by_name["Positive"].description, "Positive framing");
+        assert_eq!(by_name["Attitudes"].description, "Top-level theme");
+
+        // One node in the tree for the whole import, named by what it did.
+        let step = tree(c).unwrap().into_iter().last().unwrap();
+        assert!(step.summary.starts_with("Imported a codebook:"));
+        assert!(step.step_count > 1);
+        assert!(step.is_head && step.undoable);
+    }
+
+    #[test]
+    fn round_trips_renaming_the_project_and_setting_stop_words() {
+        let p = OpenProject::in_memory("Before").unwrap();
+        let c = &p.conn;
+        assert_round_trip(c, "rename the project", |_| {
+            p.rename("After").unwrap();
+        });
+        assert_eq!(p.info().unwrap().name, "After");
+        assert_round_trip(c, "set the stop words", |c| {
+            crate::db::analysis::set_stop_words(c, &["Misket".into(), "um".into()]).unwrap();
+        });
+        assert_round_trip(c, "change the stop words", |c| {
+            crate::db::analysis::set_stop_words(c, &["um".into()]).unwrap();
+        });
+        assert_eq!(crate::db::analysis::stop_words(c).unwrap(), vec!["um"]);
+        undo(c).unwrap().unwrap();
+        assert_eq!(
+            crate::db::analysis::stop_words(c).unwrap(),
+            vec!["misket", "um"]
+        );
+    }
+
     // -------------------------------------------------- compound steps
 
     /// Several writes bracketed by [`begin_group`] are one step in every
@@ -2800,6 +2926,48 @@ mod tests {
         assert!(redo(c, None).unwrap().is_none());
         undo(c).unwrap().unwrap();
         assert!(undo(c).unwrap().is_none());
+    }
+
+    /// The scenario a smoke test reported failing: work on the sample
+    /// project, undo, quit, reopen, undo again. Every node the sample builder
+    /// writes has to be undoable for the second undo to land.
+    #[test]
+    fn the_sample_project_can_be_undone_step_by_step_across_a_reopen() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("sample.misket");
+        crate::sample::create_sample_project(&path).unwrap();
+        let source;
+        let target;
+        {
+            let p = OpenProject::open(&path).unwrap();
+            let all = codes::list(&p.conn).unwrap();
+            source = all[0].id.clone();
+            target = all[1].id.clone();
+            codes::merge(&p.conn, &source, &target).unwrap();
+            undo(&p.conn).unwrap().unwrap();
+            assert!(codes::get(&p.conn, &source).is_ok());
+        }
+        // Reopening restores the head, and the step before the merge — one
+        // the sample builder wrote — undoes like any other.
+        let p = OpenProject::open(&path).unwrap();
+        assert!(head(&p.conn).unwrap().is_some());
+        let node = get(&p.conn, head(&p.conn).unwrap().unwrap()).unwrap();
+        assert!(
+            node.inverse.is_some(),
+            "the sample project's own {} node has no inverse",
+            node.kind
+        );
+        undo(&p.conn).unwrap().unwrap();
+
+        // And so does every one before it, all the way to the first import.
+        let mut steps = 0;
+        while undo(&p.conn).unwrap().is_some() {
+            steps += 1;
+            assert!(steps < 500, "undo is not making progress");
+        }
+        assert_eq!(head(&p.conn).unwrap(), None, "back to an empty project");
+        assert_eq!(documents::list(&p.conn).unwrap().len(), 0);
+        assert_eq!(codes::list(&p.conn).unwrap().len(), 0);
     }
 
     #[test]

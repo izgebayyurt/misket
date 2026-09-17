@@ -1,4 +1,4 @@
--- Misket project schema, version 9: compound steps in the history tree.
+-- Misket project schema, version 10: compound steps in the history tree.
 -- Applied inside a transaction by db::migrate().
 
 -- One user action can be several writes: merging two codes touches both
