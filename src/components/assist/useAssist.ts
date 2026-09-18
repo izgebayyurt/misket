@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import * as api from "@/api/assist";
 import type { AssistFeature, AssistReply, AssistSettings, AssistedRef } from "@/api/types";
-import { useSettings } from "@/state/settings";
+import { flushSettings, useSettings } from "@/state/settings";
 import type { BuiltPrompt } from "@/core/assist/prompts";
 
 /** The assistance settings as they stand. */
@@ -81,6 +81,9 @@ export function useAssistDraft(feature: AssistFeature, options?: { stream?: bool
       setText("");
       const stopListening = id ? api.onAssistDelta(id, (piece) => setText((t) => t + piece)) : null;
       try {
+        // The backend reads the saved settings, so a change still sitting in
+        // the debounce has to land first.
+        await flushSettings();
         const result = await api.assistComplete({
           feature,
           system: prompt.system,

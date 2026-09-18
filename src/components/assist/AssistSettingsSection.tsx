@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import * as api from "@/api/assist";
 import type { AssistProvider } from "@/api/types";
-import { useSettings } from "@/state/settings";
+import { flushSettings, useSettings } from "@/state/settings";
 import { toast } from "@/state/toasts";
 import {
   MAX_CONTEXT_CHARS,
@@ -40,7 +40,10 @@ export function AssistSettingsSection() {
   const [showLog, setShowLog] = useState(false);
   const { data: log } = useAssistRequests(showLog);
 
-  const patch = (p: Partial<typeof settings>) => update({ assist: { ...settings, ...p } });
+  // Read the live store rather than this render's copy: two toggles flipped
+  // in quick succession must not have the second one clobber the first.
+  const patch = (p: Partial<typeof settings>) =>
+    update({ assist: { ...useSettings.getState().settings.assist, ...p } });
   const refreshStatus = () => qc.invalidateQueries({ queryKey: ["assist", "status"] });
 
   async function saveKey() {
@@ -58,6 +61,8 @@ export function AssistSettingsSection() {
     setTesting(true);
     setTested(null);
     try {
+      // Test what is on screen, not what was saved 400ms ago.
+      await flushSettings();
       const reply = await api.testAssistConnection();
       setTested(`${reply.model} answered: ${reply.text.trim().slice(0, 80)}`);
     } catch (e) {
@@ -320,7 +325,7 @@ export function AssistSettingsSection() {
                   <tr key={`${e.at}-${i}`} className="border-t border-border">
                     <td className="py-0.5 tabular-nums">{e.at.slice(11, 19)}</td>
                     <td>{e.feature}</td>
-                    <td className="truncate" title={`${e.provider} · ${e.model}`}>
+                    <td title={e.provider} data-testid="assist-log-model">
                       {e.model}
                     </td>
                     <td className="text-right tabular-nums">{e.requestBytes} B</td>
