@@ -9,6 +9,7 @@ import {
   dayLabelInfo,
   defaultExpandedDays,
   edgePath,
+  formatDayDate,
   forkPointOf,
   groupByDay,
   headIsOnOrBelow,
@@ -223,6 +224,17 @@ describe("dayLabelInfo", () => {
 
   it("says so when the timestamp made no sense", () => {
     expect(dayLabelInfo("", now)).toEqual({ kind: "undated" });
+  });
+});
+
+describe("formatDayDate", () => {
+  it("formats through Intl.DateTimeFormat in the given locale", () => {
+    const en = formatDayDate("2026-09-14", "en");
+    const tr = formatDayDate("2026-09-14", "tr");
+    expect(en).toContain("2026");
+    expect(tr).toContain("2026");
+    // Same calendar date, different locale conventions — not the same string.
+    expect(en).not.toBe(tr);
   });
 });
 

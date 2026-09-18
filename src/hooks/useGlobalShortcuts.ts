@@ -5,6 +5,25 @@ import { useUndoStore } from "@/state/undoStore";
 import { useImportFiles } from "@/components/documents/useImportFiles";
 import { useShortcutActions } from "@/state/shortcutActions";
 
+/**
+ * Plain Tab/Shift+Tab cycle the focused excerpt while the document, image or
+ * media pane's own neutral surface has focus (where it lands right after
+ * opening or navigating one — see the `rootRef.current?.focus()` calls in
+ * DocumentView) — the same convenience a text editor gives Tab once the
+ * cursor is inside it. The moment focus moves to an actual control (a
+ * button in the header, the sidebar, a dialog…), `document.activeElement` is
+ * that control rather than the pane root, and Tab goes back to moving focus
+ * normally: it must, or a keyboard user could never reach anything outside
+ * the document view while one is open.
+ */
+function documentSurfaceHasFocus(): boolean {
+  const el = document.activeElement;
+  if (!el || el === document.body) return true;
+  return el.matches(
+    '[data-testid="doc-text"], [data-testid="image-canvas"], [data-testid="media-view"]',
+  );
+}
+
 /** Binds application-wide keyboard shortcuts while a project is open. */
 export function useGlobalShortcuts() {
   const { pickAndImport } = useImportFiles();
@@ -88,6 +107,16 @@ export function useGlobalShortcuts() {
         case "openProject":
         case "newProject":
           return; // handled on the start screen only
+        case "nextExcerpt":
+        case "prevExcerpt": {
+          if (!documentSurfaceHasFocus()) return; // let Tab move focus normally
+          const handler = handlers[action];
+          if (handler) {
+            e.preventDefault();
+            handler();
+          }
+          return;
+        }
         default: {
           const handler = handlers[action];
           if (handler) {

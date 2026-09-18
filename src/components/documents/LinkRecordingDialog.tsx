@@ -90,6 +90,7 @@ export function LinkRecordingDialog({
                   )}
                   onClick={() => setPicked(r.id)}
                   onDoubleClick={() => void linkTo(r.id)}
+                  aria-current={picked === r.id ? "true" : undefined}
                   data-testid="link-recording-item"
                 >
                   <Film className="size-4 shrink-0 text-fg-muted" />

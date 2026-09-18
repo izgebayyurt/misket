@@ -10,7 +10,7 @@ const buttonVariants = cva(
       variant: {
         default: "bg-accent text-accent-fg hover:opacity-90",
         secondary: "bg-muted text-fg hover:bg-border",
-        outline: "border border-border bg-panel hover:bg-muted",
+        outline: "border border-border-strong bg-panel hover:bg-muted",
         ghost: "hover:bg-muted",
         danger: "bg-danger text-white hover:opacity-90",
         link: "text-accent underline-offset-4 hover:underline",

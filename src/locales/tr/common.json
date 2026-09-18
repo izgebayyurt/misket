@@ -85,7 +85,6 @@
     "title": "Yapay Zeka Desteği",
     "blurb": "Misket bir dil modelinden öneri isteyebilir. Sen açana kadar kapalıdır, hiçbir şeyi kendiliğinden uygulamaz ve önerdiği her şeyi ona tıklayarak kabul edersin. Aşağıda hiçbir şey ayarlanmadıysa, bu bilgisayardan hiçbir şey çıkmaz.",
     "provider": "Sağlayıcı",
-    "providerGroup": "Yapay zeka desteği sağlayıcısı",
     "providers": {
       "anthropic": "Anthropic",
       "openAiCompatible": "OpenAI uyumlu"
@@ -146,6 +145,7 @@
       "description_one": "{{count, number}} alıntıdan bir taslak. Kaydetmeden önce düzenle; Kaydet'e basana kadar hiçbir şey kaydedilmez.",
       "description_other": "{{count, number}} alıntıdan bir taslak. Kaydetmeden önce düzenle; Kaydet'e basana kadar hiçbir şey kaydedilmez.",
       "nothingDrafted": "Henüz bir taslak yok.",
+      "bodyLabel": "Hazırlanan not metni",
       "citationHint": "Alıntılar, alıntı kimliğiyle kaynak gösterilir. Güvenmeden önce bunları alıntılarla karşılaştır.",
       "saveAsMemo": "Not olarak kaydet"
     },
@@ -314,6 +314,8 @@
     "closeProject": "Projeyi kapat"
   },
   "sidebar": {
+    "title": "Kenar çubuğu",
+    "views": "Görünümler",
     "documents": "Belgeler",
     "codes": "Kodlar",
     "overview": "Genel bakış",

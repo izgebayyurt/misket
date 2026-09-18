@@ -38,7 +38,10 @@ function ToastRow({ toast, onDismiss }: { toast: Toast; onDismiss: () => void })
   return (
     <div
       ref={ref}
-      role="status"
+      // "alert" carries an implicit assertive, atomic live region, so an
+      // error interrupts; "status" (polite, atomic) queues behind whatever
+      // the screen reader is already saying.
+      role={toast.kind === "error" ? "alert" : "status"}
       className={cn(
         "pointer-events-auto flex items-start gap-2 rounded-md border bg-panel px-3 py-2 text-sm shadow-lg",
         toast.kind === "error" ? "border-danger/50 text-danger" : "border-border",

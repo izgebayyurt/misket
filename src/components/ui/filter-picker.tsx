@@ -29,7 +29,7 @@ export function FilterPicker({
         <PopoverTrigger asChild>
           <button
             className={cn(
-              "flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs hover:bg-muted",
+              "flex items-center gap-1 rounded-md border border-border-strong px-2 py-1 text-xs hover:bg-muted",
               active && "border-accent bg-accent/10 text-fg",
             )}
             data-testid={testId}

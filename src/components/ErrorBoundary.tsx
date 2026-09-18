@@ -72,8 +72,14 @@ function ErrorScreen({ error, onReset }: { error: Error; onReset: () => void }) 
   }
 
   return (
-    <div className="flex h-screen flex-col items-center justify-center gap-4 bg-bg p-8 text-center text-fg">
-      <p className="font-serif text-2xl">Something went wrong</p>
+    // This screen replaces the whole window without warning; role="alert"
+    // (assertive, atomic) makes sure a screen reader announces it at once
+    // rather than staying silent about content that just disappeared.
+    <div
+      role="alert"
+      className="flex h-screen flex-col items-center justify-center gap-4 bg-bg p-8 text-center text-fg"
+    >
+      <h1 className="font-serif text-2xl">Something went wrong</h1>
       <p className="max-w-md text-sm text-fg-muted">
         Misket ran into an unexpected error and could not continue showing this screen. Your project
         file itself has not been touched — try reopening it. If this keeps happening, copy the

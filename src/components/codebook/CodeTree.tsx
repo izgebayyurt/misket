@@ -209,13 +209,19 @@ export function CodeTree() {
           variant="outline"
           onClick={() => setDialog({ kind: "create", parentId: null })}
           title={t("codebook.newCode")}
+          aria-label={t("codebook.newCode")}
           data-testid="new-code"
         >
           <Plus />
         </Button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button size="sm" variant="outline" title={t("codebook.importExport")}>
+            <Button
+              size="sm"
+              variant="outline"
+              title={t("codebook.importExport")}
+              aria-label={t("codebook.importExport")}
+            >
               <FileDown />
             </Button>
           </DropdownMenuTrigger>

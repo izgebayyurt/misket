@@ -15,6 +15,8 @@ interface Props {
 export function SelectionToolbar({ pos, onCode, onSuggest }: Props) {
   return (
     <div
+      role="toolbar"
+      aria-label="Selection actions"
       className="absolute z-20 flex items-center gap-1 rounded-md border border-border bg-panel p-0.5 shadow-md"
       style={{ top: pos.top, left: pos.left }}
       onMouseDown={(e) => e.preventDefault()}

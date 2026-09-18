@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useTranslation } from "react-i18next";
 import type { ProjectInfo } from "@/api/types";
@@ -28,6 +28,7 @@ export function Workspace({ project }: { project: ProjectInfo }) {
   const setSettingsOpen = useWorkspace((s) => s.setSettingsOpen);
   const shortcutsHelpOpen = useWorkspace((s) => s.shortcutsHelpOpen);
   const setShortcutsHelpOpen = useWorkspace((s) => s.setShortcutsHelpOpen);
+  const mainRef = useRef<HTMLElement>(null);
   useGlobalShortcuts();
   useUpdateCheckOnMount();
   useEffect(() => {
@@ -39,11 +40,29 @@ export function Workspace({ project }: { project: ProjectInfo }) {
   }, [project.name]);
   return (
     <div className="flex h-full flex-col">
+      {/* First focusable element in the workspace: a keyboard user tabbing
+          in from the address bar (or straight from app start) can jump past
+          the sidebar's many stops to whatever the main pane is showing. */}
+      <a
+        href="#workspace-main"
+        className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:rounded-md focus:bg-accent focus:px-3 focus:py-2 focus:text-sm focus:text-accent-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+        onClick={(e) => {
+          e.preventDefault();
+          mainRef.current?.focus();
+        }}
+      >
+        Skip to document
+      </a>
       <UpdateBanner />
       <SyncWarningBanner project={project} />
       <div className="flex min-h-0 flex-1">
         <Sidebar project={project} />
-        <main className="relative flex min-w-0 flex-1 flex-col bg-bg">
+        <main
+          ref={mainRef}
+          id="workspace-main"
+          tabIndex={-1}
+          className="relative flex min-w-0 flex-1 flex-col bg-bg outline-none"
+        >
           {view.kind === "document" ? (
             <DocumentPane
               key={view.documentId}

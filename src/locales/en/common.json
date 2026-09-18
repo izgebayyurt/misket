@@ -85,7 +85,6 @@
     "title": "Assistance",
     "blurb": "Misket can ask a language model for suggestions. It is off until you switch it on, it never applies anything by itself, and everything it proposes is something you accept by clicking it. With nothing configured below, nothing ever leaves this computer.",
     "provider": "Provider",
-    "providerGroup": "Assistance provider",
     "providers": {
       "anthropic": "Anthropic",
       "openAiCompatible": "OpenAI-compatible"
@@ -146,6 +145,7 @@
       "description_one": "A draft from {{count, number}} excerpt. Edit it before saving; nothing is saved until you press Save.",
       "description_other": "A draft from {{count, number}} excerpts. Edit it before saving; nothing is saved until you press Save.",
       "nothingDrafted": "Nothing drafted yet.",
+      "bodyLabel": "Drafted memo body",
       "citationHint": "Quotations are cited by excerpt id. Check them against the excerpts before you rely on them.",
       "saveAsMemo": "Save as memo"
     },
@@ -314,6 +314,8 @@
     "closeProject": "Close project"
   },
   "sidebar": {
+    "title": "Sidebar",
+    "views": "Views",
     "documents": "Documents",
     "codes": "Codes",
     "overview": "Overview",

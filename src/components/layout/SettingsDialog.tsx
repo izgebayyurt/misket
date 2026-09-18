@@ -41,17 +41,21 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
       <DialogContent title={t("settings.title")} description={t("settings.description")}>
         <div className="space-y-5">
           <section>
-            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-fg-muted">
+            <div
+              id="settings-theme-label"
+              className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-fg-muted"
+            >
               {t("settings.theme.label")}
-            </label>
-            <div className="flex gap-1" role="radiogroup" aria-label={t("settings.theme.label")}>
+            </div>
+            <div className="flex gap-1" role="radiogroup" aria-labelledby="settings-theme-label">
               {THEME_OPTIONS.map((o) => (
                 <Button
                   key={o.value}
                   type="button"
                   size="sm"
                   variant={settings.theme === o.value ? "default" : "outline"}
-                  aria-pressed={settings.theme === o.value}
+                  role="radio"
+                  aria-checked={settings.theme === o.value}
                   onClick={() => update({ theme: o.value })}
                 >
                   {t(o.labelKey)}
@@ -326,7 +330,13 @@ function DiagnosticsSection({ onOpenLogs }: { onOpenLogs: () => void }) {
         {t("settings.diagnostics.viewLogs")}
       </Button>
 
-      <label className="mt-3 flex items-start gap-2 text-sm">
+      <label
+        className="mt-3 flex items-start gap-2 text-sm"
+        // The name lives two spans deep, past what eslint-plugin-jsx-a11y's
+        // static check can see; naming it explicitly also keeps the
+        // announced name to the setting, not the paragraph below it.
+        aria-label={t("settings.diagnostics.sendCrashReports")}
+      >
         <input
           type="checkbox"
           className="mt-0.5"
@@ -373,7 +383,8 @@ function DiagnosticsSection({ onOpenLogs }: { onOpenLogs: () => void }) {
                   type="button"
                   size="sm"
                   variant={settings.reportFormat === o.value ? "default" : "outline"}
-                  aria-pressed={settings.reportFormat === o.value}
+                  role="radio"
+                  aria-checked={settings.reportFormat === o.value}
                   onClick={() => update({ reportFormat: o.value })}
                 >
                   {t(o.labelKey)}
@@ -428,12 +439,18 @@ function OcrLanguagesSection() {
             code: <code />,
             ext: <code />,
             link: (
+              // Trans replaces this element's children with the matching
+              // span of the translated string; the fallback text here is
+              // only what a screen reader (or a missing-translation
+              // fallback) would ever actually see as its content.
               <a
                 href="https://github.com/tesseract-ocr/tessdata_fast"
                 target="_blank"
                 rel="noreferrer"
                 className="underline"
-              />
+              >
+                tessdata_fast
+              </a>
             ),
           }}
         />

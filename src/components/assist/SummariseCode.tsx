@@ -117,6 +117,7 @@ function SummariseCodeDialog({ codeId, onClose }: { codeId: string; onClose: () 
           value={draft.text}
           onChange={(e) => draft.setText(e.target.value)}
           placeholder={draft.busy ? "" : t("assist.summarise.nothingDrafted")}
+          aria-label={t("assist.summarise.bodyLabel")}
           className="font-mono text-[13px]"
           data-testid="summarise-body"
         />

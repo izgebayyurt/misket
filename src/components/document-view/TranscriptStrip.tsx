@@ -124,8 +124,10 @@ export function TranscriptStrip({
         <span className="max-w-48 truncate">{media.name}</span>
       </button>
       {/* One media element per document. A video shows a thumbnail-sized
-          picture beside the controls; audio has nothing to show. */}
+          picture beside the controls; audio has nothing to show. Same as
+          MediaView's own player: no caption track to wire a <track> to. */}
       {isVideo ? (
+        // eslint-disable-next-line jsx-a11y/media-has-caption
         <video
           ref={playerRef}
           src={src ?? undefined}
@@ -136,6 +138,7 @@ export function TranscriptStrip({
           data-testid="transcript-player"
         />
       ) : (
+        // eslint-disable-next-line jsx-a11y/media-has-caption
         <audio
           ref={playerRef}
           src={src ?? undefined}
