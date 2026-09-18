@@ -163,7 +163,7 @@ export function TranscribeDialog({ doc, onClose }: { doc: DocumentSummary; onClo
                   onChange={(e) => setTimestamps(e.target.checked)}
                   data-testid="transcribe-timestamps"
                 />
-                Start every paragraph with its timestamp (<code>[mm:ss]</code>)
+                Start every paragraph with its <code>[mm:ss]</code> timestamp
               </label>
               <label className="flex items-center gap-2 text-sm">
                 <input

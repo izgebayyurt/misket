@@ -40,7 +40,8 @@ describe("formatElapsed", () => {
   it("reports how long a run took", () => {
     expect(formatElapsed(1_400)).toBe("1s");
     expect(formatElapsed(65_000)).toBe("1m 05s");
-    expect(formatElapsed(0)).toBe("0s");
+    expect(formatElapsed(111)).toBe("under a second");
+    expect(formatElapsed(0)).toBe("under a second");
   });
 });
 

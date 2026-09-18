@@ -135,83 +135,85 @@ export function TranscriptionSettings() {
             {isLoading ? <li className="px-2 py-2 text-sm text-fg-muted">Loading…</li> : null}
             {library?.models.map((m) => {
               const download = downloads[m.id];
+              const status = download
+                ? `${formatSize(download.received)} of ${formatSize(download.total)}`
+                : m.partialBytes > 0 && !m.installed
+                  ? `Paused at ${formatSize(m.partialBytes)} — Download resumes it`
+                  : m.note;
               return (
-                <li key={m.id} className="flex items-center gap-2 px-2 py-1.5 text-sm">
-                  <span className="min-w-0 flex-1">
-                    <span className="flex items-center gap-1.5">
-                      <span className="truncate">{m.label}</span>
-                      <span className="shrink-0 text-xs text-fg-muted">{m.sizeLabel}</span>
-                      {!m.multilingual ? (
-                        <span className="shrink-0 rounded border border-border px-1 text-[10px] uppercase text-fg-muted">
-                          en
-                        </span>
-                      ) : null}
-                      {selected === m.id ? (
-                        <span
-                          className="shrink-0 rounded bg-accent/15 px-1 text-[10px] uppercase text-accent"
-                          data-testid={`settings-whisper-in-use-${m.id}`}
-                        >
-                          in use
-                        </span>
-                      ) : null}
-                    </span>
-                    <span className="block truncate text-xs text-fg-muted">
-                      {download
-                        ? `${formatSize(download.received)} of ${formatSize(download.total)}`
-                        : m.partialBytes > 0 && !m.installed
-                          ? `Paused at ${formatSize(m.partialBytes)} — Download resumes it`
-                          : m.note}
-                    </span>
-                    {download ? (
-                      <span className="mt-1 block h-1 w-full overflow-hidden rounded-full bg-muted">
-                        <span
-                          className="block h-full rounded-full bg-accent transition-[width]"
-                          style={{ width: `${download.percent}%` }}
-                        />
+                <li key={m.id} className="px-2 py-1.5 text-sm">
+                  {/* The name, the buttons and the note are three rows' worth
+                      of content in a dialog that is one column wide, so the
+                      note goes underneath rather than squeezing the name to
+                      nothing. */}
+                  <div className="flex items-center gap-1.5">
+                    <span className="truncate font-medium">{m.label}</span>
+                    <span className="shrink-0 text-xs text-fg-muted">{m.sizeLabel}</span>
+                    {!m.multilingual ? (
+                      <span className="shrink-0 rounded border border-border px-1 text-[10px] uppercase text-fg-muted">
+                        en
                       </span>
                     ) : null}
-                  </span>
+                    {selected === m.id ? (
+                      <span
+                        className="shrink-0 rounded bg-accent/15 px-1 text-[10px] uppercase text-accent"
+                        data-testid={`settings-whisper-in-use-${m.id}`}
+                      >
+                        in use
+                      </span>
+                    ) : null}
+                    <span className="flex-1" />
+                    {download ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => void cancelWhisperModelDownload(m.id)}
+                        data-testid={`settings-whisper-stop-${m.id}`}
+                      >
+                        Stop
+                      </Button>
+                    ) : m.installed ? (
+                      <>
+                        <Button
+                          size="sm"
+                          variant={selected === m.id ? "secondary" : "outline"}
+                          disabled={selected === m.id}
+                          onClick={() => update({ whisperModel: m.id })}
+                          data-testid={`settings-whisper-use-${m.id}`}
+                        >
+                          Use
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          disabled={busy}
+                          onClick={() => void remove(m)}
+                          data-testid={`settings-whisper-delete-${m.id}`}
+                        >
+                          Delete
+                        </Button>
+                      </>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={!m.known}
+                        onClick={() => void downloadWhisperModel(m.id)}
+                        data-testid={`settings-whisper-download-${m.id}`}
+                      >
+                        {m.partialBytes > 0 ? "Resume" : "Download"}
+                      </Button>
+                    )}
+                  </div>
+                  <p className="mt-0.5 text-xs text-fg-muted">{status}</p>
                   {download ? (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => void cancelWhisperModelDownload(m.id)}
-                      data-testid={`settings-whisper-stop-${m.id}`}
-                    >
-                      Stop
-                    </Button>
-                  ) : m.installed ? (
-                    <>
-                      <Button
-                        size="sm"
-                        variant={selected === m.id ? "secondary" : "outline"}
-                        disabled={selected === m.id}
-                        onClick={() => update({ whisperModel: m.id })}
-                        data-testid={`settings-whisper-use-${m.id}`}
-                      >
-                        Use
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        disabled={busy}
-                        onClick={() => void remove(m)}
-                        data-testid={`settings-whisper-delete-${m.id}`}
-                      >
-                        Delete
-                      </Button>
-                    </>
-                  ) : (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={!m.known}
-                      onClick={() => void downloadWhisperModel(m.id)}
-                      data-testid={`settings-whisper-download-${m.id}`}
-                    >
-                      {m.partialBytes > 0 ? "Resume" : "Download"}
-                    </Button>
-                  )}
+                    <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-muted">
+                      <div
+                        className="h-full rounded-full bg-accent transition-[width]"
+                        style={{ width: `${download.percent}%` }}
+                      />
+                    </div>
+                  ) : null}
                 </li>
               );
             })}

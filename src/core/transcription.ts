@@ -29,6 +29,8 @@ export function formatEta(seconds: number | null | undefined): string | null {
 /** How long a finished run took, for the "done" toast. */
 export function formatElapsed(ms: number): string {
   const seconds = Math.max(0, Math.round(ms / 1000));
+  // "Transcribed in 0s" reads like a bug even when it is the truth.
+  if (seconds < 1) return "under a second";
   if (seconds < 60) return `${seconds}s`;
   const minutes = Math.floor(seconds / 60);
   const rest = seconds % 60;
