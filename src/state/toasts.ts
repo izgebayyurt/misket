@@ -122,4 +122,8 @@ export const TOAST_KEYS = {
   mediaTarget: "media-target",
   /** A time typed into the excerpt inspector that does not read as one. */
   mediaTimecode: "media-timecode",
+  /** "Align here" with no cursor in the transcript. */
+  alignHere: "align-here",
+  /** The linked recording will not play (a codec, a moved file). */
+  mediaPlayback: "media-playback",
 } as const;

@@ -17,8 +17,10 @@
 //!   a guess, but a monotone one, and it is what makes "play this excerpt"
 //!   work at the tail of a transcript whose timestamps stop early.
 //!
-//! Both directions are total functions of the anchor list: no anchors at all
-//! means "everything is at 0 ms", and position 0 is always 0 ms.
+//! Both directions are total functions of the anchor list: with no anchors at
+//! all everything is at 0 ms, and with no anchor of its own position 0 is at
+//! 0 ms. An anchor *at* position 0 is allowed and wins — a subtitle file whose
+//! first cue starts thirty seconds in says so.
 //!
 //! The mapping is kept **monotone**. Anchors arrive sorted by position (they
 //! are a primary key on `(document_id, pos)`), but a hand-set anchor can
@@ -50,7 +52,8 @@ impl Anchor {
     }
 }
 
-/// Sort by position, drop duplicates and anything negative, and clamp times
+/// Sort by position, drop duplicates and anything before the text, and clamp
+/// times
 /// so they never run backwards. The result is what both mappings read.
 ///
 /// Exposed because the storage layer normalizes the same way before writing:
@@ -59,7 +62,7 @@ pub fn prepare(anchors: &[Anchor]) -> Vec<Anchor> {
     let mut out: Vec<Anchor> = anchors
         .iter()
         .copied()
-        .filter(|a| a.pos > 0 && a.ms >= 0)
+        .filter(|a| a.pos >= 0 && a.ms >= 0)
         .collect();
     out.sort_by_key(|a| a.pos);
     out.dedup_by_key(|a| a.pos);
@@ -263,13 +266,7 @@ mod tests {
 
     #[test]
     fn anchors_are_sorted_deduplicated_and_never_run_backwards() {
-        let messy = anchors(&[
-            (200, 30_000),
-            (100, 10_000),
-            (150, 5_000),
-            (0, 999),
-            (-3, 1),
-        ]);
+        let messy = anchors(&[(200, 30_000), (100, 10_000), (150, 5_000), (-3, 1)]);
         let a = prepare(&messy);
         assert_eq!(a, anchors(&[(100, 10_000), (150, 10_000), (200, 30_000)]));
         // Preparing twice changes nothing.
@@ -285,6 +282,17 @@ mod tests {
         assert_eq!(pos_to_ms(&a, 130), 10_000);
         assert_eq!(ms_to_pos(&a, 10_000), 100);
         assert_eq!(ms_to_pos(&a, 12_000), 180);
+    }
+
+    #[test]
+    fn an_anchor_at_the_very_start_pushes_the_whole_document_back() {
+        // A subtitle file whose first cue begins half a minute in.
+        let a = anchors(&[(0, 30_000), (100, 40_000)]);
+        assert_eq!(pos_to_ms(&a, 0), 30_000);
+        assert_eq!(pos_to_ms(&a, 50), 35_000);
+        assert_eq!(ms_to_pos(&a, 30_000), 0);
+        assert_eq!(ms_to_pos(&a, 0), 0);
+        assert_eq!(ms_to_pos(&a, 35_000), 50);
     }
 
     #[test]

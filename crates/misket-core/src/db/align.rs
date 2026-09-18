@@ -118,9 +118,9 @@ fn record(
 /// answer.
 pub fn set(conn: &Connection, document_id: &str, pos: i64, ms: i64) -> Result<Vec<Anchor>> {
     let (doc, len) = text_document(conn, document_id)?;
-    if pos <= 0 || pos > len {
+    if pos < 0 || pos > len {
         return Err(AppError::Validation(format!(
-            "position {pos} is outside {:?} (length {len}); the start of a document is always 0 ms",
+            "position {pos} is outside {:?} (length {len})",
             doc.name
         )));
     }
@@ -428,7 +428,7 @@ mod tests {
             .summary
             .id;
         assert!(matches!(
-            set(&p.conn, &d, 0, 100),
+            set(&p.conn, &d, -1, 100),
             Err(AppError::Validation(_))
         ));
         assert!(matches!(

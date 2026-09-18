@@ -35,6 +35,25 @@ import { coderIdsOf } from "@/core/coders";
 import { useCoders } from "@/queries/coders";
 import { useSettings } from "@/state/settings";
 import { useTranscript } from "@/queries/transcripts";
+import {
+  useRemoveTranscriptAnchor,
+  useSetTranscriptAnchor,
+  useTranscriptAnchors,
+} from "@/queries/align";
+import { msToPos, posToMs } from "@/core/align";
+import { formatTimecode, unsupportedHint } from "@/core/media";
+import { extensionOf } from "@/core/importers";
+import { usePlayRequest } from "@/state/playRequest";
+import { keys } from "@/queries/keys";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { useMediaPlayback } from "./useMediaPlayback";
+import { TranscriptStrip } from "./TranscriptStrip";
 import { SelectionToolbar } from "./SelectionToolbar";
 import { ExcerptPopover } from "./ExcerptPopover";
 import { DocumentTitle } from "./DocumentTitle";
@@ -95,6 +114,20 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
   const lanesByCoder = useSettings((s) => s.settings.lanesByCoder);
   const { data: coders } = useCoders();
   const { data: transcript } = useTranscript(documentId);
+
+  // --- the linked recording -------------------------------------------------
+  const linkedMediaId = doc?.linkedMediaId ?? null;
+  const { data: linkedMedia } = useDocument(linkedMediaId);
+  const { data: storedAnchors } = useTranscriptAnchors(documentId, !!linkedMediaId);
+  const { data: mediaExcerpts } = useDocumentExcerpts(linkedMediaId);
+  const setAnchor = useSetTranscriptAnchor();
+  const removeAnchor = useRemoveTranscriptAnchor();
+  const [followPlayback, setFollowPlayback] = useState(true);
+  const qc = useQueryClient();
+  const playback = useMediaPlayback(linkedMediaId, {
+    durationMs: linkedMedia?.media?.durationMs ?? 0,
+    ready: !!linkedMedia,
+  });
 
   const text = doc?.text ?? "";
   const offsetMap = useMemo(() => buildOffsetMap(text), [text]);
@@ -192,6 +225,108 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
 
   const total = useMemo(() => codePointCount(offsetMap), [offsetMap]);
 
+  // --- alignment ------------------------------------------------------------
+  const anchors = useMemo(() => storedAnchors ?? [], [storedAnchors]);
+  const aligned = !!linkedMediaId && anchors.length > 0;
+
+  /** Where the playhead is in the text, in UTF-16 (DOM) offsets. */
+  const playheadU16 = useMemo(
+    () => (aligned ? cpToUtf16(offsetMap, msToPos(anchors, playback.positionMs)) : null),
+    [aligned, anchors, offsetMap, playback.positionMs],
+  );
+
+  /**
+   * The paragraph the recording is inside right now, by its `data-p`. The
+   * paragraphs are in order, so this is a binary search rather than a scan
+   * on every `timeupdate`.
+   */
+  const playingParagraph = useMemo(() => {
+    if (playheadU16 === null || paragraphs.length === 0) return null;
+    let lo = 0;
+    let hi = paragraphs.length - 1;
+    let best = 0;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      if (paragraphs[mid]!.start <= playheadU16) {
+        best = mid;
+        lo = mid + 1;
+      } else {
+        hi = mid - 1;
+      }
+    }
+    return paragraphs[best]?.start ?? null;
+  }, [paragraphs, playheadU16]);
+
+  /**
+   * The stretches of text that a coded stretch of the recording corresponds
+   * to, in UTF-16 offsets. Drawn as a faint band on the segments they cover —
+   * a CSS effect on the `span[data-s]` elements that are already there
+   * (`data-media`), never an element of its own, so the `.doc-text` contract
+   * holds.
+   */
+  const mediaRanges = useMemo(() => {
+    if (!aligned || !mediaExcerpts || !text) return [];
+    const out: { start: number; end: number }[] = [];
+    for (const e of mediaExcerpts) {
+      if (e.kind !== "video_range" || e.startPos === null || e.endPos === null) continue;
+      const start = cpToUtf16(offsetMap, msToPos(anchors, e.startPos));
+      const end = cpToUtf16(offsetMap, msToPos(anchors, e.endPos));
+      if (end > start) out.push({ start, end });
+    }
+    return out.sort((a, b) => a.start - b.start || a.end - b.end);
+  }, [aligned, anchors, mediaExcerpts, offsetMap, text]);
+
+  /** Seek the linked recording to the moment the text at `cp` was said. */
+  const seekToPos = useCallback(
+    (cp: number | null) => {
+      if (cp === null || !aligned) return;
+      playback.seekTo(posToMs(anchors, cp));
+    },
+    [aligned, anchors, playback],
+  );
+
+  // Keep the paragraph being read on screen, when the coder asked for it.
+  useEffect(() => {
+    if (!followPlayback || !playback.playing || playingParagraph === null) return;
+    const el = rootRef.current?.querySelector<HTMLElement>(`p[data-p="${playingParagraph}"]`);
+    el?.scrollIntoView({ block: "center", behavior: "smooth" });
+  }, [followPlayback, playback.playing, playingParagraph]);
+
+  // "Play this excerpt", from the inspector or the excerpt browser.
+  const stopAtRef = useRef<number | null>(null);
+  const playRequest = usePlayRequest((s) => s.request);
+  useEffect(() => {
+    if (!playRequest || playRequest.documentId !== documentId || !linkedMediaId) return;
+    usePlayRequest.getState().taken(playRequest.at);
+    stopAtRef.current = playRequest.endMs;
+    playback.seekTo(playRequest.startMs);
+    playback.play();
+    // Only when a new request arrives.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [documentId, linkedMediaId, playRequest]);
+
+  useEffect(() => {
+    const stopAt = stopAtRef.current;
+    if (stopAt === null || playback.positionMs < stopAt) return;
+    stopAtRef.current = null;
+    playback.pause();
+  }, [playback]);
+
+  /** A player that will not start: usually a codec this build cannot decode. */
+  const onPlaybackError = useCallback(() => {
+    void qc.invalidateQueries({ queryKey: keys.document(linkedMediaId ?? "") });
+    playback.setError(
+      unsupportedHint(
+        linkedMedia?.name ?? "This recording",
+        extensionOf(linkedMedia?.sourcePath ?? ""),
+      ),
+    );
+  }, [linkedMedia?.name, linkedMedia?.sourcePath, linkedMediaId, playback, qc]);
+
+  useEffect(() => {
+    if (playback.error) toast.error(new Error(playback.error), { key: TOAST_KEYS.mediaPlayback });
+  }, [playback.error]);
+
   /**
    * Map a viewport point to a code point offset in the document, using the
    * browser's caret hit-testing and the same `span[data-s]` contract that
@@ -238,6 +373,27 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
     if (u16 === null) return null;
     return utf16ToCp(offsetMap, Math.max(0, Math.min(u16, text.length)));
   }, [offsetMap, text.length]);
+
+  /** "Align here": the caret (or the selection's start) is heard now. */
+  const alignHere = useCallback(() => {
+    if (!linkedMediaId) return;
+    const ws = useWorkspace.getState();
+    const at =
+      ws.pendingSelection?.kind === "text" && ws.pendingSelection.documentId === documentId
+        ? ws.pendingSelection.start
+        : caretOffset();
+    if (at === null) {
+      toast.info("Put the cursor in the transcript where the recording is now, then align.", {
+        key: TOAST_KEYS.alignHere,
+      });
+      return;
+    }
+    const ms = playback.positionRef.current;
+    setAnchor
+      .mutateAsync({ documentId, pos: at, ms })
+      .then(() => toast.info(`Aligned this point with ${formatTimecode(ms)}.`))
+      .catch(toast.error);
+  }, [caretOffset, documentId, linkedMediaId, playback.positionRef, setAnchor]);
 
   // --- find in document -----------------------------------------------------
   const findResults = useMemo(
@@ -713,6 +869,43 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
     };
   }, [focusedBox, text]);
 
+  /**
+   * Where each alignment point sits on the page, so a tick can be drawn for
+   * it in the left gutter. Like the boundary handles, the ticks live in the
+   * scroll container rather than inside `.doc-text`, whose children may only
+   * be `span[data-s]` elements wrapping one text node.
+   */
+  const [ticks, setTicks] = useState<{ pos: number; ms: number; top: number }[]>([]);
+  useLayoutEffect(() => {
+    const root = rootRef.current;
+    const container = scrollRef.current;
+    if (!root || !container || anchors.length === 0 || !text) {
+      setTicks((prev) => (prev.length === 0 ? prev : []));
+      return;
+    }
+    const measure = () => {
+      const box = container.getBoundingClientRect();
+      const next: { pos: number; ms: number; top: number }[] = [];
+      for (const a of anchors) {
+        const u16 = cpToUtf16(offsetMap, a.pos);
+        const range = offsetsToRange(root, u16, Math.min(u16 + 1, text.length));
+        const rect = range?.getClientRects()[0];
+        if (!rect || rect.height === 0) continue;
+        next.push({ pos: a.pos, ms: a.ms, top: rect.top - box.top + container.scrollTop });
+      }
+      setTicks((prev) => (sameTicks(prev, next) ? prev : next));
+    };
+    measure();
+    const observer =
+      typeof ResizeObserver === "undefined" ? null : new ResizeObserver(() => measure());
+    observer?.observe(container);
+    window.addEventListener("resize", measure);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, [anchors, offsetMap, text]);
+
   /** Grow the current selection (or the focused excerpt) by one word. */
   const extendSelection = useCallback(
     (dir: "left" | "right") => {
@@ -783,6 +976,7 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
       jumpTop: () => jumpTo("top"),
       jumpBottom: () => jumpTo("bottom"),
       goToParagraph: () => setGoToOpen(true),
+      alignHere,
       // Escape peels one layer at a time: the go-to bar, the find bar, then
       // the selection, then the focus. (An open popover is closed by Radix
       // before this runs, and each bar's own input handles Escape locally
@@ -836,6 +1030,7 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
     goToOpen,
     closeGoTo,
     jumpTo,
+    alignHere,
     nudgeBoundary,
     splitFocused,
     mergeWith,
@@ -1014,10 +1209,26 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
     });
   }, [codes, documentId, excerptById, focusedId, setWeight]);
 
-  function onSegmentClick(e: React.MouseEvent, seg: Segment) {
-    if (seg.excerptIds.length === 0) return;
+  function onSegmentClick(e: React.MouseEvent, seg: Segment, paragraphStart: number) {
     const sel = window.getSelection();
     if (sel && !sel.isCollapsed) return; // a drag-selection, not a click
+    if (aligned) {
+      // In a transcript lined up with its recording, clicking seeks it:
+      // Ctrl/⌘+click to the exact word under the pointer, a plain click on
+      // text that carries no excerpt to the start of its paragraph. A plain
+      // click on coded text keeps its old meaning — cycling the excerpts
+      // there — which is the one place the two could have collided.
+      if (mod(e)) {
+        e.preventDefault();
+        seekToPos(offsetFromPoint(e.clientX, e.clientY));
+        return;
+      }
+      if (seg.excerptIds.length === 0) {
+        seekToPos(utf16ToCp(offsetMap, paragraphStart));
+        return;
+      }
+    }
+    if (seg.excerptIds.length === 0) return;
     // Where the click landed, so the popover can offer "Split here".
     const caret = offsetFromPoint(e.clientX, e.clientY);
     e.preventDefault();
@@ -1063,6 +1274,17 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
           onClose={closeGoTo}
         />
       ) : null}
+      {linkedMedia ? (
+        <TranscriptStrip
+          media={linkedMedia}
+          playback={playback}
+          followPlayback={followPlayback}
+          onFollowPlaybackChange={setFollowPlayback}
+          onAlignHere={alignHere}
+          onPlaybackError={onPlaybackError}
+          anchorCount={anchors.length}
+        />
+      ) : null}
       <div ref={scrollRef} className="relative min-h-0 flex-1 overflow-y-auto">
         <div
           className={cn("mx-auto max-w-3xl py-10 pr-10", showParagraphNumbers ? "pl-20" : "pl-10")}
@@ -1093,6 +1315,8 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
                 end={p.end}
                 text={p.text}
                 turn={turnByParagraph.get(p.start)}
+                mediaRanges={mediaRanges}
+                playing={playingParagraph === p.start && playback.playing}
                 excerpts={previewed}
                 colorById={laneColorById}
                 laneNoun={lanesByCoder ? "coders" : "codes"}
@@ -1103,6 +1327,30 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
             ))}
           </div>
         </div>
+        {ticks.map((tick) => (
+          <DropdownMenu key={tick.pos}>
+            <DropdownMenuTrigger
+              className="anchor-tick"
+              style={{ top: tick.top }}
+              title={`Aligned with ${formatTimecode(tick.ms)}`}
+              aria-label={`Alignment point at ${formatTimecode(tick.ms)}`}
+              data-testid="anchor-tick"
+            />
+            <DropdownMenuContent align="start">
+              <DropdownMenuItem onSelect={() => playback.seekTo(tick.ms)}>
+                Play from {formatTimecode(tick.ms)}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                danger
+                onSelect={() =>
+                  void removeAnchor.mutateAsync({ documentId, pos: tick.pos }).catch(toast.error)
+                }
+              >
+                Remove this alignment point
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ))}
         {handles && focusedId ? (
           <>
             <BoundaryHandle
@@ -1187,6 +1435,16 @@ interface HandleBoxes {
   end: HandleBox;
 }
 
+function sameTicks(
+  a: { pos: number; ms: number; top: number }[],
+  b: { pos: number; ms: number; top: number }[],
+): boolean {
+  return (
+    a.length === b.length &&
+    a.every((t, i) => t.pos === b[i]!.pos && t.ms === b[i]!.ms && t.top === b[i]!.top)
+  );
+}
+
 function sameBoxes(a: HandleBoxes | null, b: HandleBoxes): boolean {
   if (!a) return false;
   return (["start", "end"] as const).every(
@@ -1235,14 +1493,37 @@ interface ParagraphProps {
   flashId: string | null;
   /** Set when this paragraph opens a speaker turn and the gutter is on. */
   turn?: { speaker: string; time: string | null; cuts: number[] };
-  onSegmentClick: (e: React.MouseEvent, seg: Segment) => void;
+  /**
+   * Stretches of the text (UTF-16) that a coded stretch of the linked
+   * recording maps onto. They break segments like a turn label does, and
+   * the segments inside one are marked `data-media` for CSS to band.
+   */
+  mediaRanges: { start: number; end: number }[];
+  /** The recording is being read here right now. */
+  playing: boolean;
+  onSegmentClick: (e: React.MouseEvent, seg: Segment, paragraphStart: number) => void;
 }
 
 const Paragraph = memo(function Paragraph(p: ParagraphProps) {
   const cuts = p.turn?.cuts;
+  /** The stretches of a coded recording that reach into this paragraph. */
+  const bands = useMemo(
+    () => p.mediaRanges.filter((r) => r.start < p.end && r.end > p.start),
+    [p.end, p.mediaRanges, p.start],
+  );
+  // Segments break at a turn label's ends and at a band's ends alike, so a
+  // band can be a CSS effect on whole segments rather than an element.
+  const allCuts = useMemo(() => {
+    if (bands.length === 0) return cuts;
+    const out = cuts ? [...cuts] : [];
+    for (const b of bands) {
+      out.push(b.start, b.end);
+    }
+    return out;
+  }, [bands, cuts]);
   const segments = useMemo(
-    () => segmentParagraph(p.start, p.end, p.excerpts, cuts),
-    [p.start, p.end, p.excerpts, cuts],
+    () => segmentParagraph(p.start, p.end, p.excerpts, allCuts),
+    [p.start, p.end, p.excerpts, allCuts],
   );
   // Where the speaker label ends: every segment before it is gutter, the rest
   // is what was said. `cuts` always ends at the label's own end.
@@ -1262,6 +1543,7 @@ const Paragraph = memo(function Paragraph(p: ParagraphProps) {
       data-turn={p.turn?.speaker}
       data-time={p.turn?.time ?? undefined}
       className={cn(
+        p.playing && "playing",
         p.turn && "turn",
         // Two label segments already put the timestamp on its own line; with
         // one, `data-time` draws it as a pseudo-element, which is not a DOM
@@ -1282,6 +1564,9 @@ const Paragraph = memo(function Paragraph(p: ParagraphProps) {
             data-s={seg.start}
             data-x={seg.excerptIds.length ? seg.excerptIds.join(" ") : undefined}
             data-n={n}
+            data-media={
+              bands.some((b) => b.start <= seg.start && b.end >= seg.end) ? "" : undefined
+            }
             className={cn(
               "seg",
               // Part of the speaker label: still a span[data-s] with one text
@@ -1291,7 +1576,7 @@ const Paragraph = memo(function Paragraph(p: ParagraphProps) {
               flash && "flash",
             )}
             style={style as React.CSSProperties}
-            onClick={(e) => p.onSegmentClick(e, seg)}
+            onClick={(e) => p.onSegmentClick(e, seg, p.start)}
             title={
               seg.codeIds.length > MAX_LANES
                 ? `+${seg.codeIds.length - MAX_LANES} more ${p.laneNoun}`
@@ -1313,9 +1598,17 @@ function areParagraphPropsEqual(a: ParagraphProps, b: ParagraphProps): boolean {
     a.end !== b.end ||
     a.text !== b.text ||
     a.colorById !== b.colorById ||
-    a.laneNoun !== b.laneNoun
+    a.laneNoun !== b.laneNoun ||
+    a.playing !== b.playing
   )
     return false;
+  // A band that reaches into this paragraph changes where its segments break.
+  const bands = (list: { start: number; end: number }[]) =>
+    list
+      .filter((r) => r.start < b.end && r.end > b.start)
+      .map((r) => `${r.start}-${r.end}`)
+      .join();
+  if (bands(a.mediaRanges) !== bands(b.mediaRanges)) return false;
   // Turning the gutter on or off, or re-reading the document with another
   // transcript format, changes where the segments break.
   if (a.turn?.speaker !== b.turn?.speaker || a.turn?.time !== b.turn?.time) return false;
