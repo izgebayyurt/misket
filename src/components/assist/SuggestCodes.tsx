@@ -82,10 +82,18 @@ export function SuggestCodes({
   }, [passage, codes !== undefined]);
 
   return (
-    <div className="rounded-md border border-border bg-panel p-2" data-testid="suggest-codes">
+    <div
+      role="region"
+      aria-labelledby="suggest-codes-heading"
+      className="rounded-md border border-border bg-panel p-2"
+      data-testid="suggest-codes"
+    >
       <div className="mb-1.5 flex items-center gap-1.5">
         <Sparkles className="size-3.5 text-accent" />
-        <span className="flex-1 text-[11px] font-semibold uppercase tracking-wide text-fg-muted">
+        <span
+          id="suggest-codes-heading"
+          className="flex-1 text-[11px] font-semibold uppercase tracking-wide text-fg-muted"
+        >
           Suggestions
         </span>
         {draft.busy ? (

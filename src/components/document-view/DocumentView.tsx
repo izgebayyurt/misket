@@ -1532,6 +1532,11 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
           />
         ) : null}
         {suggesting ? (
+          // This is a positioning shell, not a widget of its own: the
+          // mousedown handler only stops a click here from stealing the text
+          // selection underneath, and the real content and roles are
+          // SuggestCodes' own (a labeled region of real buttons).
+          // eslint-disable-next-line jsx-a11y/no-static-element-interactions
           <div
             className="absolute z-20 w-80 max-w-[90%]"
             style={{ top: suggesting.top + 30, left: suggesting.left }}
