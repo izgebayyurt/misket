@@ -74,6 +74,39 @@ keyboard-friendly interface without a subscription.
   Excerpts show their `[1:02.4–1:09.0]` timecode with the frame captured at
   the in-point (or the waveform slice, for audio), and clicking one in the
   browser jumps to the document and seeks there.
+- **Transcription (offline)**: "Transcribe…" on a recording — its row menu or
+  the player's toolbar — turns it into a text document with
+  [Whisper](https://github.com/ggml-org/whisper.cpp), running entirely on your
+  machine. Nothing is uploaded, and no model is bundled: Settings →
+  Transcription lists the ggml models and downloads the one you choose, once,
+  into the app's data folder. Pick a language or let it detect one, optionally
+  translate to English, and choose whether each paragraph opens with its
+  `[mm:ss]` timestamp and how much recording goes into a paragraph. The run
+  happens in the background with a progress bar and a Stop button; the result
+  arrives as `<recording> (transcript)`, one paragraph per segment, which
+  undoes like any other import and is picked up by the transcript and speaker
+  machinery above.
+
+  | Model              | Size    | Notes                                              |
+  | ------------------ | ------- | -------------------------------------------------- |
+  | Tiny / Tiny (en)   | 75 MiB  | Fastest, rough — enough to see whether this works   |
+  | Base / Base (en)   | 142 MiB | Quick; usable for clean, close-miked speech        |
+  | Small / Small (en) | 466 MiB | The usual choice for interview audio               |
+  | Medium             | 1.5 GiB | Better on accents and crosstalk; several times slower |
+  | Large v3 Turbo     | 1.5 GiB | The best on offer, and nearly as fast as Medium    |
+
+  Each download is checked against the SHA-1 whisper.cpp publishes, resumes if
+  it is interrupted, and can be deleted again. On a machine with no network,
+  copy a `ggml-*.bin` across and use "Add model file…". Transcription uses one
+  fewer thread than your machine has by default.
+
+  **Audio needs nothing else installed.** Misket decodes mp3, wav, m4a, aac,
+  ogg, flac — and the audio track of most mp4, m4v, mov, mkv and webm — on its
+  own. For a video container it cannot open it falls back to `ffmpeg` on your
+  `PATH`, so **video transcription may need ffmpeg installed**; Settings says
+  so when it cannot find one. Transcription ships as an optional build feature
+  (`whisper`, on by default); a build made without it says so in place of the
+  dialog.
 - **Recordings stay on disk**: an interview is not copied into the project
   file — a `.misket` with ten hours of tape coded in it is still small enough
   to email. Misket remembers where each file is, warns when one has moved, and
@@ -314,7 +347,8 @@ and published.
 ## Your data
 
 Your project is a `.misket` file (a SQLite database) on your own disk; nothing
-leaves your computer. Before a destructive change — deleting a document,
+leaves your computer. The only thing Misket ever downloads on purpose is a
+transcription model, and only when you press Download in Settings. Before a destructive change — deleting a document,
 deleting a code that has excerpts, merging one code into another, or importing
 a codebook — Misket
 writes a timestamped copy into a `<project name>.backups/` folder next to the
@@ -367,6 +401,9 @@ that runs before either is sent.
 
 Prerequisites: Node 22, pnpm 10, Rust stable, and the
 [Tauri prerequisites](https://tauri.app/start/prerequisites/) for your OS.
+Transcription builds whisper.cpp from source, so a C++ toolchain and CMake
+are needed too (both come with the Tauri prerequisites on macOS and Windows;
+on Debian/Ubuntu, `sudo apt install cmake build-essential`).
 
 ```sh
 pnpm install
@@ -374,6 +411,14 @@ pnpm tauri dev          # run the app with hot reload
 pnpm check              # lint + typecheck + vitest
 cargo test --workspace  # database and domain logic tests
 pnpm tauri build        # installable bundle for this platform
+
+# Transcription is an optional feature, on by default. To build without it
+# (no CMake, no C++ toolchain, no Transcribe action):
+cargo build -p misket --no-default-features
+cargo test  -p misket --no-default-features
+
+# The one test that needs a real model is skipped unless you point it at one:
+MISKET_WHISPER_MODEL=~/models/ggml-tiny.en.bin cargo test -p misket
 ```
 
 ### Setting up on macOS from scratch
