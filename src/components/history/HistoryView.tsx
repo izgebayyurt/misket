@@ -373,7 +373,7 @@ export function HistoryView() {
           {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
           <div
             ref={listRef}
-            className="min-w-0 flex-1 overflow-auto outline-none"
+            className="min-w-0 flex-1 overflow-auto outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus"
             tabIndex={0}
             onKeyDown={onKeyDown}
             aria-label="History steps"
