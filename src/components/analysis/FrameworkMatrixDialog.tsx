@@ -13,7 +13,7 @@ type RowMode = "all" | "set" | "descriptor";
 type ColumnMode = "codes" | "set";
 
 const SELECT =
-  "h-8 w-full rounded-md border border-border bg-panel px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-focus";
+  "h-8 w-full rounded-md border border-border-strong bg-panel px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-focus";
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (

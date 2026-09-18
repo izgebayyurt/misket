@@ -65,7 +65,7 @@ export function QueryBuilder({
         <PopoverTrigger asChild>
           <button
             className={cn(
-              "flex max-w-64 items-center gap-1 rounded-md border border-border px-2 py-1 text-xs hover:bg-muted",
+              "flex max-w-64 items-center gap-1 rounded-md border border-border-strong px-2 py-1 text-xs hover:bg-muted",
               query && "border-accent bg-accent/10 text-fg",
             )}
             title={query ? describeQuery(query, codeName) : "Build a Boolean or proximity query"}
@@ -197,14 +197,14 @@ function QueryEditor({
       </ol>
       <div className="flex gap-2 text-xs">
         <button
-          className="flex items-center gap-1 rounded border border-border px-1.5 py-0.5 hover:bg-muted"
+          className="flex items-center gap-1 rounded border border-border-strong px-1.5 py-0.5 hover:bg-muted"
           onClick={() => setDraft(addTerm(draft, codeRef("")))}
           data-testid="add-query-code"
         >
           <Plus className="size-3" /> Code
         </button>
         <button
-          className="flex items-center gap-1 rounded border border-border px-1.5 py-0.5 hover:bg-muted"
+          className="flex items-center gap-1 rounded border border-border-strong px-1.5 py-0.5 hover:bg-muted"
           onClick={() =>
             setDraft(addTerm(draft, { op: "or", terms: [codeRef(""), codeRef("")], within: null }))
           }

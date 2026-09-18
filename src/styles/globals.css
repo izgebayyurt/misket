@@ -9,10 +9,18 @@
   --fg: #1f1d1a;
   --fg-muted: #6b675f;
   --border: #e4e0d6;
+  /* Same hue as --border, darkened to clear WCAG 1.4.11's 3:1 for the
+     boundary of an actual control (inputs, the outline button, selects) —
+     see src/core/contrast.test.ts. Plain dividers keep the fainter --border:
+     they separate content, they are not themselves a control to identify. */
+  --border-strong: #948561;
   --accent: #b8571c;
   --accent-fg: #ffffff;
   --focus: #b8571c;
   --danger: #b3261e;
+  /* Log level "warn" (LogViewerDialog): Tailwind's stock amber-500 fails
+     4.5:1 on this background; this is tuned to clear it. */
+  --warn: #915f08;
   --radius: 8px;
   /* Overridden on <html> by src/state/settings.ts once settings load. */
   --doc-font-size: 17px;
@@ -26,10 +34,12 @@
   --fg: #ece8df;
   --fg-muted: #a39e93;
   --border: #38362f;
+  --border-strong: #7d7869;
   --accent: #e08a4a;
   --accent-fg: #1b1a18;
   --focus: #e08a4a;
   --danger: #ff6f61;
+  --warn: #f5b547;
 }
 
 @theme inline {
@@ -39,10 +49,12 @@
   --color-fg: var(--fg);
   --color-fg-muted: var(--fg-muted);
   --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
   --color-accent: var(--accent);
   --color-accent-fg: var(--accent-fg);
   --color-focus: var(--focus);
   --color-danger: var(--danger);
+  --color-warn: var(--warn);
   --radius-md: var(--radius);
   --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-serif: "Newsreader", "Iowan Old Style", Georgia, serif;
@@ -241,6 +253,13 @@ textarea {
 
 .seg.flash {
   animation: seg-flash 1.2s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* The jumped-to excerpt still gets the `.focused` outline; skip the pulse. */
+  .seg.flash {
+    animation: none;
+  }
 }
 
 @keyframes seg-flash {

@@ -174,6 +174,11 @@ export function AutoCodeDialog({ hits, onClose }: { hits: SearchHit[]; onClose: 
               {SCOPES.map((s) => (
                 <label
                   key={s.value}
+                  // The label's text lives two spans deep, past what
+                  // eslint-plugin-jsx-a11y's static check can see; naming it
+                  // explicitly also keeps the announced name to the scope's
+                  // label, not the hint below it.
+                  aria-label={s.label}
                   className={cn(
                     "flex cursor-pointer items-start gap-2 rounded-md border border-border px-2.5 py-1.5",
                     scope === s.value && "border-accent bg-muted",

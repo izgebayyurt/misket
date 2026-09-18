@@ -92,17 +92,18 @@ export function AssistSettingsSection() {
         it. With nothing configured below, nothing ever leaves this computer.
       </p>
 
-      <label className="mb-1 block text-sm" htmlFor="assist-provider">
+      <span className="mb-1 block text-sm" id="assist-provider-label">
         Provider
-      </label>
-      <div className="flex gap-1" role="radiogroup" aria-label="Assistance provider">
+      </span>
+      <div className="flex gap-1" role="radiogroup" aria-labelledby="assist-provider-label">
         {PROVIDERS.map((p) => (
           <Button
             key={p.value}
             type="button"
             size="sm"
             variant={settings.provider === p.value ? "default" : "outline"}
-            aria-pressed={settings.provider === p.value}
+            role="radio"
+            aria-checked={settings.provider === p.value}
             onClick={() => patch({ provider: p.value })}
             data-testid={`assist-provider-${p.value}`}
           >

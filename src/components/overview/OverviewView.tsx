@@ -222,7 +222,10 @@ function ProjectNameHeading({
     );
   }
   return (
-    <h1
+    // A heading can't also carry an interactive role (h1 stays a heading for
+    // screen-reader navigation); the button role, its handlers and the
+    // visible focus ring live on this wrapper instead.
+    <div
       tabIndex={0}
       role="button"
       title="Click or press F2 to rename"
@@ -233,11 +236,11 @@ function ProjectNameHeading({
           onStartEdit();
         }
       }}
-      className="inline-block max-w-full truncate rounded-md font-serif text-2xl font-medium text-fg outline-none focus-visible:ring-2 focus-visible:ring-focus"
+      className="inline-block max-w-full truncate rounded-md outline-none focus-visible:ring-2 focus-visible:ring-focus"
       data-testid="project-name-heading"
     >
-      {name}
-    </h1>
+      <h1 className="truncate font-serif text-2xl font-medium text-fg">{name}</h1>
+    </div>
   );
 }
 

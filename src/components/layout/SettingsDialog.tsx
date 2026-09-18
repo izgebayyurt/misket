@@ -33,17 +33,21 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
       <DialogContent title="Settings" description="Changes apply immediately.">
         <div className="space-y-5">
           <section>
-            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-fg-muted">
+            <div
+              id="settings-theme-label"
+              className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-fg-muted"
+            >
               Theme
-            </label>
-            <div className="flex gap-1" role="radiogroup" aria-label="Theme">
+            </div>
+            <div className="flex gap-1" role="radiogroup" aria-labelledby="settings-theme-label">
               {THEME_OPTIONS.map((o) => (
                 <Button
                   key={o.value}
                   type="button"
                   size="sm"
                   variant={settings.theme === o.value ? "default" : "outline"}
-                  aria-pressed={settings.theme === o.value}
+                  role="radio"
+                  aria-checked={settings.theme === o.value}
                   onClick={() => update({ theme: o.value })}
                 >
                   {o.label}
@@ -300,7 +304,13 @@ function DiagnosticsSection({ onOpenLogs }: { onOpenLogs: () => void }) {
         View logs…
       </Button>
 
-      <label className="mt-3 flex items-start gap-2 text-sm">
+      <label
+        className="mt-3 flex items-start gap-2 text-sm"
+        // The name lives two spans deep, past what eslint-plugin-jsx-a11y's
+        // static check can see; naming it explicitly also keeps the
+        // announced name to the setting, not the paragraph below it.
+        aria-label="Send anonymous crash reports"
+      >
         <input
           type="checkbox"
           className="mt-0.5"
@@ -348,7 +358,8 @@ function DiagnosticsSection({ onOpenLogs }: { onOpenLogs: () => void }) {
                   type="button"
                   size="sm"
                   variant={settings.reportFormat === o.value ? "default" : "outline"}
-                  aria-pressed={settings.reportFormat === o.value}
+                  role="radio"
+                  aria-checked={settings.reportFormat === o.value}
                   onClick={() => update({ reportFormat: o.value })}
                 >
                   {o.label}

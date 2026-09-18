@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 const KINDS: DescriptorKind[] = ["text", "number", "choice", "date"];
 
 export const selectClass =
-  "h-8 w-full rounded-md border border-border bg-panel px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-50";
+  "h-8 w-full rounded-md border border-border-strong bg-panel px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-50";
 
 /** Add or edit one descriptor field: name, kind and (for choice) its options. */
 export function DescriptorFieldForm({
