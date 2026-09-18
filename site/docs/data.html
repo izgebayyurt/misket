@@ -41,6 +41,17 @@
         positions stay valid for the life of the project.
       </p>
 
+      <p>
+        One thing is deliberately outside it: <strong>audio and video</strong>. A two-hour interview
+        is gigabytes, and a project file gets opened, copied and backed up whole, so Misket
+        remembers where each recording is on disk rather than swallowing it. Everything you code
+        from a recording — the timecodes, the codes, the memos — is inside the
+        <code>.misket</code> as usual. If a recording moves, its document shows a warning and offers
+        <em>Relink…</em>; if you would rather keep everything together, the import dialog can copy
+        the files into a <code>&lt;project&gt;.media/</code> folder beside the project. Images are
+        small enough to go inside the file, and do.
+      </p>
+
       <h2>Backups</h2>
       <p>
         Before a destructive change — deleting a document, deleting a code that has excerpts,
@@ -207,7 +218,10 @@
         Misket does not phone home, does not require an account, and does not upload your documents
         or coding anywhere as part of normal use. The only network activity related to the app
         itself is you downloading a release or, in future, an update check you would be asked about
-        explicitly. Any AI-assisted features on the
+        explicitly. While the app is running it does open one listener on <code>127.0.0.1</code>, on
+        a port the system picks, because a webview will not play a recording from anywhere else; it
+        is reachable only from your own machine, answers only requests carrying a random token made
+        fresh each time the app starts, and stops when you quit. Any AI-assisted features on the
         <a href="https://github.com/izgebayyurt/misket/blob/main/ROADMAP.md">roadmap</a> are planned
         to be opt-in and to use a key or model you supply yourself — never on by default.
       </p>
