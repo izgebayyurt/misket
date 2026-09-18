@@ -13,6 +13,8 @@ import {
 } from "@/queries/project";
 import { toast } from "@/state/toasts";
 import { isAppError } from "@/api/client";
+import { UpdateBanner } from "@/components/layout/UpdateBanner";
+import { useUpdateCheckOnMount } from "@/hooks/useUpdateCheck";
 
 const FILTER = [{ name: "Misket project", extensions: ["misket"] }];
 
@@ -24,6 +26,7 @@ export function StartScreen() {
   const removeRecent = useRemoveRecent();
   const [newName, setNewName] = useState("");
   const [creating, setCreating] = useState(false);
+  useUpdateCheckOnMount();
 
   async function handleOpen() {
     try {
@@ -71,62 +74,67 @@ export function StartScreen() {
   }
 
   return (
-    <div className="flex h-full items-center justify-center">
-      <div className="w-[560px] max-w-[90vw]">
-        <div className="mb-8">
-          <h1 className="font-serif text-4xl font-medium tracking-tight">Misket</h1>
-          <p className="mt-1 text-fg-muted">Qualitative coding, on your own machine.</p>
-        </div>
+    <div className="flex h-full flex-col">
+      <UpdateBanner />
+      <div className="flex flex-1 items-center justify-center">
+        <div className="w-[560px] max-w-[90vw]">
+          <div className="mb-8">
+            <h1 className="font-serif text-4xl font-medium tracking-tight">Misket</h1>
+            <p className="mt-1 text-fg-muted">Qualitative coding, on your own machine.</p>
+          </div>
 
-        <div className="mb-4 flex gap-2">
-          <Button size="lg" onClick={() => setCreating(true)} data-testid="new-project">
-            <Plus /> New project
-          </Button>
-          <Button size="lg" variant="outline" onClick={handleOpen} data-testid="open-project">
-            <FolderOpen /> Open…
-          </Button>
-        </div>
+          <div className="mb-4 flex gap-2">
+            <Button size="lg" onClick={() => setCreating(true)} data-testid="new-project">
+              <Plus /> New project
+            </Button>
+            <Button size="lg" variant="outline" onClick={handleOpen} data-testid="open-project">
+              <FolderOpen /> Open…
+            </Button>
+          </div>
 
-        <div className="mb-8">
-          <Button
-            variant="ghost"
-            onClick={handleTrySample}
-            disabled={createSample.isPending}
-            data-testid="try-sample"
-          >
-            {createSample.isPending ? <Loader2 className="animate-spin" /> : <Sparkles />}
-            {createSample.isPending
-              ? "Setting up the sample project…"
-              : "Try Misket with sample data"}
-          </Button>
-        </div>
+          <div className="mb-8">
+            <Button
+              variant="ghost"
+              onClick={handleTrySample}
+              disabled={createSample.isPending}
+              data-testid="try-sample"
+            >
+              {createSample.isPending ? <Loader2 className="animate-spin" /> : <Sparkles />}
+              {createSample.isPending
+                ? "Setting up the sample project…"
+                : "Try Misket with sample data"}
+            </Button>
+          </div>
 
-        <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-fg-muted">Recent</h2>
-        {recent.data && recent.data.length > 0 ? (
-          <ul className="divide-y divide-border rounded-md border border-border bg-panel">
-            {recent.data.map((r) => (
-              <li key={r.path} className="group flex items-center gap-3 px-3 py-2">
-                <button
-                  className="flex-1 truncate text-left hover:text-accent"
-                  onClick={() => handleOpenRecent(r.path)}
-                  title={r.path}
-                >
-                  <div className="font-medium">{r.name}</div>
-                  <div className="truncate text-xs text-fg-muted">{r.path}</div>
-                </button>
-                <button
-                  className="rounded p-1 text-fg-muted opacity-0 hover:bg-muted group-hover:opacity-100"
-                  onClick={() => removeRecent.mutate(r.path)}
-                  aria-label="Remove from recent"
-                >
-                  <X className="size-4" />
-                </button>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="text-sm text-fg-muted">No recent projects yet.</p>
-        )}
+          <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-fg-muted">
+            Recent
+          </h2>
+          {recent.data && recent.data.length > 0 ? (
+            <ul className="divide-y divide-border rounded-md border border-border bg-panel">
+              {recent.data.map((r) => (
+                <li key={r.path} className="group flex items-center gap-3 px-3 py-2">
+                  <button
+                    className="flex-1 truncate text-left hover:text-accent"
+                    onClick={() => handleOpenRecent(r.path)}
+                    title={r.path}
+                  >
+                    <div className="font-medium">{r.name}</div>
+                    <div className="truncate text-xs text-fg-muted">{r.path}</div>
+                  </button>
+                  <button
+                    className="rounded p-1 text-fg-muted opacity-0 hover:bg-muted group-hover:opacity-100"
+                    onClick={() => removeRecent.mutate(r.path)}
+                    aria-label="Remove from recent"
+                  >
+                    <X className="size-4" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-fg-muted">No recent projects yet.</p>
+          )}
+        </div>
       </div>
 
       <Dialog open={creating} onOpenChange={setCreating}>
