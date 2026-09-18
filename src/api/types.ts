@@ -79,6 +79,71 @@ export interface AppSettings {
    * bundled `eng`. Each one needs a matching `<code>.traineddata` file
    * dropped into the app's tessdata folder (Settings shows the path). */
   ocrLanguages: string[];
+  /** AI assistance, all of it off until switched on. The API key is not here
+   * and never will be: it lives in the OS credential store. */
+  assist: AssistSettings;
+}
+
+/** Which shape of API the configured provider speaks. */
+export type AssistProvider = "anthropic" | "openAiCompatible";
+
+/** The three assisted features, and where to ask. */
+export interface AssistSettings {
+  provider: AssistProvider;
+  /** Empty means the provider's own default (Anthropic), or unset. */
+  baseUrl: string;
+  model: string;
+  /** Suggest codes for a selected passage. */
+  suggestCodes: boolean;
+  /** Draft a memo from the excerpts under one code. */
+  summariseCode: boolean;
+  /** Draft a definition for a code from its excerpts. */
+  suggestDefinition: boolean;
+  /** The ceiling on one reply. */
+  maxOutputTokens: number;
+}
+
+/** Which feature a request is for; the backend checks the matching toggle. */
+export type AssistFeature =
+  "suggestCodes" | "summariseCode" | "suggestDefinition" | "testConnection";
+
+/** What Settings needs to know without being told any secrets. */
+export interface AssistStatus {
+  hasKey: boolean;
+  /** The key came from `MISKET_ASSIST_API_KEY` rather than the keychain. */
+  keyFromEnv: boolean;
+  /** False when this machine has no usable credential store: a key can still
+   * be typed in, it just will not survive a restart. */
+  keychainAvailable: boolean;
+  anthropicModels: string[];
+  ollamaBaseUrl: string;
+  /** Null when a request could be made right now; otherwise why not. */
+  blocked: string | null;
+}
+
+/** One finished answer, with what to record on anything accepted from it. */
+export interface AssistReply {
+  text: string;
+  provider: string;
+  model: string;
+}
+
+/** One line of "what was sent": sizes and times, never content. */
+export interface AssistLogEntry {
+  at: string;
+  feature: string;
+  provider: string;
+  model: string;
+  requestBytes: number;
+  responseBytes: number;
+  /** `ok`, `cancelled`, or a short reason. */
+  outcome: string;
+}
+
+/** The note recorded on a change the person accepted from a draft. */
+export interface AssistedRef {
+  provider: string;
+  model: string;
 }
 
 export type DocumentKind = "text" | "image" | "video";

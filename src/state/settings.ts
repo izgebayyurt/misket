@@ -18,6 +18,16 @@ export const DEFAULT_SETTINGS: AppSettings = {
   coderColor: null,
   lanesByCoder: false,
   ocrLanguages: [],
+  // Assistance is off, and stays off unless somebody turns it on.
+  assist: {
+    provider: "anthropic",
+    baseUrl: "",
+    model: "claude-sonnet-5",
+    suggestCodes: false,
+    summariseCode: false,
+    suggestDefinition: false,
+    maxOutputTokens: 1200,
+  },
 };
 
 const SAVE_DEBOUNCE_MS = 400;

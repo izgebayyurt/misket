@@ -2,6 +2,7 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ColorPicker } from "@/components/codebook/ColorSwatch";
+import { AssistSettingsSection } from "@/components/assist/AssistSettingsSection";
 import { useSettings } from "@/state/settings";
 import { useTessdataLanguages } from "@/queries/ocr";
 import type { Theme } from "@/api/types";
@@ -139,6 +140,8 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
           </section>
 
           <OcrLanguagesSection />
+
+          <AssistSettingsSection />
 
           <section>
             <h3 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-fg-muted">

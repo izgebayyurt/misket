@@ -41,9 +41,12 @@ describe("codebookLines", () => {
       entry("c1", "Care > Waiting", { description: "Delays", exclusion: "Not travel time" }),
     ]);
     expect(lines).toBe(
-      ["- id: c1", "  name: Care > Waiting", "  means: Delays", "  exclude when: Not travel time"].join(
-        "\n",
-      ),
+      [
+        "- id: c1",
+        "  name: Care > Waiting",
+        "  means: Delays",
+        "  exclude when: Not travel time",
+      ].join("\n"),
     );
   });
 });

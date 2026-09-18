@@ -4,6 +4,7 @@ import { ExcerptInspector } from "@/components/excerpts/ExcerptInspector";
 import { MemoList } from "@/components/memos/MemoList";
 import { DocumentDescriptors } from "@/components/descriptors/DocumentDescriptors";
 import { CodeDefinition } from "@/components/codebook/CodeDefinition";
+import { SummariseCodeButton } from "@/components/assist/SummariseCode";
 import { CodeHistory } from "@/components/activity/HistoryTimeline";
 import { useDocuments } from "@/queries/documents";
 import { useCodeTree } from "@/queries/codes";
@@ -91,7 +92,12 @@ export function RightPanel() {
             <DocumentDescriptors documentId={documentId} />
           ) : null}
           {effectiveScope === "code" && selectedCodeId ? (
-            <CodeDefinition codeId={selectedCodeId} />
+            <>
+              <CodeDefinition codeId={selectedCodeId} />
+              <div className="flex justify-end px-3 pt-2">
+                <SummariseCodeButton codeId={selectedCodeId} />
+              </div>
+            </>
           ) : null}
           <MemoList
             target={target}

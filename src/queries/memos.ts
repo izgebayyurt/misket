@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as api from "@/api/memos";
-import type { Memo, MemoTarget } from "@/api/types";
+import type { AssistedRef, Memo, MemoTarget } from "@/api/types";
 import { keys } from "./keys";
 
 /** Id of the memo the editor should focus when it mounts (set on create). */
@@ -45,12 +45,15 @@ export function useCreateMemo() {
       target,
       title = "",
       body = "",
+      assisted,
     }: {
       target: MemoTarget;
       title?: string;
       body?: string;
+      /** Set when the body started life as a draft the person accepted. */
+      assisted?: AssistedRef;
     }) => {
-      const memo = await api.createMemo(normalizeTarget(target), title, body);
+      const memo = await api.createMemo(normalizeTarget(target), title, body, assisted);
       pendingMemoFocus.id = memo.id;
       return memo;
     },

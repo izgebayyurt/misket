@@ -3,6 +3,7 @@ import * as api from "@/api/excerpts";
 import * as codesApi from "@/api/codes";
 import type {
   ApplyCodesInput,
+  AssistedRef,
   AutoCodeHit,
   ExcerptFilter,
   ExcerptSnapshot,
@@ -79,8 +80,8 @@ function unfocus(...ids: string[]) {
 export function useApplyCodes() {
   const invalidate = useInvalidateExcerpts();
   return useMutation({
-    mutationFn: async (input: ApplyCodesInput) => {
-      const result = await api.applyCodes(input);
+    mutationFn: async ({ assisted, ...input }: ApplyCodesInput & { assisted?: AssistedRef }) => {
+      const result = await api.applyCodes(input, assisted);
       rememberApplied(input.codeIds);
       return result;
     },

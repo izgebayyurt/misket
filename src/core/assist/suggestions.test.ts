@@ -72,9 +72,9 @@ describe("parseSuggestions", () => {
   });
 
   it("accepts a single suggestion returned bare", () => {
-    expect(parseSuggestions('{"codeId":"c1","confidence":0.5,"rationale":"x"}', known)).toHaveLength(
-      1,
-    );
+    expect(
+      parseSuggestions('{"codeId":"c1","confidence":0.5,"rationale":"x"}', known),
+    ).toHaveLength(1);
   });
 
   it("keeps the same code only once", () => {
