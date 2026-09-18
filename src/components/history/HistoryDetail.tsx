@@ -1,4 +1,4 @@
-import { BookMarked, Crosshair, FileText, GitFork, Layers } from "lucide-react";
+import { AudioLines, BookMarked, Crosshair, FileText, GitFork, Layers } from "lucide-react";
 import type { HistoryRef } from "@/api/types";
 import { absoluteTime, kindLabel, relativeTime } from "@/core/activity";
 import { detailFields } from "@/core/historyDetail";
@@ -221,6 +221,10 @@ function RefRow({ ref_ }: { ref_: HistoryRef }) {
 
   if (ref_.kind === "excerpt") {
     const documentId = ref_.documentId ?? null;
+    // A coded stretch of a recording is a time, not a passage: its label is
+    // already `[0:12.0–0:19.5]` and its offsets are milliseconds, so the jump
+    // lands on the timeline rather than in a paragraph.
+    const isMedia = ref_.excerptKind === "video_range";
     return (
       <div className="min-w-0">
         <blockquote
@@ -245,8 +249,12 @@ function RefRow({ ref_ }: { ref_: HistoryRef }) {
             }
             data-testid="history-show-in-document"
           >
-            <FileText className="size-3" />
-            {ref_.exists ? "Show in document" : "Show where it was"}
+            {isMedia ? <AudioLines className="size-3" /> : <FileText className="size-3" />}
+            {ref_.exists
+              ? isMedia
+                ? "Show in the recording"
+                : "Show in document"
+              : "Show where it was"}
           </button>
         ) : null}
       </div>

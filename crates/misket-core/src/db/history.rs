@@ -645,6 +645,16 @@ pub enum DocumentOp {
     Reorder {
         ids: Vec<String>,
     },
+    /// Point an audio or video document at a different file. The bytes live
+    /// outside the project, so a relink moves the path, the fingerprint and
+    /// the measurements together (`db::media::relink`).
+    Relink {
+        document_id: String,
+        source_path: Option<String>,
+        content_hash: String,
+        media_json: Option<String>,
+        updated_at: String,
+    },
 }
 
 impl DocumentOp {
@@ -681,6 +691,27 @@ impl DocumentOp {
                         params![id, i as i64],
                     )?;
                 }
+                Ok(())
+            }
+            DocumentOp::Relink {
+                document_id,
+                source_path,
+                content_hash,
+                media_json,
+                updated_at,
+            } => {
+                conn.execute(
+                    "UPDATE documents SET source_path = ?2, content_hash = ?3,
+                                          media_json = ?4, updated_at = ?5
+                      WHERE id = ?1",
+                    params![
+                        document_id,
+                        source_path,
+                        content_hash,
+                        media_json,
+                        updated_at
+                    ],
+                )?;
                 Ok(())
             }
         }
@@ -1379,7 +1410,8 @@ fn apply(conn: &Connection, node_id: i64, kind: &str, payload: &Value) -> Result
         "transcript.format_set" | "transcript.default_set" => {
             serde_json::from_value::<TranscriptChange>(payload.clone())?.run(conn)
         }
-        "document.imported" | "document.deleted" | "document.renamed" | "document.reordered" => {
+        "document.imported" | "document.deleted" | "document.renamed" | "document.reordered"
+        | "document.relinked" => {
             serde_json::from_value::<DocumentOp>(payload.clone())?.run(conn, node_id)
         }
         "project.renamed" | "analysis.stop_words_set" => {
@@ -1803,6 +1835,7 @@ fn resolve_ref(
         exists,
         color: None,
         path: None,
+        excerpt_kind: None,
         document_id: None,
         start_pos: None,
         end_pos: None,
@@ -1887,6 +1920,7 @@ fn resolve_ref(
                     };
                     HistoryRef {
                         document_id: Some(document_id),
+                        excerpt_kind: Some(kind_of),
                         start_pos,
                         end_pos,
                         ..plain(label, true)
@@ -1908,6 +1942,10 @@ fn resolve_ref(
                         .unwrap_or_else(|| "This excerpt".into());
                     HistoryRef {
                         document_id: detail_str(detail, "documentId"),
+                        // Every step that touches an excerpt writes its kind
+                        // (`excerpts::where_json`), so a deleted stretch of a
+                        // recording is still recognisable as one.
+                        excerpt_kind: detail_str(detail, "excerptKind"),
                         start_pos: start,
                         end_pos: end,
                         ..plain(missing(&what, applied), false)
@@ -2899,6 +2937,71 @@ pub(crate) mod tests {
         assert_eq!(excerpts::list_for_document(c, &image).unwrap().len(), 1);
     }
 
+    /// Audio and video documents: the row round-trips, and none of the bytes
+    /// come along — the recording stays on disk, so `history_blobs` holds
+    /// nothing for it however big the file is.
+    #[test]
+    fn round_trips_importing_deleting_and_relinking_a_media_document() {
+        use crate::db::media;
+
+        let p = OpenProject::in_memory("t").unwrap();
+        let c = &p.conn;
+        crate::db::activity::set_actor(c, "Ada").unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let path = media::tests::fake_file(dir.path(), "interview.mp3", 8192, 11);
+
+        assert_round_trip(c, "import a recording", |c| {
+            media::create(c, None, media::tests::new_media(&path)).unwrap();
+        });
+        let id = documents::list(c).unwrap()[0].id.clone();
+        let blobs: i64 = c
+            .query_row("SELECT count(*) FROM history_blobs", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(blobs, 0, "a recording's bytes never enter the project file");
+
+        let code = codes::tests::mk(c, "Alpha", None).id;
+        assert_round_trip(c, "code a stretch of the recording", |c| {
+            excerpts::apply_codes(
+                c,
+                ApplyCodesInput {
+                    document_id: id.clone(),
+                    kind: Some("video_range".into()),
+                    start_pos: Some(12_000),
+                    end_pos: Some(19_500),
+                    code_ids: vec![code.clone()],
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        });
+        let e = excerpts::list_for_document(c, &id).unwrap()[0].id.clone();
+        assert_round_trip(c, "move the in and out points", |c| {
+            excerpts::update_range(c, &e, 11_000, 20_000).unwrap();
+        });
+        // A captured frame travels with the excerpt through delete and undo.
+        media::set_thumbnail(c, &e, "image/jpeg", b"\xff\xd8frame").unwrap();
+        assert_round_trip(c, "delete a coded stretch", |c| {
+            excerpts::delete(c, &e).unwrap();
+        });
+        undo(c).unwrap().unwrap();
+        assert_eq!(
+            media::thumbnail(c, &e).unwrap().unwrap().bytes,
+            b"\xff\xd8frame"
+        );
+        redo(c, None).unwrap().unwrap();
+
+        let moved = dir.path().join("moved.mp3");
+        std::fs::rename(&path, &moved).unwrap();
+        assert_round_trip(c, "relink", |c| {
+            media::relink(c, &id, &moved.to_string_lossy()).unwrap();
+        });
+        assert_round_trip(c, "delete the recording", |c| {
+            documents::delete(c, &id).unwrap();
+        });
+        // The file itself is never touched by any of it.
+        assert!(moved.is_file());
+    }
+
     #[test]
     fn round_trips_renaming_and_reordering_documents() {
         let f = Fixture::new();
@@ -3811,6 +3914,57 @@ pub(crate) mod tests {
         let doc = find_ref(&d, "document");
         assert_eq!(doc.label, documents::get_summary(c, &f.doc).unwrap().name);
         assert!(doc.exists);
+    }
+
+    /// A coded stretch of a recording reads as a time, and the panel can tell
+    /// that its offsets are milliseconds — before and after it is deleted.
+    #[test]
+    fn node_detail_reads_a_coded_stretch_of_a_recording_as_a_time() {
+        use crate::db::media;
+
+        let p = OpenProject::in_memory("t").unwrap();
+        let c = &p.conn;
+        crate::db::activity::set_actor(c, "Ada").unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let path = media::tests::fake_file(dir.path(), "tape.mp3", 4096, 12);
+        let doc = media::create(c, None, media::tests::new_media(&path))
+            .unwrap()
+            .summary
+            .id;
+        let code = codes::tests::mk(c, "Turning point", None).id;
+        let excerpt = excerpts::apply_codes(
+            c,
+            ApplyCodesInput {
+                document_id: doc.clone(),
+                kind: Some("video_range".into()),
+                start_pos: Some(12_000),
+                end_pos: Some(19_500),
+                code_ids: vec![code],
+                ..Default::default()
+            },
+        )
+        .unwrap()
+        .excerpt
+        .id;
+
+        let d = detail_of_head(c);
+        let e = find_ref(&d, "excerpt");
+        assert_eq!(e.id, excerpt);
+        assert!(e.exists);
+        assert_eq!(e.label, "[0:12.0\u{2013}0:19.5]");
+        assert_eq!(e.excerpt_kind.as_deref(), Some("video_range"));
+        assert_eq!((e.start_pos, e.end_pos), (Some(12_000), Some(19_500)));
+        assert_eq!(e.document_id.as_deref(), Some(doc.as_str()));
+
+        // Deleted, the step still says it was a stretch and where it was, so
+        // the panel offers to show the place rather than a paragraph.
+        excerpts::delete(c, &excerpt).unwrap();
+        let d = detail_of_head(c);
+        let e = find_ref(&d, "excerpt");
+        assert!(!e.exists);
+        assert_eq!(e.excerpt_kind.as_deref(), Some("video_range"));
+        assert_eq!((e.start_pos, e.end_pos), (Some(12_000), Some(19_500)));
+        assert_eq!(e.document_id.as_deref(), Some(doc.as_str()));
     }
 
     #[test]

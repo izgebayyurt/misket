@@ -18,6 +18,7 @@ const MIGRATIONS: &[(i64, &str)] = &[
     (11, include_str!("migrations/0011_coders.sql")),
     (12, include_str!("migrations/0012_sync_points.sql")),
     (13, include_str!("migrations/0013_weights.sql")),
+    (14, include_str!("migrations/0014_media_by_reference.sql")),
 ];
 
 pub fn latest_version() -> i64 {
@@ -88,7 +89,14 @@ mod tests {
         migrate(&conn).unwrap();
         // Put the table back the way schema 10 had it, with two codings in it.
         conn.execute_batch(
-            "DROP TABLE sync_points;
+            "DROP INDEX excerpts_video_range_uq;
+             DROP TABLE media_blobs;
+             CREATE TABLE media_blobs (
+               document_id TEXT PRIMARY KEY REFERENCES documents(id) ON DELETE CASCADE,
+               mime        TEXT NOT NULL,
+               bytes       BLOB NOT NULL
+             );
+             DROP TABLE sync_points;
              ALTER TABLE codes DROP COLUMN weight_scale_json;
              DROP INDEX excerpt_codes_coder_idx;
              DROP INDEX excerpt_codes_code_idx;

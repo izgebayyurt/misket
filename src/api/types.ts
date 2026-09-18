@@ -46,6 +46,10 @@ export interface ProjectStats {
   excerptsPerDay: [string, number][];
   /** `[codeId, count]`, direct tags only, highest first, top 8. */
   topCodes: [string, number][];
+  /** Audio and video documents (`kind === "video"`). */
+  mediaDocuments: number;
+  /** Recordings whose file is not where it was imported from. */
+  missingMedia: MissingMedia[];
 }
 
 // Mirrors AppSettings in src-tauri/src/settings.rs (app-level, not project data).
@@ -75,6 +79,10 @@ export interface AppSettings {
   /** Colour the document view's underline lanes by who applied the code
    * rather than by the code itself. */
   lanesByCoder: boolean;
+  /** Copy audio and video files into `<project>.media/` on import instead of
+   * pointing at where they are. Off by default: a recording is held by
+   * reference precisely so a project file stays small. */
+  copyMediaIntoProject: boolean;
   /** Extra Tesseract language codes to use for PDF OCR, on top of the
    * bundled `eng`. Each one needs a matching `<code>.traineddata` file
    * dropped into the app's tessdata folder (Settings shows the path). */
@@ -83,11 +91,55 @@ export interface AppSettings {
 
 export type DocumentKind = "text" | "image" | "video";
 
-/** Size and MIME of an image (later: video) document's stored media. */
+/**
+ * `documents.mediaJson`: what is known about a document's media without
+ * opening the file again.
+ *
+ * Only `mime` is always there. An image has `width`/`height`; a recording has
+ * `durationMs` and, for video, a pixel size too.
+ */
 export interface MediaInfo {
-  width: number;
-  height: number;
+  width?: number | null;
+  height?: number | null;
   mime: string;
+  /** Playing time in milliseconds; the upper bound on a `video_range`. */
+  durationMs?: number | null;
+  sizeBytes?: number | null;
+  /** SHA-256 of the first and last mebibyte of the file plus its length. */
+  fileHash?: string | null;
+  /** Waveform peaks in 0..1, one per equal slice; a rendering cache filled in
+   * by the viewer through `setMediaPeaks`. */
+  peaks?: number[] | null;
+}
+
+/** A candidate media file, staged so the webview can measure it. */
+export interface MediaProbe {
+  /** Opaque token the media protocol serves the file under. */
+  token: string;
+  mime: string;
+  sizeBytes: number;
+}
+
+/** An audio or video document whose file is no longer where it was. */
+export interface MissingMedia {
+  documentId: string;
+  name: string;
+  sourcePath: string | null;
+}
+
+/**
+ * An audio or video import. The file is **not** copied into the project
+ * file — `sourcePath` points at it on disk — unless `copyIntoProject` is set,
+ * which first copies it into `<project>.media/`.
+ */
+export interface NewMediaDocument {
+  name: string;
+  sourcePath: string;
+  mime: string;
+  /** What the webview measured by loading the file in a hidden element. */
+  media: MediaInfo;
+  copyIntoProject?: boolean;
+  allowDuplicate?: boolean;
 }
 
 /**
@@ -122,6 +174,10 @@ export interface DocumentSummary {
   textLength: number | null;
   /** Image and video documents only. */
   media: MediaInfo | null;
+  /** True when this is an audio or video document whose file is not at
+   * `sourcePath` any more. Always false for text and images, whose bytes
+   * live inside the project file. */
+  mediaMissing: boolean;
   sortOrder: number;
   excerptCount: number;
   /** The speakers this document's transcript format finds, in first-seen
@@ -1040,6 +1096,10 @@ export interface HistoryRef {
   color?: string | null;
   /** A code's path through the codebook, when it still exists. */
   path?: string | null;
+  /** An excerpt's `kind`, so the panel knows whether its offsets are code
+   * points or milliseconds — and whether "show me" means a passage or a
+   * stretch of tape. */
+  excerptKind?: string | null;
   /** Where an excerpt sits, so the panel can open the document there. */
   documentId?: string | null;
   startPos?: number | null;

@@ -4,6 +4,7 @@ import { StartScreen } from "@/components/project/StartScreen";
 import { Workspace } from "@/components/layout/Workspace";
 import { Toaster } from "@/components/layout/Toaster";
 import { useImportFiles } from "@/components/documents/useImportFiles";
+import { MediaImportDialog } from "@/components/documents/MediaImportDialog";
 import { TidyImportDialog } from "@/components/documents/TidyImportDialog";
 import { OcrPromptDialog } from "@/components/documents/OcrPromptDialog";
 import { OcrProgressDialog } from "@/components/documents/OcrProgressDialog";
@@ -27,6 +28,7 @@ export default function App() {
       {isLoading ? null : project ? <Workspace project={project} /> : <StartScreen />}
       <Toaster />
       <TidyImportDialog />
+      <MediaImportDialog />
       <OcrPromptDialog />
       <OcrProgressDialog />
     </>

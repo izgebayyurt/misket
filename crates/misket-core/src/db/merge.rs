@@ -1205,6 +1205,10 @@ fn build(
             },
             memos: vec![],
             tags,
+            // Pulled excerpts arrive without the other coder's thumbnails:
+            // a frame is a local cache of a media file this project may not
+            // even have, and the viewer captures it again on first look.
+            thumbnail: None,
         });
     }
 

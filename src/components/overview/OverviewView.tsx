@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { Check, Copy, History, Highlighter, Plus, Tag, Upload } from "lucide-react";
+import { AlertTriangle, Check, Copy, History, Highlighter, Plus, Tag, Upload } from "lucide-react";
 import { useProjectInfo, useProjectStats, useRenameProject } from "@/queries/project";
 import { useDocuments } from "@/queries/documents";
 import { useCodes, useCodeTree } from "@/queries/codes";
@@ -17,11 +17,12 @@ import { ColorDot } from "@/components/codebook/ColorSwatch";
 import { CodeDialog } from "@/components/codebook/CodeDialog";
 import { MemoEditor } from "@/components/memos/MemoEditor";
 import { useImportFiles } from "@/components/documents/useImportFiles";
+import { useRelinkMedia } from "@/components/documents/useRelinkMedia";
 import { ActivityFeed } from "@/components/activity/ActivityFeed";
 import { useWorkspace } from "@/state/workspace";
 import { toast } from "@/state/toasts";
 import { cn } from "@/lib/utils";
-import type { ProjectStats } from "@/api/types";
+import type { MissingMedia, ProjectStats } from "@/api/types";
 
 /** The project's home screen: identity, memo, statistics and a way in. */
 export function OverviewView() {
@@ -105,6 +106,8 @@ export function OverviewView() {
             onOpenDocument={(id) => openDocument(id)}
           />
         ) : null}
+
+        {stats?.missingMedia.length ? <MissingMediaSection rows={stats.missingMedia} /> : null}
 
         <section>
           <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-fg-muted">
@@ -359,6 +362,54 @@ const STAT_ROWS: { key: keyof ProjectStats; label: string }[] = [
   { key: "descriptorFields", label: "Descriptor fields" },
 ];
 
+/**
+ * The recordings whose files have moved.
+ *
+ * Audio and video are held by reference, so this is the one place that can
+ * tell the whole story at once — and every row can be repaired from here
+ * without opening the document first.
+ */
+function MissingMediaSection({ rows }: { rows: MissingMedia[] }) {
+  const relink = useRelinkMedia();
+  const openDocument = useWorkspace((s) => s.openDocument);
+  return (
+    <section data-testid="overview-missing-media">
+      <h2 className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-danger">
+        <AlertTriangle className="size-3.5" />
+        {rows.length} recording{rows.length === 1 ? "" : "s"} could not be found
+      </h2>
+      <p className="mb-2 text-xs text-fg-muted">
+        Audio and video files are not copied into the project, so they can be moved or renamed
+        outside it. Everything coded from them is still here; point each one at its file again.
+      </p>
+      <ul className="divide-y divide-border overflow-hidden rounded-md border border-border bg-panel">
+        {rows.map((row) => (
+          <li key={row.documentId} className="flex items-center gap-3 px-3 py-2">
+            <button
+              className="min-w-0 flex-1 text-left"
+              onClick={() => openDocument(row.documentId)}
+              data-testid="missing-media-row"
+            >
+              <div className="truncate text-sm">{row.name}</div>
+              <div className="truncate font-mono text-[11px] text-fg-muted">
+                {row.sourcePath ?? "(no path recorded)"}
+              </div>
+            </button>
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={relink.isPending}
+              onClick={() => void relink.pickAndRelink(row.documentId)}
+            >
+              Relink…
+            </Button>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 function StatGrid({ stats }: { stats: ProjectStats | undefined }) {
   return (
     <div className="grid grid-cols-2 gap-2 sm:grid-cols-3" data-testid="stat-grid">
@@ -374,6 +425,12 @@ function StatGrid({ stats }: { stats: ProjectStats | undefined }) {
           <div className="text-xs text-fg-muted">{row.label}</div>
         </div>
       ))}
+      <div className="rounded-md border border-border bg-panel p-3" data-testid="stat-media">
+        <div className="text-2xl font-medium tabular-nums text-fg">
+          {stats ? formatCount(stats.imageDocuments + stats.mediaDocuments) : "–"}
+        </div>
+        <div className="text-xs text-fg-muted">Images and recordings</div>
+      </div>
       <div className="rounded-md border border-border bg-panel p-3" data-testid="stat-textLength">
         <div className="text-2xl font-medium tabular-nums text-fg">
           {stats ? formatCount(stats.totalTextLength) : "–"}
