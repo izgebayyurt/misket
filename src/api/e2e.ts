@@ -11,6 +11,23 @@ export interface E2eConfig {
   /** Throw a frontend error on startup, to exercise the error boundary and
    * the log viewer headlessly (`MISKET_E2E_CRASH_TEST`). */
   triggerFrontendError: boolean;
+  /** A `latest.json` URL to check against instead of the real updater
+   * endpoint, so the update banner can be exercised without a signed
+   * release. See `src/state/updates.ts` and `e2e/README.md`. */
+  updateJsonUrl: string | null;
 }
 
 export const getE2eConfig = () => invoke<E2eConfig>("get_e2e_config");
+
+/** Metadata shape matching `@tauri-apps/plugin-updater`'s `UpdateMetadata`,
+ * from the Rust `e2e_check_update` command (test-only; see `E2eConfig`). */
+export interface E2eUpdateMetadata {
+  rid: number;
+  currentVersion: string;
+  version: string;
+  date?: string | null;
+  body?: string | null;
+  rawJson: Record<string, unknown>;
+}
+
+export const e2eCheckUpdate = () => invoke<E2eUpdateMetadata | null>("e2e_check_update");

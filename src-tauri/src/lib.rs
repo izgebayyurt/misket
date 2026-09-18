@@ -65,6 +65,8 @@ pub fn run() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .manage(AppState::default())
         .register_asynchronous_uri_scheme_protocol(MEDIA_PROTOCOL, |ctx, request, responder| {
             // Reading a blob locks the project and reading a slice of a
@@ -262,6 +264,8 @@ pub fn run() {
             commands::diagnostics::clear_logs,
             commands::diagnostics::get_diagnostics,
             commands::diagnostics::send_report_now,
+            commands::updater::get_updater_status,
+            commands::updater::e2e_check_update,
             commands::backup::save_project_copy,
             commands::backup::list_backups,
             commands::backup::restore_backup,
