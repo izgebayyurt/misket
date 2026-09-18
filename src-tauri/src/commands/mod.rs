@@ -22,5 +22,6 @@ pub mod refi;
 pub mod search;
 pub mod sets;
 pub mod settings;
+pub mod transcribe;
 pub mod transcripts;
 pub mod updater;

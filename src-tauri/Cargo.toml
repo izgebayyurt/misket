@@ -12,6 +12,13 @@ repository.workspace = true
 name = "misket_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
+[features]
+# On by default so release builds ship offline transcription; the crate must
+# still compile and pass its tests with `--no-default-features`, which leaves
+# everything but the inference engine in place (see `crate::transcribe`).
+default = ["whisper"]
+whisper = ["dep:whisper-rs"]
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
@@ -33,6 +40,21 @@ ureq = { version = "2", default-features = true }
 tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
 url = "2"
+sha1 = "0.10"
+symphonia = { version = "0.5", default-features = false, features = [
+  "aac",
+  "adpcm",
+  "alac",
+  "flac",
+  "isomp4",
+  "mkv",
+  "mp3",
+  "ogg",
+  "pcm",
+  "vorbis",
+  "wav",
+] }
+whisper-rs = { version = "0.15", default-features = false, optional = true }
 
 [dev-dependencies]
 tempfile = "3"
