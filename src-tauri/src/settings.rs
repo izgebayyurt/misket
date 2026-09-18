@@ -8,6 +8,8 @@ use misket_core::Result;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
 
+pub use crate::reporting::ReportFormat;
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub enum Theme {
@@ -86,6 +88,20 @@ pub struct AppSettings {
     /// active, not what is available.
     #[serde(default)]
     pub ocr_languages: Vec<String>,
+    /// Off by default. Even when on, nothing is sent unless
+    /// `report_endpoint` is also set — see `crate::reporting` for exactly
+    /// what a report contains (never document text, codes, memos or file
+    /// names).
+    #[serde(default)]
+    pub send_crash_reports: bool,
+    /// Where a crash report is POSTed. Empty means disabled regardless of
+    /// `send_crash_reports`, which is also the default: reporting needs a
+    /// maintainer to have configured their own collector.
+    #[serde(default)]
+    pub report_endpoint: String,
+    /// The wire shape reports are sent in; see `ReportFormat`.
+    #[serde(default)]
+    pub report_format: ReportFormat,
 }
 
 impl Default for AppSettings {
@@ -104,6 +120,9 @@ impl Default for AppSettings {
             lanes_by_coder: false,
             copy_media_into_project: false,
             ocr_languages: Vec::new(),
+            send_crash_reports: false,
+            report_endpoint: String::new(),
+            report_format: ReportFormat::default(),
         }
     }
 }
@@ -237,6 +256,9 @@ mod tests {
             lanes_by_coder: true,
             copy_media_into_project: true,
             ocr_languages: vec!["tur".into()],
+            send_crash_reports: true,
+            report_endpoint: "https://example.com/api/1/envelope/".into(),
+            report_format: ReportFormat::Sentry,
         };
         write(&path, &settings).unwrap();
         assert_eq!(read(&path).unwrap(), settings);
@@ -266,6 +288,9 @@ mod tests {
         assert_eq!(settings.coder_id, None);
         assert!(!settings.lanes_by_coder);
         assert!(settings.ocr_languages.is_empty());
+        assert!(!settings.send_crash_reports);
+        assert!(settings.report_endpoint.is_empty());
+        assert_eq!(settings.report_format, ReportFormat::Json);
     }
 
     #[test]

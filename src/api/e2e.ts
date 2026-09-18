@@ -8,6 +8,9 @@ export interface E2eConfig {
   pullPath: string | null;
   /** A `.qdpx` to import, for the same reason. */
   refiPath: string | null;
+  /** Throw a frontend error on startup, to exercise the error boundary and
+   * the log viewer headlessly (`MISKET_E2E_CRASH_TEST`). */
+  triggerFrontendError: boolean;
 }
 
 export const getE2eConfig = () => invoke<E2eConfig>("get_e2e_config");

@@ -81,7 +81,7 @@ export, open-by-double-click, dark mode, cross-platform CI and release builds.
 | #   | Feature                                                                                                                                                  | Status |
 | --- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
 | 27  | [#28](https://github.com/izgebayyurt/misket/issues/28) **Code signing and notarisation** (macOS), Windows signing, **auto-update** via the Tauri updater | later  |
-| 28  | [#29](https://github.com/izgebayyurt/misket/issues/29) **Opt-in crash and error reporting**; in-app log viewer                                           | later  |
+| 28  | [#29](https://github.com/izgebayyurt/misket/issues/29) **Opt-in crash and error reporting**; in-app log viewer                                           | done   |
 | 29  | [#30](https://github.com/izgebayyurt/misket/issues/30) **Localisation** framework, English first, Turkish second                                         | later  |
 | 30  | [#31](https://github.com/izgebayyurt/misket/issues/31) **Accessibility pass**: screen-reader labels, focus order, contrast in both themes                | later  |
 | 31  | [#32](https://github.com/izgebayyurt/misket/issues/32) **Sample project** bundled for first run ("Try Misket with sample data")                          | done   |

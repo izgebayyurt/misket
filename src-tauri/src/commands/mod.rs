@@ -5,6 +5,7 @@ pub mod codebook;
 pub mod coders;
 pub mod codes;
 pub mod descriptors;
+pub mod diagnostics;
 pub mod documents;
 pub mod e2e;
 pub mod excerpts;

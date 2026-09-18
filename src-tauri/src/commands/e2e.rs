@@ -14,6 +14,9 @@ pub struct E2eConfig {
     pub pull_path: Option<String>,
     /// A `.qdpx` to import, for the same reason (`MISKET_E2E_REFI`).
     pub refi_path: Option<String>,
+    /// Throw a frontend error on startup (`MISKET_E2E_CRASH_TEST`), so the
+    /// error boundary and the log viewer can be exercised headlessly.
+    pub trigger_frontend_error: bool,
 }
 
 #[tauri::command]
@@ -42,5 +45,6 @@ pub fn get_e2e_config() -> E2eConfig {
         refi_path: std::env::var("MISKET_E2E_REFI")
             .ok()
             .filter(|s| !s.is_empty()),
+        trigger_frontend_error: std::env::var("MISKET_E2E_CRASH_TEST").is_ok(),
     }
 }
