@@ -77,7 +77,30 @@
     "refresh": "Refresh",
     "dismiss": "Dismiss",
     "cancel": "Cancel",
-    "save": "Save"
+    "save": "Save",
+    "rename": "Rename",
+    "deleteEllipsis": "Delete…"
+  },
+  "codebook": {
+    "title": "Codebook",
+    "filterCodes": "Filter codes",
+    "newCode": "New code",
+    "importExport": "Import or export the codebook",
+    "importCodebook": "Import codebook…",
+    "exportCodebook": "Export codebook…",
+    "exportedTo": "Exported codebook to {{name}}",
+    "noCodesYet": "No codes yet. Create one, or type <kbd>&gt;name</kbd> in the palette ({{chord}}) while coding.",
+    "expand": "Expand",
+    "collapse": "Collapse",
+    "codeActions": "Code actions",
+    "codeName": "Code name",
+    "newSubCode": "New sub-code",
+    "editEllipsis": "Edit…",
+    "mergeInto": "Merge into…",
+    "moveExcerptsTo": "Move excerpts to…",
+    "rollUpInto": "Roll up into {{name}}…",
+    "rollUpChildren": "Roll up children…",
+    "reviewExcerpts": "Review excerpts…"
   },
   "toaster": {
     "saidTimes_one": "Said {{count, number}} time",

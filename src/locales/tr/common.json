@@ -77,7 +77,30 @@
     "refresh": "Yenile",
     "dismiss": "Kapat",
     "cancel": "Vazgeç",
-    "save": "Kaydet"
+    "save": "Kaydet",
+    "rename": "Yeniden adlandır",
+    "deleteEllipsis": "Sil…"
+  },
+  "codebook": {
+    "title": "Kod defteri",
+    "filterCodes": "Kodları filtrele",
+    "newCode": "Yeni kod",
+    "importExport": "Kod defterini içe veya dışa aktar",
+    "importCodebook": "Kod defteri içe aktar…",
+    "exportCodebook": "Kod defteri dışa aktar…",
+    "exportedTo": "Kod defteri {{name}} konumuna dışa aktarıldı",
+    "noCodesYet": "Henüz kod yok. Bir tane oluştur, ya da kodlarken palette'te <kbd>&gt;ad</kbd> yazarak oluştur ({{chord}}).",
+    "expand": "Genişlet",
+    "collapse": "Daralt",
+    "codeActions": "Kod eylemleri",
+    "codeName": "Kod adı",
+    "newSubCode": "Yeni alt kod",
+    "editEllipsis": "Düzenle…",
+    "mergeInto": "İçine birleştir…",
+    "moveExcerptsTo": "Alıntıları şuraya taşı…",
+    "rollUpInto": "{{name}} içine topla…",
+    "rollUpChildren": "Alt kodları topla…",
+    "reviewExcerpts": "Alıntıları gözden geçir…"
   },
   "toaster": {
     "saidTimes_one": "{{count, number}} kez söylendi",
