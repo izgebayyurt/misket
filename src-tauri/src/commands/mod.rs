@@ -1,4 +1,5 @@
 pub mod activity;
+pub mod align;
 pub mod analysis;
 pub mod backup;
 pub mod codebook;

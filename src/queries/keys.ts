@@ -69,6 +69,9 @@ export const keys = {
   excerptHistory: (id: string) => ["activity", "excerpt", id] as const,
   /** One document's transcript: format, turns and speakers. */
   transcript: (documentId: string) => ["transcript", documentId] as const,
+  /** One document's alignment points against its linked recording. */
+  transcriptAnchors: (documentId: string) => ["transcriptAnchors", documentId] as const,
+  allTranscriptAnchors: ["transcriptAnchors"] as const,
   allTranscripts: ["transcript"] as const,
   transcriptDefault: ["transcriptDefault"] as const,
   projectSpeakers: ["projectSpeakers"] as const,

@@ -57,8 +57,15 @@ export function useImportFiles() {
   const createMedia = useCreateMediaDocument();
   const openDocument = useWorkspace((s) => s.openDocument);
 
+  /**
+   * Import files by path. Returns the ids of the documents that were
+   * created, in order, so a caller can do something with them — "Link
+   * recording…" imports a recording and links it to the open transcript in
+   * one step, and does not want the view to jump to the recording.
+   */
   const importPaths = useCallback(
-    async (paths: string[]) => {
+    async (paths: string[], { openAfter = true }: { openAfter?: boolean } = {}) => {
+      const createdIds: string[] = [];
       let lastId: string | null = null;
       let imported = 0;
       const taken = new Set((await listDocuments()).map((d) => d.name));
@@ -129,7 +136,7 @@ export function useImportFiles() {
             sizeBytes: f.media.sizeBytes ?? 0,
           })),
         });
-        if (!choice.import) return;
+        if (!choice.import) return createdIds;
         copyIntoProject = choice.copyIntoProject;
       }
 
@@ -155,6 +162,7 @@ export function useImportFiles() {
                 copyIntoProject,
               });
               lastId = doc.id;
+              createdIds.push(doc.id);
             } else if (file.kind === "image") {
               // The bytes stay out of the IPC bridge: the backend reads them
               // from `sourcePath` and copies them into the project file.
@@ -166,6 +174,7 @@ export function useImportFiles() {
                 height: file.height,
               });
               lastId = doc.id;
+              createdIds.push(doc.id);
             } else {
               if (file.parsed.text.length > 2_000_000) {
                 toast.info(`${file.parsed.name} is very large; the document view may be slow.`);
@@ -175,8 +184,12 @@ export function useImportFiles() {
                 sourcePath: file.path,
                 sourceFormat: file.parsed.sourceFormat,
                 text: file.parsed.text,
+                // SRT and VTT arrive with one anchor per cue, so the
+                // transcript is aligned the moment it is linked.
+                anchors: file.parsed.anchors,
               });
               lastId = doc.id;
+              createdIds.push(doc.id);
             }
             imported++;
           } catch (e) {
@@ -199,7 +212,8 @@ export function useImportFiles() {
             : `Recognised text in ${ocrCount} scanned PDFs with OCR.`,
         );
       }
-      if (imported > 0 && lastId) openDocument(lastId);
+      if (imported > 0 && lastId && openAfter) openDocument(lastId);
+      return createdIds;
     },
     [create, createImage, createMedia, openDocument],
   );

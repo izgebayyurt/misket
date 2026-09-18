@@ -49,6 +49,7 @@ export type Action =
   | "jumpTop"
   | "jumpBottom"
   | "goToParagraph"
+  | "alignHere"
   | "escape"
   | "setWeight1"
   | "setWeight2"
@@ -120,6 +121,10 @@ export const SHORTCUTS: Record<Action, Shortcut> = {
   jumpTop: { key: "Home", mod: true },
   jumpBottom: { key: "End", mod: true },
   goToParagraph: { key: "g", mod: true },
+  // Line the cursor up with the playhead, in a transcript linked to a
+  // recording. `Alt` alone: the chord has to be free while the recording is
+  // playing and the hands are on the text, and `Ctrl`/`⌘`+`A` is select-all.
+  alignHere: { key: "a", alt: true },
   escape: { key: "Escape", global: true },
   // With an excerpt focused, `1`-`9` rate the last applied code on its
   // weight scale (a no-op if it has none). Not `global`: a text field's own
@@ -298,6 +303,7 @@ export const LABELS: Record<Action, string> = {
   jumpTop: "Jump to the top of the document",
   jumpBottom: "Jump to the bottom of the document",
   goToParagraph: "Go to paragraph",
+  alignHere: "Align the transcript here with the playhead",
   escape: "Cancel / close",
   // One shared sentence across all nine digits: they are one control, not
   // nine different shortcuts, and the docs site's cheatsheet only has to
