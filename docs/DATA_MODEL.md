@@ -916,6 +916,41 @@ can show where the project currently stands.
 Ordering is by `id`, never by `at`: `util::now()` formats RFC 3339 with
 trailing zeros trimmed, so `…:00Z` sorts _after_ `…:00.5Z` as a string.
 
+### `detail.assisted`
+
+A change the person accepted from an AI suggestion carries two extra keys in
+its `detail_json`:
+
+```json
+{ "assisted": true, "assistedBy": { "provider": "anthropic", "model": "claude-sonnet-5" } }
+```
+
+They are **absent** on every other entry, so an entry written before the
+feature existed and one written without help read exactly the same. The
+`actor` is unchanged: a suggestion only ever becomes a change because somebody
+clicked it, so the log still credits the person, and `assisted` is the note
+saying they had help — which is the whole point, since the objection
+assistance has to answer is silent automation, not help
+(`docs/research/user-criticisms.md`). Nothing else about the entry differs:
+the forward and inverse payloads are the ones the ordinary write produces, so
+an assisted coding undoes exactly like any other.
+
+The mark is set by the Tauri layer for the span of one command
+(`assist::with_assist` → `activity::set_assisted`), which puts it in a `TEMP`
+table on the connection, the same trick `set_actor` uses. It is per
+connection, so it never reaches the project file and two people with the same
+project open cannot see each other's; and it is cleared again as the command
+returns, so only the writes inside that one call are marked.
+`activity::record` folds it into `detail` on the way past, which is why every
+domain function gets it without knowing anything about it. Three commands can
+carry the note today — `apply_codes`, `create_memo`, and `create_code` /
+`update_code` — because those are the three places a suggestion can be
+accepted.
+
+Anything reading the log — the activity feed, the history detail panel, the
+activity CSV export, another tool reading `detail_json` — sees it as an
+ordinary field and shows it without special-casing.
+
 ### History view
 
 The History view (`src/components/history/HistoryView.tsx`) draws the whole

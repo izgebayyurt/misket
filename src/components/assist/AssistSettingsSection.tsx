@@ -115,24 +115,35 @@ export function AssistSettingsSection() {
         ) : null}
       </div>
 
-      {settings.provider === "openAiCompatible" ? (
-        <div className="mt-3">
-          <label className="mb-1 block text-sm" htmlFor="assist-base-url">
-            Base URL
-          </label>
-          <Input
-            id="assist-base-url"
-            value={settings.baseUrl}
-            placeholder="http://localhost:11434/v1"
-            onChange={(e) => patch({ baseUrl: e.target.value })}
-            data-testid="assist-base-url"
-          />
-          <p className="mt-1 text-xs text-fg-muted">
-            Anything that speaks the OpenAI chat API: Ollama, LM Studio, llama.cpp, a university
-            gateway, OpenAI itself. Misket adds <code>/chat/completions</code>.
-          </p>
-        </div>
-      ) : null}
+      <div className="mt-3">
+        <label className="mb-1 block text-sm" htmlFor="assist-base-url">
+          Base URL {settings.provider === "anthropic" ? "(optional)" : ""}
+        </label>
+        <Input
+          id="assist-base-url"
+          value={settings.baseUrl}
+          placeholder={
+            settings.provider === "anthropic"
+              ? "https://api.anthropic.com"
+              : "http://localhost:11434/v1"
+          }
+          onChange={(e) => patch({ baseUrl: e.target.value })}
+          data-testid="assist-base-url"
+        />
+        <p className="mt-1 text-xs text-fg-muted">
+          {settings.provider === "anthropic" ? (
+            <>
+              Leave it empty for Anthropic&rsquo;s own API. Set it to point at a gateway or proxy
+              that speaks the Messages API; Misket adds <code>/v1/messages</code>.
+            </>
+          ) : (
+            <>
+              Anything that speaks the OpenAI chat API: Ollama, LM Studio, llama.cpp, a university
+              gateway, OpenAI itself. Misket adds <code>/chat/completions</code>.
+            </>
+          )}
+        </p>
+      </div>
 
       <div className="mt-3">
         <label className="mb-1 block text-sm" htmlFor="assist-model">

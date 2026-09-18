@@ -73,7 +73,7 @@ export, open-by-double-click, dark mode, cross-platform CI and release builds.
 
 | #   | Feature                                                                                                                                                                                                                       | Status |
 | --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
-| 25  | [#26](https://github.com/izgebayyurt/misket/issues/26) **AI-assisted coding suggestions** with a user-supplied API key or a local model: suggest codes for a selection, summarise all excerpts under a code, never auto-apply | later  |
+| 25  | [#26](https://github.com/izgebayyurt/misket/issues/26) **AI-assisted coding suggestions** with a user-supplied API key or a local model: suggest codes for a selection, summarise all excerpts under a code, never auto-apply | done   |
 | 26  | [#27](https://github.com/izgebayyurt/misket/issues/27) **Local transcription** of audio/video with Whisper                                                                                                                    | later  |
 
 ## Infrastructure and polish
