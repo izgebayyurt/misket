@@ -21,17 +21,21 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
       <DialogContent title="Settings" description="Changes apply immediately.">
         <div className="space-y-5">
           <section>
-            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-fg-muted">
+            <div
+              id="settings-theme-label"
+              className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-fg-muted"
+            >
               Theme
-            </label>
-            <div className="flex gap-1" role="radiogroup" aria-label="Theme">
+            </div>
+            <div className="flex gap-1" role="radiogroup" aria-labelledby="settings-theme-label">
               {THEME_OPTIONS.map((o) => (
                 <Button
                   key={o.value}
                   type="button"
                   size="sm"
                   variant={settings.theme === o.value ? "default" : "outline"}
-                  aria-pressed={settings.theme === o.value}
+                  role="radio"
+                  aria-checked={settings.theme === o.value}
                   onClick={() => update({ theme: o.value })}
                 >
                   {o.label}

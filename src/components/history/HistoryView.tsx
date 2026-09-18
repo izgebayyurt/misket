@@ -366,6 +366,11 @@ export function HistoryView() {
         </p>
       ) : (
         <div className="flex min-h-0 flex-1">
+          {/* Each row below is a real, independently tabbable button; the
+              arrow/Enter/G handling here is a second, optional way to move
+              the highlighted step and act on it without leaving the list,
+              not a replacement widget of its own. */}
+          {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
           <div
             ref={listRef}
             className="min-w-0 flex-1 overflow-auto outline-none"

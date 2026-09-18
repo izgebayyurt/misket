@@ -575,6 +575,10 @@ export function MediaView({ documentId, focusExcerptId, seekToMs }: Props) {
   const codable = isCodableRange(range, durationMs);
 
   return (
+    // This pane only listens for the F2 shortcut while focus is anywhere
+    // inside it; it is not itself an interactive widget beyond the negative
+    // tabIndex already used to keep it out of the tab order.
+    // eslint-disable-next-line jsx-a11y/no-static-element-interactions
     <div
       ref={rootRef}
       className="flex h-full flex-col"
@@ -646,6 +650,10 @@ export function MediaView({ documentId, focusExcerptId, seekToMs }: Props) {
               {playbackError ? (
                 <PlaybackErrorNotice message={playbackError} onRelink={() => void pickRelink()} />
               ) : isVideo ? (
+                // Imported media has no caption track (roadmap #19,
+                // transcript alignment, is not built yet); nothing to wire a
+                // <track> to.
+                // eslint-disable-next-line jsx-a11y/media-has-caption
                 <video
                   ref={playerRef}
                   src={src ?? undefined}
@@ -660,6 +668,8 @@ export function MediaView({ documentId, focusExcerptId, seekToMs }: Props) {
                   data-testid="media-player"
                 />
               ) : (
+                // Audio has no transcript track to wire a <track> to (see above).
+                // eslint-disable-next-line jsx-a11y/media-has-caption
                 <audio
                   ref={playerRef}
                   src={src ?? undefined}

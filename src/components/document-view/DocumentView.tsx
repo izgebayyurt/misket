@@ -157,6 +157,15 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
         : new Map((codes ?? []).map((c) => [c.id, c.color])),
     [codes, coders, lanesByCoder],
   );
+  // Same lookup, by name, so a coded segment can name its codes (or coders)
+  // to assistive tech via `title` — the lanes are colour-only otherwise.
+  const laneNameById = useMemo(
+    () =>
+      lanesByCoder
+        ? new Map((coders ?? []).map((c) => [c.id, c.name]))
+        : new Map((codes ?? []).map((c) => [c.id, c.name])),
+    [codes, coders, lanesByCoder],
+  );
   const shortcutToCode = useMemo(
     () => new Map((codes ?? []).filter((c) => c.shortcut).map((c) => [c.shortcut!, c.id])),
     [codes],
@@ -1032,6 +1041,10 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
   if (!doc) return null;
 
   return (
+    // This pane only listens for the F2 shortcut while focus is anywhere
+    // inside it; it is not itself an interactive widget and has no separate
+    // tab stop.
+    // eslint-disable-next-line jsx-a11y/no-static-element-interactions
     <div
       className="flex h-full flex-col"
       data-testid="document-view"
@@ -1083,6 +1096,8 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
           <div
             ref={rootRef}
             tabIndex={-1}
+            role="document"
+            aria-label={doc.name}
             className={cn("doc-text", showParagraphNumbers && "with-para-numbers")}
             data-testid="doc-text"
           >
@@ -1095,6 +1110,7 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
                 turn={turnByParagraph.get(p.start)}
                 excerpts={previewed}
                 colorById={laneColorById}
+                nameById={laneNameById}
                 laneNoun={lanesByCoder ? "coders" : "codes"}
                 focusedId={focusedId}
                 flashId={flashId}
@@ -1229,6 +1245,8 @@ interface ParagraphProps {
   text: string;
   excerpts: RenderableExcerpt[];
   colorById: Map<string, string>;
+  /** Names for the same ids, so a coded segment can say what it's coded as. */
+  nameById: Map<string, string>;
   /** What the lanes stand for, for the "+N more" title: codes, or coders. */
   laneNoun: string;
   focusedId: string | null;
@@ -1276,6 +1294,22 @@ const Paragraph = memo(function Paragraph(p: ParagraphProps) {
         const n = Math.min(seg.excerptIds.length, MAX_LANES);
         const focused = p.focusedId !== null && seg.excerptIds.includes(p.focusedId);
         const flash = p.flashId !== null && seg.excerptIds.includes(p.flashId);
+        // `.doc-text` may only contain span[data-s] with a single text-node
+        // child, so a coded range cannot carry a visible label of its own:
+        // name it for assistive tech instead, via `title` (and the newer
+        // `aria-description`, where a screen reader supports it) rather than
+        // a child element.
+        const names = seg.codeIds
+          .map((id) => p.nameById.get(id))
+          .filter((name): name is string => !!name);
+        const title = names.length
+          ? `${p.laneNoun === "coders" ? "Coded by" : "Coded"}: ${names.join(", ")}`
+          : undefined;
+        // Mouse-only shortcut: cycles overlapping excerpts and opens the
+        // recode popover. Keyboard users reach the same excerpts through
+        // arrow/word selection, Ctrl+K to code, and the excerpt browser, so
+        // this segment isn't a distinct focusable control of its own.
+        /* eslint-disable jsx-a11y/no-static-element-interactions, jsx-a11y/click-events-have-key-events */
         return (
           <span
             key={seg.start}
@@ -1292,15 +1326,14 @@ const Paragraph = memo(function Paragraph(p: ParagraphProps) {
             )}
             style={style as React.CSSProperties}
             onClick={(e) => p.onSegmentClick(e, seg)}
-            title={
-              seg.codeIds.length > MAX_LANES
-                ? `+${seg.codeIds.length - MAX_LANES} more ${p.laneNoun}`
-                : undefined
-            }
+            title={title}
+            aria-description={title}
+            aria-current={focused ? "true" : undefined}
           >
             {p.text.slice(seg.start - p.start, seg.end - p.start)}
           </span>
         );
+        /* eslint-enable jsx-a11y/no-static-element-interactions, jsx-a11y/click-events-have-key-events */
       })}
     </p>
   );
@@ -1313,6 +1346,7 @@ function areParagraphPropsEqual(a: ParagraphProps, b: ParagraphProps): boolean {
     a.end !== b.end ||
     a.text !== b.text ||
     a.colorById !== b.colorById ||
+    a.nameById !== b.nameById ||
     a.laneNoun !== b.laneNoun
   )
     return false;

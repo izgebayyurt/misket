@@ -504,6 +504,10 @@ export function ImageView({ documentId, focusExcerptId }: Props) {
   const preview = draft ?? active?.geometry ?? null;
 
   return (
+    // This pane only listens for the F2 shortcut while focus is anywhere
+    // inside it; it is not itself an interactive widget and has no separate
+    // tab stop.
+    // eslint-disable-next-line jsx-a11y/no-static-element-interactions
     <div
       className="flex h-full flex-col"
       data-testid="image-view"
