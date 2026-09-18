@@ -301,7 +301,13 @@ function DiagnosticsSection({ onOpenLogs }: { onOpenLogs: () => void }) {
         View logs…
       </Button>
 
-      <label className="mt-3 flex items-start gap-2 text-sm">
+      <label
+        className="mt-3 flex items-start gap-2 text-sm"
+        // The name lives two spans deep, past what eslint-plugin-jsx-a11y's
+        // static check can see; naming it explicitly also keeps the
+        // announced name to the setting, not the paragraph below it.
+        aria-label="Send anonymous crash reports"
+      >
         <input
           type="checkbox"
           className="mt-0.5"
@@ -349,7 +355,8 @@ function DiagnosticsSection({ onOpenLogs }: { onOpenLogs: () => void }) {
                   type="button"
                   size="sm"
                   variant={settings.reportFormat === o.value ? "default" : "outline"}
-                  aria-pressed={settings.reportFormat === o.value}
+                  role="radio"
+                  aria-checked={settings.reportFormat === o.value}
                   onClick={() => update({ reportFormat: o.value })}
                 >
                   {o.label}

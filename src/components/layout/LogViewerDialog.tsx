@@ -128,7 +128,8 @@ export function LogViewerDialog({ onClose }: { onClose: () => void }) {
                   type="button"
                   size="sm"
                   variant={level === o.value ? "default" : "outline"}
-                  aria-pressed={level === o.value}
+                  role="radio"
+                  aria-checked={level === o.value}
                   onClick={() => setLevel(o.value)}
                 >
                   {o.label}
@@ -161,9 +162,9 @@ export function LogViewerDialog({ onClose }: { onClose: () => void }) {
                     key={i}
                     className={
                       line.level === "error"
-                        ? "text-red-500"
+                        ? "text-danger"
                         : line.level === "warn"
-                          ? "text-amber-500"
+                          ? "text-warn"
                           : undefined
                     }
                   >
