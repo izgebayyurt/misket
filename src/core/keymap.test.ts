@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import en from "@/locales/en/common.json";
 import {
   describe as describeAction,
   describeMedia,
@@ -13,6 +14,15 @@ import {
   type Action,
   type MediaAction,
 } from "./keymap";
+
+/** Resolve a `keymap.*` key (as `LABELS`/`MEDIA_LABELS` store it) to its English text. */
+function englishFor(key: string): string {
+  const value = key
+    .split(".")
+    .reduce<unknown>((node, part) => (node as Record<string, unknown>)?.[part], en);
+  if (typeof value !== "string") throw new Error(`no English resource for "${key}"`);
+  return value;
+}
 
 function ev(init: Partial<KeyboardEvent> & { key: string }, target?: EventTarget): KeyboardEvent {
   const e = new KeyboardEvent("keydown", { ...init, bubbles: true });
@@ -196,7 +206,7 @@ describe("keymap", () => {
 
   it("gives every media action a label and a printable chord", () => {
     for (const action of Object.keys(MEDIA_SHORTCUTS) as MediaAction[]) {
-      expect(MEDIA_LABELS[action], `missing label for "${action}"`).toBeTruthy();
+      expect(englishFor(MEDIA_LABELS[action]), `missing label for "${action}"`).toBeTruthy();
       expect(describeMedia(action)).toBeTruthy();
     }
     expect(describeMedia("mediaPlayPause")).toBe("Space");
@@ -221,28 +231,32 @@ describe("keymap", () => {
 
   it("gives every action a non-empty label", () => {
     for (const action of Object.keys(SHORTCUTS) as Action[]) {
-      expect(LABELS[action], `missing label for "${action}"`).toBeTruthy();
+      expect(englishFor(LABELS[action]), `missing label for "${action}"`).toBeTruthy();
     }
   });
 
   it("keeps the docs site's cheatsheet in sync with every shortcut", () => {
     // site/docs/shortcuts.html hand-transcribes SHORTCUTS for macOS and
-    // Windows/Linux columns. Fail loudly if an action's label is missing,
-    // so the shipped page can't silently drift from the real keymap.
+    // Windows/Linux columns. Fail loudly if an action's English label is
+    // missing, so the shipped page can't silently drift from the real
+    // keymap. Labels now live in src/locales/en/common.json; LABELS/
+    // MEDIA_LABELS just point at the keys (see core/keymap.ts).
     const shortcutsHtml = readFileSync(
       path.resolve(__dirname, "../../site/docs/shortcuts.html"),
       "utf-8",
     );
     for (const action of Object.keys(SHORTCUTS) as Action[]) {
+      const text = englishFor(LABELS[action]);
       expect(
-        shortcutsHtml.includes(LABELS[action]),
-        `"${LABELS[action]}" (action "${action}") is missing from site/docs/shortcuts.html`,
+        shortcutsHtml.includes(text),
+        `"${text}" (action "${action}") is missing from site/docs/shortcuts.html`,
       ).toBe(true);
     }
     for (const action of Object.keys(MEDIA_SHORTCUTS) as MediaAction[]) {
+      const text = englishFor(MEDIA_LABELS[action]);
       expect(
-        shortcutsHtml.includes(MEDIA_LABELS[action]),
-        `"${MEDIA_LABELS[action]}" (action "${action}") is missing from site/docs/shortcuts.html`,
+        shortcutsHtml.includes(text),
+        `"${text}" (action "${action}") is missing from site/docs/shortcuts.html`,
       ).toBe(true);
     }
   });

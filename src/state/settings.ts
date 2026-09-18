@@ -4,9 +4,11 @@ import { queryClient } from "@/queries/client";
 import { keys } from "@/queries/keys";
 import type { AppSettings } from "@/api/types";
 import { setTheme } from "./theme";
+import { applyLanguage } from "@/lib/i18n";
 
 export const DEFAULT_SETTINGS: AppSettings = {
   theme: "system",
+  language: "system",
   editorFontSize: 17,
   editorLineHeight: 1.7,
   confirmDeleteExcerpt: false,
@@ -37,6 +39,7 @@ function applyDocStyle(s: AppSettings) {
 function applyAll(s: AppSettings) {
   setTheme(s.theme);
   applyDocStyle(s);
+  applyLanguage(s.language);
 }
 
 let saveTimer: ReturnType<typeof setTimeout> | undefined;

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Trans, useTranslation } from "react-i18next";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,33 +10,40 @@ import { useTessdataLanguages } from "@/queries/ocr";
 import { sendReportNow } from "@/api/diagnostics";
 import { toast } from "@/state/toasts";
 import { LogViewerDialog } from "./LogViewerDialog";
-import type { ReportFormat, Theme } from "@/api/types";
+import type { Language, ReportFormat, Theme } from "@/api/types";
 
-const THEME_OPTIONS: { value: Theme; label: string }[] = [
-  { value: "system", label: "System" },
-  { value: "light", label: "Light" },
-  { value: "dark", label: "Dark" },
+const THEME_OPTIONS: { value: Theme; labelKey: string }[] = [
+  { value: "system", labelKey: "settings.theme.system" },
+  { value: "light", labelKey: "settings.theme.light" },
+  { value: "dark", labelKey: "settings.theme.dark" },
 ];
 
-const REPORT_FORMAT_OPTIONS: { value: ReportFormat; label: string }[] = [
-  { value: "json", label: "Plain JSON" },
-  { value: "sentry", label: "Sentry envelope" },
+const LANGUAGE_OPTIONS: { value: Language; labelKey: string }[] = [
+  { value: "system", labelKey: "settings.language.system" },
+  { value: "en", labelKey: "settings.language.en" },
+  { value: "tr", labelKey: "settings.language.tr" },
+];
+
+const REPORT_FORMAT_OPTIONS: { value: ReportFormat; labelKey: string }[] = [
+  { value: "json", labelKey: "settings.diagnostics.formatJson" },
+  { value: "sentry", labelKey: "settings.diagnostics.formatSentry" },
 ];
 
 export function SettingsDialog({ onClose }: { onClose: () => void }) {
+  const { t } = useTranslation();
   const settings = useSettings((s) => s.settings);
   const update = useSettings((s) => s.update);
   const [logsOpen, setLogsOpen] = useState(false);
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent title="Settings" description="Changes apply immediately.">
+      <DialogContent title={t("settings.title")} description={t("settings.description")}>
         <div className="space-y-5">
           <section>
             <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-fg-muted">
-              Theme
+              {t("settings.theme.label")}
             </label>
-            <div className="flex gap-1" role="radiogroup" aria-label="Theme">
+            <div className="flex gap-1" role="radiogroup" aria-label={t("settings.theme.label")}>
               {THEME_OPTIONS.map((o) => (
                 <Button
                   key={o.value}
@@ -45,7 +53,32 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
                   aria-pressed={settings.theme === o.value}
                   onClick={() => update({ theme: o.value })}
                 >
-                  {o.label}
+                  {t(o.labelKey)}
+                </Button>
+              ))}
+            </div>
+          </section>
+
+          <section>
+            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-fg-muted">
+              {t("settings.language.label")}
+            </label>
+            <div
+              className="flex gap-1"
+              role="radiogroup"
+              aria-label={t("settings.language.label")}
+            >
+              {LANGUAGE_OPTIONS.map((o) => (
+                <Button
+                  key={o.value}
+                  type="button"
+                  size="sm"
+                  variant={settings.language === o.value ? "default" : "outline"}
+                  aria-pressed={settings.language === o.value}
+                  onClick={() => update({ language: o.value })}
+                  data-testid={`settings-language-${o.value}`}
+                >
+                  {t(o.labelKey)}
                 </Button>
               ))}
             </div>
@@ -57,7 +90,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
                 htmlFor="settings-font-size"
                 className="text-xs font-semibold uppercase tracking-wide text-fg-muted"
               >
-                Document text size
+                {t("settings.documentTextSize")}
               </label>
               <span className="text-sm text-fg-muted">{settings.editorFontSize}px</span>
             </div>
@@ -80,7 +113,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
                 htmlFor="settings-line-height"
                 className="text-xs font-semibold uppercase tracking-wide text-fg-muted"
               >
-                Line spacing
+                {t("settings.lineSpacing")}
               </label>
               <span className="text-sm text-fg-muted">{settings.editorLineHeight.toFixed(1)}</span>
             </div>
@@ -105,7 +138,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
                 onChange={(e) => update({ showParagraphNumbers: e.target.checked })}
                 data-testid="settings-paragraph-numbers"
               />
-              Show paragraph numbers in documents
+              {t("settings.showParagraphNumbers")}
             </label>
             <label className="flex items-center gap-2 text-sm">
               <input
@@ -114,7 +147,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
                 onChange={(e) => update({ showSpeakerGutter: e.target.checked })}
                 data-testid="settings-speaker-gutter"
               />
-              Show transcript speakers in a gutter
+              {t("settings.showSpeakerGutter")}
             </label>
             <label className="flex items-center gap-2 text-sm">
               <input
@@ -122,7 +155,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
                 checked={settings.confirmDeleteExcerpt}
                 onChange={(e) => update({ confirmDeleteExcerpt: e.target.checked })}
               />
-              Confirm before deleting an excerpt
+              {t("settings.confirmDeleteExcerpt")}
             </label>
           </section>
 
@@ -132,7 +165,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
                 htmlFor="settings-keep-backups"
                 className="text-xs font-semibold uppercase tracking-wide text-fg-muted"
               >
-                Backups to keep
+                {t("settings.backupsToKeep")}
               </label>
               <span className="text-sm text-fg-muted">{settings.keepBackups}</span>
             </div>
@@ -153,32 +186,27 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
 
           <section>
             <h3 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-fg-muted">
-              You
+              {t("settings.you.title")}
             </h3>
             <label htmlFor="settings-coder-name" className="mb-1 block text-sm">
-              Name
+              {t("settings.you.name")}
             </label>
             <Input
               id="settings-coder-name"
               value={settings.coderName ?? ""}
-              placeholder="Your computer's user name"
+              placeholder={t("settings.you.namePlaceholder")}
               onChange={(e) => update({ coderName: e.target.value })}
               data-testid="settings-coder-name"
             />
-            <p className="mt-1 text-xs text-fg-muted">
-              Recorded next to every change you make and on every code you apply, so a shared file
-              says who did what. Leave it empty to use your computer's user name.
-            </p>
+            <p className="mt-1 text-xs text-fg-muted">{t("settings.you.nameHint")}</p>
 
             <div className="mt-3">
-              <span className="mb-1 block text-sm">Colour</span>
+              <span className="mb-1 block text-sm">{t("settings.you.colour")}</span>
               <ColorPicker
                 value={settings.coderColor ?? ""}
                 onChange={(coderColor) => update({ coderColor })}
               />
-              <p className="mt-1 text-xs text-fg-muted">
-                How your coding is marked when more than one person has worked on a project.
-              </p>
+              <p className="mt-1 text-xs text-fg-muted">{t("settings.you.colourHint")}</p>
             </div>
 
             <label className="mt-3 flex items-center gap-2 text-sm">
@@ -188,23 +216,19 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
                 onChange={(e) => update({ lanesByCoder: e.target.checked })}
                 data-testid="settings-lanes-by-coder"
               />
-              Colour document underlines by coder
+              {t("settings.you.lanesByCoder")}
             </label>
 
             <div className="mt-3">
-              <span className="mb-1 block text-sm">Coder id</span>
+              <span className="mb-1 block text-sm">{t("settings.you.coderId")}</span>
               <Input
                 readOnly
-                value={settings.coderId ?? "(not set yet)"}
+                value={settings.coderId ?? t("settings.you.coderIdNotSet")}
                 className="font-mono text-xs"
                 onFocus={(e) => e.currentTarget.select()}
                 data-testid="settings-coder-id"
               />
-              <p className="mt-1 text-xs text-fg-muted">
-                Share this with nobody; it just tells copies apart. It is generated once on this
-                computer and never changes, which is how Misket can later merge a colleague&rsquo;s
-                copy of a project into yours without mixing up whose coding is whose.
-              </p>
+              <p className="mt-1 text-xs text-fg-muted">{t("settings.you.coderIdHint")}</p>
             </div>
           </section>
 
@@ -218,6 +242,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
 }
 
 function UpdatesSection() {
+  const { t } = useTranslation();
   const settings = useSettings((s) => s.settings);
   const update = useSettings((s) => s.update);
   const status = useUpdates((s) => s.status);
@@ -226,7 +251,7 @@ function UpdatesSection() {
   return (
     <section>
       <h3 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-fg-muted">
-        Updates
+        {t("settings.updates.title")}
       </h3>
       <label className="flex items-center gap-2 text-sm">
         <input
@@ -235,7 +260,7 @@ function UpdatesSection() {
           onChange={(e) => update({ checkForUpdatesAutomatically: e.target.checked })}
           data-testid="settings-auto-update"
         />
-        Check for updates automatically
+        {t("settings.updates.autoCheck")}
       </label>
       <div className="mt-2 flex items-center gap-2">
         <Button
@@ -246,16 +271,16 @@ function UpdatesSection() {
           disabled={status === "checking" || status === "downloading"}
           data-testid="check-for-updates"
         >
-          {status === "checking" ? "Checking…" : "Check for updates…"}
+          {status === "checking" ? t("settings.updates.checking") : t("settings.updates.checkNow")}
         </Button>
         {settings.skippedUpdateVersion ? (
           <span className="text-xs text-fg-muted">
-            Skipping {settings.skippedUpdateVersion}.{" "}
+            {t("settings.updates.skipping", { version: settings.skippedUpdateVersion })}{" "}
             <button
               className="underline hover:text-fg"
               onClick={() => update({ skippedUpdateVersion: null })}
             >
-              Stop skipping
+              {t("settings.updates.stopSkipping")}
             </button>
           </span>
         ) : null}
@@ -271,6 +296,7 @@ function UpdatesSection() {
  * `src-tauri/src/reporting.rs`, for how it is built and redacted.
  */
 function DiagnosticsSection({ onOpenLogs }: { onOpenLogs: () => void }) {
+  const { t } = useTranslation();
   const settings = useSettings((s) => s.settings);
   const update = useSettings((s) => s.update);
   const [sending, setSending] = useState(false);
@@ -279,7 +305,7 @@ function DiagnosticsSection({ onOpenLogs }: { onOpenLogs: () => void }) {
     setSending(true);
     try {
       await sendReportNow();
-      toast.info("Report sent");
+      toast.info(t("settings.diagnostics.reportSent"));
     } catch (e) {
       toast.error(e);
     } finally {
@@ -290,11 +316,11 @@ function DiagnosticsSection({ onOpenLogs }: { onOpenLogs: () => void }) {
   return (
     <section>
       <h3 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-fg-muted">
-        Diagnostics
+        {t("settings.diagnostics.title")}
       </h3>
 
       <Button type="button" variant="outline" size="sm" onClick={onOpenLogs}>
-        View logs…
+        {t("settings.diagnostics.viewLogs")}
       </Button>
 
       <label className="mt-3 flex items-start gap-2 text-sm">
@@ -306,12 +332,9 @@ function DiagnosticsSection({ onOpenLogs }: { onOpenLogs: () => void }) {
           data-testid="settings-send-crash-reports"
         />
         <span>
-          <span className="block">Send anonymous crash reports</span>
+          <span className="block">{t("settings.diagnostics.sendCrashReports")}</span>
           <span className="mt-0.5 block text-xs text-fg-muted">
-            When something breaks, sends the app version, your OS, the error message and stack, and
-            the last 50 log lines (any file path in them replaced with a short hash) to the address
-            below. Never sent: your document text, codes, memos or file names — and nothing at all
-            unless an address is set here too.
+            {t("settings.diagnostics.sendCrashReportsHint")}
           </span>
         </span>
       </label>
@@ -320,7 +343,7 @@ function DiagnosticsSection({ onOpenLogs }: { onOpenLogs: () => void }) {
         <div className="mt-3 space-y-2 pl-6">
           <div>
             <label htmlFor="settings-report-endpoint" className="mb-1 block text-sm">
-              Report endpoint
+              {t("settings.diagnostics.reportEndpoint")}
             </label>
             <Input
               id="settings-report-endpoint"
@@ -330,15 +353,17 @@ function DiagnosticsSection({ onOpenLogs }: { onOpenLogs: () => void }) {
               data-testid="settings-report-endpoint"
             />
             <p className="mt-1 text-xs text-fg-muted">
-              Left empty (the default), reporting stays off no matter what is checked above. A
-              maintainer running their own GlitchTip- or Sentry-compatible collector puts its URL
-              here.
+              {t("settings.diagnostics.reportEndpointHint")}
             </p>
           </div>
 
           <div>
-            <span className="mb-1 block text-sm">Format</span>
-            <div className="flex gap-1" role="radiogroup" aria-label="Report format">
+            <span className="mb-1 block text-sm">{t("settings.diagnostics.format")}</span>
+            <div
+              className="flex gap-1"
+              role="radiogroup"
+              aria-label={t("settings.diagnostics.format")}
+            >
               {REPORT_FORMAT_OPTIONS.map((o) => (
                 <Button
                   key={o.value}
@@ -348,7 +373,7 @@ function DiagnosticsSection({ onOpenLogs }: { onOpenLogs: () => void }) {
                   aria-pressed={settings.reportFormat === o.value}
                   onClick={() => update({ reportFormat: o.value })}
                 >
-                  {o.label}
+                  {t(o.labelKey)}
                 </Button>
               ))}
             </div>
@@ -361,7 +386,7 @@ function DiagnosticsSection({ onOpenLogs }: { onOpenLogs: () => void }) {
             onClick={() => void sendNow()}
             disabled={sending || !settings.reportEndpoint.trim()}
           >
-            {sending ? "Sending…" : "Send a report now"}
+            {sending ? t("settings.diagnostics.sending") : t("settings.diagnostics.sendNow")}
           </Button>
         </div>
       ) : null}
@@ -376,6 +401,7 @@ function DiagnosticsSection({ onOpenLogs }: { onOpenLogs: () => void }) {
  * which of them to actually use.
  */
 function OcrLanguagesSection() {
+  const { t } = useTranslation();
   const settings = useSettings((s) => s.settings);
   const update = useSettings((s) => s.update);
   const { data, isLoading, refetch, isFetching } = useTessdataLanguages();
@@ -390,25 +416,29 @@ function OcrLanguagesSection() {
   return (
     <section>
       <h3 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-fg-muted">
-        OCR languages
+        {t("settings.ocr.title")}
       </h3>
       <p className="mb-2 text-xs text-fg-muted">
-        Scanned PDFs are recognised with on-device OCR. English (<code>eng</code>) is built in; for
-        another language, download its <code>.traineddata</code> file from the{" "}
-        <a
-          href="https://github.com/tesseract-ocr/tessdata_fast"
-          target="_blank"
-          rel="noreferrer"
-          className="underline"
-        >
-          tessdata_fast
-        </a>{" "}
-        project and drop it into this folder, then reopen Settings:
+        <Trans
+          i18nKey="settings.ocr.intro"
+          components={{
+            code: <code />,
+            ext: <code />,
+            link: (
+              <a
+                href="https://github.com/tesseract-ocr/tessdata_fast"
+                target="_blank"
+                rel="noreferrer"
+                className="underline"
+              />
+            ),
+          }}
+        />
       </p>
       <div className="flex items-center gap-2">
         <Input
           readOnly
-          value={isLoading ? "Loading…" : (data?.dir ?? "")}
+          value={isLoading ? t("common.loading") : (data?.dir ?? "")}
           className="font-mono text-xs"
           onFocus={(e) => e.currentTarget.select()}
           data-testid="settings-tessdata-dir"
@@ -420,13 +450,13 @@ function OcrLanguagesSection() {
           onClick={() => void refetch()}
           disabled={isFetching}
         >
-          Refresh
+          {t("common.refresh")}
         </Button>
       </div>
       <ul className="mt-2 space-y-1 text-sm">
         <li className="flex items-center gap-2 text-fg-muted">
           <input type="checkbox" checked readOnly disabled />
-          eng (bundled)
+          {t("settings.ocr.bundled")}
         </li>
         {data?.languages.map((lang) => (
           <li key={lang} className="flex items-center gap-2">
@@ -441,7 +471,7 @@ function OcrLanguagesSection() {
         ))}
       </ul>
       {!isLoading && data?.languages.length === 0 ? (
-        <p className="mt-1 text-xs text-fg-muted">No additional languages found yet.</p>
+        <p className="mt-1 text-xs text-fg-muted">{t("settings.ocr.noneFound")}</p>
       ) : null}
     </section>
   );

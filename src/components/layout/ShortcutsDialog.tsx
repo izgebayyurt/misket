@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import {
   describe,
@@ -11,9 +12,9 @@ import {
 import { useCodes } from "@/queries/codes";
 import { ColorDot } from "@/components/codebook/ColorSwatch";
 
-const GROUPS: { title: string; actions: Action[] }[] = [
+const GROUPS: { titleKey: string; actions: Action[] }[] = [
   {
-    title: "Navigation",
+    titleKey: "shortcuts.groups.navigation",
     actions: [
       "overview",
       "history",
@@ -32,7 +33,7 @@ const GROUPS: { title: string; actions: Action[] }[] = [
     ],
   },
   {
-    title: "Coding",
+    titleKey: "shortcuts.groups.coding",
     actions: [
       "palette",
       "inVivoCode",
@@ -44,7 +45,7 @@ const GROUPS: { title: string; actions: Action[] }[] = [
     ],
   },
   {
-    title: "Excerpt boundaries",
+    titleKey: "shortcuts.groups.excerptBoundaries",
     actions: [
       "excerptEndLeft",
       "excerptEndRight",
@@ -59,11 +60,11 @@ const GROUPS: { title: string; actions: Action[] }[] = [
     ],
   },
   {
-    title: "Project",
+    titleKey: "shortcuts.groups.project",
     actions: ["openProject", "newProject", "import", "newMemo", "settings", "shortcutsHelp"],
   },
   {
-    title: "Editing",
+    titleKey: "shortcuts.groups.editing",
     actions: ["undo", "redo"],
   },
 ];
@@ -76,38 +77,39 @@ const MEDIA_GROUP = Object.keys(MEDIA_SHORTCUTS) as MediaAction[];
  * through the keymap — there is nothing global about them.
  */
 const HISTORY_KEYS: [string, string][] = [
-  ["Move the selection", "↑ ↓"],
-  ["Fold or unfold a day", "Enter"],
-  ["Go to the selected step", "G"],
+  ["shortcuts.history.moveSelection", "↑ ↓"],
+  ["shortcuts.history.foldDay", "Enter"],
+  ["shortcuts.history.goToStep", "G"],
 ];
 
 export function ShortcutsDialog({ onClose }: { onClose: () => void }) {
+  const { t } = useTranslation();
   const { data: codes } = useCodes();
   const withShortcut = (codes ?? []).filter((c) => c.shortcut);
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent title="Keyboard shortcuts" className="max-w-lg">
+      <DialogContent title={t("shortcuts.title")} className="max-w-lg">
         <div className="max-h-[70vh] space-y-5 overflow-y-auto pr-1">
           {GROUPS.map((g) => (
-            <section key={g.title}>
+            <section key={g.titleKey}>
               <h3 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-fg-muted">
-                {g.title}
+                {t(g.titleKey)}
               </h3>
               <dl className="space-y-1">
                 {g.actions.map((action) => (
                   <div key={action} className="flex items-center justify-between gap-4 text-sm">
-                    <dt>{label(action)}</dt>
+                    <dt>{t(label(action))}</dt>
                     <dd className="whitespace-nowrap rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-xs">
                       {describe(action)}
                     </dd>
                   </div>
                 ))}
               </dl>
-              {g.title === "Coding" ? (
+              {g.titleKey === "shortcuts.groups.coding" ? (
                 <dl className="space-y-1">
                   <div className="flex items-center justify-between gap-4 text-sm">
-                    <dt>Rate the last applied code, with an excerpt focused</dt>
+                    <dt>{t("shortcuts.rateLastCode")}</dt>
                     <dd className="whitespace-nowrap rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-xs">
                       1–9
                     </dd>
@@ -118,16 +120,18 @@ export function ShortcutsDialog({ onClose }: { onClose: () => void }) {
           ))}
           <section>
             <h3 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-fg-muted">
-              Audio and video
+              {t("shortcuts.groups.audioVideo")}
             </h3>
             <p className="mb-1.5 text-xs text-fg-muted">
-              Bare keys, live only while the player has the focus. With an in- and out-point marked,{" "}
-              {describe("editExcerpt")} or {describe("palette")} codes that stretch.
+              {t("shortcuts.audioVideoHint", {
+                editExcerpt: describe("editExcerpt"),
+                palette: describe("palette"),
+              })}
             </p>
             <dl className="space-y-1">
               {MEDIA_GROUP.map((action) => (
                 <div key={action} className="flex items-center justify-between gap-4 text-sm">
-                  <dt>{mediaLabel(action)}</dt>
+                  <dt>{t(mediaLabel(action))}</dt>
                   <dd className="whitespace-nowrap rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-xs">
                     {describeMedia(action)}
                   </dd>
@@ -137,12 +141,12 @@ export function ShortcutsDialog({ onClose }: { onClose: () => void }) {
           </section>
           <section>
             <h3 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-fg-muted">
-              In the History view
+              {t("shortcuts.groups.historyView")}
             </h3>
             <dl className="space-y-1">
-              {HISTORY_KEYS.map(([what, key]) => (
-                <div key={what} className="flex items-center justify-between gap-4 text-sm">
-                  <dt>{what}</dt>
+              {HISTORY_KEYS.map(([whatKey, key]) => (
+                <div key={whatKey} className="flex items-center justify-between gap-4 text-sm">
+                  <dt>{t(whatKey)}</dt>
                   <dd className="whitespace-nowrap rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-xs">
                     {key}
                   </dd>
@@ -152,10 +156,10 @@ export function ShortcutsDialog({ onClose }: { onClose: () => void }) {
           </section>
           <section>
             <h3 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-fg-muted">
-              Code hotkeys
+              {t("shortcuts.groups.codeHotkeys")}
             </h3>
             {withShortcut.length === 0 ? (
-              <p className="text-sm text-fg-muted">No codes have a hotkey yet.</p>
+              <p className="text-sm text-fg-muted">{t("shortcuts.noCodeHotkeys")}</p>
             ) : (
               <dl className="space-y-1">
                 {withShortcut.map((c) => (

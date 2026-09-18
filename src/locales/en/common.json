@@ -1,0 +1,140 @@
+{
+  "keymap": {
+    "openProject": "Open project",
+    "newProject": "New project",
+    "import": "Import documents",
+    "overview": "Project overview",
+    "history": "History",
+    "excerptBrowser": "Excerpt browser",
+    "analysis": "Analysis views",
+    "find": "Find in document",
+    "findInProject": "Find in project",
+    "tabDocuments": "Switch to Documents tab",
+    "tabCodes": "Switch to Codes tab",
+    "newMemo": "New memo",
+    "palette": "Open code palette",
+    "inVivoCode": "In vivo code from the selection",
+    "quickCode": "Apply the last code used again",
+    "settings": "Open settings",
+    "shortcutsHelp": "Keyboard shortcuts",
+    "undo": "Undo",
+    "redo": "Redo",
+    "nextExcerpt": "Next excerpt",
+    "prevExcerpt": "Previous excerpt",
+    "editExcerpt": "Edit focused excerpt",
+    "deleteExcerpt": "Delete focused excerpt",
+    "extendSelectionLeft": "Extend selection left",
+    "extendSelectionRight": "Extend selection right",
+    "excerptEndLeft": "Move excerpt end left by a word",
+    "excerptEndRight": "Move excerpt end right by a word",
+    "excerptEndLeftChar": "Move excerpt end left by a character",
+    "excerptEndRightChar": "Move excerpt end right by a character",
+    "excerptStartLeft": "Move excerpt start left by a word",
+    "excerptStartRight": "Move excerpt start right by a word",
+    "excerptStartLeftChar": "Move excerpt start left by a character",
+    "excerptStartRightChar": "Move excerpt start right by a character",
+    "splitExcerpt": "Split excerpt at the cursor",
+    "mergeExcerpt": "Merge excerpt with its neighbour",
+    "jumpTop": "Jump to the top of the document",
+    "jumpBottom": "Jump to the bottom of the document",
+    "goToParagraph": "Go to paragraph",
+    "escape": "Cancel / close",
+    "setWeight": "Rate the last applied code, with an excerpt focused (1–9)",
+    "media": {
+      "playPause": "Play / pause",
+      "back": "Back 5 seconds",
+      "forward": "Forward 5 seconds",
+      "stepBack": "Back 100 ms",
+      "stepForward": "Forward 100 ms",
+      "setIn": "Set the in-point here",
+      "setOut": "Set the out-point here"
+    }
+  },
+  "shortcuts": {
+    "title": "Keyboard shortcuts",
+    "groups": {
+      "navigation": "Navigation",
+      "coding": "Coding",
+      "excerptBoundaries": "Excerpt boundaries",
+      "project": "Project",
+      "editing": "Editing",
+      "audioVideo": "Audio and video",
+      "historyView": "In the History view",
+      "codeHotkeys": "Code hotkeys"
+    },
+    "rateLastCode": "Rate the last applied code, with an excerpt focused",
+    "audioVideoHint": "Bare keys, live only while the player has the focus. With an in- and out-point marked, {{editExcerpt}} or {{palette}} codes that stretch.",
+    "noCodeHotkeys": "No codes have a hotkey yet.",
+    "history": {
+      "moveSelection": "Move the selection",
+      "foldDay": "Fold or unfold a day",
+      "goToStep": "Go to the selected step"
+    }
+  },
+  "common": {
+    "loading": "Loading…",
+    "refresh": "Refresh"
+  },
+  "settings": {
+    "title": "Settings",
+    "description": "Changes apply immediately.",
+    "theme": {
+      "label": "Theme",
+      "system": "System",
+      "light": "Light",
+      "dark": "Dark"
+    },
+    "language": {
+      "label": "Language",
+      "system": "System",
+      "en": "English",
+      "tr": "Türkçe"
+    },
+    "documentTextSize": "Document text size",
+    "lineSpacing": "Line spacing",
+    "showParagraphNumbers": "Show paragraph numbers in documents",
+    "showSpeakerGutter": "Show transcript speakers in a gutter",
+    "confirmDeleteExcerpt": "Confirm before deleting an excerpt",
+    "backupsToKeep": "Backups to keep",
+    "ocr": {
+      "title": "OCR languages",
+      "intro": "Scanned PDFs are recognised with on-device OCR. English (<code>eng</code>) is built in; for another language, download its <ext>.traineddata</ext> file from the <link>tessdata_fast</link> project and drop it into this folder, then reopen Settings:",
+      "bundled": "eng (bundled)",
+      "noneFound": "No additional languages found yet."
+    },
+    "you": {
+      "title": "You",
+      "name": "Name",
+      "namePlaceholder": "Your computer's user name",
+      "nameHint": "Recorded next to every change you make and on every code you apply, so a shared file says who did what. Leave it empty to use your computer's user name.",
+      "colour": "Colour",
+      "colourHint": "How your coding is marked when more than one person has worked on a project.",
+      "lanesByCoder": "Colour document underlines by coder",
+      "coderId": "Coder id",
+      "coderIdNotSet": "(not set yet)",
+      "coderIdHint": "Share this with nobody; it just tells copies apart. It is generated once on this computer and never changes, which is how Misket can later merge a colleague's copy of a project into yours without mixing up whose coding is whose."
+    },
+    "updates": {
+      "title": "Updates",
+      "autoCheck": "Check for updates automatically",
+      "checking": "Checking…",
+      "checkNow": "Check for updates…",
+      "skipping": "Skipping {{version}}.",
+      "stopSkipping": "Stop skipping"
+    },
+    "diagnostics": {
+      "title": "Diagnostics",
+      "viewLogs": "View logs…",
+      "sendCrashReports": "Send anonymous crash reports",
+      "sendCrashReportsHint": "When something breaks, sends the app version, your OS, the error message and stack, and the last 50 log lines (any file path in them replaced with a short hash) to the address below. Never sent: your document text, codes, memos or file names — and nothing at all unless an address is set here too.",
+      "reportEndpoint": "Report endpoint",
+      "reportEndpointHint": "Left empty (the default), reporting stays off no matter what is checked above. A maintainer running their own GlitchTip- or Sentry-compatible collector puts its URL here.",
+      "format": "Format",
+      "formatJson": "Plain JSON",
+      "formatSentry": "Sentry envelope",
+      "sending": "Sending…",
+      "sendNow": "Send a report now",
+      "reportSent": "Report sent"
+    }
+  }
+}

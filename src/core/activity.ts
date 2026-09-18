@@ -21,23 +21,29 @@ const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;
 
 /**
- * A short, calm relative time: `just now`, `12m ago`, `5h ago`, `3d ago`, and
- * a plain date once it is over a month old. Unparseable input reads as `–`.
+ * A short, calm relative time — "5 minutes ago", "in 2 hours" — through
+ * `Intl.RelativeTimeFormat` so it reads correctly in every locale we ship
+ * (see `src/core/locale.ts` for the locale tag). Falls back to a plain
+ * localized date once it is over a month old. Unparseable input reads as an
+ * em dash, the one piece of this that has no words to translate.
  */
-export function relativeTime(iso: string, now: number = Date.now()): string {
+export function relativeTime(iso: string, now: number = Date.now(), locale = "en"): string {
   const then = new Date(iso).getTime();
   if (Number.isNaN(then)) return "–";
   const diff = now - then;
-  if (diff < MINUTE) return "just now";
-  if (diff < HOUR) return `${Math.round(diff / MINUTE)}m ago`;
-  if (diff < DAY) return `${Math.round(diff / HOUR)}h ago`;
+  const rtf = new Intl.RelativeTimeFormat(locale, { numeric: "auto" });
+  if (diff < MINUTE) return rtf.format(0, "second");
+  if (diff < HOUR) return rtf.format(-Math.round(diff / MINUTE), "minute");
+  if (diff < DAY) return rtf.format(-Math.round(diff / HOUR), "hour");
   const days = Math.round(diff / DAY);
-  if (days < 30) return `${days}d ago`;
-  return new Date(iso).toLocaleDateString();
+  if (days < 30) return rtf.format(-days, "day");
+  return new Intl.DateTimeFormat(locale).format(new Date(iso));
 }
 
 /** The full timestamp, for a `title` tooltip. */
-export function absoluteTime(iso: string): string {
+export function absoluteTime(iso: string, locale = "en"): string {
   const t = new Date(iso);
-  return Number.isNaN(t.getTime()) ? iso : t.toLocaleString();
+  return Number.isNaN(t.getTime())
+    ? iso
+    : new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short" }).format(t);
 }

@@ -1,0 +1,140 @@
+{
+  "keymap": {
+    "openProject": "Proje aç",
+    "newProject": "Yeni proje",
+    "import": "Belge içe aktar",
+    "overview": "Proje genel bakışı",
+    "history": "Tarihçe",
+    "excerptBrowser": "Alıntı tarayıcısı",
+    "analysis": "Analiz görünümleri",
+    "find": "Belgede bul",
+    "findInProject": "Projede bul",
+    "tabDocuments": "Belgeler sekmesine geç",
+    "tabCodes": "Kodlar sekmesine geç",
+    "newMemo": "Yeni not",
+    "palette": "Kod paletini aç",
+    "inVivoCode": "Seçimden in vivo kod oluştur",
+    "quickCode": "Son kullanılan kodu yeniden uygula",
+    "settings": "Ayarları aç",
+    "shortcutsHelp": "Klavye kısayolları",
+    "undo": "Geri al",
+    "redo": "Yinele",
+    "nextExcerpt": "Sonraki alıntı",
+    "prevExcerpt": "Önceki alıntı",
+    "editExcerpt": "Odaklanılan alıntıyı düzenle",
+    "deleteExcerpt": "Odaklanılan alıntıyı sil",
+    "extendSelectionLeft": "Seçimi sola genişlet",
+    "extendSelectionRight": "Seçimi sağa genişlet",
+    "excerptEndLeft": "Alıntı bitişini bir kelime sola taşı",
+    "excerptEndRight": "Alıntı bitişini bir kelime sağa taşı",
+    "excerptEndLeftChar": "Alıntı bitişini bir karakter sola taşı",
+    "excerptEndRightChar": "Alıntı bitişini bir karakter sağa taşı",
+    "excerptStartLeft": "Alıntı başlangıcını bir kelime sola taşı",
+    "excerptStartRight": "Alıntı başlangıcını bir kelime sağa taşı",
+    "excerptStartLeftChar": "Alıntı başlangıcını bir karakter sola taşı",
+    "excerptStartRightChar": "Alıntı başlangıcını bir karakter sağa taşı",
+    "splitExcerpt": "Alıntıyı imleçte böl",
+    "mergeExcerpt": "Alıntıyı komşusuyla birleştir",
+    "jumpTop": "Belgenin başına git",
+    "jumpBottom": "Belgenin sonuna git",
+    "goToParagraph": "Paragrafa git",
+    "escape": "İptal / kapat",
+    "setWeight": "Odaklanılan bir alıntıyla son uygulanan kodu puanla (1-9)",
+    "media": {
+      "playPause": "Oynat / duraklat",
+      "back": "5 saniye geri",
+      "forward": "5 saniye ileri",
+      "stepBack": "100 ms geri",
+      "stepForward": "100 ms ileri",
+      "setIn": "Giriş noktasını burada ayarla",
+      "setOut": "Çıkış noktasını burada ayarla"
+    }
+  },
+  "shortcuts": {
+    "title": "Klavye kısayolları",
+    "groups": {
+      "navigation": "Gezinme",
+      "coding": "Kodlama",
+      "excerptBoundaries": "Alıntı sınırları",
+      "project": "Proje",
+      "editing": "Düzenleme",
+      "audioVideo": "Ses ve video",
+      "historyView": "Tarihçe görünümünde",
+      "codeHotkeys": "Kod kısayol tuşları"
+    },
+    "rateLastCode": "Odaklanılan bir alıntıyla son uygulanan kodu puanla",
+    "audioVideoHint": "Yalnızca oynatıcı odaktayken çalışan, değiştiricisiz tuşlar. Bir giriş ve çıkış noktası işaretliyken {{editExcerpt}} veya {{palette}} bu aralığı kodlar.",
+    "noCodeHotkeys": "Henüz hiçbir kodun kısayol tuşu yok.",
+    "history": {
+      "moveSelection": "Seçimi taşı",
+      "foldDay": "Bir günü katla veya aç",
+      "goToStep": "Seçili adıma git"
+    }
+  },
+  "common": {
+    "loading": "Yükleniyor…",
+    "refresh": "Yenile"
+  },
+  "settings": {
+    "title": "Ayarlar",
+    "description": "Değişiklikler hemen uygulanır.",
+    "theme": {
+      "label": "Tema",
+      "system": "Sistem",
+      "light": "Açık",
+      "dark": "Koyu"
+    },
+    "language": {
+      "label": "Dil",
+      "system": "Sistem",
+      "en": "English",
+      "tr": "Türkçe"
+    },
+    "documentTextSize": "Belge metin boyutu",
+    "lineSpacing": "Satır aralığı",
+    "showParagraphNumbers": "Belgelerde paragraf numarası göster",
+    "showSpeakerGutter": "Transkript konuşmacılarını bir kenar sütununda göster",
+    "confirmDeleteExcerpt": "Bir alıntıyı silmeden önce onay iste",
+    "backupsToKeep": "Saklanacak yedek sayısı",
+    "ocr": {
+      "title": "OCR dilleri",
+      "intro": "Taranmış PDF'ler cihaz üzerinde OCR ile tanınır. İngilizce (<code>eng</code>) yerleşiktir; başka bir dil için <ext>.traineddata</ext> dosyasını <link>tessdata_fast</link> projesinden indirip bu klasöre koyun, sonra Ayarlar'ı yeniden açın:",
+      "bundled": "eng (yerleşik)",
+      "noneFound": "Henüz ek dil bulunamadı."
+    },
+    "you": {
+      "title": "Sen",
+      "name": "Ad",
+      "namePlaceholder": "Bilgisayarının kullanıcı adı",
+      "nameHint": "Yaptığın her değişikliğin ve uyguladığın her kodun yanında kaydedilir, böylece paylaşılan bir dosya kimin ne yaptığını gösterir. Bilgisayarının kullanıcı adını kullanmak için boş bırak.",
+      "colour": "Renk",
+      "colourHint": "Bir projede birden fazla kişi çalıştığında kodlamanın nasıl işaretlendiği.",
+      "lanesByCoder": "Belge altı çizgilerini kodlayıcıya göre renklendir",
+      "coderId": "Kodlayıcı kimliği",
+      "coderIdNotSet": "(henüz ayarlanmadı)",
+      "coderIdHint": "Bunu kimseyle paylaşma; yalnızca kopyaları birbirinden ayırt etmeye yarar. Bu bilgisayarda bir kez oluşturulur ve hiç değişmez; Misket'in bir meslektaşının proje kopyasını seninkiyle birleştirirken kimin kodlamasının kime ait olduğunu karıştırmamasını bu sağlar."
+    },
+    "updates": {
+      "title": "Güncellemeler",
+      "autoCheck": "Güncellemeleri otomatik denetle",
+      "checking": "Denetleniyor…",
+      "checkNow": "Güncellemeleri denetle…",
+      "skipping": "{{version}} atlanıyor.",
+      "stopSkipping": "Atlamayı durdur"
+    },
+    "diagnostics": {
+      "title": "Tanılama",
+      "viewLogs": "Günlükleri görüntüle…",
+      "sendCrashReports": "Anonim çökme raporları gönder",
+      "sendCrashReportsHint": "Bir şeyler bozulduğunda uygulama sürümünü, işletim sistemini, hata mesajını ve yığın izini, son 50 günlük satırını (içindeki her dosya yolu kısa bir karma ile değiştirilmiş olarak) aşağıdaki adrese gönderir. Asla gönderilmez: belge metnin, kodların, notların veya dosya adların — ve burada bir adres ayarlanmadıkça hiçbir şey gönderilmez.",
+      "reportEndpoint": "Rapor uç noktası",
+      "reportEndpointHint": "Boş bırakıldığında (varsayılan), yukarıda ne işaretlenirse işaretlensin raporlama kapalı kalır. Kendi GlitchTip veya Sentry uyumlu toplayıcısını çalıştıran bir bakımcı, URL'sini buraya girer.",
+      "format": "Biçim",
+      "formatJson": "Düz JSON",
+      "formatSentry": "Sentry zarfı",
+      "sending": "Gönderiliyor…",
+      "sendNow": "Şimdi bir rapor gönder",
+      "reportSent": "Rapor gönderildi"
+    }
+  }
+}

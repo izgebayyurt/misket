@@ -8,10 +8,16 @@ import { log } from "@/api/log";
 import App from "./App";
 import "./styles/globals.css";
 import { initThemeWatcher } from "./state/theme";
+import { applyLanguage } from "./lib/i18n";
 
 // Tracks the OS appearance until settings load, then follows the "theme"
 // setting (see src/state/settings.ts).
 initThemeWatcher();
+
+// Same idea for language: render in the OS/browser locale immediately, then
+// follow the persisted "language" setting once it loads (see
+// src/state/settings.ts's applyAll).
+applyLanguage("system");
 
 // Anything that never made it into a component's own try/catch or a query's
 // onError: an uncaught exception, or a rejected promise nobody awaited. Logs
