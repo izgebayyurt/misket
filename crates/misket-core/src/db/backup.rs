@@ -269,6 +269,7 @@ mod tests {
                     source_format: "txt".into(),
                     text: format!("text {i}"),
                     allow_duplicate: true,
+                    ..Default::default()
                 },
             )
             .unwrap();

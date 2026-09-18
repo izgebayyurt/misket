@@ -3118,6 +3118,7 @@ mod tests {
                 // Emoji and CJK, so UTF-16 conversion has something to do.
                 text: "Ada: 漢字 and 😀 are one code point each.\nBob: quite so, yes.\n".into(),
                 allow_duplicate: false,
+                ..Default::default()
             },
         )
         .unwrap()
@@ -3823,6 +3824,7 @@ mod tests {
                 source_format: "txt".into(),
                 text: "Ada: 😀 漢字 here.\r\nBob: and here.\r\n".into(),
                 allow_duplicate: false,
+                ..Default::default()
             },
         )
         .unwrap();
