@@ -168,6 +168,7 @@ export function TranscriptionSettings() {
                         size="sm"
                         variant="outline"
                         onClick={() => void cancelWhisperModelDownload(m.id)}
+                        aria-label={`Stop downloading ${m.label}`}
                         data-testid={`settings-whisper-stop-${m.id}`}
                       >
                         Stop
@@ -179,6 +180,7 @@ export function TranscriptionSettings() {
                           variant={selected === m.id ? "secondary" : "outline"}
                           disabled={selected === m.id}
                           onClick={() => update({ whisperModel: m.id })}
+                          aria-label={`Use ${m.label} for transcription`}
                           data-testid={`settings-whisper-use-${m.id}`}
                         >
                           Use
@@ -188,6 +190,7 @@ export function TranscriptionSettings() {
                           variant="ghost"
                           disabled={busy}
                           onClick={() => void remove(m)}
+                          aria-label={`Delete ${m.label}`}
                           data-testid={`settings-whisper-delete-${m.id}`}
                         >
                           Delete
@@ -199,6 +202,7 @@ export function TranscriptionSettings() {
                         variant="outline"
                         disabled={!m.known}
                         onClick={() => void downloadWhisperModel(m.id)}
+                        aria-label={`${m.partialBytes > 0 ? "Resume downloading" : "Download"} ${m.label}`}
                         data-testid={`settings-whisper-download-${m.id}`}
                       >
                         {m.partialBytes > 0 ? "Resume" : "Download"}
@@ -207,7 +211,14 @@ export function TranscriptionSettings() {
                   </div>
                   <p className="mt-0.5 text-xs text-fg-muted">{status}</p>
                   {download ? (
-                    <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-muted">
+                    <div
+                      className="mt-1 h-1 w-full overflow-hidden rounded-full bg-muted"
+                      role="progressbar"
+                      aria-label={`Downloading ${m.label}`}
+                      aria-valuenow={download.percent}
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                    >
                       <div
                         className="h-full rounded-full bg-accent transition-[width]"
                         style={{ width: `${download.percent}%` }}

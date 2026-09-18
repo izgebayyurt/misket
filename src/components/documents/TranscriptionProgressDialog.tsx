@@ -78,7 +78,14 @@ export function TranscriptionProgressDialog() {
               : ""}
             {eta ? ` · ${eta}` : ""}
           </p>
-          <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+          <div
+            className="h-2 w-full overflow-hidden rounded-full bg-muted"
+            role="progressbar"
+            aria-label={`Transcribing ${run.name}`}
+            aria-valuenow={run.percent}
+            aria-valuemin={0}
+            aria-valuemax={100}
+          >
             <div
               className="h-full rounded-full bg-accent transition-[width]"
               style={{ width: `${run.percent}%` }}
