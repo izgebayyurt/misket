@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { FolderOpen, Loader2, Plus, Sparkles, X } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -19,6 +20,7 @@ import { useUpdateCheckOnMount } from "@/hooks/useUpdateCheck";
 const FILTER = [{ name: "Misket project", extensions: ["misket"] }];
 
 export function StartScreen() {
+  const { t } = useTranslation();
   const recent = useRecentProjects();
   const openProject = useOpenProject();
   const createProject = useCreateProject();
@@ -43,7 +45,7 @@ export function StartScreen() {
     } catch (e) {
       if (isAppError(e, "NotFound")) {
         removeRecent.mutate(path);
-        toast.info("That project file no longer exists; removed it from Recent.");
+        toast.info(t("startScreen.recentGone"));
       } else {
         toast.error(e);
       }
@@ -80,15 +82,15 @@ export function StartScreen() {
         <div className="w-[560px] max-w-[90vw]">
           <div className="mb-8">
             <h1 className="font-serif text-4xl font-medium tracking-tight">Misket</h1>
-            <p className="mt-1 text-fg-muted">Qualitative coding, on your own machine.</p>
+            <p className="mt-1 text-fg-muted">{t("startScreen.tagline")}</p>
           </div>
 
           <div className="mb-4 flex gap-2">
             <Button size="lg" onClick={() => setCreating(true)} data-testid="new-project">
-              <Plus /> New project
+              <Plus /> {t("startScreen.newProject")}
             </Button>
             <Button size="lg" variant="outline" onClick={handleOpen} data-testid="open-project">
-              <FolderOpen /> Open…
+              <FolderOpen /> {t("startScreen.openEllipsis")}
             </Button>
           </div>
 
@@ -101,13 +103,13 @@ export function StartScreen() {
             >
               {createSample.isPending ? <Loader2 className="animate-spin" /> : <Sparkles />}
               {createSample.isPending
-                ? "Setting up the sample project…"
-                : "Try Misket with sample data"}
+                ? t("startScreen.settingUpSample")
+                : t("startScreen.trySample")}
             </Button>
           </div>
 
           <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-fg-muted">
-            Recent
+            {t("startScreen.recent")}
           </h2>
           {recent.data && recent.data.length > 0 ? (
             <ul className="divide-y divide-border rounded-md border border-border bg-panel">
@@ -124,7 +126,7 @@ export function StartScreen() {
                   <button
                     className="rounded p-1 text-fg-muted opacity-0 hover:bg-muted group-hover:opacity-100"
                     onClick={() => removeRecent.mutate(r.path)}
-                    aria-label="Remove from recent"
+                    aria-label={t("startScreen.removeFromRecent")}
                   >
                     <X className="size-4" />
                   </button>
@@ -132,15 +134,15 @@ export function StartScreen() {
               ))}
             </ul>
           ) : (
-            <p className="text-sm text-fg-muted">No recent projects yet.</p>
+            <p className="text-sm text-fg-muted">{t("startScreen.noRecent")}</p>
           )}
         </div>
       </div>
 
       <Dialog open={creating} onOpenChange={setCreating}>
         <DialogContent
-          title="New project"
-          description="You will choose where to save the project file next."
+          title={t("startScreen.newProject")}
+          description={t("startScreen.newProjectDescription")}
         >
           <form
             onSubmit={(e) => {
@@ -149,22 +151,22 @@ export function StartScreen() {
             }}
           >
             <label className="text-xs font-medium text-fg-muted" htmlFor="project-name">
-              Project name
+              {t("startScreen.projectName")}
             </label>
             <Input
               id="project-name"
               autoFocus
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
-              placeholder="e.g. Morning routines study"
+              placeholder={t("startScreen.projectNamePlaceholder")}
               className="mt-1"
             />
             <DialogFooter>
               <Button type="button" variant="ghost" onClick={() => setCreating(false)}>
-                Cancel
+                {t("common.cancel")}
               </Button>
               <Button type="submit" disabled={!newName.trim() || createProject.isPending}>
-                Choose location…
+                {t("startScreen.chooseLocation")}
               </Button>
             </DialogFooter>
           </form>

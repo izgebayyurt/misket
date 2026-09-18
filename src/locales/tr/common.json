@@ -75,7 +75,9 @@
   "common": {
     "loading": "Yükleniyor…",
     "refresh": "Yenile",
-    "dismiss": "Kapat"
+    "dismiss": "Kapat",
+    "cancel": "Vazgeç",
+    "save": "Kaydet"
   },
   "toaster": {
     "saidTimes_one": "{{count, number}} kez söylendi",
@@ -85,6 +87,25 @@
     "moved": "Proje taşındı. Ne olur ne olmaz diye orijinal dosya yerinde bırakıldı.",
     "moving": "Taşınıyor…",
     "moveProject": "Projeyi taşı…"
+  },
+  "workspace": {
+    "emptyTitle": "Henüz açık bir şey yok",
+    "emptyHint": "Kenar çubuğundan bir transkript, not veya görsel içe aktar, ya da metin, Markdown, Word, PDF veya görsel dosyalarını bu pencerenin herhangi bir yerine sürükle."
+  },
+  "startScreen": {
+    "tagline": "Kendi bilgisayarında nitel kodlama.",
+    "newProject": "Yeni proje",
+    "openEllipsis": "Aç…",
+    "settingUpSample": "Örnek proje hazırlanıyor…",
+    "trySample": "Misket'i örnek verilerle dene",
+    "recent": "Son kullanılanlar",
+    "removeFromRecent": "Son kullanılanlardan kaldır",
+    "noRecent": "Henüz son kullanılan proje yok.",
+    "recentGone": "O proje dosyası artık yok; Son kullanılanlar listesinden kaldırıldı.",
+    "newProjectDescription": "Proje dosyasını nereye kaydedeceğini bir sonraki adımda seçeceksin.",
+    "projectName": "Proje adı",
+    "projectNamePlaceholder": "örn. Sabah rutinleri çalışması",
+    "chooseLocation": "Konum seç…"
   },
   "exportMenu": {
     "export": "Dışa aktar",
@@ -209,8 +230,6 @@
     "fork": "Çatalla",
     "renameTitle": "Dalı yeniden adlandır…",
     "renameDescription": "Kaldırmak için adı temizle.",
-    "cancel": "Vazgeç",
-    "save": "Kaydet",
     "compactTitle": "Buradan öncesi sıkıştırılsın mı?",
     "compactConfirm": "Sıkıştır",
     "compactNothingToDrop": "Bu adıma çıkan bir şey yok, bu yüzden atılacak bir şey de yok.",

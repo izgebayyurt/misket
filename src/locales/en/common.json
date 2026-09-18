@@ -75,7 +75,9 @@
   "common": {
     "loading": "Loading…",
     "refresh": "Refresh",
-    "dismiss": "Dismiss"
+    "dismiss": "Dismiss",
+    "cancel": "Cancel",
+    "save": "Save"
   },
   "toaster": {
     "saidTimes_one": "Said {{count, number}} time",
@@ -85,6 +87,25 @@
     "moved": "Moved the project. The original file was left in place, just in case.",
     "moving": "Moving…",
     "moveProject": "Move project…"
+  },
+  "workspace": {
+    "emptyTitle": "Nothing open yet",
+    "emptyHint": "Import a transcript, notes or an image from the sidebar, or drop text, Markdown, Word, PDF or image files anywhere in this window."
+  },
+  "startScreen": {
+    "tagline": "Qualitative coding, on your own machine.",
+    "newProject": "New project",
+    "openEllipsis": "Open…",
+    "settingUpSample": "Setting up the sample project…",
+    "trySample": "Try Misket with sample data",
+    "recent": "Recent",
+    "removeFromRecent": "Remove from recent",
+    "noRecent": "No recent projects yet.",
+    "recentGone": "That project file no longer exists; removed it from Recent.",
+    "newProjectDescription": "You will choose where to save the project file next.",
+    "projectName": "Project name",
+    "projectNamePlaceholder": "e.g. Morning routines study",
+    "chooseLocation": "Choose location…"
   },
   "exportMenu": {
     "export": "Export",
@@ -209,8 +230,6 @@
     "fork": "Fork",
     "renameTitle": "Rename branch…",
     "renameDescription": "Clear the name to remove it.",
-    "cancel": "Cancel",
-    "save": "Save",
     "compactTitle": "Compact history before here?",
     "compactConfirm": "Compact",
     "compactNothingToDrop": "Nothing leads up to this step, so there is nothing to drop.",

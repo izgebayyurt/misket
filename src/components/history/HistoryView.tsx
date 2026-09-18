@@ -527,7 +527,7 @@ export function HistoryView() {
           description={t("history.renameDescription")}
           placeholder={t("history.branchNamePlaceholder")}
           initialValue={renameTarget.branchName ?? ""}
-          submitLabel={t("history.save")}
+          submitLabel={t("common.save")}
           allowEmpty
           onSubmit={submitRename}
           onClose={() => setRenameTarget(null)}
@@ -987,7 +987,7 @@ function NamePromptDialog({
           />
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={onClose}>
-              {t("history.cancel")}
+              {t("common.cancel")}
             </Button>
             <Button
               type="submit"
