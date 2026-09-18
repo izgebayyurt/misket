@@ -1078,6 +1078,72 @@ export interface HistoryNodeSummary {
   children: number[];
 }
 
+/**
+ * Something a history step points at, named as it reads *now* — resolved on
+ * the Rust side by `history_node`.
+ */
+export interface HistoryRef {
+  /** `excerpt`, `code`, `document` or `memo`. */
+  kind: string;
+  id: string;
+  /**
+   * What to show: the code's name, the document's name, the excerpt's text —
+   * already carrying "(since deleted)" when the target is gone.
+   */
+  label: string;
+  exists: boolean;
+  /** A code's colour, when it still exists. */
+  color?: string | null;
+  /** A code's path through the codebook, when it still exists. */
+  path?: string | null;
+  /** An excerpt's `kind`, so the panel knows whether its offsets are code
+   * points or milliseconds — and whether "show me" means a passage or a
+   * stretch of tape. */
+  excerptKind?: string | null;
+  /** Where an excerpt sits, so the panel can open the document there. */
+  documentId?: string | null;
+  startPos?: number | null;
+  endPos?: number | null;
+}
+
+/** One write inside a compound step. */
+export interface HistoryStepMember {
+  id: number;
+  kind: string;
+  summary: string;
+}
+
+/** One history step with everything the detail panel needs to describe it. */
+export interface HistoryNodeDetail {
+  id: number;
+  parentId: number | null;
+  at: string;
+  actor: string;
+  coderId?: string;
+  kind: string;
+  /** `excerpt`, `code`, `document`, `set`, `project`, … */
+  targetKind: string;
+  targetId: string | null;
+  summary: string;
+  /** The payload the step recorded, as a plain object. */
+  detail: Record<string, unknown>;
+  branchName: string | null;
+  undoable: boolean;
+  isHead: boolean;
+  /**
+   * Whether this step is in force: the project sits at it or below it. A
+   * step the project has undone past, or one on a branch it is not on, is
+   * not applied — and a reference of its that cannot be found says "not in
+   * the project right now" rather than "since deleted".
+   */
+  applied: boolean;
+  stepCount: number;
+  /** The step's own target first, then everything else it names. */
+  refs: HistoryRef[];
+  /** The writes a compound step stands for; empty for a plain one. */
+  members: HistoryStepMember[];
+}
+
 /** What compacting threw away. */
 export interface CompactReport {
   droppedNodes: number;

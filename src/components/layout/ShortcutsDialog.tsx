@@ -71,6 +71,16 @@ const GROUPS: { title: string; actions: Action[] }[] = [
 /** The player's bare keys, live only while the audio/video view has focus. */
 const MEDIA_GROUP = Object.keys(MEDIA_SHORTCUTS) as MediaAction[];
 
+/**
+ * Keys the history view handles itself while its list has focus, rather than
+ * through the keymap — there is nothing global about them.
+ */
+const HISTORY_KEYS: [string, string][] = [
+  ["Move the selection", "↑ ↓"],
+  ["Fold or unfold a day", "Enter"],
+  ["Go to the selected step", "G"],
+];
+
 export function ShortcutsDialog({ onClose }: { onClose: () => void }) {
   const { data: codes } = useCodes();
   const withShortcut = (codes ?? []).filter((c) => c.shortcut);
@@ -120,6 +130,21 @@ export function ShortcutsDialog({ onClose }: { onClose: () => void }) {
                   <dt>{mediaLabel(action)}</dt>
                   <dd className="whitespace-nowrap rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-xs">
                     {describeMedia(action)}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          </section>
+          <section>
+            <h3 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-fg-muted">
+              In the History view
+            </h3>
+            <dl className="space-y-1">
+              {HISTORY_KEYS.map(([what, key]) => (
+                <div key={what} className="flex items-center justify-between gap-4 text-sm">
+                  <dt>{what}</dt>
+                  <dd className="whitespace-nowrap rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-xs">
+                    {key}
                   </dd>
                 </div>
               ))}

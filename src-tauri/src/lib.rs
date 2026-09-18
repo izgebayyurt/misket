@@ -186,6 +186,7 @@ pub fn run() {
             commands::history::history_redo,
             commands::history::history_checkout,
             commands::history::history_tree,
+            commands::history::history_node,
             commands::history::history_fork,
             commands::history::history_rename_branch,
             commands::history::history_compact,

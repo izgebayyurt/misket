@@ -127,7 +127,10 @@ keyboard-friendly interface without a subscription.
   paragraph" or within N characters — with one level of grouping, and save
   them with the rest of the filter. Codes count as together when their
   excerpts overlap, not only when one excerpt carries both.
-- **Analyse**: a code frequency table (own counts and counts with sub-codes,
+- **Analyse**: the analysis views sit in a list down the left of the Analysis
+  screen, grouped under small headings (Codes, Across data, Text, Team,
+  Mixed) and collapsible to icons, with each view's own document, set and
+  coder filters in its header. A code frequency table (own counts and counts with sub-codes,
   per document, plus a 30-day coding-activity sparkline per code), a code
   co-occurrence matrix showing which codes overlap on the same text, a
   code-by-document heatmap, a code-by-descriptor cross-tab putting codes
@@ -153,7 +156,8 @@ keyboard-friendly interface without a subscription.
   similarity-matrix heatmap ordered the same way, and a cluster list.
   "Create parent code from cluster…" turns a cluster into a new parent code
   and moves its members under it, one undoable step.
-- **Inter-rater reliability**: compare two coders over the documents they both
+- **Inter-rater reliability** (the "Reliability" entry under Team): compare
+  two coders over the documents they both
   coded — Cohen's kappa and percent agreement per code, a pooled figure and
   the unweighted mean of the per-code kappas, with the unit of analysis
   (paragraph, speaker turn or excerpt) an explicit control rather than a
@@ -219,8 +223,20 @@ keyboard-friendly interface without a subscription.
   whole file. History is kept in the project file, so it survives closing the
   app, travels with a backup, and is still there for whoever you send the
   project to.
-- **History view**: see every change as a branch graph, jump to any point,
-  fork and name branches, compact old history.
+- **History view**: every change as a branch graph, grouped by day. A day's
+  header shows how many steps it holds and, folded, a one-line digest ("12
+  codings, 3 codes created, 1 merge"); days start folded except the one the
+  project is at and any day holding a fork or a branch name, and a folded day
+  is still one row of the graph with its lanes running through it. Clicking a
+  step says what it did in a panel of its own — the passage that was coded
+  with its codes and "Show in document", a code with its colour and place and
+  "Show in codebook", a document, a memo, the changes inside a compound step —
+  naming anything since deleted as such. Moving the project there is "Go to
+  this point" (or `G`), never a stray click. A Branches strip along the top
+  has a chip per named branch plus main: click one to go to its tip, or the
+  crosshair beside it to go back to where it forked. A fresh fork shows up at
+  once, as a labelled stub off the step it grew from. Compact old history from
+  the row menu.
 - **Export** the codebook as CSV or a reusable JSON file, excerpts as CSV
   (with a `weights` column for rated codings), the activity log as CSV, or the
   whole project as JSON.

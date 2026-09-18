@@ -21,7 +21,16 @@ export function DocumentPane({ documentId, focusExcerptId, scrollToOffset }: Pro
   if (doc.kind === "image")
     return <ImageView documentId={documentId} focusExcerptId={focusExcerptId} />;
   if (doc.kind === "video")
-    return <MediaView documentId={documentId} focusExcerptId={focusExcerptId} />;
+    return (
+      <MediaView
+        documentId={documentId}
+        focusExcerptId={focusExcerptId}
+        // A media document has no text to scroll, so a caller that knows a
+        // position in it means milliseconds — the history panel's "show me
+        // where a deleted stretch was", for instance.
+        seekToMs={scrollToOffset}
+      />
+    );
   return (
     <DocumentView
       documentId={documentId}

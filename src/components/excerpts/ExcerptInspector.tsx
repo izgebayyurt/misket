@@ -23,7 +23,7 @@ import { Button } from "@/components/ui/button";
 import { MemoList } from "@/components/memos/MemoList";
 import { ExcerptHistory } from "@/components/activity/HistoryTimeline";
 import { useWorkspace } from "@/state/workspace";
-import { toast } from "@/state/toasts";
+import { toast, TOAST_KEYS } from "@/state/toasts";
 import { formatTimecode, parseTimecode } from "@/core/media";
 import { formatWeightWithLabel, weightScaleValues } from "@/core/weights";
 import { Input } from "@/components/ui/input";
@@ -278,7 +278,9 @@ function MediaRangeEditor({
     const end = parseTimecode(next.out);
     setDraft(null);
     if (start === null || end === null) {
-      toast.info("Times read as m:ss.s — for example 1:02.4.");
+      toast.info("Times read as m:ss.s — for example 1:02.4.", {
+        key: TOAST_KEYS.mediaTimecode,
+      });
       return;
     }
     try {

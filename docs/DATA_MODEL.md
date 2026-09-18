@@ -1014,12 +1014,35 @@ node's `preferredChild` — the same field `next_child` reads when redo has no
 argument — falling back to the newest child, so it always lands in lane 0;
 every other child at a fork opens a lane at the point it diverges and gives
 it back once it rejoins, so unrelated forks made at different times can share
-a column without a line ever being drawn through an unrelated dot. Clicking a
-row calls `history_checkout`; the row menu offers "Fork here…" (checks out
-the node, then `history_fork`), "Rename branch…" (`history_rename_branch`)
-and "Compact history before here…" (`history_compact`, refused up front —
-with the same message the backend would give — when the head is not on or
-under the chosen node). The view reads `history_tree()` fresh on every
+a column without a line ever being drawn through an unrelated dot.
+
+The rows are then grouped by calendar day: `collapseDays(rows, expandedDays)`
+maps the laid-out rows into the rows actually drawn — a header per day, its
+steps under it only while the day is open — and a step in a closed day is
+drawn at its day's header row, so every edge still has both ends and the
+lanes read continuously across it. A closed header also carries the lanes
+running through it, its step count and a one-line digest of what happened
+that day. Days open themselves when they hold the head, a fork or a branch
+name; anything else the person opened or closed by hand is remembered per
+project id in `localStorage` (`src/state/historyDays.ts`).
+
+Clicking a row **selects** it: `history_node(id)` returns that step with its
+`detail_json` parsed, the members of a compound step, whether the step is
+`applied` (the head sits at it or below it), and its references resolved
+against the project as it is now — an excerpt's text with the document and
+offsets to jump to, a code's name, colour and path, a document's name, a
+memo's title — each with `exists` and a label that says "(since deleted)", or
+"(not in the project right now)" for a step that is not in force. Moving the
+project is a separate "Go to this point" (`history_checkout`, also `G` and a
+context-menu entry). The row menu offers "Fork here…" (checks out the node,
+then `history_fork`, and the view then selects and scrolls to the named
+node), "Rename branch…" (`history_rename_branch`) and "Compact history before
+here…" (`history_compact`, refused up front — with the same message the
+backend would give — when the head is not on or under the chosen node). The
+Branches strip is computed from the same tree (`branchesOf`): one chip per
+named node plus `main`, each with its tip (follow `preferredChild` down) and
+its fork point, and a named leaf is drawn as a stub because a fork that has
+not diverged owns no lane yet. The view reads `history_tree()` fresh on every
 mutation and on window focus, the same way the activity feed already did.
 
 ## Queries worth knowing

@@ -1,16 +1,22 @@
 import { create } from "zustand";
 import type { ExcerptFilter, Rect } from "@/api/types";
 
+/**
+ * Which analysis the Analysis view is showing. The list of analyses, their
+ * labels, icons and components live in `components/analysis/registry.ts`;
+ * this is only the name that travels in the view state.
+ */
 export type AnalysisTab =
   | "frequencies"
   | "cooccurrence"
+  | "treemap"
+  | "clustering"
   | "matrix"
   | "descriptor"
   | "framework"
   | "words"
-  | "weights"
-  | "treemap"
-  | "clustering";
+  | "reliability"
+  | "weights";
 
 export type View =
   | { kind: "document"; documentId: string; focusExcerptId?: string; scrollToOffset?: number }
@@ -20,10 +26,14 @@ export type View =
    * re-files the parent's own excerpts under its children.
    */
   | { kind: "excerpts"; initialFilter?: ExcerptFilter; review?: { parentCodeId: string } }
+  /**
+   * The analysis views, one at a time, picked from the list down the left of
+   * the view. `tab` names an entry of `ANALYSES`; an unknown one falls back
+   * to the first, so an older window's state can never show an empty pane.
+   * Inter-rater reliability is one of these entries (`tab: "reliability"`),
+   * not a view of its own.
+   */
   | { kind: "analysis"; tab: AnalysisTab }
-  /** Two coders side by side: Cohen's kappa, percent agreement and every
-   * disagreement between them. */
-  | { kind: "reliability" }
   /** `query` seeds the search box when it mounts (e.g. clicking a term in
    * the word-frequency view). */
   | { kind: "search"; query?: string }

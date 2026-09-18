@@ -280,7 +280,11 @@
 
       <h2 id="analysis">Analysis views</h2>
       <p>
-        Open the analysis views with <kbd>Shift</kbd>+<kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>A</kbd>:
+        Open the analysis views with <kbd>Shift</kbd>+<kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>A</kbd>.
+        They sit in a list down the left of the screen, gathered under small headings —
+        <em>Codes</em>, <em>Across data</em>, <em>Text</em>, <em>Team</em> — which you can collapse
+        to icons when a wide table needs the room. Each view keeps its own document, set and coder
+        filters in its header. The list holds:
       </p>
       <ul>
         <li>
@@ -356,11 +360,11 @@
 
       <h2 id="reliability">Inter-rater reliability</h2>
       <p>
-        <strong>Reliability</strong> in the sidebar compares two coders on the documents they both
-        coded — the view behind the sentence &ldquo;two coders independently coded 20% of the
-        transcripts&rdquo; in a methods section. It appears once the project holds more than one
-        coder; until then it says so, because a second coder arrives with
-        <strong>File → Pull from another copy…</strong> rather than by being invented here.
+        <strong>Reliability</strong> — under <em>Team</em> in the Analysis list — compares two
+        coders on the documents they both coded — the view behind the sentence &ldquo;two coders
+        independently coded 20% of the transcripts&rdquo; in a methods section. It appears once the
+        project holds more than one coder; until then it says so, because a second coder arrives
+        with <strong>File → Pull from another copy…</strong> rather than by being invented here.
       </p>
       <p>
         Pick <strong>A</strong> and <strong>B</strong> (you and whoever else has coded most, to
@@ -450,8 +454,32 @@
         Open the <strong>History</strong> view with
         <kbd>Shift</kbd>+<kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>Y</kbd>, or the "Open History" button on
         the overview, to see that tree as a branch graph: every step, newest at the top, with a lane
-        per branch. Click any step to jump the project straight to it — no need to undo one change
-        at a time. From a step's menu you can name a branch ("Fork here…"), rename one later, or
+        per branch, gathered under a header per day. A day's header says how many steps it holds
+        and, while it is folded, sums them up in a line — "12 codings, 3 codes created, 1 merge".
+        Click a header to fold or unfold that day (double-click always unfolds), or use
+        <strong>Expand all</strong> and <strong>Collapse all</strong>; which days you leave open is
+        remembered per project. Days start folded except the day the project is at and any day
+        holding a fork or a named branch, so folding shortens the list without ever hiding the shape
+        of the tree — and a folded day is still one row of the graph, with its lanes running through
+        it.
+      </p>
+      <p>
+        Clicking a step <em>describes</em> it rather than moving anything. The panel on the right
+        says what that step did: the passage that was coded, with its codes and a
+        <strong>Show in document</strong> button; a code with its colour and its place in the
+        codebook and <strong>Show in codebook</strong>; a document with its counts; a memo with its
+        text; the individual changes inside a step that stands for several. Anything deleted since
+        is named as such rather than offered as a dead link. To actually move the project to a step,
+        use <strong>Go to this point</strong> in that panel, the same entry in the step's menu, or
+        the <kbd>G</kbd> key. Arrow keys walk the list and <kbd>Enter</kbd> folds or unfolds a day.
+      </p>
+      <p>
+        The <strong>Branches</strong> strip along the top has a chip for every named branch, plus
+        <em>main</em>, with the one you are on highlighted; the head step reads "You are here ·
+        <em>branch</em>". Click a chip to go to that branch's tip, or the crosshair beside it to go
+        back to the step the branch forked from. "Fork here…" in a step's menu names a branch, and
+        you see it straight away: the step wears the branch's name and the graph draws a short stub
+        off it for the branch that has not diverged yet. You can also rename a branch later, or
         compact everything before a step away once you are sure you will not need it, to keep a long
         project's history down to size.
       </p>

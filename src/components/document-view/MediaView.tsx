@@ -33,7 +33,7 @@ import { useWorkspace } from "@/state/workspace";
 import { useShortcutActions } from "@/state/shortcutActions";
 import { useSettings } from "@/state/settings";
 import { useReadingPositions } from "@/state/readingPositions";
-import { toast } from "@/state/toasts";
+import { toast, TOAST_KEYS } from "@/state/toasts";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { DocumentTitle } from "./DocumentTitle";
@@ -63,6 +63,11 @@ interface Props {
   documentId: string;
   /** Focus this excerpt and seek to its in-point once the excerpts load. */
   focusExcerptId?: string;
+  /**
+   * Seek here on arrival, in milliseconds, when there is no excerpt to focus.
+   * The history panel uses it to show where a deleted stretch was.
+   */
+  seekToMs?: number;
 }
 
 interface Band {
@@ -85,7 +90,7 @@ interface Band {
  * the code palette and the code hotkeys apply codes to a stretch of tape
  * exactly as they do to selected text.
  */
-export function MediaView({ documentId, focusExcerptId }: Props) {
+export function MediaView({ documentId, focusExcerptId, seekToMs }: Props) {
   const { data: doc, error } = useDocument(documentId);
   const { data: excerpts } = useDocumentExcerpts(documentId);
   const { data: codes } = useCodes();
@@ -239,7 +244,8 @@ export function MediaView({ documentId, focusExcerptId }: Props) {
     if (!projectPath || !doc || restored.current === documentId) return;
     restored.current = documentId;
     if (focusExcerptId) return;
-    const at = useReadingPositions.getState().recall(projectPath, documentId);
+    // Somewhere a caller asked for beats where the reader left off.
+    const at = seekToMs ?? useReadingPositions.getState().recall(projectPath, documentId);
     if (at === null || at <= 0 || at >= durationMs) return;
     // After this render: the element has to exist before it can be seeked.
     const raf = requestAnimationFrame(() => seekTo(at));
@@ -437,10 +443,15 @@ export function MediaView({ documentId, focusExcerptId }: Props) {
       quickCode: () => {
         const codeId = useWorkspace.getState().lastAppliedCodeId;
         if (!codeId) {
-          toast.info("No code has been applied yet — pick one from the palette first.");
+          toast.info("No code has been applied yet — pick one from the palette first.", {
+            key: TOAST_KEYS.quickCode,
+          });
           return;
         }
-        if (!applyCodeToTarget(codeId)) toast.info("Mark a stretch with [ and ] to code it first.");
+        if (!applyCodeToTarget(codeId))
+          toast.info("Mark a stretch with [ and ] to code it first.", {
+            key: TOAST_KEYS.mediaTarget,
+          });
       },
       escape: () => {
         const ws = useWorkspace.getState();

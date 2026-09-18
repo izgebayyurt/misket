@@ -1,5 +1,5 @@
 use misket_core::db::history;
-use misket_core::models::{CompactReport, HistoryNode, HistoryNodeSummary};
+use misket_core::models::{CompactReport, HistoryNode, HistoryNodeDetail, HistoryNodeSummary};
 use misket_core::Result;
 use tauri::State;
 
@@ -28,6 +28,13 @@ pub fn history_checkout(state: State<'_, AppState>, id: i64) -> Result<HistoryNo
 #[tauri::command]
 pub fn history_tree(state: State<'_, AppState>) -> Result<Vec<HistoryNodeSummary>> {
     state.with_project(|p| history::tree(&p.conn))
+}
+
+/// One step with its detail and its references resolved as they read now:
+/// what the history view's detail panel shows when a step is selected.
+#[tauri::command]
+pub fn history_node(state: State<'_, AppState>, id: i64) -> Result<HistoryNodeDetail> {
+    state.with_project(|p| history::node_detail(&p.conn, id))
 }
 
 /// Name the current node, so the branch growing from it can be found again.
