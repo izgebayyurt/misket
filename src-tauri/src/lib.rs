@@ -7,6 +7,7 @@ mod recent;
 mod reporting;
 mod settings;
 mod state;
+mod transcribe;
 
 use media::MEDIA_PROTOCOL;
 use state::AppState;
@@ -141,6 +142,16 @@ pub fn run() {
             commands::project::take_pending_open_path,
             commands::ocr::list_tessdata_languages,
             commands::ocr::ensure_tessdata_file,
+            commands::transcribe::transcription_support,
+            commands::transcribe::transcription_defaults,
+            commands::transcribe::list_whisper_models,
+            commands::transcribe::download_whisper_model,
+            commands::transcribe::cancel_whisper_model_download,
+            commands::transcribe::delete_whisper_model,
+            commands::transcribe::add_whisper_model_file,
+            commands::transcribe::verify_whisper_model,
+            commands::transcribe::start_transcription,
+            commands::transcribe::cancel_transcription,
             commands::documents::create_document,
             commands::documents::create_image_document,
             commands::media::media_server,

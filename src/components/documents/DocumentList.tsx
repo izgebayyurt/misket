@@ -32,6 +32,7 @@ import { cn } from "@/lib/utils";
 import { useImportFiles } from "./useImportFiles";
 import { useRelinkMedia } from "./useRelinkMedia";
 import { ImportFolderDialog } from "./ImportFolderDialog";
+import { TranscribeDialog } from "./TranscribeDialog";
 import { LinkRecordingDialog } from "./LinkRecordingDialog";
 import { DocumentSets } from "./DocumentSets";
 import { AddToSetMenu } from "@/components/sets/AddToSetMenu";
@@ -45,6 +46,7 @@ export function DocumentList() {
   const { pickAndImport, pickFolder, isPending } = useImportFiles();
   const [renaming, setRenaming] = useState<DocumentSummary | null>(null);
   const [deleting, setDeleting] = useState<DocumentSummary | null>(null);
+  const [transcribing, setTranscribing] = useState<DocumentSummary | null>(null);
   const [folder, setFolder] = useState<string | null>(null);
   const [linking, setLinking] = useState<DocumentSummary | null>(null);
 
@@ -149,11 +151,7 @@ export function DocumentList() {
                       {d.sourceFormat ? (
                         <span
                           className="shrink-0 rounded border border-border px-1 text-[10px] uppercase text-fg-muted"
-                          title={
-                            d.sourceFormat === "pdf-ocr"
-                              ? "Text recognised from a scanned PDF with OCR"
-                              : undefined
-                          }
+                          title={formatBadgeTitle(d.sourceFormat)}
                         >
                           {formatBadgeLabel(d.sourceFormat)}
                         </span>
@@ -176,6 +174,7 @@ export function DocumentList() {
                           doc={d}
                           onRename={() => setRenaming(d)}
                           onDelete={() => setDeleting(d)}
+                          onTranscribe={() => setTranscribing(d)}
                           onLinkRecording={() => setLinking(d)}
                           menu={dropdownMenuPrimitives}
                         />
@@ -188,6 +187,7 @@ export function DocumentList() {
                     doc={d}
                     onRename={() => setRenaming(d)}
                     onDelete={() => setDeleting(d)}
+                    onTranscribe={() => setTranscribing(d)}
                     onLinkRecording={() => setLinking(d)}
                     menu={contextMenuPrimitives}
                   />
@@ -201,6 +201,9 @@ export function DocumentList() {
       {renaming ? <RenameDialog doc={renaming} onClose={() => setRenaming(null)} /> : null}
       {deleting ? <DeleteDialog doc={deleting} onClose={() => setDeleting(null)} /> : null}
       {folder ? <ImportFolderDialog dir={folder} onClose={() => setFolder(null)} /> : null}
+      {transcribing ? (
+        <TranscribeDialog doc={transcribing} onClose={() => setTranscribing(null)} />
+      ) : null}
       {linking ? <LinkRecordingDialog doc={linking} onClose={() => setLinking(null)} /> : null}
     </div>
   );
@@ -211,12 +214,14 @@ function DocumentRowMenuItems({
   doc,
   onRename,
   onDelete,
+  onTranscribe,
   onLinkRecording,
   menu,
 }: {
   doc: DocumentSummary;
   onRename: () => void;
   onDelete: () => void;
+  onTranscribe: () => void;
   onLinkRecording: () => void;
   menu: MenuPrimitives;
 }) {
@@ -227,6 +232,11 @@ function DocumentRowMenuItems({
   return (
     <>
       <Item onSelect={onRename}>Rename…</Item>
+      {doc.kind === "video" ? (
+        <Item onSelect={onTranscribe} disabled={doc.mediaMissing}>
+          Transcribe…
+        </Item>
+      ) : null}
       {doc.kind === "video" ? (
         <Item onSelect={() => void relink.pickAndRelink(doc.id)}>
           {doc.mediaMissing ? "Relink the missing file…" : "Relink…"}
@@ -293,9 +303,22 @@ function RenameDialog({ doc, onClose }: { doc: DocumentSummary; onClose: () => v
   );
 }
 
+/** What a badge means, where the three letters do not say it. */
+function formatBadgeTitle(sourceFormat: string): string | undefined {
+  if (sourceFormat === "pdf-ocr") return "Text recognised from a scanned PDF with OCR";
+  if (sourceFormat === "whisper")
+    return "Transcribed automatically from the recording with Whisper — worth reading against the audio";
+  return undefined;
+}
+
 /** `sourceFormat` values that need a friendlier badge than their raw string. */
 function formatBadgeLabel(sourceFormat: string): string {
-  return sourceFormat === "pdf-ocr" ? "OCR" : sourceFormat;
+  if (sourceFormat === "pdf-ocr") return "OCR";
+  // "WHISPER" is seven characters in a row that has to leave room for the
+  // document's name; "AUTO" says the thing that matters — this text came out
+  // of a machine and wants checking.
+  if (sourceFormat === "whisper") return "AUTO";
+  return sourceFormat;
 }
 
 function DeleteDialog({ doc, onClose }: { doc: DocumentSummary; onClose: () => void }) {

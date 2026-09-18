@@ -28,6 +28,10 @@ export const keys = {
   importableFiles: (dir: string, recursive: boolean) =>
     ["importableFiles", dir, recursive] as const,
   tessdataLanguages: ["tessdataLanguages"] as const,
+  /** What this build can do about transcription; fixed for the process. */
+  transcriptionSupport: ["transcriptionSupport"] as const,
+  /** The ggml Whisper models installed in the app data folder. */
+  whisperModels: ["whisperModels"] as const,
   documentExcerpts: (documentId: string) => ["excerpts", documentId] as const,
   excerpt: (id: string) => ["excerpt", id] as const,
   excerptQuery: (filter: ExcerptFilter) => ["excerptQuery", filter] as const,

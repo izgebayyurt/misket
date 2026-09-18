@@ -41,7 +41,14 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo fmt --all --check
       - run: cargo clippy --workspace --all-targets -- -D warnings
+      # Transcription is an optional feature (`whisper`, on by default); the
+      # crate has to build and pass without it too, and a second clippy run is
+      # far cheaper than a second job.
+      - name: Clippy without the optional whisper feature
+        run: cargo clippy -p misket --all-targets --no-default-features -- -D warnings
       - run: cargo test --workspace
+      - name: Test without the optional whisper feature
+        run: cargo test -p misket --no-default-features
 
   build-debug:
     name: Debug build (${{ matrix.os }})
