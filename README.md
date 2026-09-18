@@ -367,10 +367,12 @@ and published.
 
 ## Your data
 
-Your project is a `.misket` file (a SQLite database) on your own disk; nothing
-leaves your computer unless you switch on
-[Assistance](#assistance-opt-in) and configure a provider, which is off by
-default. Before a destructive change — deleting a document,
+Your project is a `.misket` file (a SQLite database) on your own disk. Nothing
+about it leaves your computer unless you switch something on: the two that can
+send anything are [Assistance](#assistance-opt-in), which needs a provider you
+configure yourself, and [crash reports](#privacy-and-diagnostics), which never
+carry your documents or coding. Both are off by default.
+Before a destructive change — deleting a document,
 deleting a code that has excerpts, merging one code into another, or importing
 a codebook — Misket
 writes a timestamped copy into a `<project name>.backups/` folder next to the
