@@ -403,6 +403,52 @@ that rule — it drops `Alt`, because `Alt` + `Shift` + arrows already extends
 the selection. You can also drag the round grips at either end of the focused
 excerpt; every adjustment, split and merge is undoable.
 
+## Accessibility
+
+- **Screen readers.** Every icon-only button has an `aria-label`; dialogs
+  carry a real title and description (Radix's own missing-title warning is
+  clean); the code tree is a proper `role="tree"` with `treeitem`,
+  `aria-expanded`, `aria-level` and `aria-selected`; the sidebar's
+  documents/codes switcher and the analysis list use `tablist`/`tab` and
+  `nav`/`aria-current`; the document list and excerpt browser rows are
+  focusable, named list items; toasts are `role="status"` (`role="alert"` for
+  errors), so a screen reader hears them without you having to look. Inside
+  the document text, a coded stretch names its codes to assistive tech via
+  `title`/`aria-description` on its `span[data-s]` (never a child element —
+  the DOM there is text-only by design) and the container is
+  `role="document"` with the document's name; the focused excerpt gets
+  `aria-current`.
+- **Focus.** "Skip to document" is the first focusable element in the
+  workspace. Every focusable element has a visible `:focus-visible` ring in
+  both themes. Dialogs trap focus (Radix) and return it on close; the code
+  palette returns focus to the document. `Tab`/`Shift`+`Tab` cycle the
+  focused excerpt only while the document/image/media pane's own neutral
+  surface has focus (where it lands right after you open or navigate one);
+  the moment focus is on an actual control — a sidebar button, a dialog, a
+  menu — Tab moves focus normally, so nothing outside the document is ever
+  unreachable by keyboard. There is no positive `tabindex` anywhere.
+- **Contrast.** Every text/background and focus-ring/background pair in
+  `src/styles/globals.css` clears WCAG AA (4.5:1 for text, 3:1 for the focus
+  ring and for an input, select or outline button's own edge) in both light
+  and dark themes, checked by [`src/core/contrast.test.ts`](src/core/contrast.test.ts)
+  against the actual tokens, including the highlight tint against the
+  lightest and darkest code colours in the default palette.
+- **Motion.** `prefers-reduced-motion: reduce` drops the toast shake and the
+  flash on jumping to a coded excerpt; what they signal (which toast
+  repeated, which excerpt you landed on) still shows without the animation.
+- **Known gaps.** There is currently no way to place the very first text
+  selection with the keyboard alone in a document with no excerpts yet —
+  extending a selection by word (`Alt`+`Shift`+`←`/`→`) needs either a live
+  selection or a focused excerpt to extend from. A screen reader's own
+  virtual cursor can still place a real selection, which this does read; a
+  sighted keyboard-only user currently cannot. Audio and video have no
+  caption track — nothing in Misket transcribes a recording's audio track
+  automatically.
+
+Found something that does not work with a screen reader or the keyboard
+alone? Please [open an issue](https://github.com/izgebayyurt/misket/issues) —
+accessibility bugs are treated as bugs, not feature requests.
+
 ## Install
 
 Builds for macOS, Windows and Linux are published on the

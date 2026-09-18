@@ -168,6 +168,11 @@ export function RefiImportDialog({ onClose }: { onClose: () => void }) {
                 ).map(([id, title, hint, enabled]) => (
                   <label
                     key={id}
+                    // The label's text lives two spans deep, past what
+                    // eslint-plugin-jsx-a11y's static check can see; naming it
+                    // explicitly also keeps the announced name to the option's
+                    // title, not the hint below it.
+                    aria-label={title}
                     className={cn(
                       "flex items-start gap-2 text-sm",
                       !enabled && "text-fg-muted opacity-60",

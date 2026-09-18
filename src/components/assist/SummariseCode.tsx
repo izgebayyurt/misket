@@ -114,6 +114,7 @@ function SummariseCodeDialog({ codeId, onClose }: { codeId: string; onClose: () 
           value={draft.text}
           onChange={(e) => draft.setText(e.target.value)}
           placeholder={draft.busy ? "" : "Nothing drafted yet."}
+          aria-label="Drafted memo body"
           className="font-mono text-[13px]"
           data-testid="summarise-body"
         />
