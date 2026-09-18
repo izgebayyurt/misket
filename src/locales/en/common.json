@@ -165,6 +165,25 @@
       "hint": "Hover for the reason. Clicking applies the code as your own coding; nothing is applied until you click."
     }
   },
+  "excerpts": {
+    "weight": "Weight",
+    "excerpt": "Excerpt",
+    "codes": "Codes",
+    "suggest": "Suggest",
+    "suggestHint": "Ask for code suggestions. Nothing is applied until you click one.",
+    "add": "Add",
+    "removeCode": "Remove code",
+    "removeMineCoding": "Remove my coding",
+    "removeTheirCoding": "Remove {{name}}'s coding",
+    "uncoded": "Uncoded.",
+    "memos": "Memos",
+    "timecodeHint": "Times read as m:ss.s — for example 1:02.4.",
+    "in": "In",
+    "out": "Out",
+    "inPoint": "In-point",
+    "outPoint": "Out-point",
+    "durationLong": "{{duration}} long"
+  },
   "codebook": {
     "title": "Codebook",
     "filterCodes": "Filter codes",

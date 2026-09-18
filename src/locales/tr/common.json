@@ -165,6 +165,25 @@
       "hint": "Gerekçe için üzerine gel. Tıklamak kodu kendi kodlaman olarak uygular; tıklamadan hiçbir şey uygulanmaz."
     }
   },
+  "excerpts": {
+    "weight": "Ağırlık",
+    "excerpt": "Alıntı",
+    "codes": "Kodlar",
+    "suggest": "Öner",
+    "suggestHint": "Kod önerileri iste. Birine tıklamadan hiçbir şey uygulanmaz.",
+    "add": "Ekle",
+    "removeCode": "Kodu kaldır",
+    "removeMineCoding": "Kendi kodlamamı kaldır",
+    "removeTheirCoding": "{{name}} kodlamasını kaldır",
+    "uncoded": "Kodlanmadı.",
+    "memos": "Notlar",
+    "timecodeHint": "Zamanlar dk:ss.s biçiminde okunur — örneğin 1:02.4.",
+    "in": "Giriş",
+    "out": "Çıkış",
+    "inPoint": "Giriş noktası",
+    "outPoint": "Çıkış noktası",
+    "durationLong": "{{duration}} uzunluğunda"
+  },
   "codebook": {
     "title": "Kod defteri",
     "filterCodes": "Kodları filtrele",
