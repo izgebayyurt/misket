@@ -1,6 +1,8 @@
 mod backup_guard;
 mod commands;
+mod logging;
 mod recent;
+mod reporting;
 mod settings;
 mod state;
 
@@ -73,10 +75,40 @@ fn media_response<R: tauri::Runtime>(
     }
 }
 
+/// Try to send whatever crash reports are still queued from a previous run.
+/// Runs off the UI thread at startup, best-effort: a report that still
+/// cannot be sent (still offline, endpoint still down) simply stays queued
+/// for the next start. Never sends anything unless both settings say to.
+fn flush_queued_reports(app: &tauri::AppHandle) {
+    let Ok(settings) = settings::load(app) else {
+        return;
+    };
+    if !settings.send_crash_reports || settings.report_endpoint.trim().is_empty() {
+        return;
+    }
+    let Ok(dir) = reporting::queue_dir(app) else {
+        return;
+    };
+    let Ok(queued) = reporting::queued_reports(&dir) else {
+        return;
+    };
+    for report in queued {
+        match reporting::send(&settings.report_endpoint, settings.report_format, &report) {
+            Ok(()) => {
+                let _ = reporting::dequeue(&dir, &report.event_id);
+            }
+            Err(e) => {
+                tracing::warn!(error = %e, "queued crash report still cannot be sent");
+            }
+        }
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_opener::init())
         .manage(AppState::default())
         .register_asynchronous_uri_scheme_protocol(MEDIA_PROTOCOL, |ctx, request, responder| {
             // Reading the blob locks the project, so answer off the UI thread.
@@ -85,6 +117,25 @@ pub fn run() {
             std::thread::spawn(move || responder.respond(media_response(&app, &path)));
         })
         .setup(|app| {
+            // Kept alive for the app's lifetime: dropping it would stop the
+            // background writer thread that flushes log lines to disk.
+            let log_guard = logging::init(app.handle())?;
+            app.manage(log_guard);
+
+            std::panic::set_hook(Box::new(|info| {
+                tracing::error!(target: "panic", "{info}");
+            }));
+
+            let version = app.package_info().version.to_string();
+            let os = std::env::consts::OS;
+            let webview = tauri::webview_version().unwrap_or_else(|_| "unknown".into());
+            tracing::info!(version = %version, os = %os, webview = %webview, "app start");
+
+            // A report made while offline, or against an endpoint that was
+            // briefly unreachable, is still queued on disk: try it again now.
+            let handle = app.handle().clone();
+            std::thread::spawn(move || flush_queued_reports(&handle));
+
             // Windows and Linux pass a double-clicked file as the first argument.
             if let Some(arg) = std::env::args().nth(1) {
                 if is_project_path(&arg) {
@@ -221,6 +272,11 @@ pub fn run() {
             commands::e2e::get_e2e_config,
             commands::settings::get_settings,
             commands::settings::set_settings,
+            commands::diagnostics::frontend_log,
+            commands::diagnostics::read_logs,
+            commands::diagnostics::clear_logs,
+            commands::diagnostics::get_diagnostics,
+            commands::diagnostics::send_report_now,
             commands::backup::save_project_copy,
             commands::backup::list_backups,
             commands::backup::restore_backup,

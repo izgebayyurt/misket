@@ -18,6 +18,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   coderColor: null,
   lanesByCoder: false,
   ocrLanguages: [],
+  sendCrashReports: false,
+  reportEndpoint: "",
+  reportFormat: "json",
 };
 
 const SAVE_DEBOUNCE_MS = 400;

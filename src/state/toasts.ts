@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { log } from "@/api/log";
 
 /**
  * The toast stack.
@@ -98,8 +99,15 @@ export const useToasts = create<ToastState>((set, get) => ({
 export const toast = {
   info: (message: string, options?: ToastOptions) =>
     useToasts.getState().push("info", message, options),
-  error: (e: unknown, options?: ToastOptions) =>
-    useToasts.getState().push("error", e instanceof Error ? e.message : String(e), options),
+  error: (e: unknown, options?: ToastOptions) => {
+    const message = e instanceof Error ? e.message : String(e);
+    // `client.ts`'s `invoke` already logs every command failure by code and
+    // message; this also catches errors raised outside a command (a bad
+    // drag-and-drop file, a client-side validation) that only ever surface
+    // as a toast.
+    log.error(message, e instanceof Error && e.name !== "Error" ? { name: e.name } : undefined);
+    useToasts.getState().push("error", message, options);
+  },
 };
 
 /**

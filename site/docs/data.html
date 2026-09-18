@@ -205,11 +205,35 @@
       <h2>Nothing leaves your machine</h2>
       <p>
         Misket does not phone home, does not require an account, and does not upload your documents
-        or coding anywhere as part of normal use. The only network activity related to the app
-        itself is you downloading a release or, in future, an update check you would be asked about
-        explicitly. Any AI-assisted features on the
+        or coding anywhere as part of normal use — the one exception is the opt-in, off-by-default
+        diagnostics below, which even then never carries your documents or coding. The only other
+        network activity related to the app itself is you downloading a release or, in future, an
+        update check you would be asked about explicitly. Any AI-assisted features on the
         <a href="https://github.com/izgebayyurt/misket/blob/main/ROADMAP.md">roadmap</a> are planned
         to be opt-in and to use a key or model you supply yourself — never on by default.
+      </p>
+
+      <h2 id="privacy-and-diagnostics">Privacy and diagnostics</h2>
+      <p>
+        Misket keeps a local, structured log — app version, OS, command failures by code and
+        message, project open/close and similar events, with any file path always hashed rather than
+        written out — in a daily-rotating file next to the app, kept for 7 days.
+        <strong>Settings → Diagnostics → &ldquo;View logs&hellip;&rdquo;</strong> shows it, with
+        level filtering, search, <strong>Copy</strong> and <strong>Reveal in folder</strong>;
+        <strong>Clear logs</strong> deletes it. None of this leaves your computer on its own — it is
+        a file on your disk, same as the project itself.
+      </p>
+      <p>
+        <strong>&ldquo;Send anonymous crash reports&rdquo;</strong>, in that same Diagnostics
+        section, is off by default. Turning it on is not enough by itself: nothing is ever sent
+        unless a report endpoint is also set, which normally only a maintainer running their own
+        collector would do. With both set, an error sends a small bundle: the app version, your OS,
+        the error message and stack, and the last 50 log lines — again with any path replaced by a
+        short hash. It never sends your document text, codes, memos or file names. A report made
+        while offline is queued on disk and retried at the next launch; a
+        <strong>&ldquo;Send a report now&rdquo;</strong> button sends one immediately, for testing
+        or support. The About dialog's <strong>&ldquo;Copy diagnostics&rdquo;</strong> puts the same
+        redacted bundle on your clipboard without sending it anywhere.
       </p>
     </main>
 

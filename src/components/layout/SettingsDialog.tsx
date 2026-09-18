@@ -1,10 +1,14 @@
+import { useState } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ColorPicker } from "@/components/codebook/ColorSwatch";
 import { useSettings } from "@/state/settings";
 import { useTessdataLanguages } from "@/queries/ocr";
-import type { Theme } from "@/api/types";
+import { sendReportNow } from "@/api/diagnostics";
+import { toast } from "@/state/toasts";
+import { LogViewerDialog } from "./LogViewerDialog";
+import type { ReportFormat, Theme } from "@/api/types";
 
 const THEME_OPTIONS: { value: Theme; label: string }[] = [
   { value: "system", label: "System" },
@@ -12,9 +16,15 @@ const THEME_OPTIONS: { value: Theme; label: string }[] = [
   { value: "dark", label: "Dark" },
 ];
 
+const REPORT_FORMAT_OPTIONS: { value: ReportFormat; label: string }[] = [
+  { value: "json", label: "Plain JSON" },
+  { value: "sentry", label: "Sentry envelope" },
+];
+
 export function SettingsDialog({ onClose }: { onClose: () => void }) {
   const settings = useSettings((s) => s.settings);
   const update = useSettings((s) => s.update);
+  const [logsOpen, setLogsOpen] = useState(false);
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
@@ -196,9 +206,117 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
               </p>
             </div>
           </section>
+
+          <DiagnosticsSection onOpenLogs={() => setLogsOpen(true)} />
         </div>
       </DialogContent>
+      {logsOpen ? <LogViewerDialog onClose={() => setLogsOpen(false)} /> : null}
     </Dialog>
+  );
+}
+
+/**
+ * Off by default, and inert even when on until a maintainer's own endpoint
+ * is set: see `docs/data.html` / README "Privacy and diagnostics" for the
+ * exact contents of a report, and `crates/misket-core`'s sibling,
+ * `src-tauri/src/reporting.rs`, for how it is built and redacted.
+ */
+function DiagnosticsSection({ onOpenLogs }: { onOpenLogs: () => void }) {
+  const settings = useSettings((s) => s.settings);
+  const update = useSettings((s) => s.update);
+  const [sending, setSending] = useState(false);
+
+  async function sendNow() {
+    setSending(true);
+    try {
+      await sendReportNow();
+      toast.info("Report sent");
+    } catch (e) {
+      toast.error(e);
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <section>
+      <h3 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-fg-muted">
+        Diagnostics
+      </h3>
+
+      <Button type="button" variant="outline" size="sm" onClick={onOpenLogs}>
+        View logs…
+      </Button>
+
+      <label className="mt-3 flex items-start gap-2 text-sm">
+        <input
+          type="checkbox"
+          className="mt-0.5"
+          checked={settings.sendCrashReports}
+          onChange={(e) => update({ sendCrashReports: e.target.checked })}
+          data-testid="settings-send-crash-reports"
+        />
+        <span>
+          <span className="block">Send anonymous crash reports</span>
+          <span className="mt-0.5 block text-xs text-fg-muted">
+            When something breaks, sends the app version, your OS, the error message and stack, and
+            the last 50 log lines (any file path in them replaced with a short hash) to the address
+            below. Never sent: your document text, codes, memos or file names — and nothing at all
+            unless an address is set here too.
+          </span>
+        </span>
+      </label>
+
+      {settings.sendCrashReports ? (
+        <div className="mt-3 space-y-2 pl-6">
+          <div>
+            <label htmlFor="settings-report-endpoint" className="mb-1 block text-sm">
+              Report endpoint
+            </label>
+            <Input
+              id="settings-report-endpoint"
+              value={settings.reportEndpoint}
+              placeholder="https://your-collector.example/api/1/envelope/"
+              onChange={(e) => update({ reportEndpoint: e.target.value })}
+              data-testid="settings-report-endpoint"
+            />
+            <p className="mt-1 text-xs text-fg-muted">
+              Left empty (the default), reporting stays off no matter what is checked above. A
+              maintainer running their own GlitchTip- or Sentry-compatible collector puts its URL
+              here.
+            </p>
+          </div>
+
+          <div>
+            <span className="mb-1 block text-sm">Format</span>
+            <div className="flex gap-1" role="radiogroup" aria-label="Report format">
+              {REPORT_FORMAT_OPTIONS.map((o) => (
+                <Button
+                  key={o.value}
+                  type="button"
+                  size="sm"
+                  variant={settings.reportFormat === o.value ? "default" : "outline"}
+                  aria-pressed={settings.reportFormat === o.value}
+                  onClick={() => update({ reportFormat: o.value })}
+                >
+                  {o.label}
+                </Button>
+              ))}
+            </div>
+          </div>
+
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => void sendNow()}
+            disabled={sending || !settings.reportEndpoint.trim()}
+          >
+            {sending ? "Sending…" : "Send a report now"}
+          </Button>
+        </div>
+      ) : null}
+    </section>
   );
 }
 
