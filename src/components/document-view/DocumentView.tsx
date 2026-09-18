@@ -13,7 +13,7 @@ import {
   useUpdateExcerptRange,
 } from "@/queries/excerpts";
 import { snapWeight } from "@/core/weights";
-import type { ExcerptWithCodes } from "@/api/types";
+import type { ExcerptWithCodes, TranscriptAnchor } from "@/api/types";
 import { buildOffsetMap, codePointCount, cpToUtf16, utf16ToCp } from "@/core/offsets";
 import {
   MAX_LANES,
@@ -276,14 +276,31 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
     return out.sort((a, b) => a.start - b.start || a.end - b.end);
   }, [aligned, anchors, mediaExcerpts, offsetMap, text]);
 
+  /**
+   * What a click needs to know about the alignment, kept in a ref.
+   *
+   * `onSegmentClick` is handed to every `Paragraph`, and `Paragraph` is
+   * memoized on what actually changes its layout — so a handler that closed
+   * over `anchors` or the playhead would either go stale the moment a
+   * recording was linked, or force every paragraph to re-render several times
+   * a second while it plays. The handler stays identical; what it reads moves.
+   */
+  const alignRef = useRef<{
+    aligned: boolean;
+    anchors: TranscriptAnchor[];
+    seekTo: (ms: number) => void;
+  }>({ aligned: false, anchors: [], seekTo: () => {} });
+  const seekPlayback = playback.seekTo;
+  useEffect(() => {
+    alignRef.current = { aligned, anchors, seekTo: seekPlayback };
+  }, [aligned, anchors, seekPlayback]);
+
   /** Seek the linked recording to the moment the text at `cp` was said. */
-  const seekToPos = useCallback(
-    (cp: number | null) => {
-      if (cp === null || !aligned) return;
-      playback.seekTo(posToMs(anchors, cp));
-    },
-    [aligned, anchors, playback],
-  );
+  const seekToPos = useCallback((cp: number | null) => {
+    const { aligned: ready, anchors: points, seekTo } = alignRef.current;
+    if (cp === null || !ready) return;
+    seekTo(posToMs(points, cp));
+  }, []);
 
   // Keep the paragraph being read on screen, when the coder asked for it.
   useEffect(() => {
@@ -305,12 +322,13 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [documentId, linkedMediaId, playRequest]);
 
+  const { pause: pausePlayback, positionMs: playheadMs } = playback;
   useEffect(() => {
     const stopAt = stopAtRef.current;
-    if (stopAt === null || playback.positionMs < stopAt) return;
+    if (stopAt === null || playheadMs < stopAt) return;
     stopAtRef.current = null;
-    playback.pause();
-  }, [playback]);
+    pausePlayback();
+  }, [pausePlayback, playheadMs]);
 
   /** A player that will not start: usually a codec this build cannot decode. */
   const onPlaybackError = useCallback(() => {
@@ -1209,35 +1227,39 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
     });
   }, [codes, documentId, excerptById, focusedId, setWeight]);
 
-  function onSegmentClick(e: React.MouseEvent, seg: Segment, paragraphStart: number) {
-    const sel = window.getSelection();
-    if (sel && !sel.isCollapsed) return; // a drag-selection, not a click
-    if (aligned) {
-      // In a transcript lined up with its recording, clicking seeks it:
-      // Ctrl/⌘+click to the exact word under the pointer, a plain click on
-      // text that carries no excerpt to the start of its paragraph. A plain
-      // click on coded text keeps its old meaning — cycling the excerpts
-      // there — which is the one place the two could have collided.
-      if (mod(e)) {
-        e.preventDefault();
-        seekToPos(offsetFromPoint(e.clientX, e.clientY));
-        return;
+  const onSegmentClick = useCallback(
+    (e: React.MouseEvent, seg: Segment, paragraphStart: number) => {
+      const sel = window.getSelection();
+      if (sel && !sel.isCollapsed) return; // a drag-selection, not a click
+      if (alignRef.current.aligned) {
+        // In a transcript lined up with its recording, clicking seeks it:
+        // Ctrl/⌘+click to the exact word under the pointer, a plain click on
+        // text that carries no excerpt to the start of its paragraph. A plain
+        // click on coded text keeps its old meaning — cycling the excerpts
+        // there — which is the one place the two could have collided.
+        if (mod(e)) {
+          e.preventDefault();
+          seekToPos(offsetFromPoint(e.clientX, e.clientY));
+          return;
+        }
+        if (seg.excerptIds.length === 0) {
+          seekToPos(utf16ToCp(offsetMap, paragraphStart));
+          return;
+        }
       }
-      if (seg.excerptIds.length === 0) {
-        seekToPos(utf16ToCp(offsetMap, paragraphStart));
-        return;
-      }
-    }
-    if (seg.excerptIds.length === 0) return;
-    // Where the click landed, so the popover can offer "Split here".
-    const caret = offsetFromPoint(e.clientX, e.clientY);
-    e.preventDefault();
-    // Cycle through overlapping excerpts on repeated clicks.
-    const idx = focusedId ? seg.excerptIds.indexOf(focusedId) : -1;
-    const next = seg.excerptIds[(idx + 1) % seg.excerptIds.length]!;
-    setFocusedId(next);
-    setPopover({ id: next, anchor: e.currentTarget as HTMLElement, caret });
-  }
+      if (seg.excerptIds.length === 0) return;
+      // Where the click landed, so the popover can offer "Split here".
+      const caret = offsetFromPoint(e.clientX, e.clientY);
+      e.preventDefault();
+      // Cycle through overlapping excerpts on repeated clicks.
+      const focused = useWorkspace.getState().focusedExcerptId;
+      const idx = focused ? seg.excerptIds.indexOf(focused) : -1;
+      const next = seg.excerptIds[(idx + 1) % seg.excerptIds.length]!;
+      setFocusedId(next);
+      setPopover({ id: next, anchor: e.currentTarget as HTMLElement, caret });
+    },
+    [offsetFromPoint, offsetMap, seekToPos, setFocusedId],
+  );
 
   if (error) return <div className="p-6 text-danger">{String(error)}</div>;
   if (!doc) return null;
@@ -1506,28 +1528,32 @@ interface ParagraphProps {
 
 const Paragraph = memo(function Paragraph(p: ParagraphProps) {
   const cuts = p.turn?.cuts;
+  // Where the speaker label ends: every segment before it is gutter, the rest
+  // is what was said. `cuts` always ends at the label's own end.
+  const labelEnd = cuts?.[cuts.length - 1] ?? p.start;
   /** The stretches of a coded recording that reach into this paragraph. */
   const bands = useMemo(
     () => p.mediaRanges.filter((r) => r.start < p.end && r.end > p.start),
     [p.end, p.mediaRanges, p.start],
   );
   // Segments break at a turn label's ends and at a band's ends alike, so a
-  // band can be a CSS effect on whole segments rather than an element.
+  // band can be a CSS effect on whole segments rather than an element. A band
+  // never cuts *inside* a label, though: the label's segments are taken out of
+  // flow into the gutter, and a third one there would land on top of the
+  // other two.
   const allCuts = useMemo(() => {
     if (bands.length === 0) return cuts;
     const out = cuts ? [...cuts] : [];
     for (const b of bands) {
-      out.push(b.start, b.end);
+      if (b.start > labelEnd) out.push(b.start);
+      if (b.end > labelEnd) out.push(b.end);
     }
     return out;
-  }, [bands, cuts]);
+  }, [bands, cuts, labelEnd]);
   const segments = useMemo(
     () => segmentParagraph(p.start, p.end, p.excerpts, allCuts),
     [p.start, p.end, p.excerpts, allCuts],
   );
-  // Where the speaker label ends: every segment before it is gutter, the rest
-  // is what was said. `cuts` always ends at the label's own end.
-  const labelEnd = cuts?.[cuts.length - 1] ?? p.start;
   if (p.text.length === 0) {
     // Blank lines carry no paragraph number, so the gutter counts paragraphs
     // rather than lines (see `.doc-text.with-para-numbers` in globals.css).
@@ -1565,7 +1591,9 @@ const Paragraph = memo(function Paragraph(p: ParagraphProps) {
             data-x={seg.excerptIds.length ? seg.excerptIds.join(" ") : undefined}
             data-n={n}
             data-media={
-              bands.some((b) => b.start <= seg.start && b.end >= seg.end) ? "" : undefined
+              seg.start >= labelEnd && bands.some((b) => b.start <= seg.start && b.end >= seg.end)
+                ? ""
+                : undefined
             }
             className={cn(
               "seg",
@@ -1599,7 +1627,8 @@ function areParagraphPropsEqual(a: ParagraphProps, b: ParagraphProps): boolean {
     a.text !== b.text ||
     a.colorById !== b.colorById ||
     a.laneNoun !== b.laneNoun ||
-    a.playing !== b.playing
+    a.playing !== b.playing ||
+    a.onSegmentClick !== b.onSegmentClick
   )
     return false;
   // A band that reaches into this paragraph changes where its segments break.
