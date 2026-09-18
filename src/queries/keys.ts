@@ -16,6 +16,8 @@ export const keys = {
   recent: ["recent"] as const,
   documents: ["documents"] as const,
   document: (id: string) => ["document", id] as const,
+  /** Audio and video documents whose file is not where it was imported from. */
+  missingMedia: ["missingMedia"] as const,
   codes: ["codes"] as const,
   /** Everyone whose work is in the project, with their coding counts. */
   coders: ["coders"] as const,

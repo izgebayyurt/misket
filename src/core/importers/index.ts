@@ -1,3 +1,4 @@
+import { MEDIA_EXTENSIONS, mediaMimeForExtension } from "../media";
 import { importText } from "./text";
 import { importMarkdown } from "./markdown";
 import { importDocx } from "./docx";
@@ -24,7 +25,15 @@ export const TEXT_EXTENSIONS = ["txt", "md", "markdown", "docx", "pdf"] as const
 /** Extensions imported as image documents (coded with rectangle regions). */
 export const IMAGE_EXTENSIONS = ["png", "jpg", "jpeg", "webp"] as const;
 
-export const SUPPORTED_EXTENSIONS = [...TEXT_EXTENSIONS, ...IMAGE_EXTENSIONS] as const;
+/** Extensions imported as recordings and coded with time ranges, by
+ * reference: see `src/core/media.ts`. */
+export { MEDIA_EXTENSIONS } from "../media";
+
+export const SUPPORTED_EXTENSIONS = [
+  ...TEXT_EXTENSIONS,
+  ...IMAGE_EXTENSIONS,
+  ...MEDIA_EXTENSIONS,
+] as const;
 
 const IMAGE_MIMES: Record<string, string> = {
   png: "image/png",
@@ -43,6 +52,11 @@ export function imageMimeForPath(path: string): string | null {
   return imageMimeForExtension(extensionOf(path));
 }
 
+/** Whether this path is imported as a recording, held by reference. */
+export function mediaMimeForPath(path: string): string | null {
+  return mediaMimeForExtension(extensionOf(path));
+}
+
 export function extensionOf(path: string): string {
   const base = path.split(/[\\/]/).pop() ?? path;
   const dot = base.lastIndexOf(".");
@@ -57,7 +71,9 @@ export function baseName(path: string): string {
 
 /**
  * Parse a file's bytes into plain text according to its extension. Images do
- * not go through here: they keep their bytes (see `imageMimeForPath`).
+ * not go through here (they keep their bytes, see `imageMimeForPath`), and
+ * neither do recordings (their bytes are never read at all, see
+ * `mediaMimeForPath`).
  */
 export async function importFile(path: string, bytes: Uint8Array): Promise<ImportedDocument> {
   const ext = extensionOf(path);

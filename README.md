@@ -1,6 +1,6 @@
 # Misket
 
-Open-source qualitative coding for text and images, with video on the way.
+Open-source qualitative coding for text, images, audio and video.
 Misket is a local-first desktop app: your project is a single file on your
 machine, and nothing is uploaded anywhere.
 
@@ -14,9 +14,10 @@ keyboard-friendly interface without a subscription.
 
 ## What it does today
 
-- **Import** plain text, Markdown, Word (`.docx`), PDF and image (PNG, JPEG,
-  WebP) documents, one at a time or a whole folder at once ("Import folder…",
-  optionally including subfolders).
+- **Import** plain text, Markdown, Word (`.docx`), PDF, image (PNG, JPEG,
+  WebP), audio (MP3, WAV, M4A, AAC, OGG, FLAC) and video (MP4, MOV, WebM,
+  M4V, MKV) documents, one at a time or a whole folder at once ("Import
+  folder…", optionally including subfolders).
   If a file has blank-line gaps, trailing spaces or other likely-accidental
   whitespace, Misket offers to tidy it up before import (document text is
   immutable once imported). Check "Remember my choice" in that dialog to skip
@@ -64,6 +65,22 @@ keyboard-friendly interface without a subscription.
   `Tab` cycles them, and the excerpt browser shows a thumbnail of each one.
   The image is copied into the project file, so a `.misket` stays
   self-contained.
+- **Code audio and video**: a recording opens in a player with a timeline
+  under it — the waveform, one band per coded stretch in its code's colour,
+  and the playhead. `Space` plays, `J`/`L` scrub five seconds, `,`/`.` nudge
+  100 ms, and `[` and `]` mark an in- and an out-point; `Enter` or the palette
+  then codes that stretch, or a code's hotkey applies it straight away.
+  Playback speed runs 0.5–2×, and the position is remembered per document.
+  Excerpts show their `[1:02.4–1:09.0]` timecode with the frame captured at
+  the in-point (or the waveform slice, for audio), and clicking one in the
+  browser jumps to the document and seeks there.
+- **Recordings stay on disk**: an interview is not copied into the project
+  file — a `.misket` with ten hours of tape coded in it is still small enough
+  to email. Misket remembers where each file is, warns when one has moved, and
+  offers "Relink…" from the document row, the viewer or the project overview
+  (undoable, like every other change). If you would rather keep everything
+  together, the import dialog can copy the files into a `<project>.media/`
+  folder beside the project instead.
 - **Find your place in a long transcript**: paragraph numbers in the gutter
   (optional), `Ctrl`/`⌘`+`G` to go to one, `Ctrl`/`⌘`+`Home`/`End` to jump to
   the top or bottom, and a reading position remembered per document so
@@ -229,6 +246,10 @@ keyboard-friendly interface without a subscription.
   MAXQDA, QDA Miner, Quirkos and QualCoder read, and import one back the same
   way. An import shows you what is in the file before it writes anything,
   says what it cannot take, and arrives as a single undoable step.
+- **Diagnostics**: an in-app log viewer (Settings → Diagnostics → "View
+  logs…") with level filtering, search, copy and "Reveal in folder", and an
+  opt-in, off-by-default "Send anonymous crash reports" setting — see
+  [Privacy and diagnostics](#privacy-and-diagnostics) below.
 
 ![Excerpt browser](docs/screenshots/browser.png)
 
@@ -296,6 +317,10 @@ can read every word Misket would send before you switch anything on.
 | Apply the last code used again (quick code)            | `Ctrl`/`⌘` + `.`                              |
 | Rate the last applied code, with an excerpt focused    | `1`–`9`                                       |
 | Fit / zoom an image                                    | `0` / `+` / `-`                               |
+| Play / pause a recording                               | `Space`                                       |
+| Scrub back / forward 5 seconds                         | `J` / `L`                                     |
+| Nudge back / forward 100 ms                            | `,` / `.`                                     |
+| Set the in- / out-point                                | `[` / `]`                                     |
 | Next / previous excerpt                                | `Tab` / `Shift`+`Tab`                         |
 | Jump to the top / bottom of the document               | `Ctrl`/`⌘` + `Home` / `End`                   |
 | Go to paragraph                                        | `Ctrl`/`⌘` + `G`                              |
@@ -334,6 +359,11 @@ Builds for macOS, Windows and Linux are published on the
 [releases page](https://github.com/izgebayyurt/misket/releases). They are not
 code-signed yet: macOS will ask you to allow the app under System Settings >
 Privacy & Security, and Windows SmartScreen will show a warning the first time.
+Misket checks for updates on launch and offers to install them in place
+(Settings has a "Check for updates automatically" toggle, on by default, and
+a manual "Check for updates…"). See
+[docs/RELEASING.md](docs/RELEASING.md) for how releases are built, signed
+and published.
 
 ## Your data
 
@@ -362,6 +392,32 @@ place, just in case).
 
 No project yet? Click "Try Misket with sample data" on the start screen for a
 ready-made study to explore.
+
+## Privacy and diagnostics
+
+Misket keeps a local, structured log (app version, OS, command failures by
+code and message, project open/close and similar events — paths are hashed,
+never logged in the clear) in a daily-rotating file kept for 7 days. Settings
+→ Diagnostics → "View logs…" shows it with level filtering, search, "Copy"
+and "Reveal in folder"; "Clear logs" deletes it. None of this ever leaves
+your computer on its own.
+
+**"Send anonymous crash reports"** (Settings → Diagnostics) is off by
+default. When it is on **and** a report endpoint is set, an error sends: the
+app version, your OS, the error message and stack, and the last 50 log lines
+with anything path-shaped replaced by a short hash. It never sends your
+document text, codes, memos or file names. Leaving the endpoint empty (the
+default) disables sending outright regardless of the toggle — there is no
+Misket-run collector to send to. A report made offline is queued on disk and
+retried at the next launch; "Send a report now" (shown once the toggle is on)
+sends one immediately, logs included.
+
+Maintainers running their own instance can point `report_endpoint` at a
+GlitchTip- or Sentry-compatible collector's envelope URL and set
+`report_format` to `sentry` for that wire format, or leave it as `json` for a
+plain, self-describing POST body to any collector of their own. See
+`src-tauri/src/reporting.rs` for the exact shape of both and the redaction
+that runs before either is sent.
 
 ## Development
 
@@ -403,8 +459,9 @@ together, [docs/DATA_MODEL.md](docs/DATA_MODEL.md) for the schema, and
 
 ## Roadmap
 
-- **Milestone 2**: image regions are in; video time ranges and transcript
-  alignment are next (the data model already supports both).
+- **Milestone 2**: image regions and audio/video time ranges are in;
+  transcript alignment (jumping between a recording and its transcript) is
+  next.
 - Full-text search, REFI-QDA import/export, project sharing.
 
 ## License

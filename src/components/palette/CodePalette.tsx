@@ -83,7 +83,9 @@ function PaletteBody({ close }: { close: () => void }) {
     : pending
       ? pending.kind === "image"
         ? "Code region"
-        : "Code selection"
+        : pending.kind === "media"
+          ? "Code stretch"
+          : "Code selection"
       : focused
         ? "Add to excerpt"
         : "No target";
@@ -103,12 +105,20 @@ function PaletteBody({ close }: { close: () => void }) {
                 geometry: pending.geometry,
                 codeIds: [codeId],
               }
-            : {
-                documentId,
-                startPos: pending.start,
-                endPos: pending.end,
-                codeIds: [codeId],
-              },
+            : pending.kind === "media"
+              ? {
+                  documentId,
+                  kind: "video_range",
+                  startPos: pending.startMs,
+                  endPos: pending.endMs,
+                  codeIds: [codeId],
+                }
+              : {
+                  documentId,
+                  startPos: pending.start,
+                  endPos: pending.end,
+                  codeIds: [codeId],
+                },
         );
         window.getSelection()?.removeAllRanges();
         setPending(null);
@@ -120,7 +130,7 @@ function PaletteBody({ close }: { close: () => void }) {
           codeIds: [codeId],
         });
       } else {
-        toast.info("Select some text, draw a region, or focus an excerpt first.", {
+        toast.info("Select some text, draw a region, mark a stretch, or focus an excerpt first.", {
           key: TOAST_KEYS.codeTarget,
         });
       }

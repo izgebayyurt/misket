@@ -4,6 +4,7 @@ import type { WordFrequency, WordFrequencyOptions, WordFrequencyScope } from "@/
 import { DEFAULT_WORD_FREQUENCY_OPTIONS } from "@/api/types";
 import { toCsv } from "@/core/csv";
 import { useSetStopWords, useStopWords, useWordFrequencies } from "@/queries/analysis";
+import { useDocuments } from "@/queries/documents";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -19,6 +20,7 @@ const WORD_CLOUD_LIMIT = 100;
 
 export function WordFrequencies() {
   const [documentIds, setDocumentIds] = useState<string[]>([]);
+  const { data: allDocuments } = useDocuments();
   const [documentSetIds, setDocumentSetIds] = useState<string[]>([]);
   const [codeIds, setCodeIds] = useState<string[]>([]);
   const [search, setSearch] = useState("");
@@ -84,6 +86,12 @@ export function WordFrequencies() {
       </span>
     </th>
   );
+
+  // A recording has no words. Saying so beats an empty list that looks like a
+  // bug — the backend counts text documents only (`db::analysis`).
+  const onlyRecordings =
+    documentIds.length > 0 &&
+    documentIds.every((id) => allDocuments?.find((d) => d.id === id)?.kind === "video");
 
   return (
     <div className="flex h-full flex-col" data-testid="analysis-word-frequencies">
@@ -154,7 +162,13 @@ export function WordFrequencies() {
       </AnalysisToolbar>
       <div className="min-h-0 flex-1 overflow-auto">
         {!rows.length ? (
-          <EmptyNote>{isPending ? "Counting…" : "No words to show for this selection."}</EmptyNote>
+          <EmptyNote>
+            {isPending
+              ? "Counting…"
+              : onlyRecordings
+                ? "Counting words needs a transcript: audio and video have no text to count. Import the transcript of a recording as a document and count that."
+                : "No words to show for this selection."}
+          </EmptyNote>
         ) : view === "cloud" ? (
           <WordCloud
             rows={rows.slice(0, WORD_CLOUD_LIMIT)}

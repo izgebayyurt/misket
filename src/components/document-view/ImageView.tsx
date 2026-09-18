@@ -4,7 +4,7 @@ import { mediaUrl } from "@/api/media";
 import { useCodes } from "@/queries/codes";
 import { useApplyCodes, useDeleteExcerpt, useDocumentExcerpts } from "@/queries/excerpts";
 import { useDocument } from "@/queries/documents";
-import { parseGeometry, rectFromPoints, type Rect } from "@/core/imageCrop";
+import { naturalSize, parseGeometry, rectFromPoints, type Rect } from "@/core/imageCrop";
 import { isTextField, mod } from "@/core/keymap";
 import { useWorkspace } from "@/state/workspace";
 import { useShortcutActions } from "@/state/shortcutActions";
@@ -72,7 +72,8 @@ export function ImageView({ documentId, focusExcerptId }: Props) {
   const [flashId, setFlashId] = useState<string | null>(null);
   const [renaming, setRenaming] = useState(false);
 
-  const natural = doc?.media ?? null;
+  // Pixel size only: `media` also describes audio and video, which have none.
+  const natural = useMemo(() => naturalSize(doc?.media), [doc?.media]);
   const colorById = useMemo(() => new Map((codes ?? []).map((c) => [c.id, c.color])), [codes]);
 
   /** Region excerpts, largest first so small ones stay clickable on top. */

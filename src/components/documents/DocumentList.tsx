@@ -1,7 +1,9 @@
 import { describe } from "@/core/keymap";
 import { useState } from "react";
 import {
+  AlertTriangle,
   ChevronDown,
+  Film,
   FileText,
   FolderOpen,
   Image as ImageIcon,
@@ -27,6 +29,7 @@ import { Dialog, DialogContent, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { useImportFiles } from "./useImportFiles";
+import { useRelinkMedia } from "./useRelinkMedia";
 import { ImportFolderDialog } from "./ImportFolderDialog";
 import { DocumentSets } from "./DocumentSets";
 import { AddToSetMenu } from "@/components/sets/AddToSetMenu";
@@ -83,7 +86,7 @@ export function DocumentList() {
       </div>
       {docs && docs.length === 0 ? (
         <p className="px-3 py-2 text-xs text-fg-muted">
-          No documents yet. Import txt, md, docx, pdf or images.
+          No documents yet. Import txt, md, docx, pdf, images, audio or video.
         </p>
       ) : null}
       <ul>
@@ -109,10 +112,19 @@ export function DocumentList() {
                     >
                       {d.kind === "image" ? (
                         <ImageIcon className="size-4 shrink-0 text-fg-muted" />
+                      ) : d.kind === "video" ? (
+                        <Film className="size-4 shrink-0 text-fg-muted" />
                       ) : (
                         <FileText className="size-4 shrink-0 text-fg-muted" />
                       )}
                       <span className="truncate">{d.name}</span>
+                      {d.mediaMissing ? (
+                        <AlertTriangle
+                          className="size-3.5 shrink-0 text-danger"
+                          aria-label="Its file is missing"
+                          data-testid="document-media-missing"
+                        />
+                      ) : null}
                       {d.sourceFormat ? (
                         <span
                           className="shrink-0 rounded border border-border px-1 text-[10px] uppercase text-fg-muted"
@@ -183,9 +195,15 @@ function DocumentRowMenuItems({
   menu: MenuPrimitives;
 }) {
   const { Item } = menu;
+  const relink = useRelinkMedia();
   return (
     <>
       <Item onSelect={onRename}>Rename…</Item>
+      {doc.kind === "video" ? (
+        <Item onSelect={() => void relink.pickAndRelink(doc.id)}>
+          {doc.mediaMissing ? "Relink the missing file…" : "Relink…"}
+        </Item>
+      ) : null}
       <AddToSetMenu kind="document" memberId={doc.id} memberLabel={doc.name} menu={menu} />
       <Item danger onSelect={onDelete}>
         Delete…

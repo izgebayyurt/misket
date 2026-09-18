@@ -4,6 +4,7 @@ import { pathOf } from "@/core/codeTree";
 import { ColorDot } from "@/components/codebook/ColorSwatch";
 import { formatWeightWithLabel } from "@/core/weights";
 import { cn } from "@/lib/utils";
+import { MediaThumbnail } from "./MediaThumbnail";
 import { RegionThumbnail } from "./RegionThumbnail";
 
 interface Props {
@@ -23,6 +24,7 @@ interface Props {
 export function ExcerptRow({ row, selected = false, active, onOpen, onToggle }: Props) {
   const tree = useCodeTree();
   const isRegion = row.kind === "image_region";
+  const isMedia = row.kind === "video_range";
   return (
     <li
       className={cn(
@@ -57,9 +59,22 @@ export function ExcerptRow({ row, selected = false, active, onOpen, onToggle }: 
             height={64}
           />
         ) : null}
+        {isMedia ? (
+          <MediaThumbnail
+            documentId={row.documentId}
+            excerptId={row.id}
+            startMs={row.startPos}
+            endMs={row.endPos}
+            width={96}
+            height={64}
+          />
+        ) : null}
         <span className="flex min-w-0 flex-1 flex-col gap-1">
-          {isRegion ? (
-            <span className="block text-[13px] text-fg-muted">{row.snapshot}</span>
+          {isRegion || isMedia ? (
+            // A region's snapshot describes the rectangle; a media excerpt's
+            // is its `[in-out]` timecode label. Both read as a label, not as
+            // a quotation, so neither gets the serif quoting treatment.
+            <span className="block font-mono text-[13px] text-fg-muted">{row.snapshot}</span>
           ) : (
             <span className="block font-serif text-[15px] leading-snug">
               <span className="text-fg-muted">{row.contextBefore.slice(-80)}</span>

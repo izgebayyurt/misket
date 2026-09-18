@@ -11,23 +11,23 @@ stays a single file that can be copied while open), `synchronous = NORMAL`.
 
 ## Tables
 
-| Table                | Purpose                                                                                                                                                                                                                                                                                                                   |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `project_meta`       | key/value: `schema_version`, `project_id`, `name`, `created_at`, `created_with_app_version`                                                                                                                                                                                                                               |
-| `documents`          | imported sources. `kind` is `text` or `image` (`video` later). `text` is immutable and NULL for media; `text_length` is the code point count; `media_json` holds `{width,height,mime}`; `content_hash` de-duplicates imports; `transcript_json` is how the document marks who is speaking                                 |
-| `codes`              | the codebook tree: adjacency list (`parent_id`) with `sort_order` among siblings, `color`, optional single-key `shortcut`, the definition fields `description`, `inclusion`, `exclusion` and `example_excerpt_id`, and an optional `weight_scale_json` ([Weights](#weights)). Sibling names are unique case-insensitively |
-| `excerpts`           | coded ranges. `kind` = `text` (code point `start_pos`/`end_pos`), `video_range` (milliseconds) or `image_region` (`geometry` JSON `{x,y,w,h}` normalized 0..1). `snapshot` stores the excerpted text or a description of the region. One excerpt per exact range or rectangle                                             |
-| `excerpt_codes`      | many-to-many between excerpts and codes, per coder: the primary key is `(excerpt_id, code_id, coder_id)`, so two people applying the same code to one passage are two rows. `weight` is that coder's value on the code's scale, if any ([Weights](#weights))                                                              |
-| `coders`             | who has worked on this project: `id` (a UUID an install generates once and keeps in its settings), `name`, `color`, `created_at`                                                                                                                                                                                          |
-| `media_blobs`        | the bytes of an image document, with their MIME type, one row per document. Deleting the document drops them                                                                                                                                                                                                              |
-| `memos`              | notes with at most one target: `document_id`, `code_id`, `excerpt_id`, or none (project memo). Each target is a real foreign key so deletes cascade. `coder_id` is who wrote it                                                                                                                                           |
-| `descriptor_fields`  | document attributes ("Site", "Age group"). `kind` is `text`, `number`, `choice` or `date`; `options_json` holds a choice field's options as a JSON array of strings; `sort_order` is the order they are shown in. Names are unique case-insensitively                                                                     |
-| `descriptor_values`  | one value per (`document_id`, `field_id`), `WITHOUT ROWID`. Both foreign keys cascade, so deleting a document or a field takes its values with it                                                                                                                                                                         |
-| `sets`               | named groups of codes or of documents. `kind` is `code` or `document`; names are unique per kind, case-insensitively, so "Round 1" can be both                                                                                                                                                                            |
-| `set_members`        | `(set_id, member_id)`, `WITHOUT ROWID`. `member_id` is a code id or a document id depending on the set's kind, so it is not a foreign key; two triggers stand in for the cascade                                                                                                                                          |
-| `saved_filters`      | a whole `ExcerptFilter` as JSON under a unique (case-insensitive) name                                                                                                                                                                                                                                                    |
-| `framework_matrices` | a saved framework matrix: its name, how to make its rows (`row_kind`, `row_field_id`, `row_set_id`) and where its columns come from (`code_set_id`, or `code_ids_json`). Names are unique case-insensitively                                                                                                              |
-| `framework_cells`    | the written summary for one (`matrix_id`, `row_key`, `code_id`), `WITHOUT ROWID`. `row_key` is a document id or a descriptor value; a trigger stands in for the missing `code_id` cascade                                                                                                                                 |
+| Table                | Purpose                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `project_meta`       | key/value: `schema_version`, `project_id`, `name`, `created_at`, `created_with_app_version`                                                                                                                                                                                                                                                                                                                                                                |
+| `documents`          | imported sources. `kind` is `text`, `image` or `video` (audio and video share `video`). `text` is immutable and NULL for media; `text_length` is the code point count; `media_json` holds `{mime, width?, height?, durationMs?, sizeBytes?, fileHash?, peaks?}`; `content_hash` de-duplicates imports; `source_path` is where a recording's file is, because recordings are held by reference; `transcript_json` is how the document marks who is speaking |
+| `codes`              | the codebook tree: adjacency list (`parent_id`) with `sort_order` among siblings, `color`, optional single-key `shortcut`, the definition fields `description`, `inclusion`, `exclusion` and `example_excerpt_id`, and an optional `weight_scale_json` ([Weights](#weights)). Sibling names are unique case-insensitively                                                                                                                                  |
+| `excerpts`           | coded ranges. `kind` = `text` (code point `start_pos`/`end_pos`), `video_range` (milliseconds) or `image_region` (`geometry` JSON `{x,y,w,h}` normalized 0..1). `snapshot` stores the excerpted text or a description of the region. One excerpt per exact range or rectangle                                                                                                                                                                              |
+| `excerpt_codes`      | many-to-many between excerpts and codes, per coder: the primary key is `(excerpt_id, code_id, coder_id)`, so two people applying the same code to one passage are two rows. `weight` is that coder's value on the code's scale, if any ([Weights](#weights))                                                                                                                                                                                               |
+| `coders`             | who has worked on this project: `id` (a UUID an install generates once and keeps in its settings), `name`, `color`, `created_at`                                                                                                                                                                                                                                                                                                                           |
+| `media_blobs`        | small binaries kept inside the project file: an image document's pixels (`name = 'source'`, no `excerpt_id`) and the frame captured for a `video_range` excerpt (`name = 'thumbnail'`). Deleting the document or the excerpt drops them. An audio or video document's own bytes are **not** here                                                                                                                                                           |
+| `memos`              | notes with at most one target: `document_id`, `code_id`, `excerpt_id`, or none (project memo). Each target is a real foreign key so deletes cascade. `coder_id` is who wrote it                                                                                                                                                                                                                                                                            |
+| `descriptor_fields`  | document attributes ("Site", "Age group"). `kind` is `text`, `number`, `choice` or `date`; `options_json` holds a choice field's options as a JSON array of strings; `sort_order` is the order they are shown in. Names are unique case-insensitively                                                                                                                                                                                                      |
+| `descriptor_values`  | one value per (`document_id`, `field_id`), `WITHOUT ROWID`. Both foreign keys cascade, so deleting a document or a field takes its values with it                                                                                                                                                                                                                                                                                                          |
+| `sets`               | named groups of codes or of documents. `kind` is `code` or `document`; names are unique per kind, case-insensitively, so "Round 1" can be both                                                                                                                                                                                                                                                                                                             |
+| `set_members`        | `(set_id, member_id)`, `WITHOUT ROWID`. `member_id` is a code id or a document id depending on the set's kind, so it is not a foreign key; two triggers stand in for the cascade                                                                                                                                                                                                                                                                           |
+| `saved_filters`      | a whole `ExcerptFilter` as JSON under a unique (case-insensitive) name                                                                                                                                                                                                                                                                                                                                                                                     |
+| `framework_matrices` | a saved framework matrix: its name, how to make its rows (`row_kind`, `row_field_id`, `row_set_id`) and where its columns come from (`code_set_id`, or `code_ids_json`). Names are unique case-insensitively                                                                                                                                                                                                                                               |
+| `framework_cells`    | the written summary for one (`matrix_id`, `row_key`, `code_id`), `WITHOUT ROWID`. `row_key` is a document id or a descriptor value; a trigger stands in for the missing `code_id` cascade                                                                                                                                                                                                                                                                  |
 
 All ids are UUID v4 strings so deleted rows can be restored with their original
 identity (undo) and so exports are stable.
@@ -295,6 +295,93 @@ region 12%×8% at (30%, 40%)
 
 The excerpt context (`contextBefore` / `contextAfter`) is empty for image
 excerpts.
+
+## Audio and video
+
+A recording (`kind = 'video'`, whatever its MIME — an mp3 and an mp4 differ
+only there) is the one document kind held **by reference**. An image's pixels
+are a few megabytes and belong inside the project file; a two-hour interview
+is gigabytes, and a `.misket` is opened, copied and backed up whole, so
+`documents.source_path` holds the absolute path to the file on disk and
+nothing is written to `media_blobs`. `media_json` records what the import
+measured by loading the file in a hidden media element:
+
+```jsonc
+{
+  "mime": "audio/mpeg",
+  "durationMs": 125400,
+  "sizeBytes": 40000000,
+  "fileHash": "a1b2…",
+  "width": 1920, // video only
+  "height": 1080,
+  "peaks": [0.1, 0.42, …] // the cached waveform, see below
+}
+```
+
+`content_hash` is `fileHash`: sha256 over the first and last mebibyte of the
+file plus its length (`db::media::file_hash`). Hashing a 4 GB recording in
+full would take a minute and buy nothing, and the hash is advisory — it
+decides whether an import is a duplicate, not whether anything is correct.
+
+Because the file is outside the project, it can move. `documents.source_path`
+is checked on every listing, which is what `DocumentSummary.media_missing`
+reports; `db::media::missing` lists every such document for the project
+overview, and `db::media::relink` points one at a new file. A relink is an
+ordinary undoable write (`document.relinked`, `DocumentOp::Relink`): it moves
+the path, the fingerprint and the measurements together, keeps the duration —
+so a stretch already coded cannot silently fall outside the recording — and
+drops the cached waveform, which belonged to the old bytes. On import,
+`copy_into_project` first copies the file into `<project>.media/` beside the
+`.misket` and points `source_path` at the copy, for a project folder meant to
+be moved as one piece. Images are never held by reference.
+
+A coded stretch is `kind = 'video_range'` with `start_pos`/`end_pos` in
+**milliseconds**, end-exclusive, validated against `media_json.durationMs`
+(`excerpts::check_media_range`). The partial unique index
+`excerpts_video_range_uq (document_id, start_pos, end_pos) WHERE
+kind='video_range'` makes coding the same in/out pair twice add codes to the
+existing excerpt, exactly as for text ranges and image regions. There is
+nothing to quote, so `snapshot` holds the timecode label, written by Rust in
+one place (`db::media::range_label`) and mirrored by `formatRangeLabel` in
+`src/core/media.ts`:
+
+```
+[1:02.4–1:09.0]
+```
+
+`update_range` moves those boundaries and relabels the snapshot; `split` and
+`merge_adjacent` stay text-only.
+
+Two things about a recording are **caches**, derived from the file and written
+without a history node, like the transcript format cached in
+`documents.transcript_json`:
+
+- `media_json.peaks` — the waveform, computed once by the viewer from
+  `decodeAudioData` in an 8 kHz offline context, reduced to ~1500 peaks in
+  0..1 and rounded to two decimals (`set_media_peaks`). A recording longer
+  than 45 minutes is left without one rather than decoding hundreds of
+  megabytes of PCM; the timeline works either way.
+- the JPEG frame captured at a video excerpt's in-point, stored in
+  `media_blobs` under `name = 'thumbnail'` (`set_excerpt_thumbnail`). It
+  travels inside `ExcerptSnapshot.thumbnail`, so deleting an excerpt or its
+  document and undoing puts the frame back with everything else. Audio
+  excerpts show their slice of the waveform instead.
+
+The bytes reach the webview through `src-tauri/src/media.rs`, which answers
+`Range: bytes=…` with a `206` and a `Content-Range` — WebKit will not let the
+user seek in an element whose source cannot — and caps one response at 4 MiB,
+so a seek never loads a whole interview into memory. It serves three routes:
+`/document/<id>`, `/thumbnail/<excerptId>` (the captured frame) and, during an
+import, `/probe/<token>` — a file the user has just picked, staged in
+`AppState` so its duration can be measured before it is a document; the page
+hands over a token, never a path.
+
+Images and thumbnails are served over the same `misket-media` URI scheme they
+always were, but a recording cannot be: a media element on Linux refuses a
+custom scheme (and `asset://`, and `file://`). So the same routes are also
+served over a loopback HTTP listener on an ephemeral port, gated by a token
+minted per run of the app; `docs/ARCHITECTURE.md` explains why, and
+`src/api/media.ts` decides which URL each use needs.
 
 ## Transcripts
 
@@ -1022,7 +1109,7 @@ mutation and on window focus, the same way the activity feed already did.
   codes listed parents-before-children (depth-first in path order, like the CSV).
   `example_excerpt_id` is deliberately left out of both: it points at an
   excerpt that does not exist in the importing project
-- Excerpts CSV: `excerpt_id, document, start, end, geometry, text, codes, coders, weights, memo_count, created_at`
+- Excerpts CSV: `excerpt_id, document, start, end, start_ms, end_ms, geometry, text, codes, coders, weights, memo_count, created_at`
   (codes are full paths separated by `; `), then one column per descriptor
   field, named after the field, holding the excerpt's document's value.
   One row per excerpt, not per coding: `codes` lists every code on it once and
@@ -1030,13 +1117,19 @@ mutation and on window focus, the same way the activity feed already did.
   `weights` lists `path=value` for every rated coding the same way, so a
   passage two coders rated differently shows both. Who applied which code (and
   weight) is in the project JSON, where each excerpt's `codings` pairs them up.
-  `start`/`end` are empty for image excerpts and `geometry` is empty for text
-  ones; `text` holds the snapshot either way
+  `start`/`end` are the raw columns — code points for text, milliseconds for a
+  recording — and are empty for image excerpts; `start_ms`/`end_ms` are filled
+  only for `video_range` excerpts, so a spreadsheet never has to guess the
+  unit; `geometry` is empty for anything that is not an image region; `text`
+  holds the snapshot either way (the quoted words, the region description or
+  the `[in–out]` timecode label)
 - Activity CSV: `at, actor, kind, target_kind, target_id, summary, detail_json`, oldest first
 - Project JSON: `{ format: "misket-project", formatVersion: 1, meta, documents, codes, coders, excerpts, memos, descriptorFields, descriptorValues, sets, savedFilters, activity }`.
   `coders` is everyone whose work is in the file; each excerpt carries
   `codings: [{codeId, coderId, weight}]` alongside `codeIds`, and each memo its
   own `coderId`; a code with a scale carries it as `weightScale`.
+  Each document carries its `media` (the parsed `media_json`: mime, duration,
+  pixel size, size on disk, fingerprint and cached peaks) and `mediaMissing`.
   `sets` is `[{ set: SetInfo, memberIds }]` for every code set and document
   set; `savedFilters` is the `SavedFilter` list with `filter` already parsed
   back into an `ExcerptFilter` object, not left as a JSON string; `activity`
@@ -1093,10 +1186,10 @@ derived from those three.
 | `example_excerpt_id`                    | `Code/Description`, an `Example:` paragraph with the quote and `[misket:excerpt:GUID]` | ✓   | ✓   | the pointer, if the excerpt is not in the same file                                             |
 | text `documents`                        | `TextSource` + `Sources/<guid>.txt` (UTF-8)                                            | ✓   | ✓   | `source_path`, and `source_format` (everything arrives as `txt`)                                |
 | image `documents` + `media_blobs`       | `PictureSource` + `Sources/<guid>.png`                                                 | ✓   | ✓   | as above; the size is re-read from the file's header                                            |
-| video `documents`                       | `VideoSource/@path` (by reference)                                                     | ✓   | —   | video import needs a media document, which this build has no writer for                         |
+| audio/video `documents`                 | `AudioSource` / `VideoSource` `@path` (by reference)                                   | ✓   | ✓   | the duration, which REFI-QDA has no attribute for: the viewer measures the file on first open   |
 | text `excerpts`                         | `PlainTextSelection` (`@startPosition`/`@endPosition`)                                 | ✓   | ✓   | —                                                                                               |
 | image region `excerpts`                 | `PictureSelection` (`@firstX`…`@secondY`, pixels)                                      | ✓   | ✓   | sub-pixel precision, since REFI-QDA counts whole pixels                                         |
-| video range `excerpts`                  | `VideoSelection` (`@begin`/`@end`, milliseconds)                                       | ✓   | —   | —                                                                                               |
+| video range `excerpts`                  | `Audio`/`VideoSelection` (`@begin`/`@end`, milliseconds)                               | ✓   | ✓   | —                                                                                               |
 | `excerpt_codes`                         | `Coding` + `CodeRef`, `@creatingUser`                                                  | ✓   | ✓   | —                                                                                               |
 | `memos`                                 | `Notes/Note` (`@name`, `PlainTextContent`) with a `NoteRef` on the target              | ✓   | ✓   | —                                                                                               |
 | `descriptor_fields`                     | `Variables/Variable`, `@typeOfVariable`                                                | ✓   | ✓   | —                                                                                               |
@@ -1107,7 +1200,11 @@ derived from those three.
 | `documents.transcript_json`             | —                                                                                      | —   | —   | re-detected on import, as for any new document                                                  |
 | `history`, `sync_points`                | —                                                                                      | —   | —   | an import is one new history step, not the file's history                                       |
 | —                                       | `Cases`                                                                                | —   | ~   | a case's `VariableValue`s land on the documents its `SourceRef`s name; the case itself does not |
-| —                                       | `Links`, `Graphs`, `PDFSource`, `AudioSource`, `Transcript`, `SyncPoint`               | —   | —   | reported in the import's `unsupported`                                                          |
+| —                                       | `Links`, `Graphs`, `PDFSource`, `Transcript`, `SyncPoint`                              | —   | —   | reported in the import's `unsupported`                                                          |
+
+A recording named with `internal://` — packed inside the `.qdpx` — is
+reported rather than unpacked: Misket keeps audio and video on disk, so the
+honest answer is to unzip the container and import the file.
 
 Descriptor kinds map `text → Text`, `number → Float`, `date → Date`; a
 `choice` field is a `Text` variable whose options are written into its

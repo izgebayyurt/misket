@@ -8,6 +8,8 @@ use misket_core::Result;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
 
+pub use crate::reporting::ReportFormat;
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub enum Theme {
@@ -73,6 +75,12 @@ pub struct AppSettings {
     /// are what most people are reading for.
     #[serde(default)]
     pub lanes_by_coder: bool,
+    /// Copy audio and video files into `<project>.media/` on import instead
+    /// of pointing at where they already are. Off by default: a recording is
+    /// held by reference precisely so a project file stays small. The import
+    /// dialog offers it per batch and remembers the answer here.
+    #[serde(default)]
+    pub copy_media_into_project: bool,
     /// Extra Tesseract language codes to use for PDF OCR, on top of the
     /// bundled `eng`. Each one needs a matching `<code>.traineddata` file
     /// dropped into the app's tessdata folder (see `commands::ocr` and
@@ -86,6 +94,30 @@ pub struct AppSettings {
     /// paste into a bug report.
     #[serde(default)]
     pub assist: crate::assist::AssistSettings,
+    /// Off by default. Even when on, nothing is sent unless
+    /// `report_endpoint` is also set — see `crate::reporting` for exactly
+    /// what a report contains (never document text, codes, memos or file
+    /// names).
+    #[serde(default)]
+    pub send_crash_reports: bool,
+    /// Where a crash report is POSTed. Empty means disabled regardless of
+    /// `send_crash_reports`, which is also the default: reporting needs a
+    /// maintainer to have configured their own collector.
+    #[serde(default)]
+    pub report_endpoint: String,
+    /// The wire shape reports are sent in; see `ReportFormat`.
+    #[serde(default)]
+    pub report_format: ReportFormat,
+    /// Check the updater endpoint once per launch (see `commands::updater`).
+    /// A no-op, regardless of this setting, while `tauri.conf.json`'s
+    /// updater pubkey is still the placeholder (`docs/RELEASING.md`).
+    #[serde(default = "default_true")]
+    pub check_for_updates_automatically: bool,
+    /// A version the person chose to skip ("Skip this version" on the update
+    /// banner): the banner stays quiet about this exact version, but a later
+    /// one still shows.
+    #[serde(default)]
+    pub skipped_update_version: Option<String>,
 }
 
 impl Default for AppSettings {
@@ -102,8 +134,14 @@ impl Default for AppSettings {
             coder_id: None,
             coder_color: None,
             lanes_by_coder: false,
+            copy_media_into_project: false,
             ocr_languages: Vec::new(),
             assist: crate::assist::AssistSettings::default(),
+            send_crash_reports: false,
+            report_endpoint: String::new(),
+            report_format: ReportFormat::default(),
+            check_for_updates_automatically: default_true(),
+            skipped_update_version: None,
         }
     }
 }
@@ -235,12 +273,18 @@ mod tests {
             coder_id: Some("11111111-2222-3333-4444-555555555555".into()),
             coder_color: Some("#5CB85C".into()),
             lanes_by_coder: true,
+            copy_media_into_project: true,
             ocr_languages: vec!["tur".into()],
             assist: crate::assist::AssistSettings {
                 suggest_codes: true,
                 base_url: "http://localhost:11434/v1".into(),
                 ..Default::default()
             },
+            send_crash_reports: true,
+            report_endpoint: "https://example.com/api/1/envelope/".into(),
+            report_format: ReportFormat::Sentry,
+            check_for_updates_automatically: false,
+            skipped_update_version: Some("0.2.0".into()),
         };
         write(&path, &settings).unwrap();
         assert_eq!(read(&path).unwrap(), settings);
@@ -273,6 +317,11 @@ mod tests {
         // Assistance stays off in a file that has never heard of it.
         assert_eq!(settings.assist, crate::assist::AssistSettings::default());
         assert!(!settings.assist.suggest_codes);
+        assert!(!settings.send_crash_reports);
+        assert!(settings.report_endpoint.is_empty());
+        assert_eq!(settings.report_format, ReportFormat::Json);
+        assert!(settings.check_for_updates_automatically);
+        assert_eq!(settings.skipped_update_version, None);
     }
 
     #[test]

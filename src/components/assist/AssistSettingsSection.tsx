@@ -7,6 +7,7 @@ import * as api from "@/api/assist";
 import type { AssistProvider } from "@/api/types";
 import { flushSettings, useSettings } from "@/state/settings";
 import { toast } from "@/state/toasts";
+import { log } from "@/api/log";
 import {
   MAX_CONTEXT_CHARS,
   MAX_EXCERPTS,
@@ -38,7 +39,7 @@ export function AssistSettingsSection() {
   const [testing, setTesting] = useState(false);
   const [tested, setTested] = useState<string | null>(null);
   const [showLog, setShowLog] = useState(false);
-  const { data: log } = useAssistRequests(showLog);
+  const { data: requests } = useAssistRequests(showLog);
 
   // Read the live store rather than this render's copy: two toggles flipped
   // in quick succession must not have the second one clobber the first.
@@ -67,6 +68,10 @@ export function AssistSettingsSection() {
       setTested(`${reply.model} answered: ${reply.text.trim().slice(0, 80)}`);
     } catch (e) {
       setTested(null);
+      log.error("assist connection test failed", {
+        provider: settings.provider,
+        model: settings.model,
+      });
       toast.error(e);
     } finally {
       setTesting(false);
@@ -306,7 +311,7 @@ export function AssistSettingsSection() {
           onClick={() => setShowLog((v) => !v)}
           data-testid="assist-log-toggle"
         >
-          {showLog ? "Hide" : "Show"} what was sent ({log?.length ?? 0} this session)
+          {showLog ? "Hide" : "Show"} what was sent ({requests?.length ?? 0} this session)
         </button>
         {showLog ? (
           <div className="mt-1.5" data-testid="assist-log">
@@ -321,7 +326,7 @@ export function AssistSettingsSection() {
                 </tr>
               </thead>
               <tbody>
-                {(log ?? []).map((e, i) => (
+                {(requests ?? []).map((e, i) => (
                   <tr key={`${e.at}-${i}`} className="border-t border-border">
                     <td className="py-0.5 tabular-nums">{e.at.slice(11, 19)}</td>
                     <td>{e.feature}</td>
@@ -336,7 +341,7 @@ export function AssistSettingsSection() {
                 ))}
               </tbody>
             </table>
-            {(log?.length ?? 0) === 0 ? (
+            {(requests?.length ?? 0) === 0 ? (
               <p className="text-xs text-fg-muted">Nothing has been sent.</p>
             ) : (
               <Button

@@ -61,11 +61,14 @@ export interface PaletteTarget {
 
 /**
  * What the palette and the code hotkeys will code next: a text selection in
- * code point offsets, or a rectangle drawn on an image (fractions, 0..1).
+ * code point offsets, a rectangle drawn on an image (fractions, 0..1), or a
+ * stretch of a recording marked with in and out points (milliseconds,
+ * end-exclusive).
  */
 export type PendingSelection =
   | { documentId: string; kind: "text"; start: number; end: number }
-  | { documentId: string; kind: "image"; geometry: Rect };
+  | { documentId: string; kind: "image"; geometry: Rect }
+  | { documentId: string; kind: "media"; startMs: number; endMs: number };
 
 interface WorkspaceState {
   view: View;

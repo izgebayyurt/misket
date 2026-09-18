@@ -19,6 +19,7 @@ pub fn project_stats(conn: &Connection) -> Result<ProjectStats> {
     let documents = one("SELECT count(*) FROM documents")?;
     let text_documents = one("SELECT count(*) FROM documents WHERE kind = 'text'")?;
     let image_documents = one("SELECT count(*) FROM documents WHERE kind = 'image'")?;
+    let media_documents = one("SELECT count(*) FROM documents WHERE kind = 'video'")?;
     let codes = one("SELECT count(*) FROM codes")?;
     let excerpts = one("SELECT count(*) FROM excerpts")?;
     let coded_excerpts = one("SELECT count(DISTINCT excerpt_id) FROM excerpt_codes")?;
@@ -44,6 +45,7 @@ pub fn project_stats(conn: &Connection) -> Result<ProjectStats> {
         documents,
         text_documents,
         image_documents,
+        media_documents,
         codes,
         excerpts,
         coded_excerpts,
@@ -53,6 +55,7 @@ pub fn project_stats(conn: &Connection) -> Result<ProjectStats> {
         last_activity_at,
         excerpts_per_day: excerpts_per_day(conn)?,
         top_codes: top_codes(conn)?,
+        missing_media: super::media::missing(conn)?,
     })
 }
 

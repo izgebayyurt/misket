@@ -42,6 +42,17 @@
         positions stay valid for the life of the project.
       </p>
 
+      <p>
+        One thing is deliberately outside it: <strong>audio and video</strong>. A two-hour interview
+        is gigabytes, and a project file gets opened, copied and backed up whole, so Misket
+        remembers where each recording is on disk rather than swallowing it. Everything you code
+        from a recording — the timecodes, the codes, the memos — is inside the
+        <code>.misket</code> as usual. If a recording moves, its document shows a warning and offers
+        <em>Relink…</em>; if you would rather keep everything together, the import dialog can copy
+        the files into a <code>&lt;project&gt;.media/</code> folder beside the project. Images are
+        small enough to go inside the file, and do.
+      </p>
+
       <h2>Backups</h2>
       <p>
         Before a destructive change — deleting a document, deleting a code that has excerpts,
@@ -208,15 +219,43 @@
         Misket does not phone home, does not require an account, and does not upload your documents
         or coding anywhere as part of normal use. The only network activity related to the app
         itself is you downloading a release or, in future, an update check you would be asked about
-        explicitly.
+        explicitly. While the app is running it does open one listener on <code>127.0.0.1</code>, on
+        a port the system picks, because a webview will not play a recording from anywhere else; it
+        is reachable only from your own machine, answers only requests carrying a random token made
+        fresh each time the app starts, and stops when you quit.
       </p>
       <p>
-        The one exception is <a href="assistance.html">Assistance</a>, and it is off until you turn
-        it on. It has no default provider and no bundled key: you supply a provider and a key, or
-        point it at a model running on your own machine, and only then does anything go anywhere. It
-        sends one passage or one code's excerpts at a time — never a document, never the project —
-        it never applies anything by itself, and Settings keeps a list of every request it made,
-        with sizes but not content, so you can check what actually happened.
+        Two things can send something, and both are off until you turn them on: the
+        <a href="#privacy-and-diagnostics">diagnostics</a> below, which even then never carry your
+        documents or coding, and <a href="assistance.html">Assistance</a>. Assistance has no default
+        provider and no bundled key: you supply a provider and a key, or point it at a model running
+        on your own machine, and only then does anything go anywhere. It sends one passage or one
+        code's excerpts at a time — never a document, never the project — it never applies anything
+        by itself, and Settings keeps a list of every request it made, with sizes but not content,
+        so you can check what actually happened.
+      </p>
+
+      <h2 id="privacy-and-diagnostics">Privacy and diagnostics</h2>
+      <p>
+        Misket keeps a local, structured log — app version, OS, command failures by code and
+        message, project open/close and similar events, with any file path always hashed rather than
+        written out — in a daily-rotating file next to the app, kept for 7 days.
+        <strong>Settings → Diagnostics → &ldquo;View logs&hellip;&rdquo;</strong> shows it, with
+        level filtering, search, <strong>Copy</strong> and <strong>Reveal in folder</strong>;
+        <strong>Clear logs</strong> deletes it. None of this leaves your computer on its own — it is
+        a file on your disk, same as the project itself.
+      </p>
+      <p>
+        <strong>&ldquo;Send anonymous crash reports&rdquo;</strong>, in that same Diagnostics
+        section, is off by default. Turning it on is not enough by itself: nothing is ever sent
+        unless a report endpoint is also set, which normally only a maintainer running their own
+        collector would do. With both set, an error sends a small bundle: the app version, your OS,
+        the error message and stack, and the last 50 log lines — again with any path replaced by a
+        short hash. It never sends your document text, codes, memos or file names. A report made
+        while offline is queued on disk and retried at the next launch; a
+        <strong>&ldquo;Send a report now&rdquo;</strong> button sends one immediately, for testing
+        or support. The About dialog's <strong>&ldquo;Copy diagnostics&rdquo;</strong> puts the same
+        redacted bundle on your clipboard without sending it anywhere.
       </p>
     </main>
 

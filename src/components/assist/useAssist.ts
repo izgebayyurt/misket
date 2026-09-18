@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import * as api from "@/api/assist";
 import type { AssistFeature, AssistReply, AssistSettings, AssistedRef } from "@/api/types";
 import { flushSettings, useSettings } from "@/state/settings";
+import { log } from "@/api/log";
 import type { BuiltPrompt } from "@/core/assist/prompts";
 
 /** The assistance settings as they stand. */
@@ -94,9 +95,23 @@ export function useAssistDraft(feature: AssistFeature, options?: { stream?: bool
           setText(result.text);
           setReply(result);
         }
+        // Sizes and names only. The passage, the excerpts and the key never
+        // go near the log file.
+        log.info("assist reply", {
+          feature,
+          provider: result.provider,
+          model: result.model,
+          replyBytes: result.text.length,
+        });
         return result;
       } catch (e) {
-        if (alive.current) setError(e instanceof Error ? e.message : String(e));
+        const message = e instanceof Error ? e.message : String(e);
+        log.error("assist request failed", {
+          feature,
+          promptBytes: prompt.system.length + prompt.user.length,
+          message,
+        });
+        if (alive.current) setError(message);
         return null;
       } finally {
         stopListening?.();

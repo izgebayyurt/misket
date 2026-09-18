@@ -183,6 +183,11 @@ pub fn excerpts_csv<W: Write>(conn: &Connection, filter: &ExcerptFilter, w: W) -
         "document".into(),
         "start".into(),
         "end".into(),
+        // Milliseconds, filled only for a coded stretch of a recording. The
+        // `start`/`end` pair above is the raw column, which means code points
+        // for text and milliseconds for media; these two are unambiguous.
+        "start_ms".into(),
+        "end_ms".into(),
         "geometry".into(),
         "text".into(),
         "codes".into(),
@@ -234,6 +239,8 @@ pub fn excerpts_csv<W: Write>(conn: &Connection, filter: &ExcerptFilter, w: W) -
             row.document_name.clone(),
             e.start_pos.map(|v| v.to_string()).unwrap_or_default(),
             e.end_pos.map(|v| v.to_string()).unwrap_or_default(),
+            media_ms(&e, e.start_pos),
+            media_ms(&e, e.end_pos),
             e.geometry.clone().unwrap_or_default(),
             e.snapshot.clone().unwrap_or_default(),
             code_list,
@@ -252,6 +259,16 @@ pub fn excerpts_csv<W: Write>(conn: &Connection, filter: &ExcerptFilter, w: W) -
     }
     wtr.flush()?;
     Ok(())
+}
+
+/// A position in milliseconds, or empty for anything that is not a coded
+/// stretch of a recording.
+fn media_ms(e: &ExcerptWithCodes, pos: Option<i64>) -> String {
+    if e.kind == "video_range" {
+        pos.map(|v| v.to_string()).unwrap_or_default()
+    } else {
+        String::new()
+    }
 }
 
 #[derive(Serialize)]
@@ -456,6 +473,70 @@ mod tests {
         assert!(codes[0]["color"].as_str().unwrap().starts_with('#'));
     }
 
+    /// A coded stretch of a recording exports its milliseconds in the
+    /// dedicated columns, and the project JSON carries everything known
+    /// about the media file (`documents.media_json`) so an export is enough
+    /// to see what was coded and how long it ran.
+    #[test]
+    fn media_excerpts_export_their_milliseconds_and_media_json() {
+        use crate::db::media;
+
+        let p = populated();
+        let dir = tempfile::tempdir().unwrap();
+        let path = media::tests::fake_file(dir.path(), "tape.mp3", 4096, 8);
+        let doc = media::create(&p.conn, None, media::tests::new_media(&path))
+            .unwrap()
+            .summary
+            .id;
+        let code = codes::list(&p.conn).unwrap()[0].id.clone();
+        excerpts::apply_codes(
+            &p.conn,
+            crate::models::ApplyCodesInput {
+                document_id: doc.clone(),
+                kind: Some("video_range".into()),
+                start_pos: Some(12_000),
+                end_pos: Some(19_500),
+                code_ids: vec![code],
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        let mut buf = vec![];
+        excerpts_csv(&p.conn, &ExcerptFilter::default(), &mut buf).unwrap();
+        let csv = String::from_utf8(buf).unwrap();
+        let media_line = csv
+            .lines()
+            .find(|l| l.contains("[0:12.0–0:19.5]"))
+            .unwrap_or_else(|| panic!("no media row in\n{csv}"));
+        assert!(
+            media_line.contains(",12000,19500,12000,19500,"),
+            "{media_line}"
+        );
+        // A text excerpt leaves the millisecond columns empty.
+        let text_line = csv
+            .lines()
+            .find(|l| l.contains("He said"))
+            .unwrap_or_else(|| panic!("no text row in\n{csv}"));
+        assert!(text_line.contains(",0,18,,,"), "{text_line}");
+
+        let mut buf = vec![];
+        project_json(&p.conn, &mut buf).unwrap();
+        let v: serde_json::Value = serde_json::from_slice(&buf).unwrap();
+        let recording = v["documents"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|d| d["id"] == doc.as_str())
+            .unwrap();
+        assert_eq!(recording["kind"], "video");
+        assert_eq!(recording["media"]["durationMs"], 125_400);
+        assert_eq!(recording["media"]["mime"], "audio/mpeg");
+        assert!(recording["media"]["fileHash"].is_string());
+        assert_eq!(recording["mediaMissing"], false);
+        assert!(recording["text"].is_null());
+    }
+
     #[test]
     fn excerpts_csv_escapes_quotes_and_newlines() {
         let p = populated();
@@ -465,8 +546,8 @@ mod tests {
         // One column per descriptor field, after the fixed columns.
         assert!(
             s.starts_with(
-                "excerpt_id,document,start,end,geometry,text,codes,coders,weights,memo_count,\
-                 created_at,Site,Age\n"
+                "excerpt_id,document,start,end,start_ms,end_ms,geometry,text,codes,coders,\
+                 weights,memo_count,created_at,Site,Age\n"
             ),
             "{s}"
         );

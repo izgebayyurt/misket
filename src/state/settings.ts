@@ -17,6 +17,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   coderId: null,
   coderColor: null,
   lanesByCoder: false,
+  copyMediaIntoProject: false,
   ocrLanguages: [],
   // Assistance is off, and stays off unless somebody turns it on.
   assist: {
@@ -28,6 +29,11 @@ export const DEFAULT_SETTINGS: AppSettings = {
     suggestDefinition: false,
     maxOutputTokens: 1200,
   },
+  sendCrashReports: false,
+  reportEndpoint: "",
+  reportFormat: "json",
+  checkForUpdatesAutomatically: true,
+  skippedUpdateVersion: null,
 };
 
 const SAVE_DEBOUNCE_MS = 400;

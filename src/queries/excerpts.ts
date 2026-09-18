@@ -200,7 +200,8 @@ export function useDeleteExcerpt() {
   });
 }
 
-/** Move a text excerpt's boundaries. */
+/** Move an excerpt's boundaries: code points for text, milliseconds for a
+ * coded stretch of a recording. */
 export function useUpdateExcerptRange() {
   const invalidate = useInvalidateExcerpts();
   return useMutation({

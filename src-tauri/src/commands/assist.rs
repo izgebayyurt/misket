@@ -236,6 +236,16 @@ async fn run(
     match result {
         Ok(text) => {
             finish("ok", text.len());
+            // Names and sizes only: never the prompt, never the reply, never
+            // the key (see `assist::redact`).
+            tracing::info!(
+                feature = feature.as_str(),
+                provider = provider.as_str(),
+                model = %req.model,
+                request_bytes,
+                response_bytes = text.len(),
+                "assist request"
+            );
             Ok(AssistReply {
                 text,
                 provider: provider.as_str().to_string(),
@@ -248,6 +258,14 @@ async fn run(
                 other => assist::redact(&other.to_string(), key.as_deref()),
             };
             finish(&outcome, 0);
+            tracing::warn!(
+                feature = feature.as_str(),
+                provider = provider.as_str(),
+                model = %req.model,
+                request_bytes,
+                outcome = %outcome,
+                "assist request failed"
+            );
             Err(e)
         }
     }

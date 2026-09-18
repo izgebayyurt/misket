@@ -117,9 +117,40 @@ when it would affect existing excerpts) and `merge_code`, outside any
 transaction the operation itself opens. A backup failure is logged and
 swallowed — it never turns a successful edit into a failed one.
 
-## Milestone 2 (video)
+## Audio and video
 
-The `excerpts` table already has `kind` (`text` | `image_region` |
-`video_range`) and millisecond `start_pos`/`end_pos` for video, and
-`media_json` has room for `durationMs`, so the player needs no schema change
-beyond what images added.
+Where an image's pixels go inside the project file, a recording does not: a
+two-hour interview is gigabytes and a `.misket` is opened, copied and backed
+up whole. So `documents.source_path` holds the path to the file on disk and
+`media_json` holds what was measured from it — `db::media` owns that, along
+with detecting a file that has moved and relinking to a new one.
+`docs/DATA_MODEL.md` has the shapes; two things about the plumbing belong
+here.
+
+**Two ways into the bytes.** An `<img>` loads from the `misket-media` scheme
+happily, so images and video excerpt thumbnails keep using it. A media
+element will not: on Linux, WebKitGTK hands playback to GStreamer, which
+refuses `misket-media://`, Tauri's own `asset://` and plain `file://` alike
+with `MEDIA_ERR_SRC_NOT_SUPPORTED`. A `blob:` URL works, but building one
+means holding the whole recording in the page — the very thing holding media
+by reference avoids. So `src-tauri/src/media.rs` also binds a loopback
+HTTP listener on an ephemeral port, serves the same routes over HTTP/1.1
+(which GStreamer streams and seeks in natively), and answers only requests
+carrying the random token minted for that run of the app. `src/api/media.ts`
+knows which URL each use needs. Both paths answer `Range: bytes=…` with a
+`206`, capped at 4 MiB a response, so seeking in a long recording never reads
+more than a slice.
+
+**A file that is not a document yet.** Only a decoder knows how long a
+recording is, and the import needs that before it writes a row — so
+`stage_media_probe` puts the picked file behind an opaque token, the page
+loads `/probe/<token>` to read its headers, and the page never names a path
+of its own.
+
+`MediaView` is the counterpart of `ImageView`: a marked in/out pair becomes
+the workspace's pending selection, which is now a union of a text range, an
+image region and a media range, so the palette, the code hotkeys and undo
+remain the same code for all three. The player's bare keys (space, `J`/`L`,
+`,`/`.`, `[`/`]`) live in their own table in `src/core/keymap.ts` and are
+matched by the view itself rather than by the application-wide listener,
+because a bare full stop everywhere else in Misket is a full stop.
