@@ -547,6 +547,28 @@ pub fn stream_delta(provider: Provider, data: &str) -> Option<String> {
     }
 }
 
+/// Does this `data:` line say the stream is over?
+///
+/// Both providers mark the end explicitly, and reading the mark is what lets
+/// a reply finish promptly even when the provider leaves the connection open
+/// afterwards — without it, the only end-of-body signal is the socket
+/// closing, and a provider that keeps it alive would leave the request
+/// hanging until the read timeout.
+pub fn stream_is_done(provider: Provider, data: &str) -> bool {
+    let data = data.trim();
+    match provider {
+        Provider::OpenAiCompatible => data == "[DONE]",
+        Provider::Anthropic => serde_json::from_str::<Value>(data)
+            .ok()
+            .and_then(|v| {
+                v.get("type")
+                    .and_then(Value::as_str)
+                    .map(|t| t == "message_stop")
+            })
+            .unwrap_or(false),
+    }
+}
+
 /// An error from a non-2xx response, with the key scrubbed and the body cut
 /// down to something a toast can hold.
 pub fn http_error(status: u16, body: &str, key: Option<&str>) -> AppError {
@@ -931,6 +953,27 @@ mod tests {
             .unwrap_err()
             .to_string()
             .contains("bad model"));
+    }
+
+    #[test]
+    fn the_end_of_a_stream_is_read_from_the_stream_itself() {
+        assert!(stream_is_done(
+            Provider::Anthropic,
+            r#"{"type":"message_stop"}"#
+        ));
+        assert!(stream_is_done(Provider::OpenAiCompatible, "[DONE]"));
+        // Each provider's marker means nothing to the other, and an ordinary
+        // frame is not the end.
+        assert!(!stream_is_done(Provider::Anthropic, "[DONE]"));
+        assert!(!stream_is_done(
+            Provider::OpenAiCompatible,
+            r#"{"type":"message_stop"}"#
+        ));
+        assert!(!stream_is_done(
+            Provider::Anthropic,
+            r#"{"type":"content_block_delta","delta":{"type":"text_delta","text":"Hi"}}"#
+        ));
+        assert!(!stream_is_done(Provider::Anthropic, "not json"));
     }
 
     #[test]

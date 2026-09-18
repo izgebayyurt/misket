@@ -309,7 +309,8 @@ async fn send(
     let mut response = response;
     let mut buffer = String::new();
     let mut text = String::new();
-    loop {
+    let mut done = false;
+    while !done {
         if state.is_cancelled(&id) {
             return Err(AppError::Conflict("the request was cancelled".into()));
         }
@@ -325,6 +326,10 @@ async fn send(
             let Some(data) = line.strip_prefix("data:") else {
                 continue;
             };
+            if assist::stream_is_done(provider, data) {
+                done = true;
+                break;
+            }
             if let Some(delta) = assist::stream_delta(provider, data) {
                 text.push_str(&delta);
                 let _ = app.emit(
