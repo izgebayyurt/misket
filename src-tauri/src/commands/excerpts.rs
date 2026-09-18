@@ -7,11 +7,26 @@ use misket_core::models::{
 use misket_core::Result;
 use tauri::State;
 
+use crate::assist::AssistedRef;
 use crate::state::AppState;
 
+/// Apply codes to a passage.
+///
+/// `assisted` is set only when the person clicked a suggestion a model had
+/// drafted. It changes nothing about the coding itself — same coder, same
+/// weights, same undo — it only adds the note to the history entry that says
+/// the person had help, and from what (`crate::assist::with_assist`).
 #[tauri::command]
-pub fn apply_codes(state: State<'_, AppState>, input: ApplyCodesInput) -> Result<ApplyResult> {
-    state.with_project(|p| excerpts::apply_codes(&p.conn, input))
+pub fn apply_codes(
+    state: State<'_, AppState>,
+    input: ApplyCodesInput,
+    assisted: Option<AssistedRef>,
+) -> Result<ApplyResult> {
+    state.with_project(|p| {
+        crate::assist::with_assist(p, assisted.as_ref(), || {
+            excerpts::apply_codes(&p.conn, input)
+        })
+    })
 }
 
 /// Create a code named after the selected text and apply it to that

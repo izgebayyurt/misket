@@ -20,7 +20,9 @@ export const DialogContent = React.forwardRef<
       ref={ref}
       onEscapeKeyDown={(e) => e.stopPropagation()}
       className={cn(
-        "fixed left-1/2 top-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-lg border border-border bg-panel p-5 shadow-xl outline-none",
+        // A dialog taller than the window scrolls its body rather than
+        // running off the bottom with its buttons out of reach.
+        "fixed left-1/2 top-1/2 z-50 flex max-h-[85vh] w-full max-w-md -translate-x-1/2 -translate-y-1/2 flex-col rounded-lg border border-border bg-panel p-5 shadow-xl outline-none",
         className,
       )}
       {...props}
@@ -33,10 +35,11 @@ export const DialogContent = React.forwardRef<
       ) : (
         <DialogPrimitive.Description className="sr-only">{title}</DialogPrimitive.Description>
       )}
-      <div className="mt-4">{children}</div>
+      <div className="-mx-5 mt-4 min-h-0 flex-1 overflow-y-auto px-5">{children}</div>
       <DialogPrimitive.Close
         className="absolute right-3 top-3 rounded-sm p-1 text-fg-muted hover:bg-muted hover:text-fg"
         aria-label="Close"
+        data-testid="dialog-close"
       >
         <X className="size-4" />
       </DialogPrimitive.Close>

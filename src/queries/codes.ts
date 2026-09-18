@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
 import * as api from "@/api/codes";
-import type { ChildrenStrategy, Code, CodePatch, NewCode } from "@/api/types";
+import type { AssistedRef, ChildrenStrategy, Code, CodePatch, NewCode } from "@/api/types";
 import { historyBeginGroup, historyEndGroup } from "@/api/history";
 import { buildCodeTree } from "@/core/codeTree";
 import { keys } from "./keys";
@@ -34,7 +34,8 @@ export function useInvalidateCodes() {
 export function useCreateCode() {
   const invalidate = useInvalidateCodes();
   return useMutation({
-    mutationFn: (input: NewCode) => api.createCode(input),
+    mutationFn: ({ assisted, ...input }: NewCode & { assisted?: AssistedRef }) =>
+      api.createCode(input, assisted),
     onSuccess: invalidate,
   });
 }
@@ -42,7 +43,16 @@ export function useCreateCode() {
 export function useUpdateCode() {
   const invalidate = useInvalidateCodes();
   return useMutation({
-    mutationFn: ({ id, patch }: { id: string; patch: CodePatch }) => api.updateCode(id, patch),
+    mutationFn: ({
+      id,
+      patch,
+      assisted,
+    }: {
+      id: string;
+      patch: CodePatch;
+      /** Set when some of the definition came from a draft. */
+      assisted?: AssistedRef;
+    }) => api.updateCode(id, patch, assisted),
     onSuccess: invalidate,
   });
 }

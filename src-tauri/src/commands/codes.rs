@@ -5,6 +5,7 @@ use misket_core::models::{
 use misket_core::Result;
 use tauri::{AppHandle, State};
 
+use crate::assist::AssistedRef;
 use crate::backup_guard;
 use crate::state::AppState;
 
@@ -13,14 +14,32 @@ pub fn list_codes(state: State<'_, AppState>) -> Result<Vec<Code>> {
     state.with_project(|p| codes::list(&p.conn))
 }
 
+/// Create a code. `assisted` marks one whose name or definition came out of a
+/// draft the person accepted; everything else about it is ordinary.
 #[tauri::command]
-pub fn create_code(state: State<'_, AppState>, input: NewCode) -> Result<Code> {
-    state.with_project(|p| codes::create(&p.conn, input))
+pub fn create_code(
+    state: State<'_, AppState>,
+    input: NewCode,
+    assisted: Option<AssistedRef>,
+) -> Result<Code> {
+    state.with_project(|p| {
+        crate::assist::with_assist(p, assisted.as_ref(), || codes::create(&p.conn, input))
+    })
 }
 
+/// Edit a code. `assisted` marks a save where the person kept some of a
+/// drafted definition; the fields saved are whatever is in the dialog when
+/// they press Save, drafted or typed.
 #[tauri::command]
-pub fn update_code(state: State<'_, AppState>, id: String, patch: CodePatch) -> Result<Code> {
-    state.with_project(|p| codes::update(&p.conn, &id, patch))
+pub fn update_code(
+    state: State<'_, AppState>,
+    id: String,
+    patch: CodePatch,
+    assisted: Option<AssistedRef>,
+) -> Result<Code> {
+    state.with_project(|p| {
+        crate::assist::with_assist(p, assisted.as_ref(), || codes::update(&p.conn, &id, patch))
+    })
 }
 
 #[tauri::command]

@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Assistance</title>
+    <meta
+      name="description"
+      content="Misket's opt-in AI assistance: suggestions you accept by clicking, an audit trail for every one, and exactly what text is sent where."
+    />
+    <link rel="stylesheet" href="../style.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="site-header">
+      <div class="wrap">
+        <a class="brand" href="../index.html"><span class="dot">●</span> Misket</a>
+        <nav class="site-nav" aria-label="Site">
+          <a href="../index.html">Home</a>
+          <a href="install.html">Install</a>
+          <a href="tutorial.html">Tutorial</a>
+          <a href="shortcuts.html">Shortcuts</a>
+          <a href="assistance.html" aria-current="page">Assistance</a>
+          <a href="data.html">Data &amp; privacy</a>
+          <a href="https://github.com/izgebayyurt/misket">GitHub</a>
+        </nav>
+      </div>
+    </header>
+
+    <main id="main" class="prose narrow">
+      <h1>Assistance</h1>
+      <p class="lede">
+        Misket can ask a language model for suggestions. It is off. It stays off until you go to
+        Settings, choose a provider and tick a box — and even then it never applies anything. Every
+        suggestion is something you accept by clicking it, and every one you accept is recorded as
+        yours, with a note saying you had help.
+      </p>
+
+      <h2>Why it works this way</h2>
+      <p>
+        Researchers who have used AI coding in other tools report the same complaint: it
+        <em>made choices I did not agree with</em>, and it was hard to tell afterwards which
+        decisions were theirs. That is not an argument against help; it is an argument against
+        silent automation and against losing the audit trail. So Misket draws the line in one place:
+        <strong>a model can propose, only a person can decide</strong>, and the project file
+        remembers which is which.
+      </p>
+      <ul>
+        <li>Nothing is applied, created or saved without a click.</li>
+        <li>
+          Accepting a suggestion goes through the same commands as coding by hand — same coder, same
+          undo step, same weight defaults. There is no separate "AI coding" path.
+        </li>
+        <li>
+          The history entry says <code>assisted: true</code> with the provider and model, while the
+          actor stays you. A year later you can still tell which codings were drafted and which were
+          not.
+        </li>
+        <li>
+          A code id the model invents is dropped rather than applied. A reply that is not valid JSON
+          is no suggestions, not an error.
+        </li>
+      </ul>
+
+      <h2>The three features</h2>
+      <h3>Suggest codes for a selection</h3>
+      <p>
+        Select a passage and press <strong>Suggest</strong> on the selection toolbar, or in the
+        excerpt inspector. Up to five chips come back, each with its reason on hover and a
+        confidence. Clicking a chip applies that code to the passage. A <code>+</code> chip is a
+        code that does not exist yet: it opens the ordinary code dialog with the name filled in, and
+        you still have to press Create.
+      </p>
+
+      <h3>Summarise a code's excerpts</h3>
+      <p>
+        Select a code and press <strong>Summarise…</strong> in the right-hand panel. A memo draft —
+        themes, quotations cited by excerpt id, tensions between them — streams in and is editable
+        from the first character; there is a Stop button while it is arriving. Save it as a memo or
+        discard it. What is saved is whatever is in the box when you press Save, and the memo's body
+        carries a line saying it was drafted with assistance, because a memo gets exported and read
+        long after the history log is out of sight.
+      </p>
+
+      <h3>Draft a definition</h3>
+      <p>
+        In the code dialog, <strong>Draft definition</strong> fills the description, "Include when"
+        and "Exclude when" fields from the passages already coded with that code. It is offered only
+        for a code with at least three excerpts: below that there is nothing to generalise from, and
+        the draft would be the model's guess about the code's <em>name</em> — exactly the quiet
+        wrong answer this feature exists not to give. The fields stay editable and nothing is
+        written to the project until the dialog's Save.
+      </p>
+
+      <h2>Providers, including one on your own machine</h2>
+      <p>
+        Two shapes are supported: Anthropic's Messages API, and anything that speaks the OpenAI chat
+        API. The second covers far more than OpenAI — Ollama, LM Studio, llama.cpp, vLLM, a
+        university gateway. The <strong>Local (Ollama)</strong> preset fills in
+        <code>http://localhost:11434/v1</code> and needs no key; with it, assistance costs nothing
+        and still sends nothing over the network, which may be the only arrangement your ethics
+        approval allows.
+      </p>
+      <p>
+        Your API key is stored in your operating system's credential store — Keychain on macOS,
+        Credential Manager on Windows, Secret Service on Linux — never in Misket's settings file and
+        never inside a project. On a machine with no usable credential store the key is kept in
+        memory for that session only, and Settings tells you so rather than pretending it saved.
+      </p>
+
+      <h2>What gets sent</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Feature</th>
+            <th>What leaves your machine</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Suggest codes</td>
+            <td>
+              The selected passage (up to 4,000 characters), one paragraph either side of it (up to
+              1,000 characters each), and your code names with their definitions — up to 200 codes;
+              past that, the ones whose wording is closest to the passage.
+            </td>
+          </tr>
+          <tr>
+            <td>Summarise a code</td>
+            <td>
+              Up to 40 excerpts carrying that one code, with the document names they came from, and
+              the code's own name and definition.
+            </td>
+          </tr>
+          <tr>
+            <td>Draft a definition</td>
+            <td>The same excerpts, for one code.</td>
+          </tr>
+        </tbody>
+      </table>
+      <p>
+        Never a whole document. Never the project file. Never your memos. Never anything at all for
+        a feature you have not switched on. Long text is cut to the limits above, and the prompt
+        says so where it was cut rather than quietly pretending that was all there was.
+      </p>
+      <p>
+        The prompts are four short functions in <code>src/core/assist/prompts.ts</code>, with tests,
+        so you can read every word Misket would send before you turn anything on.
+      </p>
+
+      <h2>The audit trail</h2>
+      <p>
+        Settings → Assistance → <strong>Show what was sent</strong> lists every request this
+        session: the time, the feature, the provider and model, how many bytes went out and how many
+        came back. It holds sizes, never content, so it is safe to show a colleague or a research
+        ethics committee. It covers the session and is not written to disk.
+      </p>
+      <p>
+        In the project itself, the History view shows each accepted suggestion as an ordinary step
+        with two extra fields: <em>Assisted: yes</em> and the provider and model that drafted it.
+        The activity CSV export carries them too.
+      </p>
+    </main>
+
+    <footer class="site-footer">
+      <div class="wrap">
+        <span>Misket is free software, MIT-licensed.</span>
+        <span
+          ><a href="https://github.com/izgebayyurt/misket">Source on GitHub</a> ·
+          <a href="https://github.com/izgebayyurt/misket/blob/main/ROADMAP.md">Roadmap</a></span
+        >
+      </div>
+    </footer>
+  </body>
+</html>
