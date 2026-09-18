@@ -67,7 +67,7 @@ pub struct ProjectStats {
 
 // ---------------------------------------------------------------- documents
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct NewDocument {
     pub name: String,
@@ -77,6 +77,12 @@ pub struct NewDocument {
     pub text: String,
     #[serde(default)]
     pub allow_duplicate: bool,
+    /// Alignment points the import already knows: an SRT or VTT file brings
+    /// one per cue, so the document is aligned to its recording the moment it
+    /// is linked. Stored with the document (`db::align`) and carried in the
+    /// import's history snapshot, so undo and redo keep them.
+    #[serde(default)]
+    pub anchors: Vec<crate::text::align::Anchor>,
 }
 
 /// An image document. The bytes are stored inside the project file so a
@@ -189,6 +195,18 @@ pub struct DocumentSummary {
     pub media_missing: bool,
     pub sort_order: i64,
     pub excerpt_count: i64,
+    /// For a text document: the recording it is the transcript of, if it has
+    /// been linked to one (`db::align`).
+    #[serde(default)]
+    pub linked_media_id: Option<String>,
+    /// For a recording: the text document that transcribes it, if any — the
+    /// other end of `linked_media_id`, so a media row can offer a jump to its
+    /// transcript without a second query.
+    #[serde(default)]
+    pub transcript_id: Option<String>,
+    /// How many alignment points this document has (`transcript_anchors`).
+    #[serde(default)]
+    pub anchor_count: i64,
     /// The speakers the document's transcript format finds, in first-seen
     /// order; empty for anything that is not a transcript. Read from the
     /// cache in `documents.transcript_json`, so a listing never re-scans the
@@ -506,6 +524,18 @@ pub struct DocumentSnapshot {
     pub media_mime: Option<String>,
     pub text_length: Option<i64>,
     pub sort_order: i64,
+    /// The recording this transcript was linked to.
+    #[serde(default)]
+    pub linked_media_id: Option<String>,
+    /// The other direction: for a recording, the text documents that pointed
+    /// at it. `ON DELETE SET NULL` clears their link when the recording goes,
+    /// so restoring it has to set them again.
+    #[serde(default)]
+    pub linked_by: Vec<String>,
+    /// The alignment points (`transcript_anchors`), which hang off the
+    /// document and are deleted with it.
+    #[serde(default)]
+    pub anchors: Vec<crate::text::align::Anchor>,
     /// How the document marks who is speaking (`db::transcripts`), verbatim,
     /// so a restore keeps a format the user chose rather than re-detecting
     /// one. `None` means it had never been looked at.

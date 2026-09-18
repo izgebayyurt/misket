@@ -29,6 +29,7 @@ import { formatWeightWithLabel, weightScaleValues } from "@/core/weights";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { MediaThumbnail } from "./MediaThumbnail";
+import { TranscriptExcerptActions } from "./TranscriptExcerptActions";
 import { RegionThumbnail } from "./RegionThumbnail";
 
 /**
@@ -166,6 +167,13 @@ export function ExcerptInspector({ excerptId }: { excerptId: string }) {
             <p className="mt-1 text-[11px] text-fg-muted">
               {detail.documentName} · {detail.startPos}–{detail.endPos}
             </p>
+            <TranscriptExcerptActions
+              excerptId={detail.id}
+              documentId={detail.documentId}
+              kind={detail.kind}
+              startPos={detail.startPos}
+              endPos={detail.endPos}
+            />
           </>
         )}
       </div>

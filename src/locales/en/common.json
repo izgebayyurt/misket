@@ -38,6 +38,7 @@
     "jumpTop": "Jump to the top of the document",
     "jumpBottom": "Jump to the bottom of the document",
     "goToParagraph": "Go to paragraph",
+    "alignHere": "Align the transcript here with the playhead",
     "escape": "Cancel / close",
     "setWeight": "Rate the last applied code, with an excerpt focused (1–9)",
     "media": {

@@ -4,6 +4,9 @@ import { importMarkdown } from "./markdown";
 import { importDocx } from "./docx";
 import { extractPdfText } from "./pdf";
 import { classifyPdfQuality, type PdfQualityStats } from "./pdfQuality";
+import { importSrt } from "./srt";
+import { importVtt } from "./vtt";
+import type { Anchor } from "../align";
 
 export interface ImportedDocument {
   name: string;
@@ -17,10 +20,14 @@ export interface ImportedDocument {
    * for OCR if the person chooses "Recognise text". Unused (and dropped)
    * once that decision is made either way. */
   pdfBytes?: Uint8Array;
+  /** Set for SRT and VTT only: one alignment anchor per cue, handed to
+   * `create_document` so the transcript lines up with its recording the
+   * moment the two are linked (`src/core/align.ts`). */
+  anchors?: Anchor[];
 }
 
 /** Extensions parsed into document text. */
-export const TEXT_EXTENSIONS = ["txt", "md", "markdown", "docx", "pdf"] as const;
+export const TEXT_EXTENSIONS = ["txt", "md", "markdown", "docx", "pdf", "srt", "vtt"] as const;
 
 /** Extensions imported as image documents (coded with rectangle regions). */
 export const IMAGE_EXTENSIONS = ["png", "jpg", "jpeg", "webp"] as const;
@@ -87,6 +94,18 @@ export async function importFile(path: string, bytes: Uint8Array): Promise<Impor
       return { name, sourceFormat: "md", text: importMarkdown(bytes) };
     case "docx":
       return { name, sourceFormat: "docx", text: await importDocx(bytes) };
+    case "srt":
+    case "vtt": {
+      // Subtitles arrive as a timestamped transcript plus the cue anchors:
+      // one paragraph per cue, `[mm:ss] Speaker: text`.
+      const parsed = ext === "srt" ? importSrt(bytes) : importVtt(bytes);
+      if (parsed.cueCount === 0) {
+        throw new Error(
+          `No subtitle cues were found in ${name}.${ext}. A cue needs a timing line like "00:00:04,000 --> 00:00:08,200" with its text under it.`,
+        );
+      }
+      return { name, sourceFormat: ext, text: parsed.text, anchors: parsed.anchors };
+    }
     case "pdf": {
       // pdf.js hands `data` off to its worker (a real one in the browser, a
       // fake in-thread one in Node/tests) as a transferable, which detaches

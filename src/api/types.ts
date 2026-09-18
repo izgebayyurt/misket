@@ -185,6 +185,9 @@ export interface NewDocument {
   sourceFormat: string;
   text: string;
   allowDuplicate?: boolean;
+  /** Alignment points the import already knows — one per cue for SRT and VTT.
+   * Recorded in the import's history snapshot, so undo and redo keep them. */
+  anchors?: TranscriptAnchor[];
 }
 
 export interface DocumentSummary {
@@ -202,6 +205,12 @@ export interface DocumentSummary {
   mediaMissing: boolean;
   sortOrder: number;
   excerptCount: number;
+  /** For a text document: the recording it is the transcript of, once linked. */
+  linkedMediaId: string | null;
+  /** For a recording: the text document that transcribes it, if any. */
+  transcriptId: string | null;
+  /** How many alignment points this document has. */
+  anchorCount: number;
   /** The speakers this document's transcript format finds, in first-seen
    * order; empty for anything that is not a transcript. */
   speakers: string[];
@@ -971,6 +980,17 @@ export interface SpeakerTurn {
   labelEnd: number;
   start: number;
   end: number;
+}
+
+/**
+ * One point where a transcript and its recording are known to meet: a code
+ * point offset into the document text and a millisecond of the recording.
+ * Mirrors `misket_core::text::align::Anchor`; the interpolation between them
+ * is `src/core/align.ts`.
+ */
+export interface TranscriptAnchor {
+  pos: number;
+  ms: number;
 }
 
 /** Which shapes of speaker label a document's turns are written in. */

@@ -55,7 +55,7 @@ export, open-by-double-click, dark mode, cross-platform CI and release builds.
 | --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
 | 16  | [#17](https://github.com/izgebayyurt/misket/issues/17) **Image documents**: import PNG/JPEG/WebP, viewer with zoom/pan, rectangle region excerpts drawn with the mouse, same palette and browser, thumbnails in the excerpt browser                     | done   |
 | 17  | [#18](https://github.com/izgebayyurt/misket/issues/18) **Audio/video documents**: player with timeline and waveform, time-range excerpts set with in/out keys, frame-accurate scrubbing, excerpt thumbnails                                             | done   |
-| 18  | [#19](https://github.com/izgebayyurt/misket/issues/19) **Transcript alignment**: import SRT/VTT/timestamped transcripts as text documents linked to media; clicking a transcript excerpt seeks the media; coding a time range highlights the transcript | later  |
+| 18  | [#19](https://github.com/izgebayyurt/misket/issues/19) **Transcript alignment**: import SRT/VTT/timestamped transcripts as text documents linked to media; clicking a transcript excerpt seeks the media; coding a time range highlights the transcript | done   |
 | 19  | [#20](https://github.com/izgebayyurt/misket/issues/20) **Media by reference**: relink moved media files, optional copy-into-project, missing-media warnings                                                                                             | done   |
 
 ## v0.5 Teams and rigour

@@ -29,6 +29,7 @@ const GROUPS: { titleKey: string; actions: Action[] }[] = [
       "jumpTop",
       "jumpBottom",
       "goToParagraph",
+      "alignHere",
       "escape",
     ],
   },
