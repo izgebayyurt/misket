@@ -7,11 +7,8 @@ import { useCodes } from "@/queries/codes";
 import { useExcerptQuery } from "@/queries/excerpts";
 import { useCreateMemo } from "@/queries/memos";
 import { MAX_EXCERPTS, assistedMemoFooter, summariseCodePrompt } from "@/core/assist/prompts";
-import { toast } from "@/state/toasts";
+import { TOAST_KEYS, toast } from "@/state/toasts";
 import { useAssistDraft, useAssistEnabled } from "./useAssist";
-
-/** The toast channel for everything assistance has to say. */
-export const ASSIST_TOAST_KEY = "assist";
 
 /**
  * "Summarise excerpts…" for one code: a memo draft the researcher edits and
@@ -91,7 +88,7 @@ function SummariseCodeDialog({ codeId, onClose }: { codeId: string; onClose: () 
       });
       onClose();
     } catch (e) {
-      toast.error(e, { key: ASSIST_TOAST_KEY });
+      toast.error(e, { key: TOAST_KEYS.assist });
     }
   }
 

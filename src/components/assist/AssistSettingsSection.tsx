@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import * as api from "@/api/assist";
 import type { AssistProvider } from "@/api/types";
 import { flushSettings, useSettings } from "@/state/settings";
-import { toast } from "@/state/toasts";
+import { TOAST_KEYS, toast } from "@/state/toasts";
 import { log } from "@/api/log";
 import {
   MAX_CONTEXT_CHARS,
@@ -54,7 +54,7 @@ export function AssistSettingsSection() {
       await refreshStatus();
       toast.info(key.trim() ? "API key saved to the system keychain." : "API key removed.");
     } catch (e) {
-      toast.error(e);
+      toast.error(e, { key: TOAST_KEYS.assist });
     }
   }
 
@@ -72,7 +72,7 @@ export function AssistSettingsSection() {
         provider: settings.provider,
         model: settings.model,
       });
-      toast.error(e);
+      toast.error(e, { key: TOAST_KEYS.assist });
     } finally {
       setTesting(false);
       void qc.invalidateQueries({ queryKey: ["assist", "requests"] });
@@ -203,7 +203,7 @@ export function AssistSettingsSection() {
                 .clearAssistApiKey()
                 .then(refreshStatus)
                 .then(() => toast.info("API key removed."))
-                .catch(toast.error)
+                .catch((e) => toast.error(e, { key: TOAST_KEYS.assist }))
             }
           >
             Forget
