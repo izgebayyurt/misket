@@ -43,7 +43,12 @@ export function TranscriptionProgressDialog() {
         toast.error(e.message ?? "Transcription failed.");
         return;
       }
+      // The transcript is a new document, linked to the recording and
+      // carrying anchors: `linkedMediaId`, `transcriptId` and `anchorCount`
+      // all ride on the summaries the list and the viewers read.
       void qc.invalidateQueries({ queryKey: keys.documents });
+      void qc.invalidateQueries({ queryKey: keys.document(e.documentId) });
+      void qc.invalidateQueries({ queryKey: keys.allTranscriptAnchors });
       void qc.invalidateQueries({ queryKey: keys.history });
       toast.info(
         `Transcribed in ${formatElapsed(e.elapsedMs)}. Undo with Ctrl/⌘+Z if it is not what you wanted.`,

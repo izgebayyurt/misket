@@ -1,6 +1,7 @@
 //! Project database: one SQLite file per project.
 
 pub mod activity;
+pub mod align;
 pub mod analysis;
 pub mod backup;
 pub mod bulk;
@@ -282,7 +283,10 @@ mod tests {
             let p = OpenProject::create(&path, "Old", "0.1.0").unwrap();
             p.conn
                 .execute_batch(
-                    "DROP INDEX excerpts_video_range_uq;
+                    "DROP TABLE transcript_anchors;
+                     DROP INDEX documents_linked_media_idx;
+                     ALTER TABLE documents DROP COLUMN linked_media_id;
+                     DROP INDEX excerpts_video_range_uq;
                      DROP TABLE sync_points;
                      DROP INDEX memos_coder_idx;
                      ALTER TABLE memos DROP COLUMN coder_id;

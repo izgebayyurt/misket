@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Captions, Pause, Play } from "lucide-react";
-import { loadMediaServer, mediaFileUrl, mediaServer } from "@/api/media";
+import { mediaFileUrl } from "@/api/media";
 import { useCodes } from "@/queries/codes";
 import { useApplyCodes, useDeleteExcerpt, useDocumentExcerpts } from "@/queries/excerpts";
 import {
@@ -11,17 +11,14 @@ import {
 } from "@/queries/documents";
 import { useRelinkMedia } from "@/components/documents/useRelinkMedia";
 import { TranscribeDialog } from "@/components/documents/TranscribeDialog";
-import { useProjectInfo } from "@/queries/project";
 import { useQueryClient } from "@tanstack/react-query";
 import { keys } from "@/queries/keys";
 import {
-  clampPosition,
   downsamplePeaks,
   formatDuration,
   formatTimecode,
   isCodableRange,
   isVideoMime,
-  MIN_RANGE_MS,
   setInPoint,
   setOutPoint,
   unsupportedHint,
@@ -33,11 +30,11 @@ import { isTextField, matchMediaAction, MEDIA_SEEK_MS, MEDIA_STEP_MS } from "@/c
 import { useWorkspace } from "@/state/workspace";
 import { useShortcutActions } from "@/state/shortcutActions";
 import { useSettings } from "@/state/settings";
-import { useReadingPositions } from "@/state/readingPositions";
 import { toast, TOAST_KEYS } from "@/state/toasts";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { DocumentTitle } from "./DocumentTitle";
+import { useMediaPlayback } from "./useMediaPlayback";
 
 /** How many peaks a waveform is reduced to; a timeline is ~1000 px wide. */
 const PEAK_COUNT = 1500;
@@ -95,7 +92,6 @@ export function MediaView({ documentId, focusExcerptId, seekToMs }: Props) {
   const { data: doc, error } = useDocument(documentId);
   const { data: excerpts } = useDocumentExcerpts(documentId);
   const { data: codes } = useCodes();
-  const { data: projectInfo } = useProjectInfo();
   const applyCodes = useApplyCodes();
   const deleteExcerpt = useDeleteExcerpt();
   const relink = useRelinkMedia();
@@ -105,10 +101,6 @@ export function MediaView({ documentId, focusExcerptId, seekToMs }: Props) {
   const qc = useQueryClient();
 
   const rootRef = useRef<HTMLDivElement>(null);
-  // The keys read the position from a ref: `timeupdate` fires several times a
-  // second, and re-registering a listener that often would be silly.
-  const positionRef = useRef(0);
-  const playerRef = useRef<HTMLVideoElement & HTMLAudioElement>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
 
   const pending = useWorkspace((s) => s.pendingSelection);
@@ -117,13 +109,6 @@ export function MediaView({ documentId, focusExcerptId, seekToMs }: Props) {
   const setFocusedId = useWorkspace((s) => s.setFocusedExcerptId);
   const setPaletteOpen = useWorkspace((s) => s.setPaletteOpen);
 
-  const [positionMs, setPositionMs] = useState(0);
-  const [playing, setPlaying] = useState(false);
-  const [speed, setSpeed] = useState(1);
-  const [playbackError, setPlaybackError] = useState<string | null>(null);
-  // Where a media element can reach a recording (`src/api/media.ts`). Asked
-  // for once per run; `null` while the answer is still on its way.
-  const [serverReady, setServerReady] = useState(() => !!mediaServer());
   const [renaming, setRenaming] = useState(false);
   const [transcribeOpen, setTranscribeOpen] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
@@ -133,25 +118,31 @@ export function MediaView({ documentId, focusExcerptId, seekToMs }: Props) {
   const isVideo = isVideoMime(media?.mime ?? "");
   const missing = doc?.mediaMissing ?? false;
   const ext = extensionOf(doc?.sourcePath ?? "");
-  const projectPath = projectInfo?.path ?? "";
 
-  useEffect(() => {
-    if (serverReady) return;
-    let cancelled = false;
-    void loadMediaServer().then((info) => {
-      if (cancelled) return;
-      if (info) setServerReady(true);
-      else
-        setPlaybackError(
-          "Misket could not open the local connection it plays recordings through, so this one cannot be played. Restarting the app usually fixes it.",
-        );
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [serverReady]);
-
-  const src = serverReady ? mediaFileUrl(documentId) : null;
+  // Playing the recording is shared with the compact strip a linked
+  // transcript shows, so the playhead and the speed survive moving between
+  // the two views (`useMediaPlayback`).
+  const playback = useMediaPlayback(documentId, {
+    durationMs,
+    ready: !!doc,
+    seekToMs,
+    skipRestore: !!focusExcerptId,
+  });
+  const {
+    ref: playerRef,
+    src,
+    positionMs,
+    positionRef,
+    playing,
+    speed,
+    setSpeed,
+    playableLimit,
+    seekTo,
+    togglePlay,
+    error: playbackError,
+    setError: setPlaybackError,
+  } = playback;
+  const serverReady = src !== null;
 
   const colorById = useMemo(() => new Map((codes ?? []).map((c) => [c.id, c.color])), [codes]);
 
@@ -190,80 +181,14 @@ export function MediaView({ documentId, focusExcerptId, seekToMs }: Props) {
 
   // --- the player ----------------------------------------------------------
 
-  /** Record where the player is, for the render and for the keys. */
-  const notePosition = useCallback((ms: number) => {
-    positionRef.current = ms;
-    setPositionMs(ms);
-  }, []);
-
-  /**
-   * The furthest the playhead goes. Not the last millisecond: seeking a
-   * WebKit media element to exactly the end makes it ask the server for
-   * `Range: bytes=<length>-`, which is by definition unsatisfiable — the
-   * loopback server answers `416`, as any HTTP server would, and WebKit
-   * turns that into `MEDIA_ERR_NETWORK` and stops playing (measured in
-   * `e2e/`). A playhead 100 ms from the end is the same thing to a coder,
-   * and an out-point can still reach the very end (`atEnd` below).
-   */
-  const playableLimit = Math.max(0, durationMs - MIN_RANGE_MS);
-
-  const seekTo = useCallback(
-    (ms: number) => {
-      const player = playerRef.current;
-      const at = clampPosition(ms, playableLimit);
-      notePosition(at);
-      if (player) player.currentTime = at / 1000;
-    },
-    [notePosition, playableLimit],
-  );
-
   /**
    * Where an in- or out-point goes when the playhead is as far as it can go:
    * the coder means "the end of the recording", not "100 ms before it".
    */
   const markAt = useCallback(
     () => (positionRef.current >= playableLimit ? durationMs : positionRef.current),
-    [durationMs, playableLimit],
+    [durationMs, playableLimit, positionRef],
   );
-
-  const togglePlay = useCallback(() => {
-    const player = playerRef.current;
-    if (!player) return;
-    if (player.paused) void player.play().catch(() => setPlaying(false));
-    else player.pause();
-  }, []);
-
-  useEffect(() => {
-    const player = playerRef.current;
-    if (player) player.playbackRate = speed;
-  }, [speed, playbackError]);
-
-  // Remembered playback position, reused from the text viewer's store: both
-  // answer "where had I got to in this document", one in code points and one
-  // in milliseconds.
-  const restored = useRef<string | null>(null);
-  useEffect(() => {
-    if (!projectPath || !doc || restored.current === documentId) return;
-    restored.current = documentId;
-    if (focusExcerptId) return;
-    // Somewhere a caller asked for beats where the reader left off.
-    const at = seekToMs ?? useReadingPositions.getState().recall(projectPath, documentId);
-    if (at === null || at <= 0 || at >= durationMs) return;
-    // After this render: the element has to exist before it can be seeked.
-    const raf = requestAnimationFrame(() => seekTo(at));
-    return () => cancelAnimationFrame(raf);
-    // Only on first arrival at a document.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [documentId, !!doc, projectPath]);
-
-  useEffect(() => {
-    if (!projectPath || positionMs <= 0) return;
-    const t = setTimeout(
-      () => useReadingPositions.getState().remember(projectPath, documentId, positionMs),
-      600,
-    );
-    return () => clearTimeout(t);
-  }, [documentId, positionMs, projectPath]);
 
   // --- jumping in from the excerpt browser ---------------------------------
   const jumped = useRef<string | null>(null);
@@ -361,7 +286,7 @@ export function MediaView({ documentId, focusExcerptId, seekToMs }: Props) {
         // error the coder needs to hear about.
       }
     },
-    [isVideo, setThumbnail],
+    [isVideo, playerRef, setThumbnail],
   );
 
   const codeRange = useCallback(
@@ -535,6 +460,7 @@ export function MediaView({ documentId, focusExcerptId, seekToMs }: Props) {
     hasFocus,
     markAt,
     markRange,
+    positionRef,
     range,
     seekTo,
     shortcutToCode,
@@ -550,12 +476,12 @@ export function MediaView({ documentId, focusExcerptId, seekToMs }: Props) {
     void qc.invalidateQueries({ queryKey: keys.document(documentId) });
     void qc.invalidateQueries({ queryKey: keys.documents });
     setPlaybackError(unsupportedHint(doc?.name ?? "This recording", ext));
-  }, [doc?.name, documentId, ext, qc]);
+  }, [doc?.name, documentId, ext, qc, setPlaybackError]);
 
   // --- relinking -----------------------------------------------------------
   const pickRelink = useCallback(async () => {
     if (await relink.pickAndRelink(documentId)) setPlaybackError(null);
-  }, [documentId, relink]);
+  }, [documentId, relink, setPlaybackError]);
 
   // --- the timeline --------------------------------------------------------
   const fraction = durationMs > 0 ? Math.min(1, positionMs / durationMs) : 0;
@@ -665,10 +591,8 @@ export function MediaView({ documentId, focusExcerptId, seekToMs }: Props) {
                   className="max-h-full max-w-full"
                   preload="metadata"
                   onClick={togglePlay}
-                  onPlay={() => setPlaying(true)}
-                  onPause={() => setPlaying(false)}
+                  {...playback.elementProps}
                   onLoadedMetadata={onLoadedMetadata}
-                  onTimeUpdate={(e) => notePosition(Math.round(e.currentTarget.currentTime * 1000))}
                   onError={onPlaybackError}
                   data-testid="media-player"
                 />
@@ -679,10 +603,8 @@ export function MediaView({ documentId, focusExcerptId, seekToMs }: Props) {
                   className="w-full max-w-2xl"
                   controls
                   preload="metadata"
-                  onPlay={() => setPlaying(true)}
-                  onPause={() => setPlaying(false)}
+                  {...playback.elementProps}
                   onLoadedMetadata={onLoadedMetadata}
-                  onTimeUpdate={(e) => notePosition(Math.round(e.currentTarget.currentTime * 1000))}
                   onError={onPlaybackError}
                   data-testid="media-player"
                 />

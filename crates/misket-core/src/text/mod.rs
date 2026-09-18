@@ -5,10 +5,12 @@
 //! and code-point slicing of document text); this one is about turning text
 //! into words, not about offsets.
 
+pub mod align;
 pub mod stem;
 pub mod stopwords;
 pub mod transcript;
 
+pub use align::Anchor;
 pub use transcript::{detect_format, speaker_turns, TranscriptFormat, Turn};
 
 /// Tokenize `text` into lowercase words: maximal runs of Unicode

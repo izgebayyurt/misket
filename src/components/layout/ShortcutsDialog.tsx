@@ -28,6 +28,7 @@ const GROUPS: { title: string; actions: Action[] }[] = [
       "jumpTop",
       "jumpBottom",
       "goToParagraph",
+      "alignHere",
       "escape",
     ],
   },

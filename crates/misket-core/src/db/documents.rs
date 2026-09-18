@@ -5,7 +5,7 @@ use serde_json::json;
 
 use super::history::DocumentOp;
 use super::transcripts::{self, StoredTranscript};
-use super::{activity, excerpts, history, memos, text, util};
+use super::{activity, align, excerpts, history, memos, text, util};
 use crate::error::{AppError, Result};
 use crate::models::{
     Document, DocumentSnapshot, DocumentSummary, FrameworkCellRow, MediaInfo, MemoTarget,
@@ -22,7 +22,10 @@ pub const MEDIA_KIND: &str = "video";
 const SUMMARY_COLUMNS: &str =
     "d.id, d.kind, d.name, d.source_path, d.source_format, d.text_length, d.media_json, d.sort_order,
      (SELECT count(*) FROM excerpts e WHERE e.document_id = d.id) AS excerpt_count,
-     d.created_at, d.updated_at, d.transcript_json";
+     d.created_at, d.updated_at, d.transcript_json, d.linked_media_id,
+     (SELECT t.id FROM documents t WHERE t.linked_media_id = d.id ORDER BY t.sort_order LIMIT 1)
+       AS transcript_id,
+     (SELECT count(*) FROM transcript_anchors a WHERE a.document_id = d.id) AS anchor_count";
 
 /// The image types Misket imports, with the `source_format` recorded for each.
 pub const IMAGE_MIMES: [(&str, &str); 3] = [
@@ -49,6 +52,9 @@ fn summary_from_row(r: &Row) -> rusqlite::Result<DocumentSummary> {
         media_missing,
         sort_order: r.get(7)?,
         excerpt_count: r.get(8)?,
+        linked_media_id: r.get(12)?,
+        transcript_id: r.get(13)?,
+        anchor_count: r.get(14)?,
         created_at: r.get(9)?,
         updated_at: r.get(10)?,
         // Read from the cache the transcript format was stored with; a
@@ -108,6 +114,18 @@ pub fn create(conn: &Connection, input: NewDocument) -> Result<Document> {
             now
         ],
     )?;
+    // Alignment points an SRT or VTT import already knows, written before the
+    // import is snapshotted so undo and redo carry them (`db::align`).
+    if !input.anchors.is_empty() {
+        let len = text::cp_len(&text);
+        let kept: Vec<_> = input
+            .anchors
+            .iter()
+            .copied()
+            .filter(|a| a.pos <= len)
+            .collect();
+        align::write(conn, &id, &kept)?;
+    }
     // Work out how this document marks its speakers once, at import, so the
     // listing and the document view can both read the answer (`db::transcripts`).
     transcripts::ensure(conn, &id)?;
@@ -164,7 +182,8 @@ pub fn snapshot(
     let mut snapshot = conn
         .query_row(
             "SELECT id, kind, name, source_path, source_format, content_hash, media_json,
-                    text_length, sort_order, created_at, updated_at, transcript_json
+                    text_length, sort_order, created_at, updated_at, transcript_json,
+                    linked_media_id
                FROM documents WHERE id = ?1",
             [id],
             |r| {
@@ -182,6 +201,7 @@ pub fn snapshot(
                     created_at: r.get(9)?,
                     updated_at: r.get(10)?,
                     transcript_json: r.get(11)?,
+                    linked_media_id: r.get(12)?,
                     ..Default::default()
                 })
             },
@@ -226,6 +246,11 @@ pub fn snapshot(
         },
     )?;
 
+    // Both ends of the transcript link: the recording this document points
+    // at, and (for a recording) the transcripts that point at it, whose links
+    // `ON DELETE SET NULL` would otherwise quietly drop.
+    snapshot.linked_by = align::linked_by(conn, id)?;
+    snapshot.anchors = align::list(conn, id)?;
     let text: Option<String> =
         conn.query_row("SELECT text FROM documents WHERE id = ?1", [id], |r| {
             r.get(0)
@@ -252,8 +277,9 @@ pub fn restore(
     tx.execute(
         "INSERT INTO documents (id, kind, name, source_path, source_format, content_hash,
                                 text, text_length, media_json, sort_order, created_at, updated_at,
-                                transcript_json)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+                                transcript_json, linked_media_id)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13,
+                 (SELECT id FROM documents WHERE id = ?14))",
         params![
             snapshot.id,
             snapshot.kind,
@@ -267,9 +293,19 @@ pub fn restore(
             snapshot.sort_order,
             snapshot.created_at,
             snapshot.updated_at,
-            snapshot.transcript_json
+            snapshot.transcript_json,
+            snapshot.linked_media_id
         ],
     )?;
+    // The transcripts that pointed here, and this document's own alignment
+    // points. A transcript deleted since is simply not put back.
+    for other in &snapshot.linked_by {
+        tx.execute(
+            "UPDATE documents SET linked_media_id = ?2 WHERE id = ?1",
+            params![other, snapshot.id],
+        )?;
+    }
+    align::write(&tx, &snapshot.id, &snapshot.anchors)?;
     if let (Some(bytes), Some(mime)) = (media, snapshot.media_mime.as_deref()) {
         tx.execute(
             "INSERT INTO media_blobs (document_id, excerpt_id, name, mime, bytes)
@@ -612,6 +648,7 @@ pub(crate) mod tests {
             source_format: "txt".into(),
             text: text.into(),
             allow_duplicate: false,
+            anchors: vec![],
         }
     }
 

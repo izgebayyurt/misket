@@ -252,6 +252,49 @@ textarea {
   }
 }
 
+/* --- transcript alignment ----------------------------------------------
+
+   A transcript linked to a recording gets two more layers, both CSS-only for
+   the same reason the speaker gutter is: nothing may be added to or removed
+   from `.doc-text`, whose children are span[data-s] elements wrapping a
+   single text node.
+
+   The paragraph being read right now, while the recording plays. */
+.doc-text p.playing {
+  background-color: color-mix(in srgb, var(--focus) 8%, transparent);
+  box-shadow: -0.6rem 0 0 color-mix(in srgb, var(--focus) 8%, transparent);
+  border-radius: 2px;
+}
+
+/* A stretch of the recording that has been coded, mapped back onto the text
+   through the alignment. Not interactive and not an excerpt: a faint band
+   that says "this is what that coded stretch of tape says". Drawn under the
+   excerpt tint with `box-shadow: inset`, so a passage that is both coded in
+   the text and coded on the tape still shows its own colours. */
+.doc-text .seg[data-media] {
+  box-shadow: inset 0 0 0 100vmax color-mix(in srgb, var(--accent) 10%, transparent);
+  border-radius: 2px;
+}
+
+/* One alignment point, in the far-left gutter. Like the drag grips below, it
+   lives in the scroll container rather than inside `.doc-text`. */
+.anchor-tick {
+  position: absolute;
+  left: 2px;
+  z-index: 14;
+  width: 10px;
+  height: 10px;
+  margin-top: 0.35em;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--accent) 55%, transparent);
+  cursor: pointer;
+}
+
+.anchor-tick:hover,
+.anchor-tick[data-state="open"] {
+  background: var(--accent);
+}
+
 /* Drag grips on the focused excerpt's edges. They are positioned in the
    scroll container, not inside .doc-text, whose only children may be
    span[data-s] elements wrapping a single text node. */

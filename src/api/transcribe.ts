@@ -1,5 +1,6 @@
 import { listen } from "@tauri-apps/api/event";
 import { invoke } from "./client";
+import type { TranscriptAnchor } from "./types";
 
 /** Mirrors `transcribe::Language`. */
 export interface TranscriptionLanguage {
@@ -66,17 +67,13 @@ export interface TranscriptionProgress {
   eta: number | null;
 }
 
-/** Where a position in the transcript sits in the recording. */
-export interface TranscriptAnchor {
-  pos: number;
-  ms: number;
-}
-
 export interface TranscriptionDone {
+  /** The recording that was transcribed. */
   documentId: string;
   status: "done" | "cancelled" | "failed";
   transcriptDocumentId?: string;
   transcriptName?: string;
+  /** The segment anchors written with the transcript (`db::align`). */
   anchors?: TranscriptAnchor[];
   message?: string;
   elapsedMs: number;

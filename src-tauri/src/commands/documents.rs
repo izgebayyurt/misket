@@ -60,9 +60,9 @@ pub fn delete_document(state: State<'_, AppState>, app: AppHandle, id: String) -
 /// the image formats it stores inside the project, and the audio and video
 /// formats it imports by reference. Keep in sync with `SUPPORTED_EXTENSIONS`
 /// there.
-const IMPORTABLE_EXTENSIONS: [&str; 20] = [
-    "txt", "md", "markdown", "docx", "pdf", "png", "jpg", "jpeg", "webp", "mp3", "wav", "m4a",
-    "aac", "ogg", "flac", "mp4", "mov", "webm", "m4v", "mkv",
+const IMPORTABLE_EXTENSIONS: [&str; 22] = [
+    "txt", "md", "markdown", "docx", "pdf", "srt", "vtt", "png", "jpg", "jpeg", "webp", "mp3",
+    "wav", "m4a", "aac", "ogg", "flac", "mp4", "mov", "webm", "m4v", "mkv",
 ];
 
 fn is_importable(path: &Path) -> bool {

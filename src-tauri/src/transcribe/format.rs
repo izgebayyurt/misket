@@ -5,13 +5,14 @@
 //! transcript in, and one the timestamp-aware transcript presets in
 //! `misket_core::text::transcript` can read.
 //!
-//! Alongside the text, each paragraph produces an **anchor**: the code-point
-//! offset where the paragraph starts, and the millisecond into the recording
-//! it was spoken at. That is what transcript alignment (roadmap 18) needs to
-//! seek the player from a position in the text. Until the column that stores
-//! anchors lands, they are still computed and handed back — nothing here
-//! depends on where they end up.
+//! Alongside the text, each paragraph produces a
+//! [`misket_core::text::align::Anchor`]: the code-point offset where the
+//! paragraph starts, and the millisecond into the recording it was spoken at.
+//! Those go straight into `transcript_anchors` with the document, so a
+//! transcription is aligned to its recording the moment it exists — clicking
+//! a line seeks the player, and coding a time range highlights the text.
 
+use misket_core::text::align::Anchor;
 use serde::{Deserialize, Serialize};
 
 /// One stretch of speech as Whisper reports it.
@@ -21,17 +22,6 @@ pub struct Segment {
     pub start_ms: i64,
     pub end_ms: i64,
     pub text: String,
-}
-
-/// Where a position in the transcript sits in the recording.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Anchor {
-    /// Code-point offset into the transcript text, like every other offset in
-    /// Misket.
-    pub pos: i64,
-    /// Milliseconds into the recording.
-    pub ms: i64,
 }
 
 /// A finished transcript: the document text, its anchors, and the speakers —
@@ -95,10 +85,7 @@ pub fn render(segments: &[Segment], layout: Layout) -> TranscriptionResult {
             text.push_str("\n\n");
             pos += 2;
         }
-        anchors.push(Anchor {
-            pos,
-            ms: para.start_ms,
-        });
+        anchors.push(Anchor::new(pos, para.start_ms));
         let body = if layout.timestamps {
             format!("[{}] {}", timecode(para.start_ms), para.text)
         } else {
@@ -213,10 +200,7 @@ mod tests {
             out.text,
             "[00:00] Hello there.\n\n[00:02] This is the second bit."
         );
-        assert_eq!(
-            out.anchors,
-            vec![Anchor { pos: 0, ms: 0 }, Anchor { pos: 22, ms: 2_000 }]
-        );
+        assert_eq!(out.anchors, vec![Anchor::new(0, 0), Anchor::new(22, 2_000)]);
         // Every anchor must land exactly on the "[" that opens its paragraph.
         let chars: Vec<char> = out.text.chars().collect();
         for a in &out.anchors {
@@ -255,10 +239,7 @@ mod tests {
             },
         );
         assert_eq!(out.text, "One.\n\nTwo.");
-        assert_eq!(
-            out.anchors,
-            vec![Anchor { pos: 0, ms: 0 }, Anchor { pos: 6, ms: 1_000 }]
-        );
+        assert_eq!(out.anchors, vec![Anchor::new(0, 0), Anchor::new(6, 1_000)]);
     }
 
     #[test]
@@ -272,7 +253,7 @@ mod tests {
             Layout::default(),
         );
         assert_eq!(out.text, "[00:02] Real speech here");
-        assert_eq!(out.anchors, vec![Anchor { pos: 0, ms: 2_000 }]);
+        assert_eq!(out.anchors, vec![Anchor::new(0, 2_000)]);
     }
 
     #[test]

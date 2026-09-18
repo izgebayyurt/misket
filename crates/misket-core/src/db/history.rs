@@ -22,7 +22,7 @@ use rusqlite::{params, Connection, OptionalExtension, Row};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
-use super::{activity, codes, documents, excerpts, framework, transcripts, util};
+use super::{activity, align, codes, documents, excerpts, framework, transcripts, util};
 use crate::error::{AppError, Result};
 use crate::models::{
     ChildrenStrategy, CodePatch, CodeTreeSnapshot, Coder, CompactReport, DescriptorField,
@@ -30,6 +30,7 @@ use crate::models::{
     HistoryNodeSummary, HistoryRef, HistoryStepMember, Memo, SavedFilter, SetWithMembers,
     SyncPoint, TagRow, WeightScale,
 };
+use crate::text::align::Anchor;
 use crate::text::TranscriptFormat;
 
 // ------------------------------------------------------------- the head
@@ -623,6 +624,23 @@ pub struct TranscriptChange {
     pub format: Option<TranscriptFormat>,
 }
 
+/// A document's whole alignment, replaced. Both directions speak the same
+/// vocabulary — the anchor list to put in force — so setting one anchor,
+/// removing one and rebuilding all of them share a payload and an inverse
+/// (`db::align`).
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct AnchorChange {
+    pub document_id: String,
+    pub anchors: Vec<Anchor>,
+}
+
+impl AnchorChange {
+    fn run(&self, conn: &Connection) -> Result<()> {
+        align::write(conn, &self.document_id, &self.anchors)
+    }
+}
+
 /// Everything that happens to a document. `Restore` is the inverse of a
 /// delete *and* the forward of an import: both put the row back with its
 /// original id, from the snapshot in the payload and the bytes in the node's
@@ -653,6 +671,14 @@ pub enum DocumentOp {
         source_path: Option<String>,
         content_hash: String,
         media_json: Option<String>,
+        updated_at: String,
+    },
+    /// Point a text document at the recording it transcribes, or clear the
+    /// link (`db::align::link`). A link to a document that is gone is stored
+    /// as no link at all rather than failing the replay.
+    Link {
+        document_id: String,
+        linked_media_id: Option<String>,
         updated_at: String,
     },
 }
@@ -691,6 +717,20 @@ impl DocumentOp {
                         params![id, i as i64],
                     )?;
                 }
+                Ok(())
+            }
+            DocumentOp::Link {
+                document_id,
+                linked_media_id,
+                updated_at,
+            } => {
+                conn.execute(
+                    "UPDATE documents
+                        SET linked_media_id = (SELECT id FROM documents WHERE id = ?2),
+                            updated_at = ?3
+                      WHERE id = ?1",
+                    params![document_id, linked_media_id, updated_at],
+                )?;
                 Ok(())
             }
             DocumentOp::Relink {
@@ -1410,8 +1450,11 @@ fn apply(conn: &Connection, node_id: i64, kind: &str, payload: &Value) -> Result
         "transcript.format_set" | "transcript.default_set" => {
             serde_json::from_value::<TranscriptChange>(payload.clone())?.run(conn)
         }
+        "transcript.anchor_set" | "transcript.anchor_removed" | "transcript.anchors_built" => {
+            serde_json::from_value::<AnchorChange>(payload.clone())?.run(conn)
+        }
         "document.imported" | "document.deleted" | "document.renamed" | "document.reordered"
-        | "document.relinked" => {
+        | "document.relinked" | "document.linked" => {
             serde_json::from_value::<DocumentOp>(payload.clone())?.run(conn, node_id)
         }
         "project.renamed" | "analysis.stop_words_set" => {
@@ -3000,6 +3043,77 @@ pub(crate) mod tests {
         });
         // The file itself is never touched by any of it.
         assert!(moved.is_file());
+    }
+
+    /// Transcript alignment: the link between a transcript and its recording,
+    /// and the anchors that line them up.
+    #[test]
+    fn round_trips_linking_a_transcript_and_aligning_it() {
+        use crate::db::{align, media};
+
+        let p = OpenProject::in_memory("t").unwrap();
+        let c = &p.conn;
+        crate::db::activity::set_actor(c, "Ada").unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let path = media::tests::fake_file(dir.path(), "interview.mp3", 8192, 11);
+        media::create(c, None, media::tests::new_media(&path)).unwrap();
+        let rec = documents::list(c).unwrap()[0].id.clone();
+        let text = documents::create(
+            c,
+            documents::tests::new_doc(
+                "[00:05] Alice: Hello there.\n[00:20] Bob: Hello back.\n\
+                 [01:00] Alice: Goodbye.\n[01:30] Bob: Bye now.\n",
+            ),
+        )
+        .unwrap()
+        .summary
+        .id;
+
+        assert_round_trip(c, "link the transcript to the recording", |c| {
+            align::link(c, &text, Some(&rec)).unwrap();
+        });
+        assert_round_trip(c, "build anchors from the timestamps", |c| {
+            align::build_from_timestamps(c, &text).unwrap();
+        });
+        assert_round_trip(c, "align here", |c| {
+            align::set(c, &text, 12, 7_000).unwrap();
+        });
+        assert_round_trip(c, "remove an anchor", |c| {
+            align::remove(c, &text, 12).unwrap();
+        });
+        assert_round_trip(c, "unlink", |c| {
+            align::link(c, &text, None).unwrap();
+        });
+
+        // Coding the recording for a passage is one step to undo.
+        align::link(c, &text, Some(&rec)).unwrap();
+        align::build_from_timestamps(c, &text).unwrap();
+        let code = codes::tests::mk(c, "Alpha", None).id;
+        let e = excerpts::apply_codes(
+            c,
+            ApplyCodesInput {
+                document_id: text.clone(),
+                start_pos: Some(30),
+                end_pos: Some(40),
+                code_ids: vec![code],
+                ..Default::default()
+            },
+        )
+        .unwrap()
+        .excerpt
+        .id;
+        assert_round_trip(c, "code the recording for a passage", |c| {
+            align::code_recording_for_excerpt(c, &e).unwrap();
+        });
+
+        // Deleting the recording unlinks its transcript and undo relinks it;
+        // deleting the transcript takes its anchors and undo brings them back.
+        assert_round_trip(c, "delete the recording out from under a transcript", |c| {
+            documents::delete(c, &rec).unwrap();
+        });
+        assert_round_trip(c, "delete the aligned transcript", |c| {
+            documents::delete(c, &text).unwrap();
+        });
     }
 
     #[test]

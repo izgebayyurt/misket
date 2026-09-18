@@ -9,7 +9,7 @@ import { toast } from "@/state/toasts";
  * When launched with MISKET_E2E_PROJECT set, open (or create) that project and
  * import MISKET_E2E_IMPORT files so automated smoke tests never need a dialog.
  */
-export function useE2eBootstrap(importPaths: (paths: string[]) => Promise<void>) {
+export function useE2eBootstrap(importPaths: (paths: string[]) => Promise<unknown>) {
   const qc = useQueryClient();
   const ran = useRef(false);
   useEffect(() => {

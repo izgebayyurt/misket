@@ -41,6 +41,7 @@
           <li><a href="#codebook">Build a codebook</a></li>
           <li><a href="#coding">Code text</a></li>
           <li><a href="#auto-code">Auto-code many matches or turns at once</a></li>
+          <li><a href="#alignment">Line a transcript up with its recording</a></li>
           <li><a href="#orientation">Find your place in a long transcript</a></li>
           <li><a href="#boundaries">Adjust boundaries</a></li>
           <li><a href="#browser">Excerpt browser and filters</a></li>
@@ -169,6 +170,60 @@
         beside the chip lists everyone with their turn count; pick one and a code to tag every one
         of their turns in a single step.
       </p>
+      <h2 id="alignment">Line a transcript up with its recording</h2>
+      <p>
+        A transcript and the recording it was typed from can be joined up, so that reading and
+        listening are the same activity. Open the transcript's row menu (the
+        <strong>…</strong> button, or right-click it) and choose <strong>Link recording…</strong>;
+        pick a recording already in the project, or import one there and then — importing and
+        linking are one step to undo.
+      </p>
+      <p>
+        A linked transcript grows a slim strip above the text: play and pause, where the playhead
+        is, the speed, and <strong>Follow playback</strong>. With the recording playing, the
+        paragraph being read is tinted and scrolls itself into view. Click any paragraph to seek the
+        recording there; hold <kbd>Ctrl</kbd>/<kbd>⌘</kbd> and click to seek to the exact word under
+        the pointer. (A plain click on text you have already coded keeps its old meaning — it
+        selects that excerpt.)
+      </p>
+      <p>
+        Misket works out when a passage was said from <em>alignment points</em>: pairs of "this
+        word" and "this moment". It interpolates between them, so a handful is enough — anything
+        before the first point is measured from the start of the recording, and anything after the
+        last carries on at the document's average pace. They come from three places:
+      </p>
+      <ul>
+        <li>
+          <strong>Subtitles.</strong> Import an <code>.srt</code> or <code>.vtt</code> file and it
+          arrives as an ordinary text document, one paragraph per cue, opening with the cue's time —
+          <code>[0:04] Alice: I had been there before.</code> — with a speaker label where the file
+          names one. Every cue is an alignment point already, so linking the recording is all that
+          is left to do.
+        </li>
+        <li>
+          <strong>Timestamps already in the text.</strong> If the transcript's format captures a
+          time (<code>[00:12:03] P1:</code>, <code>P1 (00:12):</code>), the transcript chip's menu
+          offers <strong>Build anchors from timestamps</strong>, which reads every one of them at
+          once.
+        </li>
+        <li>
+          <strong>By ear.</strong> Play the recording, put the cursor in the transcript where you
+          are hearing it, and press <kbd>Alt</kbd>+<kbd>A</kbd> (or <strong>Align here</strong> in
+          the strip). Each point shows as a small tick in the left gutter; its menu plays from there
+          or removes it.
+        </li>
+      </ul>
+      <p>
+        Once the two are lined up, work travels both ways. Coding a stretch of the recording draws a
+        faint band across the words it covers, so you can see what a coded passage of tape says. An
+        excerpt of the transcript — in the inspector or the excerpt browser — offers
+        <strong>Play this excerpt</strong>, which plays exactly that passage, and
+        <strong>Code the recording</strong>, which puts the same codes on the same stretch of tape
+        in one undoable step. The strip's name on the right opens the recording's own viewer, with
+        its waveform and in/out points, and the recording's row carries a <em>transcript</em> badge
+        that comes back.
+      </p>
+
       <h2 id="orientation">Find your place in a long transcript</h2>
       <p>
         Every paragraph is numbered in the document's left gutter, so you can cite "paragraph 47" in

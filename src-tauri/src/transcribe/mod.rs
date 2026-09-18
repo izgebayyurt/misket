@@ -26,7 +26,8 @@ use misket_core::{AppError, Result};
 use serde::{Deserialize, Serialize};
 
 pub use engine::{Engine, Progress, RunOptions};
-pub use format::{Anchor, Layout, TranscriptionResult};
+pub use format::{Layout, TranscriptionResult};
+pub use misket_core::text::align::Anchor;
 
 /// Set from the UI to stop a run; polled by the engine and the downloader.
 pub type Cancel = Arc<AtomicBool>;
@@ -301,7 +302,7 @@ mod tests {
         assert!(out.text.starts_with("[00:00] "), "got {:?}", out.text);
         assert_eq!(out.text.lines().filter(|l| !l.is_empty()).count(), 3);
         assert_eq!(out.anchors.len(), 3);
-        assert_eq!(out.anchors[0], Anchor { pos: 0, ms: 0 });
+        assert_eq!(out.anchors[0], Anchor::new(0, 0));
         assert!(out.anchors[2].ms > out.anchors[1].ms);
         assert_eq!(out.speakers, None);
 

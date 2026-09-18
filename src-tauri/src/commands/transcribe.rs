@@ -11,7 +11,7 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Instant;
 
-use misket_core::db::documents;
+use misket_core::db::{align, documents, history, OpenProject};
 use misket_core::models::{Document, NewDocument};
 use misket_core::{AppError, Result};
 use serde::Serialize;
@@ -265,6 +265,45 @@ fn engine_for(app: &AppHandle, request: &TranscribeRequest) -> Result<Box<dyn tr
     transcribe::engine::load(&path)
 }
 
+/// Write a finished transcription into the project: the text document, its
+/// anchors, and the link back to the recording.
+///
+/// All three are **one step in the undo tree**. A transcript sitting in the
+/// project unlinked from the recording it came from is not a state anyone
+/// asked for, so undo should not stop there — one `Ctrl`/`⌘`+`Z` takes the
+/// whole transcription back, and one redo brings it back linked.
+fn save_transcript(
+    project: &OpenProject,
+    recording_id: &str,
+    recording_name: &str,
+    source_path: Option<String>,
+    result: &transcribe::TranscriptionResult,
+) -> Result<Document> {
+    history::group(
+        &project.conn,
+        &format!("Transcribed \"{recording_name}\""),
+        |conn| {
+            let document = documents::create(
+                conn,
+                NewDocument {
+                    name: transcribe::format::transcript_name(recording_name),
+                    source_path,
+                    source_format: TRANSCRIPT_FORMAT.into(),
+                    text: result.text.clone(),
+                    // Two recordings of the same words would otherwise collide on
+                    // the content hash.
+                    allow_duplicate: true,
+                    // Segment starts, so the transcript is aligned to its
+                    // recording from the moment it exists (`db::align`).
+                    anchors: result.anchors.clone(),
+                },
+            )?;
+            align::link(conn, &document.summary.id, Some(recording_id))?;
+            Ok(document)
+        },
+    )
+}
+
 /// Start transcribing a recording. Returns at once; watch
 /// `transcription:progress` and `transcription:done`.
 #[tauri::command]
@@ -314,17 +353,12 @@ pub fn start_transcription(
         .and_then(|result| {
             let state = handle.state::<AppState>();
             let document = state.with_project(|p| {
-                documents::create(
-                    &p.conn,
-                    NewDocument {
-                        name: transcribe::format::transcript_name(&name),
-                        source_path: path.to_str().map(str::to_owned),
-                        source_format: TRANSCRIPT_FORMAT.into(),
-                        text: result.text.clone(),
-                        // Two recordings of the same words would otherwise
-                        // collide on the content hash.
-                        allow_duplicate: true,
-                    },
+                save_transcript(
+                    p,
+                    &document_id,
+                    &name,
+                    path.to_str().map(str::to_owned),
+                    &result,
                 )
             })?;
             Ok((document, result.anchors))
@@ -478,7 +512,7 @@ mod tests {
         let finished = serde_json::to_value(done(
             "d1",
             sample_document("d2", "Talk (transcript)"),
-            vec![Anchor { pos: 0, ms: 0 }, Anchor { pos: 21, ms: 4000 }],
+            vec![Anchor::new(0, 0), Anchor::new(21, 4000)],
             1234,
         ))
         .unwrap();
@@ -510,6 +544,130 @@ mod tests {
         assert!(empty(&state.model_downloads));
     }
 
+    /// A recording in a throwaway project, so the save path can be exercised
+    /// against the real schema.
+    fn project_with_recording() -> (tempfile::TempDir, OpenProject, String) {
+        let dir = tempfile::tempdir().unwrap();
+        let project = OpenProject::in_memory("transcription").unwrap();
+        let wav = dir.path().join("Interview 3.wav");
+        std::fs::copy(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../fixtures/sample.wav"),
+            &wav,
+        )
+        .unwrap();
+        let recording = misket_core::db::media::create(
+            &project.conn,
+            None,
+            misket_core::models::NewMediaDocument {
+                name: "Interview 3".into(),
+                source_path: wav.to_string_lossy().into_owned(),
+                mime: "audio/wav".into(),
+                media: misket_core::models::MediaInfo {
+                    duration_ms: Some(3_000),
+                    ..Default::default()
+                },
+                copy_into_project: false,
+                allow_duplicate: false,
+            },
+        )
+        .unwrap()
+        .summary
+        .id;
+        (dir, project, recording)
+    }
+
+    fn stub_result() -> transcribe::TranscriptionResult {
+        transcribe::format::render(
+            &[
+                transcribe::format::Segment {
+                    start_ms: 0,
+                    end_ms: 2_000,
+                    text: " Hello there.".into(),
+                },
+                transcribe::format::Segment {
+                    start_ms: 2_000,
+                    end_ms: 3_000,
+                    text: " And goodbye.".into(),
+                },
+            ],
+            transcribe::Layout::default(),
+        )
+    }
+
+    /// The whole point of the save step: a text document with `[mm:ss]`
+    /// paragraphs, its anchors written, and linked to the recording.
+    #[test]
+    fn saving_a_transcript_writes_anchors_and_links_the_recording() {
+        let (_dir, project, recording) = project_with_recording();
+        let result = stub_result();
+        let document = save_transcript(&project, &recording, "Interview 3", None, &result).unwrap();
+
+        assert_eq!(document.summary.name, "Interview 3 (transcript)");
+        assert_eq!(document.summary.kind, "text");
+        assert_eq!(
+            document.summary.source_format.as_deref(),
+            Some(TRANSCRIPT_FORMAT)
+        );
+        assert_eq!(
+            document.text.as_deref(),
+            Some("[00:00] Hello there.\n\n[00:02] And goodbye.")
+        );
+
+        let summary = documents::get_summary(&project.conn, &document.summary.id).unwrap();
+        assert_eq!(summary.linked_media_id.as_deref(), Some(recording.as_str()));
+        assert_eq!(
+            align::list(&project.conn, &document.summary.id).unwrap(),
+            vec![Anchor::new(0, 0), Anchor::new(22, 2_000)]
+        );
+    }
+
+    /// The import and the link are one step, so one undo takes both back and
+    /// one redo brings them both again.
+    #[test]
+    fn a_transcription_is_a_single_undoable_step() {
+        let (_dir, project, recording) = project_with_recording();
+        let before = documents::list(&project.conn).unwrap().len();
+        let document =
+            save_transcript(&project, &recording, "Interview 3", None, &stub_result()).unwrap();
+        assert_eq!(documents::list(&project.conn).unwrap().len(), before + 1);
+
+        history::undo(&project.conn)
+            .unwrap()
+            .expect("something to undo");
+        assert_eq!(
+            documents::list(&project.conn).unwrap().len(),
+            before,
+            "one undo must take the whole transcription back, not leave it unlinked"
+        );
+
+        history::redo(&project.conn, None)
+            .unwrap()
+            .expect("something to redo");
+        let summary = documents::get_summary(&project.conn, &document.summary.id).unwrap();
+        assert_eq!(
+            summary.linked_media_id.as_deref(),
+            Some(recording.as_str()),
+            "redo must bring the link back too"
+        );
+        assert_eq!(
+            align::list(&project.conn, &document.summary.id)
+                .unwrap()
+                .len(),
+            2
+        );
+    }
+
+    /// Transcribing the same recording twice is allowed (a different model, a
+    /// different language) and must not trip the content-hash duplicate check.
+    #[test]
+    fn the_same_words_can_be_transcribed_twice() {
+        let (_dir, project, recording) = project_with_recording();
+        save_transcript(&project, &recording, "Interview 3", None, &stub_result()).unwrap();
+        let second =
+            save_transcript(&project, &recording, "Interview 3", None, &stub_result()).unwrap();
+        assert_eq!(second.summary.name, "Interview 3 (transcript)");
+    }
+
     fn sample_document(id: &str, name: &str) -> Document {
         Document {
             summary: misket_core::models::DocumentSummary {
@@ -521,6 +679,9 @@ mod tests {
                 text_length: Some(0),
                 media: None,
                 media_missing: false,
+                linked_media_id: None,
+                transcript_id: None,
+                anchor_count: 0,
                 sort_order: 0,
                 excerpt_count: 0,
                 speakers: Vec::new(),
