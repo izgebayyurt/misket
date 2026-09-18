@@ -8,6 +8,7 @@ import { MediaImportDialog } from "@/components/documents/MediaImportDialog";
 import { TidyImportDialog } from "@/components/documents/TidyImportDialog";
 import { OcrPromptDialog } from "@/components/documents/OcrPromptDialog";
 import { OcrProgressDialog } from "@/components/documents/OcrProgressDialog";
+import { TranscriptionProgressDialog } from "@/components/documents/TranscriptionProgressDialog";
 import { useE2eBootstrap } from "@/components/project/useE2eBootstrap";
 import { useE2eCrashTest } from "@/components/project/useE2eCrashTest";
 import { useOpenFileRequests } from "@/components/project/useOpenFileRequests";
@@ -33,6 +34,7 @@ export default function App() {
       <MediaImportDialog />
       <OcrPromptDialog />
       <OcrProgressDialog />
+      <TranscriptionProgressDialog />
     </>
   );
 }

@@ -86,6 +86,21 @@ export interface AppSettings {
    * pointing at where they are. Off by default: a recording is held by
    * reference precisely so a project file stays small. */
   copyMediaIntoProject: boolean;
+  /** The Whisper model transcription uses: an id from the catalogue
+   * (`tiny`, `small`, `large-v3-turbo`…) or the file name of one added by
+   * hand. Null — the default — means nothing has been downloaded yet. */
+  whisperModel?: string | null;
+  /** An ISO-639-1 code, or null/"auto" to let Whisper detect it. */
+  whisperLanguage?: string | null;
+  /** Whisper's translate task: English out, whatever went in. */
+  whisperTranslate: boolean;
+  /** Decoding threads; null is one fewer than the machine has. */
+  whisperThreads?: number | null;
+  /** Open each transcript paragraph with `[mm:ss]`. */
+  whisperTimestamps: boolean;
+  /** Null is one paragraph per segment; a number groups segments into
+   * paragraphs of at least that many seconds. */
+  whisperGroupSeconds?: number | null;
   /** Extra Tesseract language codes to use for PDF OCR, on top of the
    * bundled `eng`. Each one needs a matching `<code>.traineddata` file
    * dropped into the app's tessdata folder (Settings shows the path). */

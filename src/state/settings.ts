@@ -24,6 +24,12 @@ export const DEFAULT_SETTINGS: AppSettings = {
   reportFormat: "json",
   checkForUpdatesAutomatically: true,
   skippedUpdateVersion: null,
+  whisperModel: null,
+  whisperLanguage: null,
+  whisperTranslate: false,
+  whisperThreads: null,
+  whisperTimestamps: true,
+  whisperGroupSeconds: null,
 };
 
 const SAVE_DEBOUNCE_MS = 400;

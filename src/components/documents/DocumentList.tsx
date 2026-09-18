@@ -31,6 +31,7 @@ import { cn } from "@/lib/utils";
 import { useImportFiles } from "./useImportFiles";
 import { useRelinkMedia } from "./useRelinkMedia";
 import { ImportFolderDialog } from "./ImportFolderDialog";
+import { TranscribeDialog } from "./TranscribeDialog";
 import { DocumentSets } from "./DocumentSets";
 import { AddToSetMenu } from "@/components/sets/AddToSetMenu";
 import { toast } from "@/state/toasts";
@@ -43,6 +44,7 @@ export function DocumentList() {
   const { pickAndImport, pickFolder, isPending } = useImportFiles();
   const [renaming, setRenaming] = useState<DocumentSummary | null>(null);
   const [deleting, setDeleting] = useState<DocumentSummary | null>(null);
+  const [transcribing, setTranscribing] = useState<DocumentSummary | null>(null);
   const [folder, setFolder] = useState<string | null>(null);
 
   async function chooseFolder() {
@@ -155,6 +157,7 @@ export function DocumentList() {
                           doc={d}
                           onRename={() => setRenaming(d)}
                           onDelete={() => setDeleting(d)}
+                          onTranscribe={() => setTranscribing(d)}
                           menu={dropdownMenuPrimitives}
                         />
                       </DropdownMenuContent>
@@ -166,6 +169,7 @@ export function DocumentList() {
                     doc={d}
                     onRename={() => setRenaming(d)}
                     onDelete={() => setDeleting(d)}
+                    onTranscribe={() => setTranscribing(d)}
                     menu={contextMenuPrimitives}
                   />
                 </ContextMenuContent>
@@ -178,6 +182,9 @@ export function DocumentList() {
       {renaming ? <RenameDialog doc={renaming} onClose={() => setRenaming(null)} /> : null}
       {deleting ? <DeleteDialog doc={deleting} onClose={() => setDeleting(null)} /> : null}
       {folder ? <ImportFolderDialog dir={folder} onClose={() => setFolder(null)} /> : null}
+      {transcribing ? (
+        <TranscribeDialog doc={transcribing} onClose={() => setTranscribing(null)} />
+      ) : null}
     </div>
   );
 }
@@ -187,11 +194,13 @@ function DocumentRowMenuItems({
   doc,
   onRename,
   onDelete,
+  onTranscribe,
   menu,
 }: {
   doc: DocumentSummary;
   onRename: () => void;
   onDelete: () => void;
+  onTranscribe: () => void;
   menu: MenuPrimitives;
 }) {
   const { Item } = menu;
@@ -199,6 +208,11 @@ function DocumentRowMenuItems({
   return (
     <>
       <Item onSelect={onRename}>Rename…</Item>
+      {doc.kind === "video" ? (
+        <Item onSelect={onTranscribe} disabled={doc.mediaMissing}>
+          Transcribe…
+        </Item>
+      ) : null}
       {doc.kind === "video" ? (
         <Item onSelect={() => void relink.pickAndRelink(doc.id)}>
           {doc.mediaMissing ? "Relink the missing file…" : "Relink…"}
