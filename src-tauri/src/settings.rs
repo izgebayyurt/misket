@@ -80,6 +80,12 @@ pub struct AppSettings {
     /// active, not what is available.
     #[serde(default)]
     pub ocr_languages: Vec<String>,
+    /// AI assistance. Every part of it is off until somebody turns it on, and
+    /// the API key is deliberately not here — it lives in the OS credential
+    /// store (`crate::assist`), so this file stays safe to copy, sync and
+    /// paste into a bug report.
+    #[serde(default)]
+    pub assist: crate::assist::AssistSettings,
 }
 
 impl Default for AppSettings {
@@ -97,6 +103,7 @@ impl Default for AppSettings {
             coder_color: None,
             lanes_by_coder: false,
             ocr_languages: Vec::new(),
+            assist: crate::assist::AssistSettings::default(),
         }
     }
 }
@@ -229,6 +236,11 @@ mod tests {
             coder_color: Some("#5CB85C".into()),
             lanes_by_coder: true,
             ocr_languages: vec!["tur".into()],
+            assist: crate::assist::AssistSettings {
+                suggest_codes: true,
+                base_url: "http://localhost:11434/v1".into(),
+                ..Default::default()
+            },
         };
         write(&path, &settings).unwrap();
         assert_eq!(read(&path).unwrap(), settings);
@@ -258,6 +270,9 @@ mod tests {
         assert_eq!(settings.coder_id, None);
         assert!(!settings.lanes_by_coder);
         assert!(settings.ocr_languages.is_empty());
+        // Assistance stays off in a file that has never heard of it.
+        assert_eq!(settings.assist, crate::assist::AssistSettings::default());
+        assert!(!settings.assist.suggest_codes);
     }
 
     #[test]

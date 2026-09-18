@@ -1,5 +1,6 @@
 pub mod activity;
 pub mod analysis;
+pub mod assist;
 pub mod backup;
 pub mod codebook;
 pub mod coders;
