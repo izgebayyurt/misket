@@ -1,7 +1,8 @@
-import { X } from "lucide-react";
+import { Sparkles, X } from "lucide-react";
 import { useState } from "react";
-import type { Coding, WeightScale } from "@/api/types";
+import type { AssistedRef, Coding, WeightScale } from "@/api/types";
 import {
+  useApplyCodes,
   useExcerptDetail,
   useRemoveExcerptCode,
   useSetExcerptWeight,
@@ -26,6 +27,9 @@ import { useWorkspace } from "@/state/workspace";
 import { toast, TOAST_KEYS } from "@/state/toasts";
 import { formatTimecode, parseTimecode } from "@/core/media";
 import { formatWeightWithLabel, weightScaleValues } from "@/core/weights";
+import { SuggestCodes } from "@/components/assist/SuggestCodes";
+import { useAssistEnabled } from "@/components/assist/useAssist";
+import { CodeDialog } from "@/components/codebook/CodeDialog";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { MediaThumbnail } from "./MediaThumbnail";
@@ -111,8 +115,14 @@ export function ExcerptInspector({ excerptId }: { excerptId: string }) {
   const { data: detail } = useExcerptDetail(excerptId);
   const tree = useCodeTree();
   const removeCode = useRemoveExcerptCode();
+  const applyCodes = useApplyCodes();
   const { data: coders } = useCoders();
   const setPaletteOpen = useWorkspace((s) => s.setPaletteOpen);
+  const suggestEnabled = useAssistEnabled("suggestCodes");
+  const [suggesting, setSuggesting] = useState(false);
+  const [newCodeFrom, setNewCodeFrom] = useState<{ name: string; assisted: AssistedRef } | null>(
+    null,
+  );
   if (!detail) return null;
   const me = coders?.find((c) => c.isLocal)?.id;
   const nameOf = (coderId: string) =>
@@ -121,6 +131,23 @@ export function ExcerptInspector({ excerptId }: { excerptId: string }) {
     removeCode
       .mutateAsync({ id: detail.id, documentId: detail.documentId, codeId, coderId })
       .catch(toast.error);
+  /**
+   * Accept a suggestion: the ordinary `apply_codes` path against this
+   * excerpt's own range, with the note that says the person had help.
+   */
+  const applySuggested = (codeId: string, assisted: AssistedRef) => {
+    if (detail.startPos === null || detail.endPos === null) return;
+    applyCodes
+      .mutateAsync({
+        documentId: detail.documentId,
+        startPos: detail.startPos,
+        endPos: detail.endPos,
+        codeIds: [codeId],
+        assisted,
+      })
+      .then(() => setSuggesting(false))
+      .catch(toast.error);
+  };
   return (
     <div className="flex flex-col" data-testid="excerpt-inspector">
       <div className="border-b border-border p-3">
@@ -180,10 +207,49 @@ export function ExcerptInspector({ excerptId }: { excerptId: string }) {
       <div className="border-b border-border p-3">
         <div className="flex items-center justify-between">
           <h3 className="text-xs font-semibold uppercase tracking-wide text-fg-muted">Codes</h3>
-          <Button size="sm" variant="ghost" onClick={() => setPaletteOpen(true)}>
-            Add
-          </Button>
+          <div className="flex items-center">
+            {suggestEnabled && detail.kind === "text" ? (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setSuggesting((v) => !v)}
+                title="Ask for code suggestions. Nothing is applied until you click one."
+                data-testid="inspector-suggest"
+              >
+                <Sparkles className="size-3.5" /> Suggest
+              </Button>
+            ) : null}
+            <Button size="sm" variant="ghost" onClick={() => setPaletteOpen(true)}>
+              Add
+            </Button>
+          </div>
         </div>
+        {suggesting ? (
+          <div className="mt-2">
+            <SuggestCodes
+              key={detail.id}
+              passage={detail.snapshot ?? ""}
+              contextBefore={detail.contextBefore}
+              contextAfter={detail.contextAfter}
+              onApply={applySuggested}
+              onNewCode={(name, assisted) => setNewCodeFrom({ name, assisted })}
+              onClose={() => setSuggesting(false)}
+            />
+          </div>
+        ) : null}
+        {newCodeFrom ? (
+          <CodeDialog
+            mode="create"
+            parentId={null}
+            initialName={newCodeFrom.name}
+            assisted={newCodeFrom.assisted}
+            onClose={() => setNewCodeFrom(null)}
+            onCreated={(code) => {
+              applySuggested(code.id, newCodeFrom.assisted);
+              setNewCodeFrom(null);
+            }}
+          />
+        ) : null}
         <ul className="mt-1">
           {detail.codeIds.map((id) => {
             // Who applied this code. One coding and it is mine is the

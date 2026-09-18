@@ -3,6 +3,7 @@ use misket_core::models::{Memo, MemoTarget};
 use misket_core::Result;
 use tauri::State;
 
+use crate::assist::AssistedRef;
 use crate::state::AppState;
 
 #[tauri::command]
@@ -10,14 +11,21 @@ pub fn list_memos(state: State<'_, AppState>, target: MemoTarget) -> Result<Vec<
     state.with_project(|p| memos::list(&p.conn, &target))
 }
 
+/// Write a memo. `assisted` marks one the person accepted from a draft; the
+/// memo is theirs either way, and its body says so in its own words.
 #[tauri::command]
 pub fn create_memo(
     state: State<'_, AppState>,
     target: MemoTarget,
     title: String,
     body: String,
+    assisted: Option<AssistedRef>,
 ) -> Result<Memo> {
-    state.with_project(|p| memos::create(&p.conn, target, &title, &body))
+    state.with_project(|p| {
+        crate::assist::with_assist(p, assisted.as_ref(), || {
+            memos::create(&p.conn, target, &title, &body)
+        })
+    })
 }
 
 #[tauri::command]

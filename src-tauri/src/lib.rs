@@ -1,3 +1,4 @@
+mod assist;
 mod backup_guard;
 mod commands;
 mod logging;
@@ -68,6 +69,7 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .manage(AppState::default())
+        .manage(assist::AssistState::default())
         .register_asynchronous_uri_scheme_protocol(MEDIA_PROTOCOL, |ctx, request, responder| {
             // Reading a blob locks the project and reading a slice of a
             // recording touches the disk, so answer off the UI thread.
@@ -266,6 +268,14 @@ pub fn run() {
             commands::e2e::get_e2e_config,
             commands::settings::get_settings,
             commands::settings::set_settings,
+            commands::assist::assist_status,
+            commands::assist::assist_set_api_key,
+            commands::assist::assist_clear_api_key,
+            commands::assist::assist_requests,
+            commands::assist::assist_clear_requests,
+            commands::assist::assist_cancel,
+            commands::assist::assist_complete,
+            commands::assist::assist_test_connection,
             commands::diagnostics::frontend_log,
             commands::diagnostics::read_logs,
             commands::diagnostics::clear_logs,

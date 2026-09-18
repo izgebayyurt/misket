@@ -126,6 +126,9 @@ export const TOAST_KEYS = {
   inVivo: "in-vivo",
   /** Splitting an excerpt with the cursor outside it. */
   splitExcerpt: "split-excerpt",
+  /** Anything assistance has to say: one channel, so a provider that is
+   * down cannot bury the screen in identical toasts. */
+  assist: "assist",
   /** A media key pressed with no stretch marked: [ and ] first. */
   mediaTarget: "media-target",
   /** A time typed into the excerpt inspector that does not read as one. */

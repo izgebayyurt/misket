@@ -88,6 +88,12 @@ pub struct AppSettings {
     /// active, not what is available.
     #[serde(default)]
     pub ocr_languages: Vec<String>,
+    /// AI assistance. Every part of it is off until somebody turns it on, and
+    /// the API key is deliberately not here — it lives in the OS credential
+    /// store (`crate::assist`), so this file stays safe to copy, sync and
+    /// paste into a bug report.
+    #[serde(default)]
+    pub assist: crate::assist::AssistSettings,
     /// Off by default. Even when on, nothing is sent unless
     /// `report_endpoint` is also set — see `crate::reporting` for exactly
     /// what a report contains (never document text, codes, memos or file
@@ -130,6 +136,7 @@ impl Default for AppSettings {
             lanes_by_coder: false,
             copy_media_into_project: false,
             ocr_languages: Vec::new(),
+            assist: crate::assist::AssistSettings::default(),
             send_crash_reports: false,
             report_endpoint: String::new(),
             report_format: ReportFormat::default(),
@@ -268,6 +275,11 @@ mod tests {
             lanes_by_coder: true,
             copy_media_into_project: true,
             ocr_languages: vec!["tur".into()],
+            assist: crate::assist::AssistSettings {
+                suggest_codes: true,
+                base_url: "http://localhost:11434/v1".into(),
+                ..Default::default()
+            },
             send_crash_reports: true,
             report_endpoint: "https://example.com/api/1/envelope/".into(),
             report_format: ReportFormat::Sentry,
@@ -302,6 +314,9 @@ mod tests {
         assert_eq!(settings.coder_id, None);
         assert!(!settings.lanes_by_coder);
         assert!(settings.ocr_languages.is_empty());
+        // Assistance stays off in a file that has never heard of it.
+        assert_eq!(settings.assist, crate::assist::AssistSettings::default());
+        assert!(!settings.assist.suggest_codes);
         assert!(!settings.send_crash_reports);
         assert!(settings.report_endpoint.is_empty());
         assert_eq!(settings.report_format, ReportFormat::Json);

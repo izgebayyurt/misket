@@ -269,6 +269,60 @@ keyboard-friendly interface without a subscription.
 
 ![Excerpt browser](docs/screenshots/browser.png)
 
+## Assistance (opt-in)
+
+Misket can ask a language model for suggestions. It is **off**. There is no
+default provider, no bundled key and no request Misket makes on its own
+initiative: until you go to **Settings → Assistance**, choose a provider and
+tick one of three boxes, nothing about your project ever leaves your computer.
+
+Nothing is ever applied for you. Every suggestion is a chip or a draft that
+sits there until you click it, and clicking it goes through the ordinary
+commands — same coder, same undo step, same weights — with one extra note on
+the history entry saying you had help and from which model. The actor stays
+you, because you are the one who decided.
+
+- **Suggest codes for a selection.** With text selected, press **Suggest** on
+  the selection toolbar (or in the excerpt inspector). Up to five chips come
+  back, each with its reason on hover and a confidence. Clicking one applies
+  that code; a `+` chip proposes a code that does not exist yet and opens the
+  code dialog with the name filled in, which you still have to confirm. A code
+  id the model invents is dropped rather than applied.
+- **Summarise a code's excerpts.** Select a code and press **Summarise…** in
+  the right panel. A memo draft — themes, quotations cited by excerpt id,
+  tensions — streams in and is editable from the first character. Press
+  **Save as memo** to keep it, or **Discard**. What is saved is whatever is in
+  the box then, and the memo's own body says it was drafted with assistance.
+- **Draft a definition.** In the code dialog, **Draft definition** fills the
+  description, "Include when" and "Exclude when" fields from the code's own
+  excerpts. Offered only for a code with at least three of them — below that
+  there is nothing to generalise from. The fields stay editable and nothing is
+  saved until the dialog's **Save**.
+
+**Providers.** Either Anthropic's Messages API, or anything that speaks the
+OpenAI chat API — which includes a model running on your own machine. The
+**Local (Ollama)** preset fills in `http://localhost:11434/v1` and needs no
+key, and then assistance costs nothing and still sends nothing over the
+network. Your API key is stored in your operating system's keychain (Keychain,
+Windows Credential Manager, Secret Service), never in Misket's settings file
+and never in a project. (On a machine with no usable keychain — a headless
+Linux box — the key is kept in memory for the session only, and Settings says
+so. `MISKET_ASSIST_API_KEY` is read first if you manage secrets yourself.)
+
+**What gets sent, exactly.** Suggesting codes sends the selected passage (up
+to 4,000 characters), one paragraph either side of it, and your code names
+with their definitions (up to 200 codes; past that, the ones whose wording is
+closest to the passage). Summarising or drafting a definition sends up to 40
+excerpts of that one code. Never a whole document, never the project, never
+your memos, never anything for a feature you have not switched on. Settings →
+Assistance → **Show what was sent** lists every request this session with its
+time, provider, model and byte count — sizes only, never the text — so you can
+show a colleague or an ethics committee what actually happened.
+
+The prompts themselves are four short functions in
+[`src/core/assist/prompts.ts`](src/core/assist/prompts.ts), with tests, so you
+can read every word Misket would send before you switch anything on.
+
 ## Keyboard
 
 | Action                                                 | Shortcut                                      |
@@ -329,8 +383,12 @@ and published.
 
 ## Your data
 
-Your project is a `.misket` file (a SQLite database) on your own disk; nothing
-leaves your computer. Before a destructive change — deleting a document,
+Your project is a `.misket` file (a SQLite database) on your own disk. Nothing
+about it leaves your computer unless you switch something on: the two that can
+send anything are [Assistance](#assistance-opt-in), which needs a provider you
+configure yourself, and [crash reports](#privacy-and-diagnostics), which never
+carry your documents or coding. Both are off by default.
+Before a destructive change — deleting a document,
 deleting a code that has excerpts, merging one code into another, or importing
 a codebook — Misket
 writes a timestamped copy into a `<project name>.backups/` folder next to the
