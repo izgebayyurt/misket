@@ -243,6 +243,13 @@ textarea {
   animation: seg-flash 1.2s ease-out;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  /* The jumped-to excerpt still gets the `.focused` outline; skip the pulse. */
+  .seg.flash {
+    animation: none;
+  }
+}
+
 @keyframes seg-flash {
   0% {
     background-color: color-mix(in srgb, var(--focus) 45%, transparent);
