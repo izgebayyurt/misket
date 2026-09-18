@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { AudioLines } from "lucide-react";
 import { thumbnailUrl } from "@/api/media";
-import { peakSlice } from "@/core/media";
+import { peakSlice, waveformPath } from "@/core/media";
 import { useDocuments } from "@/queries/documents";
 
 interface Props {
@@ -45,15 +45,18 @@ export function MediaThumbnail({ documentId, excerptId, startMs, endMs, width, h
           onError={() => setFrameFailed(true)}
         />
       ) : peaks.length > 0 ? (
-        <div className="flex size-full items-center gap-px px-0.5" aria-hidden="true">
-          {peaks.map((p, i) => (
-            <span
-              key={i}
-              className="flex-1 rounded-sm bg-fg-muted/50"
-              style={{ height: `${Math.max(6, p * 100)}%` }}
-            />
-          ))}
-        </div>
+        // The same envelope the timeline draws, stretched into the box: a
+        // slice can be one peak or a thousand, and a path copes with both.
+        <svg
+          className="size-full"
+          viewBox={`0 0 ${peaks.length} 2`}
+          preserveAspectRatio="none"
+          aria-hidden="true"
+        >
+          <g transform="translate(0 1)">
+            <path d={waveformPath(peaks)} className="fill-fg-muted/60" />
+          </g>
+        </svg>
       ) : (
         <AudioLines className="size-5 text-fg-muted" aria-hidden="true" />
       )}
