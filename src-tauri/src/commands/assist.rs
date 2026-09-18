@@ -193,7 +193,7 @@ async fn run(
             "assistance is not set up: {reason}"
         )));
     }
-    state.check_rate_limit()?;
+    let _in_flight = state.begin_request()?;
 
     let provider = settings.provider;
     let url = assist::endpoint(provider, &settings.base_url)?;

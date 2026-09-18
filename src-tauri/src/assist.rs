@@ -596,15 +596,17 @@ pub struct AssistLogEntry {
 /// How many lines the list keeps. It is a session log, not an archive.
 pub const LOG_CAPACITY: usize = 200;
 
-/// The shortest gap between two requests. A person clicking "Suggest codes"
-/// on passage after passage should not be able to melt their own rate limit.
-pub const MIN_REQUEST_GAP: Duration = Duration::from_millis(1200);
+/// The shortest gap between two requests: enough to swallow a double-click or
+/// a component that fires twice, short enough that pressing one button and
+/// then deliberately pressing another is never refused.
+pub const MIN_REQUEST_GAP: Duration = Duration::from_millis(400);
 
 /// Everything assistance needs that outlives one command.
 pub struct AssistState {
     pub store: Box<dyn SecretStore>,
     log: Mutex<VecDeque<AssistLogEntry>>,
     last_request: Mutex<Option<Instant>>,
+    in_flight: std::sync::atomic::AtomicBool,
     cancelled: Mutex<Vec<String>>,
     client: std::sync::OnceLock<reqwest::Client>,
 }
@@ -615,6 +617,7 @@ impl Default for AssistState {
             store: best_store(),
             log: Mutex::new(VecDeque::new()),
             last_request: Mutex::new(None),
+            in_flight: std::sync::atomic::AtomicBool::new(false),
             cancelled: Mutex::new(Vec::new()),
             client: std::sync::OnceLock::new(),
         }
@@ -651,22 +654,40 @@ impl AssistState {
             .ok_or_else(|| AppError::Io("http client".into()))
     }
 
-    /// Refuse a request that comes too soon after the last one.
-    pub fn check_rate_limit(&self) -> Result<()> {
+    /// Claim the right to make one request, or say why not.
+    ///
+    /// Two guards, and they are different things. One request may be in the
+    /// air at a time, because these features are one-person-one-click and a
+    /// second concurrent call is a bug or an impatient double-press. And two
+    /// requests may not start within [`MIN_REQUEST_GAP`] of each other, which
+    /// catches the double-press the first guard misses (the first having
+    /// already finished). Neither is a quota: the provider's own rate limit
+    /// is the provider's business, and its 429 is surfaced as one.
+    ///
+    /// The returned guard releases the claim when it is dropped, so a request
+    /// that fails, is cancelled, or panics does not wedge the feature.
+    pub fn begin_request(&self) -> Result<InFlight<'_>> {
+        use std::sync::atomic::Ordering;
+        if self.in_flight.swap(true, Ordering::SeqCst) {
+            return Err(AppError::Conflict(
+                "one request at a time — wait for the last one to finish".into(),
+            ));
+        }
+        let guard = InFlight(&self.in_flight);
         let mut last = self
             .last_request
             .lock()
             .map_err(|_| AppError::Db("assist lock poisoned".into()))?;
         if let Some(at) = *last {
-            let since = at.elapsed();
-            if since < MIN_REQUEST_GAP {
+            if at.elapsed() < MIN_REQUEST_GAP {
                 return Err(AppError::Conflict(
-                    "one request at a time, please — try again in a moment".into(),
+                    "that was a moment too quick after the last request".into(),
                 ));
             }
         }
         *last = Some(Instant::now());
-        Ok(())
+        drop(last);
+        Ok(guard)
     }
 
     pub fn log(&self, entry: AssistLogEntry) {
@@ -718,6 +739,16 @@ impl AssistState {
         if let Ok(mut c) = self.cancelled.lock() {
             c.retain(|id| id != request_id);
         }
+    }
+}
+
+/// The claim [`AssistState::begin_request`] hands out. Dropping it releases
+/// the "one at a time" flag, whatever became of the request.
+pub struct InFlight<'a>(&'a std::sync::atomic::AtomicBool);
+
+impl Drop for InFlight<'_> {
+    fn drop(&mut self) {
+        self.0.store(false, std::sync::atomic::Ordering::SeqCst);
     }
 }
 
@@ -1067,13 +1098,22 @@ mod tests {
     }
 
     #[test]
-    fn two_requests_in_a_row_are_refused() {
+    fn only_one_request_is_in_the_air_at_a_time() {
         let state = AssistState::in_memory();
-        assert!(state.check_rate_limit().is_ok());
-        assert!(matches!(
-            state.check_rate_limit(),
-            Err(AppError::Conflict(_))
-        ));
+        let first = state.begin_request().unwrap();
+        assert!(matches!(state.begin_request(), Err(AppError::Conflict(_))));
+        drop(first);
+        // The claim is released even though the first request "failed";
+        // the second is now only held back by the minimum gap.
+        std::thread::sleep(MIN_REQUEST_GAP);
+        assert!(state.begin_request().is_ok());
+    }
+
+    #[test]
+    fn a_second_request_in_the_same_breath_is_refused() {
+        let state = AssistState::in_memory();
+        drop(state.begin_request().unwrap());
+        assert!(matches!(state.begin_request(), Err(AppError::Conflict(_))));
     }
 
     #[test]
