@@ -7,6 +7,7 @@ import { RightPanel } from "./RightPanel";
 import { DocumentPane } from "@/components/document-view/DocumentPane";
 import { useWorkspace } from "@/state/workspace";
 import { useGlobalShortcuts } from "@/hooks/useGlobalShortcuts";
+import { useUpdateCheckOnMount } from "@/hooks/useUpdateCheck";
 import { ExcerptBrowser } from "@/components/excerpts/ExcerptBrowser";
 import { AnalysisView } from "@/components/analysis/AnalysisView";
 import { SearchView } from "@/components/search/SearchView";
@@ -18,6 +19,7 @@ import { ImportDropzone } from "@/components/documents/ImportDropzone";
 import { SettingsDialog } from "./SettingsDialog";
 import { ShortcutsDialog } from "./ShortcutsDialog";
 import { SyncWarningBanner } from "./SyncWarningBanner";
+import { UpdateBanner } from "./UpdateBanner";
 
 export function Workspace({ project }: { project: ProjectInfo }) {
   const view = useWorkspace((s) => s.view);
@@ -27,6 +29,7 @@ export function Workspace({ project }: { project: ProjectInfo }) {
   const setShortcutsHelpOpen = useWorkspace((s) => s.setShortcutsHelpOpen);
   const mainRef = useRef<HTMLElement>(null);
   useGlobalShortcuts();
+  useUpdateCheckOnMount();
   useEffect(() => {
     const win = getCurrentWindow();
     win.setTitle(`${project.name} — Misket`).catch(() => {});
@@ -49,6 +52,7 @@ export function Workspace({ project }: { project: ProjectInfo }) {
       >
         Skip to document
       </a>
+      <UpdateBanner />
       <SyncWarningBanner project={project} />
       <div className="flex min-h-0 flex-1">
         <Sidebar project={project} />

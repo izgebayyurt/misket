@@ -246,6 +246,10 @@ keyboard-friendly interface without a subscription.
   MAXQDA, QDA Miner, Quirkos and QualCoder read, and import one back the same
   way. An import shows you what is in the file before it writes anything,
   says what it cannot take, and arrives as a single undoable step.
+- **Diagnostics**: an in-app log viewer (Settings → Diagnostics → "View
+  logs…") with level filtering, search, copy and "Reveal in folder", and an
+  opt-in, off-by-default "Send anonymous crash reports" setting — see
+  [Privacy and diagnostics](#privacy-and-diagnostics) below.
 
 ![Excerpt browser](docs/screenshots/browser.png)
 
@@ -301,6 +305,11 @@ Builds for macOS, Windows and Linux are published on the
 [releases page](https://github.com/izgebayyurt/misket/releases). They are not
 code-signed yet: macOS will ask you to allow the app under System Settings >
 Privacy & Security, and Windows SmartScreen will show a warning the first time.
+Misket checks for updates on launch and offers to install them in place
+(Settings has a "Check for updates automatically" toggle, on by default, and
+a manual "Check for updates…"). See
+[docs/RELEASING.md](docs/RELEASING.md) for how releases are built, signed
+and published.
 
 ## Your data
 
@@ -327,6 +336,32 @@ place, just in case).
 
 No project yet? Click "Try Misket with sample data" on the start screen for a
 ready-made study to explore.
+
+## Privacy and diagnostics
+
+Misket keeps a local, structured log (app version, OS, command failures by
+code and message, project open/close and similar events — paths are hashed,
+never logged in the clear) in a daily-rotating file kept for 7 days. Settings
+→ Diagnostics → "View logs…" shows it with level filtering, search, "Copy"
+and "Reveal in folder"; "Clear logs" deletes it. None of this ever leaves
+your computer on its own.
+
+**"Send anonymous crash reports"** (Settings → Diagnostics) is off by
+default. When it is on **and** a report endpoint is set, an error sends: the
+app version, your OS, the error message and stack, and the last 50 log lines
+with anything path-shaped replaced by a short hash. It never sends your
+document text, codes, memos or file names. Leaving the endpoint empty (the
+default) disables sending outright regardless of the toggle — there is no
+Misket-run collector to send to. A report made offline is queued on disk and
+retried at the next launch; "Send a report now" (shown once the toggle is on)
+sends one immediately, logs included.
+
+Maintainers running their own instance can point `report_endpoint` at a
+GlitchTip- or Sentry-compatible collector's envelope URL and set
+`report_format` to `sentry` for that wire format, or leave it as `json` for a
+plain, self-describing POST body to any collector of their own. See
+`src-tauri/src/reporting.rs` for the exact shape of both and the redaction
+that runs before either is sent.
 
 ## Development
 

@@ -55,6 +55,9 @@ export interface ProjectStats {
 // Mirrors AppSettings in src-tauri/src/settings.rs (app-level, not project data).
 export type Theme = "system" | "light" | "dark";
 
+/** The wire shape a crash report is sent in; see `reporting::ReportFormat`. */
+export type ReportFormat = "json" | "sentry";
+
 export interface AppSettings {
   theme: Theme;
   editorFontSize: number;
@@ -87,6 +90,21 @@ export interface AppSettings {
    * bundled `eng`. Each one needs a matching `<code>.traineddata` file
    * dropped into the app's tessdata folder (Settings shows the path). */
   ocrLanguages: string[];
+  /** Off by default. Even when on, nothing is sent unless `reportEndpoint`
+   * is also set. See the Diagnostics section of Settings for exactly what a
+   * report contains (never document text, codes, memos or file names). */
+  sendCrashReports: boolean;
+  /** Where a crash report is POSTed. Empty disables sending regardless of
+   * `sendCrashReports`. */
+  reportEndpoint: string;
+  reportFormat: ReportFormat;
+  /** Check the updater endpoint once per launch. A no-op regardless of this
+   * setting while the updater has no real public key configured yet (see
+   * docs/RELEASING.md). */
+  checkForUpdatesAutomatically: boolean;
+  /** A version chosen with "Skip this version" on the update banner: that
+   * exact version stays quiet, but a later one still shows. */
+  skippedUpdateVersion?: string | null;
 }
 
 export type DocumentKind = "text" | "image" | "video";

@@ -46,18 +46,52 @@ jobs:
         with:
           workspaces: ". -> target"
       - run: pnpm install --frozen-lockfile
+      - name: Warn if this build will be unsigned
+        run: |
+          if [ "$RUNNER_OS" = "macOS" ] && [ -z "${{ secrets.APPLE_CERTIFICATE }}" ]; then
+            echo "### :warning: Unsigned macOS build" >> "$GITHUB_STEP_SUMMARY"
+            echo "APPLE_CERTIFICATE is not set, so this build is not signed or notarised. Gatekeeper will require right-click > Open. See docs/RELEASING.md." >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if [ "$RUNNER_OS" = "Windows" ] && [ -z "${{ secrets.WINDOWS_CERTIFICATE }}" ]; then
+            echo "### :warning: Unsigned Windows build" >> "$GITHUB_STEP_SUMMARY"
+            echo "WINDOWS_CERTIFICATE is not set, so this build is not signed. SmartScreen will show More info > Run anyway. See docs/RELEASING.md." >> "$GITHUB_STEP_SUMMARY"
+          fi
+        shell: bash
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Signs the updater artifacts themselves (latest.json + each
+          # bundle's .sig), independent of platform code signing below.
+          # Required once `bundle.createUpdaterArtifacts` is on — generate
+          # the keypair and set these two before your first tag; see
+          # docs/RELEASING.md.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # macOS code signing + notarisation. tauri-action only signs when
+          # APPLE_CERTIFICATE is present, so an unsigned build still
+          # succeeds until these secrets exist; see docs/RELEASING.md.
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          # Windows code signing (PFX route). tauri-action only signs when
+          # WINDOWS_CERTIFICATE is present; see docs/RELEASING.md for this
+          # and the Azure Trusted Signing alternative.
+          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
         with:
           tagName: v__VERSION__
           releaseName: "Misket v__VERSION__"
           releaseBody: |
-            Installable builds for macOS, Windows and Linux.
+            Installable builds for macOS, Windows and Linux, with in-app auto-update.
 
-            These builds are not code-signed yet: macOS will ask you to allow the app
-            in System Settings > Privacy & Security, and Windows SmartScreen will show
-            a warning the first time. See the README for details.
+            Code signing needs the maintainer's certificates and is not set up yet:
+            macOS will ask you to allow the app in System Settings > Privacy & Security
+            (or right-click > Open), and Windows SmartScreen will show a warning the
+            first time (More info > Run anyway). See docs/RELEASING.md for details.
           releaseDraft: true
           prerelease: false
+          includeUpdaterJson: true
           args: ${{ matrix.args }}

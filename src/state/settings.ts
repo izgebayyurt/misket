@@ -19,6 +19,11 @@ export const DEFAULT_SETTINGS: AppSettings = {
   lanesByCoder: false,
   copyMediaIntoProject: false,
   ocrLanguages: [],
+  sendCrashReports: false,
+  reportEndpoint: "",
+  reportFormat: "json",
+  checkForUpdatesAutomatically: true,
+  skippedUpdateVersion: null,
 };
 
 const SAVE_DEBOUNCE_MS = 400;
