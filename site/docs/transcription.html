@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Transcription</title>
+    <meta
+      name="description"
+      content="Misket transcribes audio and video on your own machine with Whisper: which model to download, what the transcript looks like, and when you need ffmpeg."
+    />
+    <link rel="stylesheet" href="../style.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="site-header">
+      <div class="wrap">
+        <a class="brand" href="../index.html"><span class="dot">●</span> Misket</a>
+        <nav class="site-nav" aria-label="Site">
+          <a href="../index.html">Home</a>
+          <a href="install.html">Install</a>
+          <a href="tutorial.html">Tutorial</a>
+          <a href="shortcuts.html">Shortcuts</a>
+          <a href="transcription.html" aria-current="page">Transcription</a>
+          <a href="assistance.html">Assistance</a>
+          <a href="data.html">Data &amp; privacy</a>
+          <a href="https://github.com/izgebayyurt/misket">GitHub</a>
+        </nav>
+      </div>
+    </header>
+
+    <main id="main" class="prose narrow">
+      <h1>Transcription</h1>
+      <p class="lede">
+        Misket turns a recording into a transcript on your own machine, with
+        <a href="https://github.com/ggml-org/whisper.cpp">Whisper</a>. No account, no upload, no
+        per-minute bill. The audio never leaves the computer it is sitting on, which for interview
+        data is usually the only arrangement an ethics approval will accept.
+      </p>
+
+      <h2>Get a model first</h2>
+      <p>
+        Nothing is bundled. Whisper needs a model file, the smallest useful one is 75 MiB and the
+        best is 1.5 GiB, so Misket does not guess which one you want or download it behind your
+        back. Open <strong>Settings → Transcription</strong> and press Download next to one:
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th>Model</th>
+            <th>Size</th>
+            <th>When to pick it</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Tiny / Tiny (English)</td>
+            <td>75 MiB</td>
+            <td>Fastest and roughest. Good for finding out whether this works on your audio.</td>
+          </tr>
+          <tr>
+            <td>Base / Base (English)</td>
+            <td>142 MiB</td>
+            <td>Still quick. Usable for clean, close-miked speech.</td>
+          </tr>
+          <tr>
+            <td>Small / Small (English)</td>
+            <td>466 MiB</td>
+            <td>The usual choice for interview audio on a modern laptop.</td>
+          </tr>
+          <tr>
+            <td>Medium</td>
+            <td>1.5 GiB</td>
+            <td>Noticeably better on accents and crosstalk; several times slower.</td>
+          </tr>
+          <tr>
+            <td>Large v3 Turbo</td>
+            <td>1.5 GiB</td>
+            <td>The best on offer, and nearly as fast as Medium.</td>
+          </tr>
+        </tbody>
+      </table>
+      <p>
+        The English-only variants are smaller for the same accuracy on English and cannot do
+        anything else. The rest handle around a hundred languages and can translate to English.
+      </p>
+      <p>
+        Each file comes from the <code>ggerganov/whisper.cpp</code> repository on Hugging Face — the
+        same one whisper.cpp's own download script uses — and is checked against the SHA-1 that
+        project publishes before it is put in place. An interrupted download resumes where it
+        stopped. Models live in Misket's app data folder, which Settings shows in full, and Delete
+        takes one away again.
+      </p>
+      <p>
+        <strong>On a machine with no network</strong>, copy a <code>ggml-*.bin</code> across on a
+        stick and use <em>Add model file…</em>. Misket checks that the file really is a ggml model,
+        and says plainly that it has no published checksum to compare a hand-added file against.
+      </p>
+
+      <h2>Transcribing</h2>
+      <p>
+        Right-click a recording in the document list — or use the <em>Transcribe…</em> button in the
+        player's toolbar — and choose:
+      </p>
+      <ul>
+        <li><strong>Model</strong>, from the ones you have downloaded.</li>
+        <li>
+          <strong>Language</strong>: detect it from the first thirty seconds, or name it. Naming it
+          is a little faster and a little more reliable.
+        </li>
+        <li>
+          <strong>Translate to English</strong>, Whisper's second task: the transcript comes out in
+          English whatever was spoken. Multilingual models only.
+        </li>
+        <li>
+          <strong>Paragraphs</strong>: one per segment as Whisper cuts them, or grouped into
+          paragraphs of at least fifteen seconds, thirty seconds or a minute. Longer paragraphs read
+          better; shorter ones give you more precise timestamps to click.
+        </li>
+        <li><strong>Timestamps</strong>: open each paragraph with <code>[mm:ss]</code>.</li>
+      </ul>
+      <p>
+        The run happens in the background — a progress bar with the percentage, the number of
+        segments so far and a rough estimate, and a Stop button that really does stop it. You can
+        keep coding other documents while it runs. It uses one fewer thread than your machine has by
+        default, so the rest of the desktop stays usable; Settings can change that.
+      </p>
+
+      <h2>What you get</h2>
+      <p>
+        A new text document called <em>&lt;recording&gt; (transcript)</em>, one paragraph per
+        segment:
+      </p>
+      <pre><code>[00:00] So tell me how you first heard about the programme.
+
+[00:06] It was through a friend, actually. She had been
+going for about six months by then.</code></pre>
+      <p>
+        It is an ordinary document: immutable text, code it with the same palette and hotkeys,
+        export it with everything else. Because it carries its timestamps, Misket lines it up with
+        the recording automatically — clicking a passage seeks the player, and coding a stretch of
+        audio highlights the matching text. The whole thing is one step in History, so a single
+        <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>Z</kbd> takes the transcript and the link back together.
+      </p>
+
+      <h2>Speakers</h2>
+      <p>
+        Misket does not label speakers here, and will not pretend to. Whisper transcribes; it does
+        not do diarisation — working out who is talking — and guessing from pauses would put a guess
+        into your data where a coder would read it as a fact. What you can do is edit the exported
+        transcript into <code>Name:</code> turns in a text editor and re-import it, which the
+        speaker-aware transcript features then pick up properly.
+      </p>
+
+      <h2>Formats, and when you need ffmpeg</h2>
+      <p>
+        <strong>Audio needs nothing installed.</strong> Misket decodes mp3, wav, m4a, aac, ogg and
+        flac itself, and reads the audio track out of most mp4, m4v, mov, mkv and webm video on its
+        own too.
+      </p>
+      <p>
+        For a video container it cannot open — an unusual codec, an exotic wrapper — it falls back
+        to <code>ffmpeg</code> if there is one on your <code>PATH</code>. So
+        <strong>video transcription may need ffmpeg installed</strong>; audio never does. Settings
+        says so when it cannot find one, and the Transcribe dialog warns before you start.
+      </p>
+
+      <h2>How long it takes</h2>
+      <p>
+        Roughly: Tiny runs many times faster than real time on any recent laptop, Small is around
+        real time or better, and Medium and Large v3 Turbo are slower than real time on a machine
+        with no GPU acceleration. A one-hour interview with Small is a coffee break, not an
+        overnight job. The estimate in the progress dialog is measured from how far along it
+        actually is, not guessed from the file size.
+      </p>
+
+      <h2>For people building Misket</h2>
+      <p>
+        Transcription is an optional Cargo feature (<code>whisper</code>), on by default. It builds
+        whisper.cpp from source, so a release build needs CMake and a C++ toolchain. A build made
+        with <code>--no-default-features</code> compiles without either and says, in place of the
+        dialog, that this build has no transcription support.
+      </p>
+    </main>
+
+    <footer class="site-footer">
+      <div class="wrap">
+        <span>Misket is free software, MIT-licensed.</span>
+        <span
+          ><a href="https://github.com/izgebayyurt/misket">Source on GitHub</a> ·
+          <a href="https://github.com/izgebayyurt/misket/blob/main/ROADMAP.md">Roadmap</a></span
+        >
+      </div>
+    </footer>
+  </body>
+</html>

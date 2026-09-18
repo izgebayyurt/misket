@@ -1,6 +1,7 @@
 import { invoke } from "./client";
 import type {
   ApplyCodesInput,
+  AssistedRef,
   ApplyResult,
   InVivoResult,
   AutoCodeHit,
@@ -17,7 +18,13 @@ import type {
   SplitResult,
 } from "./types";
 
-export const applyCodes = (input: ApplyCodesInput) => invoke<ApplyResult>("apply_codes", { input });
+/**
+ * Apply codes to a passage. `assisted` is set only when the person clicked a
+ * suggestion a model had drafted: it changes nothing about the coding, and
+ * only adds a note to the history entry saying they had help.
+ */
+export const applyCodes = (input: ApplyCodesInput, assisted?: AssistedRef) =>
+  invoke<ApplyResult>("apply_codes", { input, assisted: assisted ?? null });
 
 /**
  * Create a code named after the selected text and apply it to that

@@ -20,6 +20,8 @@
           <a href="install.html">Install</a>
           <a href="tutorial.html">Tutorial</a>
           <a href="shortcuts.html">Shortcuts</a>
+          <a href="transcription.html">Transcription</a>
+          <a href="assistance.html">Assistance</a>
           <a href="data.html" aria-current="page">Data &amp; privacy</a>
           <a href="https://github.com/izgebayyurt/misket">GitHub</a>
         </nav>
@@ -227,13 +229,17 @@
         explicitly. While the app is running it does open one listener on <code>127.0.0.1</code>, on
         a port the system picks, because a webview will not play a recording from anywhere else; it
         is reachable only from your own machine, answers only requests carrying a random token made
-        fresh each time the app starts, and stops when you quit. Any AI-assisted features on the or
-        coding anywhere as part of normal use — the one exception is the opt-in, off-by-default
-        diagnostics below, which even then never carries your documents or coding. The only other
-        network activity related to the app itself is you downloading a release or, in future, an
-        update check you would be asked about explicitly. Any AI-assisted features on the
-        <a href="https://github.com/izgebayyurt/misket/blob/main/ROADMAP.md">roadmap</a> are planned
-        to be opt-in and to use a key or model you supply yourself — never on by default.
+        fresh each time the app starts, and stops when you quit.
+      </p>
+      <p>
+        Two things can send something, and both are off until you turn them on: the
+        <a href="#privacy-and-diagnostics">diagnostics</a> below, which even then never carry your
+        documents or coding, and <a href="assistance.html">Assistance</a>. Assistance has no default
+        provider and no bundled key: you supply a provider and a key, or point it at a model running
+        on your own machine, and only then does anything go anywhere. It sends one passage or one
+        code's excerpts at a time — never a document, never the project — it never applies anything
+        by itself, and Settings keeps a list of every request it made, with sizes but not content,
+        so you can check what actually happened.
       </p>
 
       <h2 id="privacy-and-diagnostics">Privacy and diagnostics</h2>

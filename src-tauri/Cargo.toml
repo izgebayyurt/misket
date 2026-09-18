@@ -30,6 +30,23 @@ tauri-plugin-opener = "2"
 base64 = "0.22"
 serde.workspace = true
 serde_json.workspace = true
+# Assistance (opt-in): talks to whichever provider the user configured, over
+# rustls so there is no OpenSSL to find at build time.
+reqwest = { version = "0.13", default-features = false, features = [
+  "json",
+  "rustls",
+  "http2",
+  "charset",
+  "system-proxy",
+] }
+# The API key lives in the OS credential store, never in settings.json.
+keyring = { version = "3", features = [
+  "apple-native",
+  "windows-native",
+  "async-secret-service",
+  "tokio",
+  "crypto-rust",
+] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 tracing-appender = "0.2"
