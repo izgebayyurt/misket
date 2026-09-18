@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Loader2, Sparkles } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/input";
@@ -23,6 +24,7 @@ import { useAssistDraft, useAssistEnabled } from "./useAssist";
  * exported, pasted into a paper, read years later.
  */
 export function SummariseCodeButton({ codeId }: { codeId: string }) {
+  const { t } = useTranslation();
   const enabled = useAssistEnabled("summariseCode");
   const [open, setOpen] = useState(false);
   if (!enabled) return null;
@@ -33,9 +35,9 @@ export function SummariseCodeButton({ codeId }: { codeId: string }) {
         variant="ghost"
         onClick={() => setOpen(true)}
         data-testid="summarise-code"
-        title="Draft a memo from this code's excerpts"
+        title={t("assist.summarise.buttonHint")}
       >
-        <Sparkles className="size-3.5" /> Summarise…
+        <Sparkles className="size-3.5" /> {t("assist.summarise.button")}
       </Button>
       {open ? <SummariseCodeDialog codeId={codeId} onClose={() => setOpen(false)} /> : null}
     </>
@@ -43,6 +45,7 @@ export function SummariseCodeButton({ codeId }: { codeId: string }) {
 }
 
 function SummariseCodeDialog({ codeId, onClose }: { codeId: string; onClose: () => void }) {
+  const { t } = useTranslation();
   const { data: codes } = useCodes();
   const code = codes?.find((c) => c.id === codeId);
   const { data: page } = useExcerptQuery({
@@ -80,7 +83,7 @@ function SummariseCodeDialog({ codeId, onClose }: { codeId: string; onClose: () 
     try {
       await createMemo.mutateAsync({
         target: { codeId },
-        title: `${code?.name ?? "Code"} — summary`,
+        title: t("assist.summarise.memoTitle", { name: code?.name ?? t("rightPanel.scope.code") }),
         body:
           body +
           (draft.assisted ? assistedMemoFooter(draft.assisted.provider, draft.assisted.model) : ""),
@@ -96,11 +99,11 @@ function SummariseCodeDialog({ codeId, onClose }: { codeId: string; onClose: () 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent
-        title={`Summarise ${code?.name ?? "code"}`}
+        title={t("assist.summarise.title", { name: code?.name ?? t("assist.summarise.aCode") })}
         description={
           empty
-            ? "This code has no excerpts yet."
-            : `A draft from ${page?.rows.length ?? 0} excerpt${page?.rows.length === 1 ? "" : "s"}. Edit it before saving; nothing is saved until you press Save.`
+            ? t("assist.summarise.noExcerpts")
+            : t("assist.summarise.description", { count: page?.rows.length ?? 0 })
         }
         className="max-w-2xl"
       >
@@ -113,27 +116,24 @@ function SummariseCodeDialog({ codeId, onClose }: { codeId: string; onClose: () 
           rows={16}
           value={draft.text}
           onChange={(e) => draft.setText(e.target.value)}
-          placeholder={draft.busy ? "" : "Nothing drafted yet."}
+          placeholder={draft.busy ? "" : t("assist.summarise.nothingDrafted")}
           className="font-mono text-[13px]"
           data-testid="summarise-body"
         />
-        <p className="mt-1 text-[11px] text-fg-muted">
-          Quotations are cited by excerpt id. Check them against the excerpts before you rely on
-          them.
-        </p>
+        <p className="mt-1 text-[11px] text-fg-muted">{t("assist.summarise.citationHint")}</p>
         <DialogFooter>
           {draft.busy ? (
             <span className="mr-auto flex items-center gap-1.5 text-xs text-fg-muted">
-              <Loader2 className="size-3.5 animate-spin" /> Drafting…
+              <Loader2 className="size-3.5 animate-spin" /> {t("assist.drafting")}
             </span>
           ) : null}
           {draft.busy ? (
             <Button type="button" variant="outline" onClick={draft.cancel}>
-              Stop
+              {t("assist.stop")}
             </Button>
           ) : null}
           <Button type="button" variant="ghost" onClick={onClose}>
-            Discard
+            {t("assist.discard")}
           </Button>
           <Button
             type="button"
@@ -141,7 +141,7 @@ function SummariseCodeDialog({ codeId, onClose }: { codeId: string; onClose: () 
             disabled={draft.busy || !draft.text.trim()}
             data-testid="summarise-save"
           >
-            Save as memo
+            {t("assist.summarise.saveAsMemo")}
           </Button>
         </DialogFooter>
       </DialogContent>

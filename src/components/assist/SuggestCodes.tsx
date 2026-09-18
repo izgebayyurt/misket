@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Loader2, Sparkles, X } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { useCodes, useCodeTree } from "@/queries/codes";
 import { pathOf } from "@/core/codeTree";
 import { ColorDot } from "@/components/codebook/ColorSwatch";
@@ -40,6 +41,7 @@ export function SuggestCodes({
   onNewCode,
   onClose,
 }: Props) {
+  const { t } = useTranslation();
   const { data: codes } = useCodes();
   const tree = useCodeTree();
   const draft = useAssistDraft("suggestCodes");
@@ -86,17 +88,17 @@ export function SuggestCodes({
       <div className="mb-1.5 flex items-center gap-1.5">
         <Sparkles className="size-3.5 text-accent" />
         <span className="flex-1 text-[11px] font-semibold uppercase tracking-wide text-fg-muted">
-          Suggestions
+          {t("assist.suggest.title")}
         </span>
         {draft.busy ? (
           <Button size="sm" variant="ghost" onClick={draft.cancel}>
-            Stop
+            {t("assist.stop")}
           </Button>
         ) : null}
         <button
           type="button"
           className="rounded p-0.5 text-fg-muted hover:bg-muted"
-          aria-label="Close suggestions"
+          aria-label={t("assist.suggest.close")}
           onClick={onClose}
         >
           <X className="size-3.5" />
@@ -105,7 +107,7 @@ export function SuggestCodes({
 
       {draft.busy ? (
         <p className="flex items-center gap-1.5 text-xs text-fg-muted">
-          <Loader2 className="size-3.5 animate-spin" /> Asking…
+          <Loader2 className="size-3.5 animate-spin" /> {t("assist.suggest.asking")}
         </p>
       ) : null}
       {draft.error ? (
@@ -114,7 +116,7 @@ export function SuggestCodes({
         </p>
       ) : null}
       {!draft.busy && !draft.error && suggestions?.length === 0 ? (
-        <p className="text-xs text-fg-muted">Nothing suggested for this passage.</p>
+        <p className="text-xs text-fg-muted">{t("assist.suggest.nothing")}</p>
       ) : null}
 
       <ul className="flex flex-wrap gap-1">
@@ -123,7 +125,10 @@ export function SuggestCodes({
             <button
               type="button"
               data-testid="suggestion-chip"
-              title={`${s.rationale || "No reason given."}\nConfidence ${Math.round(s.confidence * 100)}%`}
+              title={t("assist.suggest.chipTitle", {
+                rationale: s.rationale || t("assist.suggest.noReason"),
+                confidence: Math.round(s.confidence * 100),
+              })}
               className="flex items-center gap-1 rounded-full border border-border bg-bg px-2 py-0.5 text-xs hover:border-accent hover:bg-muted"
               onClick={() => {
                 if (!draft.assisted) return;
@@ -146,10 +151,7 @@ export function SuggestCodes({
       </ul>
 
       {suggestions && suggestions.length > 0 ? (
-        <p className="mt-1.5 text-[11px] text-fg-muted">
-          Hover for the reason. Clicking applies the code as your own coding; nothing is applied
-          until you click.
-        </p>
+        <p className="mt-1.5 text-[11px] text-fg-muted">{t("assist.suggest.hint")}</p>
       ) : null}
     </div>
   );
