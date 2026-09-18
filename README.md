@@ -280,6 +280,11 @@ Builds for macOS, Windows and Linux are published on the
 [releases page](https://github.com/izgebayyurt/misket/releases). They are not
 code-signed yet: macOS will ask you to allow the app under System Settings >
 Privacy & Security, and Windows SmartScreen will show a warning the first time.
+Misket checks for updates on launch and offers to install them in place
+(Settings has a "Check for updates automatically" toggle, on by default, and
+a manual "Check for updates…"). See
+[docs/RELEASING.md](docs/RELEASING.md) for how releases are built, signed
+and published.
 
 ## Your data
 

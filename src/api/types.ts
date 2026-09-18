@@ -79,6 +79,13 @@ export interface AppSettings {
    * bundled `eng`. Each one needs a matching `<code>.traineddata` file
    * dropped into the app's tessdata folder (Settings shows the path). */
   ocrLanguages: string[];
+  /** Check the updater endpoint once per launch. A no-op regardless of this
+   * setting while the updater has no real public key configured yet (see
+   * docs/RELEASING.md). */
+  checkForUpdatesAutomatically: boolean;
+  /** A version chosen with "Skip this version" on the update banner: that
+   * exact version stays quiet, but a later one still shows. */
+  skippedUpdateVersion?: string | null;
 }
 
 export type DocumentKind = "text" | "image" | "video";

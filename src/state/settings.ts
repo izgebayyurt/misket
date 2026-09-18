@@ -18,6 +18,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   coderColor: null,
   lanesByCoder: false,
   ocrLanguages: [],
+  checkForUpdatesAutomatically: true,
+  skippedUpdateVersion: null,
 };
 
 const SAVE_DEBOUNCE_MS = 400;

@@ -21,3 +21,4 @@ pub mod search;
 pub mod sets;
 pub mod settings;
 pub mod transcripts;
+pub mod updater;

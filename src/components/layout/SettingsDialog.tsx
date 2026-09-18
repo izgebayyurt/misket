@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ColorPicker } from "@/components/codebook/ColorSwatch";
 import { useSettings } from "@/state/settings";
+import { useUpdates } from "@/state/updates";
 import { useTessdataLanguages } from "@/queries/ocr";
 import type { Theme } from "@/api/types";
 
@@ -196,9 +197,58 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
               </p>
             </div>
           </section>
+
+          <UpdatesSection />
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function UpdatesSection() {
+  const settings = useSettings((s) => s.settings);
+  const update = useSettings((s) => s.update);
+  const status = useUpdates((s) => s.status);
+  const checkNow = useUpdates((s) => s.checkNow);
+
+  return (
+    <section>
+      <h3 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-fg-muted">
+        Updates
+      </h3>
+      <label className="flex items-center gap-2 text-sm">
+        <input
+          type="checkbox"
+          checked={settings.checkForUpdatesAutomatically}
+          onChange={(e) => update({ checkForUpdatesAutomatically: e.target.checked })}
+          data-testid="settings-auto-update"
+        />
+        Check for updates automatically
+      </label>
+      <div className="mt-2 flex items-center gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => void checkNow({ announce: true })}
+          disabled={status === "checking" || status === "downloading"}
+          data-testid="check-for-updates"
+        >
+          {status === "checking" ? "Checking…" : "Check for updates…"}
+        </Button>
+        {settings.skippedUpdateVersion ? (
+          <span className="text-xs text-fg-muted">
+            Skipping {settings.skippedUpdateVersion}.{" "}
+            <button
+              className="underline hover:text-fg"
+              onClick={() => update({ skippedUpdateVersion: null })}
+            >
+              Stop skipping
+            </button>
+          </span>
+        ) : null}
+      </div>
+    </section>
   );
 }
 

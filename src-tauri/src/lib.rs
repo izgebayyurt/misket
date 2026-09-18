@@ -77,6 +77,8 @@ fn media_response<R: tauri::Runtime>(
 pub fn run() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .manage(AppState::default())
         .register_asynchronous_uri_scheme_protocol(MEDIA_PROTOCOL, |ctx, request, responder| {
             // Reading the blob locks the project, so answer off the UI thread.
@@ -221,6 +223,8 @@ pub fn run() {
             commands::e2e::get_e2e_config,
             commands::settings::get_settings,
             commands::settings::set_settings,
+            commands::updater::get_updater_status,
+            commands::updater::e2e_check_update,
             commands::backup::save_project_copy,
             commands::backup::list_backups,
             commands::backup::restore_backup,

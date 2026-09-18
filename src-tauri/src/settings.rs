@@ -80,6 +80,16 @@ pub struct AppSettings {
     /// active, not what is available.
     #[serde(default)]
     pub ocr_languages: Vec<String>,
+    /// Check the updater endpoint once per launch (see `commands::updater`).
+    /// A no-op, regardless of this setting, while `tauri.conf.json`'s
+    /// updater pubkey is still the placeholder (`docs/RELEASING.md`).
+    #[serde(default = "default_true")]
+    pub check_for_updates_automatically: bool,
+    /// A version the person chose to skip ("Skip this version" on the update
+    /// banner): the banner stays quiet about this exact version, but a later
+    /// one still shows.
+    #[serde(default)]
+    pub skipped_update_version: Option<String>,
 }
 
 impl Default for AppSettings {
@@ -97,6 +107,8 @@ impl Default for AppSettings {
             coder_color: None,
             lanes_by_coder: false,
             ocr_languages: Vec::new(),
+            check_for_updates_automatically: default_true(),
+            skipped_update_version: None,
         }
     }
 }
@@ -229,6 +241,8 @@ mod tests {
             coder_color: Some("#5CB85C".into()),
             lanes_by_coder: true,
             ocr_languages: vec!["tur".into()],
+            check_for_updates_automatically: false,
+            skipped_update_version: Some("0.2.0".into()),
         };
         write(&path, &settings).unwrap();
         assert_eq!(read(&path).unwrap(), settings);
@@ -258,6 +272,8 @@ mod tests {
         assert_eq!(settings.coder_id, None);
         assert!(!settings.lanes_by_coder);
         assert!(settings.ocr_languages.is_empty());
+        assert!(settings.check_for_updates_automatically);
+        assert_eq!(settings.skipped_update_version, None);
     }
 
     #[test]
