@@ -6,7 +6,7 @@ import {
   currentBranchName,
   dayDigest,
   dayKey,
-  dayLabel,
+  dayLabelInfo,
   defaultExpandedDays,
   edgePath,
   forkPointOf,
@@ -209,22 +209,20 @@ describe("dayKey", () => {
   });
 });
 
-describe("dayLabel", () => {
+describe("dayLabelInfo", () => {
   const now = new Date(2026, 8, 17, 15).getTime();
 
   it("names today and yesterday", () => {
-    expect(dayLabel("2026-09-17", now)).toBe("Today");
-    expect(dayLabel("2026-09-16", now)).toBe("Yesterday");
+    expect(dayLabelInfo("2026-09-17", now)).toEqual({ kind: "today" });
+    expect(dayLabelInfo("2026-09-16", now)).toEqual({ kind: "yesterday" });
   });
 
-  it("spells out anything older", () => {
-    const label = dayLabel("2026-09-14", now);
-    expect(label).not.toBe("Today");
-    expect(label).toContain("2026");
+  it("hands back the day itself for anything older, to format at the edge", () => {
+    expect(dayLabelInfo("2026-09-14", now)).toEqual({ kind: "date", day: "2026-09-14" });
   });
 
   it("says so when the timestamp made no sense", () => {
-    expect(dayLabel("", now)).toBe("Undated");
+    expect(dayLabelInfo("", now)).toEqual({ kind: "undated" });
   });
 });
 
@@ -239,11 +237,14 @@ describe("dayDigest", () => {
       node({ id: 40, kind: "code.merged_into" }),
     ];
     // "created an excerpt" and "added a code to one" are both codings.
-    expect(dayDigest(nodes)).toBe("12 codings, 3 codes created, 1 merge");
-  });
-
-  it("uses the singular for one of something", () => {
-    expect(dayDigest([node({ id: 1, kind: "memo.created" })])).toBe("1 memo");
+    expect(dayDigest(nodes)).toEqual({
+      items: [
+        { phraseKey: "coding", count: 12 },
+        { phraseKey: "codeCreated", count: 3 },
+        { phraseKey: "merge", count: 1 },
+      ],
+      moreCount: 0,
+    });
   });
 
   it("keeps the line short, rolling the rest into a count", () => {
@@ -255,16 +256,19 @@ describe("dayDigest", () => {
       node({ id: 5, kind: "set.created" }),
     ];
     const digest = dayDigest(nodes);
-    expect(digest.split(", ")).toHaveLength(4);
-    expect(digest.endsWith("+ 2 more")).toBe(true);
+    expect(digest.items).toHaveLength(3);
+    expect(digest.moreCount).toBe(2);
   });
 
   it("falls back to the kind's own group for something it has never seen", () => {
-    expect(dayDigest([node({ id: 1, kind: "gizmo.spun" })])).toBe("1 gizmo change");
+    expect(dayDigest([node({ id: 1, kind: "gizmo.spun" })])).toEqual({
+      items: [{ phraseKey: "groupChange", count: 1, group: "gizmo" }],
+      moreCount: 0,
+    });
   });
 
   it("has nothing to say about no steps", () => {
-    expect(dayDigest([])).toBe("");
+    expect(dayDigest([])).toEqual({ items: [], moreCount: 0 });
   });
 });
 
@@ -280,8 +284,8 @@ describe("groupByDay", () => {
     const { rows } = layoutHistory(nodes);
     const groups = groupByDay(rows, now);
     expect(groups.map((g) => [g.label, g.rows.length])).toEqual([
-      ["Yesterday", 2],
-      ["Tue 15 Sep 2026", 1],
+      [{ kind: "yesterday" }, 2],
+      [{ kind: "date", day: "2026-09-15" }, 1],
     ]);
   });
 });
@@ -328,7 +332,7 @@ describe("collapseDays", () => {
     expect(header?.kind).toBe("day");
     if (header?.kind !== "day") return;
     expect(header.count).toBe(2);
-    expect(header.digest).toBe("2 codes created");
+    expect(header.digest).toEqual({ items: [{ phraseKey: "codeCreated", count: 2 }], moreCount: 0 });
     expect(header.hasHead).toBe(false);
   });
 

@@ -22,6 +22,11 @@ void i18next.use(initReactI18next).init({
     en: { common: en },
     tr: { common: tr },
   },
+  // `{{count, number}}` (and `{{n, number}}`, …) formats through
+  // `Intl.NumberFormat` in the active locale via i18next's built-in
+  // formatter — thousands separators in analysis tables and counts like
+  // `activity.recordedCount` follow the locale automatically instead of
+  // hardcoding "," or ".".
   interpolation: { escapeValue: false },
   returnNull: false,
 });

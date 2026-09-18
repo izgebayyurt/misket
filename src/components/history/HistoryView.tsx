@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   ChevronDown,
   ChevronRight,
@@ -26,12 +27,21 @@ import {
   dayKey,
   defaultExpandedDays,
   edgePath,
+  formatDayDate,
   headIsOnOrBelow,
   layoutHistory,
   undivergedBranches,
 } from "@/core/historyGraph";
-import type { BranchInfo, DayHeaderRow, DisplayRow, StepRow } from "@/core/historyGraph";
+import type {
+  BranchInfo,
+  DayDigest,
+  DayHeaderRow,
+  DayLabel,
+  DisplayRow,
+  StepRow,
+} from "@/core/historyGraph";
 import { absoluteTime, kindGroup, kindLabel, relativeTime } from "@/core/activity";
+import { currentLocale } from "@/lib/i18n";
 import {
   effectiveExpanded,
   readDayState,
@@ -93,6 +103,7 @@ function trackRow(map: Map<string, HTMLElement>, key: string, el: HTMLElement | 
  *   graph, with every lane running through it.
  */
 export function HistoryView() {
+  const { t } = useTranslation();
   const { data: nodes, isLoading } = useHistoryTree();
   const { data: project } = useProjectInfo();
   const projectId = project?.projectId ?? "";
@@ -240,9 +251,7 @@ export function HistoryView() {
 
   function openCompact(node: HistoryNodeSummary) {
     if (!nodes || !headIsOnOrBelow(nodes, node.id)) {
-      toast.error(
-        "Go to that step (or a step below it) first: compacting from here would drop where the project is.",
-      );
+      toast.error(t("history.unsafeCompact"));
       return;
     }
     setCompactTarget(node);
@@ -292,15 +301,15 @@ export function HistoryView() {
     <div className="flex h-full flex-col" data-testid="history-view">
       <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-2">
         <HistoryIcon className="size-4 shrink-0 text-fg-muted" aria-hidden />
-        <h1 className="mr-2 text-sm font-medium">History</h1>
+        <h1 className="mr-2 text-sm font-medium">{t("history.title")}</h1>
         <select
           value={kindFilter}
           onChange={(e) => setKindFilter(e.target.value)}
           className="h-7 rounded-md border border-border bg-panel px-1.5 text-xs text-fg"
-          aria-label="Filter by kind"
+          aria-label={t("history.filterByKind")}
           data-testid="history-kind-filter"
         >
-          <option value="">All kinds</option>
+          <option value="">{t("history.allKinds")}</option>
           {kindGroups.map((g) => (
             <option key={g} value={g}>
               {kindLabel(g)}
@@ -310,8 +319,8 @@ export function HistoryView() {
         <Input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search summaries…"
-          aria-label="Search history"
+          placeholder={t("history.searchPlaceholder")}
+          aria-label={t("history.searchLabel")}
           className="h-7 max-w-52 text-xs"
           data-testid="history-search"
         />
@@ -322,7 +331,7 @@ export function HistoryView() {
           disabled={!headRow}
           data-testid="history-jump-to-current"
         >
-          <Crosshair /> Jump to current
+          <Crosshair /> {t("history.jumpToCurrent")}
         </Button>
         <Button
           size="sm"
@@ -330,7 +339,7 @@ export function HistoryView() {
           onClick={() => setAllDays(true)}
           data-testid="history-expand-all"
         >
-          Expand all
+          {t("history.expandAll")}
         </Button>
         <Button
           size="sm"
@@ -338,14 +347,14 @@ export function HistoryView() {
           onClick={() => setAllDays(false)}
           data-testid="history-collapse-all"
         >
-          Collapse all
+          {t("history.collapseAll")}
         </Button>
         <div className="ml-auto flex items-center gap-1">
           <Button size="sm" variant="ghost" disabled={busy} onClick={() => void undo()}>
-            <Undo2 /> Undo
+            <Undo2 /> {t("history.undo")}
           </Button>
           <Button size="sm" variant="ghost" disabled={busy} onClick={() => void redo()}>
-            <Redo2 /> Redo
+            <Redo2 /> {t("history.redo")}
           </Button>
         </div>
       </div>
@@ -359,10 +368,10 @@ export function HistoryView() {
       ) : null}
 
       {isLoading ? (
-        <p className="p-4 text-sm text-fg-muted">Loading…</p>
+        <p className="p-4 text-sm text-fg-muted">{t("common.loading")}</p>
       ) : rows.length === 0 ? (
         <p className="p-4 text-sm text-fg-muted" data-testid="history-empty">
-          Nothing recorded yet. Coding, editing the codebook and writing memos all show up here.
+          {t("history.empty")}
         </p>
       ) : (
         <div className="flex min-h-0 flex-1">
@@ -371,7 +380,7 @@ export function HistoryView() {
             className="min-w-0 flex-1 overflow-auto outline-none"
             tabIndex={0}
             onKeyDown={onKeyDown}
-            aria-label="History steps"
+            aria-label={t("history.stepsLabel")}
             data-testid="history-scroller"
           >
             <div className="flex">
@@ -435,7 +444,7 @@ export function HistoryView() {
                     const y2 = y1 - ROW_HEIGHT * 0.34;
                     return (
                       <g key={`stub-${r.node.id}`} data-testid="history-branch-stub">
-                        <title>{`Branch "${name}" starts here and has not diverged yet`}</title>
+                        <title>{t("history.branchStartsHereUndiverged", { name })}</title>
                         <path
                           d={`M${x1},${y1} C${x1},${y2} ${x2},${y1} ${x2},${y2}`}
                           fill="none"
@@ -503,10 +512,10 @@ export function HistoryView() {
 
       {forkTarget ? (
         <NamePromptDialog
-          title="Fork here…"
-          description={`Name the branch that grows from "${forkTarget.summary}".`}
-          placeholder="Branch name"
-          submitLabel="Fork"
+          title={t("history.forkTitle")}
+          description={t("history.forkDescription", { summary: forkTarget.summary })}
+          placeholder={t("history.branchNamePlaceholder")}
+          submitLabel={t("history.fork")}
           onSubmit={submitFork}
           onClose={() => setForkTarget(null)}
         />
@@ -514,11 +523,11 @@ export function HistoryView() {
 
       {renameTarget ? (
         <NamePromptDialog
-          title="Rename branch…"
-          description="Clear the name to remove it."
-          placeholder="Branch name"
+          title={t("history.renameTitle")}
+          description={t("history.renameDescription")}
+          placeholder={t("history.branchNamePlaceholder")}
           initialValue={renameTarget.branchName ?? ""}
-          submitLabel="Save"
+          submitLabel={t("history.save")}
           allowEmpty
           onSubmit={submitRename}
           onClose={() => setRenameTarget(null)}
@@ -551,12 +560,15 @@ function BranchStrip({
   onCheckoutTip: (tipId: number) => void;
   onForkPoint: (forkPointId: number) => void;
 }) {
+  const { t } = useTranslation();
   return (
     <div
       className="flex flex-wrap items-center gap-1.5 border-b border-border bg-panel px-4 py-1.5"
       data-testid="history-branches"
     >
-      <span className="mr-1 text-[11px] uppercase tracking-wide text-fg-muted">Branches</span>
+      <span className="mr-1 text-[11px] uppercase tracking-wide text-fg-muted">
+        {t("history.branches")}
+      </span>
       {branches.map((b) => (
         <span
           key={`${b.name}-${b.forkPointId}`}
@@ -571,18 +583,20 @@ function BranchStrip({
             type="button"
             className="flex max-w-56 items-center gap-1 rounded-l-full py-0.5 pl-2 pr-1 hover:bg-muted"
             onClick={() => onCheckoutTip(b.tipId)}
-            title={`Go to the tip of "${b.name}": ${b.tipSummary}`}
+            title={t("history.goToTip", { name: b.name, summary: b.tipSummary })}
           >
             <GitFork className="size-3 shrink-0" aria-hidden />
             <span className="truncate">{b.name}</span>
-            {b.diverged ? null : <span className="shrink-0 text-[10px] text-fg-muted">(new)</span>}
+            {b.diverged ? null : (
+              <span className="shrink-0 text-[10px] text-fg-muted">{t("history.branchNew")}</span>
+            )}
           </button>
           <button
             type="button"
             className="rounded-r-full py-0.5 pl-1 pr-2 text-fg-muted hover:bg-muted hover:text-fg"
             onClick={() => onForkPoint(b.forkPointId)}
-            title={`Show where "${b.name}" forked`}
-            aria-label={`Show where "${b.name}" forked`}
+            title={t("history.showForkPoint", { name: b.name })}
+            aria-label={t("history.showForkPoint", { name: b.name })}
             data-testid="history-branch-fork-point"
           >
             <Crosshair className="size-3" />
@@ -591,6 +605,80 @@ function BranchStrip({
       ))}
     </div>
   );
+}
+
+type TFn = (key: string, opts?: Record<string, unknown>) => string;
+
+/** `{ kind: "today" }` etc. as text, in the active locale. */
+function formatDayLabel(label: DayLabel, t: TFn, locale: string): string {
+  switch (label.kind) {
+    case "today":
+      return t("history.day.today");
+    case "yesterday":
+      return t("history.day.yesterday");
+    case "undated":
+      return t("history.day.undated");
+    case "date":
+      return formatDayDate(label.day, locale);
+  }
+}
+
+/**
+ * Every `history.digest.*` key `formatDigest` can look up, written out
+ * literally and never called: `formatDigest` builds the key at runtime
+ * (`` `history.digest.${item.phraseKey}` ``, from `DIGEST_PHRASE_KEYS` in
+ * `core/historyGraph.ts`), which `scripts/i18n-extract.mjs` cannot follow —
+ * it only finds string literals. This keeps every phrase key checked as
+ * "used" instead of the whole `history.digest.*` block reading as dead. Keep
+ * it in sync with `DIGEST_PHRASE_KEYS`'s values (plus the `"groupChange"`
+ * fallback); a mismatch fails `pnpm i18n:check` on whichever side is stale.
+ */
+function _digestKeysForExtraction(t: TFn) {
+  t("history.digest.coding");
+  t("history.digest.bulkCoding");
+  t("history.digest.autoCoding");
+  t("history.digest.recoding");
+  t("history.digest.codeRemoved");
+  t("history.digest.excerptDeleted");
+  t("history.digest.excerptEdit");
+  t("history.digest.codeCreated");
+  t("history.digest.codeEdit");
+  t("history.digest.codeDeleted");
+  t("history.digest.merge");
+  t("history.digest.codebookImport");
+  t("history.digest.documentImported");
+  t("history.digest.documentDeleted");
+  t("history.digest.documentRenamed");
+  t("history.digest.documentReordered");
+  t("history.digest.memo");
+  t("history.digest.memoDeleted");
+  t("history.digest.descriptorSet");
+  t("history.digest.descriptorField");
+  t("history.digest.setChange");
+  t("history.digest.savedFilter");
+  t("history.digest.frameworkEdit");
+  t("history.digest.frameworkCell");
+  t("history.digest.transcriptSetting");
+  t("history.digest.stopWordEdit");
+  t("history.digest.projectRenamed");
+  t("history.digest.pull");
+  t("history.digest.groupChange");
+}
+void _digestKeysForExtraction;
+
+/**
+ * A day's digest as one line — `12 codings, 3 codes created, 1 merge` — by
+ * running each structured {@link DayDigest} item through `t()` (picking the
+ * right plural form) and joining with `Intl.ListFormat`, so the punctuation
+ * between items follows the locale too.
+ */
+function formatDigest(digest: DayDigest, t: TFn, locale: string): string {
+  const parts = digest.items.map((item) =>
+    t(`history.digest.${item.phraseKey}`, { count: item.count, group: item.group }),
+  );
+  if (digest.moreCount > 0) parts.push(t("history.digest.more", { count: digest.moreCount }));
+  if (parts.length === 0) return "";
+  return new Intl.ListFormat(locale, { type: "unit", style: "short" }).format(parts);
 }
 
 /** A day's header: a click folds or unfolds it, a double click unfolds it. */
@@ -609,6 +697,8 @@ function DayRow({
   onToggle: () => void;
   onExpand: () => void;
 }) {
+  const { t } = useTranslation();
+  const locale = currentLocale();
   return (
     <li
       ref={rowRef}
@@ -633,16 +723,16 @@ function DayRow({
         // double clicking a group is expected to do.
         onDoubleClick={onExpand}
         aria-expanded={header.expanded}
-        title={header.expanded ? "Fold this day" : "Unfold this day"}
+        title={header.expanded ? t("history.foldDay") : t("history.unfoldDay")}
       >
         {header.expanded ? (
           <ChevronDown className="size-4 shrink-0 text-fg-muted" />
         ) : (
           <ChevronRight className="size-4 shrink-0 text-fg-muted" />
         )}
-        <span className="shrink-0 font-medium">{header.label}</span>
+        <span className="shrink-0 font-medium">{formatDayLabel(header.label, t, locale)}</span>
         <span className="shrink-0 whitespace-nowrap text-xs text-fg-muted">
-          {header.count} step{header.count === 1 ? "" : "s"}
+          {t("history.stepCount", { count: header.count })}
         </span>
         {header.expanded ? (
           <span className="flex-1" />
@@ -651,14 +741,14 @@ function DayRow({
             className="min-w-0 flex-1 truncate text-xs text-fg-muted"
             data-testid="history-day-digest"
           >
-            {header.digest}
+            {formatDigest(header.digest, t, locale)}
           </span>
         )}
         {header.branchNames.map((name) => (
           <span
             key={name}
             className="shrink-0 rounded-full border border-accent px-1.5 py-0.5 text-[10px]"
-            title={`The branch "${name}" starts this day`}
+            title={t("history.branchStartsHere", { name })}
           >
             {name}
           </span>
@@ -666,12 +756,12 @@ function DayRow({
         {header.hasBranchPoint ? (
           <GitFork
             className="size-3.5 shrink-0 text-fg-muted"
-            aria-label="The history forks inside this day"
+            aria-label={t("history.forksInsideDay")}
           />
         ) : null}
         {header.hasHead ? (
           <span className="shrink-0 rounded-full bg-accent px-1.5 py-0.5 text-[10px] font-medium text-accent-fg">
-            You are here
+            {t("history.youAreHere")}
           </span>
         ) : null}
       </button>
@@ -708,6 +798,8 @@ function HistoryRow({
   onRename: () => void;
   onCompact: () => void;
 }) {
+  const { t } = useTranslation();
+  const locale = currentLocale();
   const { node } = laid;
   return (
     <ContextMenu>
@@ -732,17 +824,17 @@ function HistoryRow({
               (future || dimmed) && "opacity-50",
               node.undoable === false && "italic text-fg-muted",
             )}
-            title="Show what this step did"
+            title={t("history.showWhatStepDid")}
             data-testid="history-row-select"
           >
             <span className="min-w-0 flex-1 truncate">{node.summary}</span>
             {node.stepCount > 1 ? (
               <span
                 className="shrink-0 text-[10px] text-fg-muted"
-                title={`${node.stepCount} changes, undone and redone as one step`}
+                title={t("history.stepUndoneRedone", { count: node.stepCount })}
                 data-testid="history-step-count"
               >
-                {node.stepCount} changes
+                {t("history.stepCount", { count: node.stepCount })}
               </span>
             ) : null}
             {node.branchName ? (
@@ -751,11 +843,12 @@ function HistoryRow({
                   "flex shrink-0 items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px]",
                   undiverged ? "border-accent text-fg" : "border-border bg-panel text-fg-muted",
                 )}
-                title={
+                title={t(
                   undiverged
-                    ? `The branch "${node.branchName}" starts here and has not diverged yet`
-                    : `The branch "${node.branchName}" starts here`
-                }
+                    ? "history.branchStartsHereUndiverged"
+                    : "history.branchStartsHereShort",
+                  { name: node.branchName },
+                )}
                 data-testid="history-row-branch-chip"
               >
                 <GitFork className="size-2.5" aria-hidden /> {node.branchName}
@@ -764,16 +857,16 @@ function HistoryRow({
             <span className="shrink-0 text-xs text-fg-muted">{node.actor}</span>
             <span
               className="shrink-0 whitespace-nowrap text-xs tabular-nums text-fg-muted"
-              title={absoluteTime(node.at)}
+              title={absoluteTime(node.at, locale)}
             >
-              {relativeTime(node.at)}
+              {relativeTime(node.at, undefined, locale)}
             </span>
             {node.isHead ? (
               <span
                 className="shrink-0 whitespace-nowrap rounded-full bg-accent px-1.5 py-0.5 text-[10px] font-medium text-accent-fg"
                 data-testid="history-here-marker"
               >
-                You are here · {branchName}
+                {t("history.youAreHereOn", { branch: branchName })}
               </span>
             ) : null}
           </button>
@@ -781,7 +874,7 @@ function HistoryRow({
             <DropdownMenuTrigger asChild>
               <button
                 className="shrink-0 rounded p-0.5 text-fg-muted opacity-0 hover:bg-border group-hover:opacity-100 data-[state=open]:opacity-100"
-                aria-label="History step actions"
+                aria-label={t("history.stepActions")}
               >
                 <MoreHorizontal className="size-4" />
               </button>
@@ -828,24 +921,25 @@ function HistoryRowMenuItems({
   onCompact: () => void;
   menu: MenuPrimitives;
 }) {
+  const { t } = useTranslation();
   const { Item } = menu;
   return (
     <>
       {node.isHead ? null : (
         <Item onSelect={onCheckout} data-testid="history-goto">
-          <Crosshair /> Go to this point
+          <Crosshair /> {t("history.goToThisPoint")}
         </Item>
       )}
       <Item onSelect={onFork} data-testid="history-fork">
-        <GitFork /> Fork here…
+        <GitFork /> {t("history.forkHere")}
       </Item>
       {node.branchName ? (
         <Item onSelect={onRename} data-testid="history-rename-branch">
-          <Pencil /> Rename branch…
+          <Pencil /> {t("history.renameBranch")}
         </Item>
       ) : null}
       <Item onSelect={onCompact} data-testid="history-compact">
-        <Scissors /> Compact history before here…
+        <Scissors /> {t("history.compactBeforeHere")}
       </Item>
     </>
   );
@@ -871,6 +965,7 @@ function NamePromptDialog({
   onSubmit: (name: string) => void;
   onClose: () => void;
 }) {
+  const { t } = useTranslation();
   const [value, setValue] = useState(initialValue);
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
@@ -892,7 +987,7 @@ function NamePromptDialog({
           />
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={onClose}>
-              Cancel
+              {t("history.cancel")}
             </Button>
             <Button
               type="submit"
@@ -919,24 +1014,32 @@ function CompactConfirmDialog({
   onConfirm: () => void;
   onCancel: () => void;
 }) {
+  const { t } = useTranslation();
+  const locale = currentLocale();
   const { dropped, droppedBranches } = useMemo(
     () => compactPreview(nodes, target.id),
     [nodes, target.id],
   );
+  const branchNames = droppedBranches.map((b) => `"${b}"`);
   const description =
     dropped === 0
-      ? "Nothing leads up to this step, so there is nothing to drop."
-      : `This drops ${dropped.toLocaleString()} step${dropped === 1 ? "" : "s"} that ` +
-        `${dropped === 1 ? "does" : "do"} not lead to or from "${target.summary}"` +
-        (droppedBranches.length > 0
-          ? `, including the branch${droppedBranches.length === 1 ? "" : "es"} ${droppedBranches.map((b) => `"${b}"`).join(", ")}`
-          : "") +
-        ". This cannot be undone.";
+      ? t("history.compactNothingToDrop")
+      : t("history.compactDescription", {
+          count: dropped,
+          summary: target.summary,
+          branches:
+            branchNames.length > 0
+              ? t("history.compactIncludingBranch", {
+                  count: branchNames.length,
+                  names: new Intl.ListFormat(locale, { type: "conjunction" }).format(branchNames),
+                })
+              : "",
+        });
   return (
     <ConfirmDialog
-      title="Compact history before here?"
+      title={t("history.compactTitle")}
       description={description}
-      confirmLabel="Compact"
+      confirmLabel={t("history.compactConfirm")}
       onConfirm={onConfirm}
       onCancel={onCancel}
     />

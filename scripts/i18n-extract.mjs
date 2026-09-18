@@ -64,6 +64,23 @@ function loadJson(p) {
 
 const KEY_SHAPE = /^[a-zA-Z][a-zA-Z0-9]*(\.[a-zA-Z][a-zA-Z0-9]*)+$/;
 
+/** i18next's plural-form suffixes (CLDR categories); see i18next's pluralResolver. */
+const PLURAL_SUFFIXES = ["_zero", "_one", "_two", "_few", "_many", "_other"];
+
+/** Strip a trailing plural suffix, if `key` has one — `"a.b_one"` → `"a.b"`. */
+function pluralBase(key) {
+  const suffix = PLURAL_SUFFIXES.find((s) => key.endsWith(s));
+  return suffix ? key.slice(0, -suffix.length) : null;
+}
+
+/** Does `key` (a literal passed to `t(...)`) resolve against `knownKeys`? A
+ * count-pluralized call passes the *base* key, which only exists in the
+ * resource file suffixed (`_one`/`_other`/…), so check both. */
+function resolves(key, knownKeys) {
+  if (knownKeys.has(key)) return true;
+  return PLURAL_SUFFIXES.some((s) => knownKeys.has(key + s));
+}
+
 function extractUsedKeys(files, knownKeys) {
   const used = new Set();
   const tCallRe = /\bt\(\s*["'`]([^"'`]+)["'`]/g;
@@ -72,11 +89,15 @@ function extractUsedKeys(files, knownKeys) {
 
   for (const file of files) {
     const text = readFileSync(file, "utf-8");
-    for (const m of text.matchAll(tCallRe)) used.add(m[1]);
+    // Skip a template-literal key built with interpolation (`` `a.b.${x}` ``,
+    // matched by the plain t() regex up to the backtick): nothing to check
+    // it against, and its concrete values are already listed by hand
+    // wherever they are defined (e.g. the DIGEST_PHRASE_KEYS table).
+    for (const m of text.matchAll(tCallRe)) if (!m[1].includes("${")) used.add(m[1]);
     for (const m of text.matchAll(transRe)) used.add(m[1]);
     for (const m of text.matchAll(stringLiteralRe)) {
       const candidate = m[1];
-      if (KEY_SHAPE.test(candidate) && knownKeys.has(candidate)) used.add(candidate);
+      if (KEY_SHAPE.test(candidate) && resolves(candidate, knownKeys)) used.add(candidate);
     }
   }
   return used;
@@ -91,9 +112,11 @@ function main() {
   const files = walk(SRC);
   const used = extractUsedKeys(files, enKeys);
 
-  const missingInEn = [...used].filter((k) => !enKeys.has(k)).sort();
-  const missingInTr = [...used].filter((k) => !trKeys.has(k)).sort();
-  const unusedInEn = [...enKeys].filter((k) => !used.has(k)).sort();
+  const missingInEn = [...used].filter((k) => !resolves(k, enKeys)).sort();
+  const missingInTr = [...used].filter((k) => !resolves(k, trKeys)).sort();
+  const unusedInEn = [...enKeys]
+    .filter((k) => !used.has(k) && !used.has(pluralBase(k) ?? ""))
+    .sort();
   // Keys `tr` has but `en` doesn't are a drift of a different kind: report
   // them as missing-in-en too, since `en` is the source of truth for shape.
   const extraInTr = [...trKeys].filter((k) => !enKeys.has(k)).sort();

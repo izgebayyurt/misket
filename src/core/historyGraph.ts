@@ -233,115 +233,158 @@ export function dayKey(iso: string): string {
   return `${t.getFullYear()}-${month}-${day}`;
 }
 
-/** `Today`, `Yesterday`, then a plain `Mon 14 Sep 2026`. */
-export function dayLabel(day: string, now: number = Date.now()): string {
-  if (day === "") return "Undated";
+/**
+ * `Today`, `Yesterday`, "undated" and a plain calendar date all read
+ * differently in every language, so this hands back *which one* rather than
+ * English text — no `react-i18next` import here (`src/core` stays
+ * framework-free; see CLAUDE.md). A component resolves `"today"` /
+ * `"yesterday"` / `"undated"` with `t()` and a plain date with
+ * {@link formatDayDate}.
+ */
+export type DayLabel =
+  | { kind: "today" }
+  | { kind: "yesterday" }
+  | { kind: "undated" }
+  | { kind: "date"; day: string };
+
+export function dayLabelInfo(day: string, now: number = Date.now()): DayLabel {
+  if (day === "") return { kind: "undated" };
   const today = dayKey(new Date(now).toISOString());
-  if (day === today) return "Today";
+  if (day === today) return { kind: "today" };
   const yesterday = dayKey(new Date(now - 24 * 60 * 60 * 1000).toISOString());
-  if (day === yesterday) return "Yesterday";
+  if (day === yesterday) return { kind: "yesterday" };
+  return { kind: "date", day };
+}
+
+/** A `{ kind: "date" }` label's `day` (`YYYY-MM-DD`) as `Mon 14 Sep 2026`, localized. */
+export function formatDayDate(day: string, locale: string): string {
   const [y, m, d] = day.split("-").map(Number);
   const date = new Date(y ?? 0, (m ?? 1) - 1, d ?? 1);
-  // Composed rather than one `toLocaleDateString` call, so the order and the
-  // punctuation are the same everywhere while the names stay localized.
-  const weekday = date.toLocaleDateString(undefined, { weekday: "short" });
-  const month = date.toLocaleDateString(undefined, { month: "short" });
-  return `${weekday} ${date.getDate()} ${month} ${date.getFullYear()}`;
+  return new Intl.DateTimeFormat(locale, {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  }).format(date);
 }
 
 /**
- * What to call a kind in a day's digest, singular and plural. Several kinds
- * share a phrase on purpose — creating an excerpt and adding a code to one are
- * both "codings" to someone scanning a day — and the digest counts by phrase,
- * not by kind, so they add up into one number.
+ * The `i18next` key (under `history.digest.*`, `_one`/`_other` plural forms)
+ * for a kind in a day's digest. Several kinds share a phrase on purpose —
+ * creating an excerpt and adding a code to one are both "codings" to someone
+ * scanning a day — and the digest counts by phrase, not by kind, so they add
+ * up into one number. No English text here: see the note on {@link DayLabel}.
  */
-const DIGEST_PHRASES: Record<string, [string, string]> = {
-  "excerpt.created": ["coding", "codings"],
-  "excerpt.codes_added": ["coding", "codings"],
-  "excerpt.restored": ["coding", "codings"],
-  "bulk.codes_added": ["bulk coding", "bulk codings"],
-  "bulk.auto_coded": ["auto-coding", "auto-codings"],
-  "bulk.retagged": ["recoding", "recodings"],
-  "excerpt.code_removed": ["code removed", "codes removed"],
-  "bulk.codes_removed": ["code removed", "codes removed"],
-  "excerpt.deleted": ["excerpt deleted", "excerpts deleted"],
-  "bulk.excerpts_deleted": ["excerpt deleted", "excerpts deleted"],
-  "excerpt.range_updated": ["excerpt edit", "excerpt edits"],
-  "excerpt.split": ["excerpt edit", "excerpt edits"],
-  "excerpt.split_off": ["excerpt edit", "excerpt edits"],
-  "excerpt.merged": ["excerpt edit", "excerpt edits"],
-  "excerpt.merged_into": ["excerpt edit", "excerpt edits"],
-  "code.created": ["code created", "codes created"],
-  "code.updated": ["code edit", "code edits"],
-  "code.moved": ["code edit", "code edits"],
-  "code.deleted": ["code deleted", "codes deleted"],
-  "code.merged_into": ["merge", "merges"],
-  "code.merged_from": ["merge", "merges"],
-  "codebook.imported": ["codebook import", "codebook imports"],
-  "document.imported": ["document imported", "documents imported"],
-  "document.deleted": ["document deleted", "documents deleted"],
-  "document.renamed": ["document renamed", "documents renamed"],
-  "document.reordered": ["document reordered", "documents reordered"],
-  "memo.created": ["memo", "memos"],
-  "memo.updated": ["memo", "memos"],
-  "memo.deleted": ["memo deleted", "memos deleted"],
-  "memo.restored": ["memo", "memos"],
-  "descriptor.value_set": ["descriptor set", "descriptors set"],
-  "descriptor.field_created": ["descriptor field", "descriptor fields"],
-  "descriptor.field_updated": ["descriptor field", "descriptor fields"],
-  "descriptor.field_deleted": ["descriptor field", "descriptor fields"],
-  "descriptor.fields_reordered": ["descriptor field", "descriptor fields"],
-  "set.created": ["set change", "set changes"],
-  "set.renamed": ["set change", "set changes"],
-  "set.deleted": ["set change", "set changes"],
-  "set.members_changed": ["set change", "set changes"],
-  "filter.saved": ["saved filter", "saved filters"],
-  "filter.deleted": ["saved filter", "saved filters"],
-  "framework.matrix_created": ["framework edit", "framework edits"],
-  "framework.matrix_updated": ["framework edit", "framework edits"],
-  "framework.matrix_deleted": ["framework edit", "framework edits"],
-  "framework.cell_set": ["framework cell", "framework cells"],
-  "transcript.format_set": ["transcript setting", "transcript settings"],
-  "transcript.default_set": ["transcript setting", "transcript settings"],
-  "analysis.stop_words_set": ["stop-word edit", "stop-word edits"],
-  "project.renamed": ["project renamed", "project renames"],
-  "project.pulled": ["pull", "pulls"],
+const DIGEST_PHRASE_KEYS: Record<string, string> = {
+  "excerpt.created": "coding",
+  "excerpt.codes_added": "coding",
+  "excerpt.restored": "coding",
+  "bulk.codes_added": "bulkCoding",
+  "bulk.auto_coded": "autoCoding",
+  "bulk.retagged": "recoding",
+  "excerpt.code_removed": "codeRemoved",
+  "bulk.codes_removed": "codeRemoved",
+  "excerpt.deleted": "excerptDeleted",
+  "bulk.excerpts_deleted": "excerptDeleted",
+  "excerpt.range_updated": "excerptEdit",
+  "excerpt.split": "excerptEdit",
+  "excerpt.split_off": "excerptEdit",
+  "excerpt.merged": "excerptEdit",
+  "excerpt.merged_into": "excerptEdit",
+  "code.created": "codeCreated",
+  "code.updated": "codeEdit",
+  "code.moved": "codeEdit",
+  "code.deleted": "codeDeleted",
+  "code.merged_into": "merge",
+  "code.merged_from": "merge",
+  "codebook.imported": "codebookImport",
+  "document.imported": "documentImported",
+  "document.deleted": "documentDeleted",
+  "document.renamed": "documentRenamed",
+  "document.reordered": "documentReordered",
+  "memo.created": "memo",
+  "memo.updated": "memo",
+  "memo.deleted": "memoDeleted",
+  "memo.restored": "memo",
+  "descriptor.value_set": "descriptorSet",
+  "descriptor.field_created": "descriptorField",
+  "descriptor.field_updated": "descriptorField",
+  "descriptor.field_deleted": "descriptorField",
+  "descriptor.fields_reordered": "descriptorField",
+  "set.created": "setChange",
+  "set.renamed": "setChange",
+  "set.deleted": "setChange",
+  "set.members_changed": "setChange",
+  "filter.saved": "savedFilter",
+  "filter.deleted": "savedFilter",
+  "framework.matrix_created": "frameworkEdit",
+  "framework.matrix_updated": "frameworkEdit",
+  "framework.matrix_deleted": "frameworkEdit",
+  "framework.cell_set": "frameworkCell",
+  "transcript.format_set": "transcriptSetting",
+  "transcript.default_set": "transcriptSetting",
+  "analysis.stop_words_set": "stopWordEdit",
+  "project.renamed": "projectRenamed",
+  "project.pulled": "pull",
 };
 
-/** The fallback phrase for a kind not in the table: `code change(s)`. */
-function digestPhrase(kind: string): [string, string] {
-  const known = DIGEST_PHRASES[kind];
-  if (known) return known;
-  const group = kind.includes(".") ? kind.slice(0, kind.indexOf(".")) : kind;
-  return [`${group} change`, `${group} changes`];
+/** One line of a day's digest: how many of what, by `i18next` key. */
+export interface DigestItem {
+  /** A key under `history.digest.*`, or `"groupChange"` for the fallback. */
+  phraseKey: string;
+  count: number;
+  /** Only set for the `"groupChange"` fallback — see {@link digestPhraseKey}. */
+  group?: string;
 }
 
 /**
- * A day's one-line summary — `12 codings, 3 codes created, 1 merge` — from
- * the steps it holds. The three commonest phrases, biggest first, and
- * `+ 4 more` for whatever is left, so the line never grows past a glance.
+ * A day's digest, structured: the (at most three) commonest kinds, biggest
+ * first, and how many more steps are not shown. A component turns this into
+ * `12 codings, 3 codes created, 1 merge` with `t()` and `Intl.ListFormat` —
+ * see `HistoryView.tsx`'s `formatDigest`.
  */
-export function dayDigest(nodes: HistoryNodeSummary[]): string {
-  const counts = new Map<string, { n: number; one: string; many: string }>();
+export interface DayDigest {
+  items: DigestItem[];
+  moreCount: number;
+}
+
+/** The fallback phrase key + group for a kind not in {@link DIGEST_PHRASE_KEYS}. */
+function digestPhraseKey(kind: string): { phraseKey: string; group?: string } {
+  const known = DIGEST_PHRASE_KEYS[kind];
+  if (known) return { phraseKey: known };
+  const group = kind.includes(".") ? kind.slice(0, kind.indexOf(".")) : kind;
+  return { phraseKey: "groupChange", group };
+}
+
+export function dayDigest(nodes: HistoryNodeSummary[]): DayDigest {
+  const counts = new Map<string, { n: number; phraseKey: string; group?: string }>();
   for (const node of nodes) {
-    const [one, many] = digestPhrase(node.kind);
-    const entry = counts.get(one) ?? { n: 0, one, many };
+    const { phraseKey, group } = digestPhraseKey(node.kind);
+    // Group-change fallbacks bucket by group (`"gizmo change"` vs `"widget
+    // change"` stay separate counts); everything else buckets by phrase key.
+    const bucketKey = phraseKey === "groupChange" ? `groupChange:${group}` : phraseKey;
+    const entry = counts.get(bucketKey) ?? { n: 0, phraseKey, group };
     // A compound step counts as the one action it stands for, not as its
     // members: that is how it reads in the list.
     entry.n += 1;
-    counts.set(one, entry);
+    counts.set(bucketKey, entry);
   }
-  const ranked = [...counts.values()].sort((a, b) => b.n - a.n || a.one.localeCompare(b.one));
-  const shown = ranked.slice(0, 3).map((e) => `${e.n} ${e.n === 1 ? e.one : e.many}`);
-  const rest = ranked.slice(3).reduce((sum, e) => sum + e.n, 0);
-  if (rest > 0) shown.push(`+ ${rest} more`);
-  return shown.join(", ");
+  const ranked = [...counts.entries()]
+    .map(([bucketKey, e]) => ({ bucketKey, count: e.n, phraseKey: e.phraseKey, group: e.group }))
+    .sort((a, b) => b.count - a.count || a.bucketKey.localeCompare(b.bucketKey));
+  const items = ranked.slice(0, 3).map((e) => ({
+    phraseKey: e.phraseKey,
+    count: e.count,
+    ...(e.group !== undefined ? { group: e.group } : {}),
+  }));
+  const moreCount = ranked.slice(3).reduce((sum, e) => sum + e.count, 0);
+  return { items, moreCount };
 }
 
 /** One day's worth of laid-out rows, in the order the graph puts them. */
 export interface DayGroup {
   day: string;
-  label: string;
+  label: DayLabel;
   rows: LaidOutNode[];
 }
 
@@ -358,7 +401,7 @@ export function groupByDay(rows: LaidOutNode[], now: number = Date.now()): DayGr
     const day = dayKey(row.node.at);
     const last = groups[groups.length - 1];
     if (last && last.day === day) last.rows.push(row);
-    else groups.push({ day, label: dayLabel(day, now), rows: [row] });
+    else groups.push({ day, label: dayLabelInfo(day, now), rows: [row] });
   }
   return groups;
 }
@@ -384,10 +427,10 @@ export interface DayHeaderRow {
   kind: "day";
   row: number;
   day: string;
-  label: string;
+  label: DayLabel;
   /** How many steps happened that day. */
   count: number;
-  digest: string;
+  digest: DayDigest;
   expanded: boolean;
   /**
    * Every lane with a line running through this row: the lanes of the steps
