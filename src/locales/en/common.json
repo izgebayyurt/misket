@@ -165,6 +165,17 @@
       "hint": "Hover for the reason. Clicking applies the code as your own coding; nothing is applied until you click."
     }
   },
+  "excerptBrowser": {
+    "selectAllLoaded_one": "Select all {{count, number}} loaded",
+    "selectAllLoaded_other": "Select all {{count, number}} loaded",
+    "selectedCount_one": "{{count, number}} selected",
+    "selectedCount_other": "{{count, number}} selected",
+    "emptyNone": "No excerpts yet. Select text in a document and press the palette shortcut to code it.",
+    "emptyNoSingleMatch": "No single excerpt carries all of these codes. Untick “match all selected codes” to see excerpts carrying any of them.",
+    "emptyNoMatch": "Nothing matches these filters.",
+    "loadMore_one": "Load more ({{count, number}} remaining)",
+    "loadMore_other": "Load more ({{count, number}} remaining)"
+  },
   "excerpts": {
     "weight": "Weight",
     "excerpt": "Excerpt",

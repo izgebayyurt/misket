@@ -165,6 +165,17 @@
       "hint": "Gerekçe için üzerine gel. Tıklamak kodu kendi kodlaman olarak uygular; tıklamadan hiçbir şey uygulanmaz."
     }
   },
+  "excerptBrowser": {
+    "selectAllLoaded_one": "Yüklenen {{count, number}} tanenin tümünü seç",
+    "selectAllLoaded_other": "Yüklenen {{count, number}} tanenin tümünü seç",
+    "selectedCount_one": "{{count, number}} seçildi",
+    "selectedCount_other": "{{count, number}} seçildi",
+    "emptyNone": "Henüz alıntı yok. Bir belgede metin seç ve kodlamak için palet kısayoluna bas.",
+    "emptyNoSingleMatch": "Bu kodların tümünü taşıyan tek bir alıntı yok. Bunlardan herhangi birini taşıyan alıntıları görmek için “seçili kodların tümüyle eşleş” işaretini kaldır.",
+    "emptyNoMatch": "Bu filtrelerle eşleşen bir şey yok.",
+    "loadMore_one": "Daha fazla yükle ({{count, number}} kaldı)",
+    "loadMore_other": "Daha fazla yükle ({{count, number}} kaldı)"
+  },
   "excerpts": {
     "weight": "Ağırlık",
     "excerpt": "Alıntı",
