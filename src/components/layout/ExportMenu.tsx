@@ -1,7 +1,9 @@
 import { save } from "@tauri-apps/plugin-dialog";
 import { Download } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import * as api from "@/api/export";
 import { exportRefi } from "@/api/refi";
+import { currentLocale } from "@/lib/i18n";
 import { useSaveProjectCopy } from "@/queries/backup";
 import {
   DropdownMenu,
@@ -18,6 +20,7 @@ function stem(project: ProjectInfo) {
 }
 
 export function ExportMenu({ project }: { project: ProjectInfo }) {
+  const { t } = useTranslation();
   const saveCopy = useSaveProjectCopy();
 
   async function run(
@@ -42,19 +45,22 @@ export function ExportMenu({ project }: { project: ProjectInfo }) {
       else if (kind === "activity") await api.exportActivityCsv(path);
       else if (kind === "refi") {
         const report = await exportRefi(path);
-        const what = [
-          `${report.textSources + report.pictureSources} sources`,
-          `${report.codes} codes`,
-          `${report.codings} codings`,
-        ].join(", ");
+        const what = new Intl.ListFormat(currentLocale(), {
+          type: "unit",
+          style: "short",
+        }).format([
+          t("exportMenu.sources", { count: report.textSources + report.pictureSources }),
+          t("exportMenu.codesCount", { count: report.codes }),
+          t("exportMenu.codingsCount", { count: report.codings }),
+        ]);
         toast.info(
           report.skipped.length > 0
-            ? `Exported ${what}; left behind: ${report.skipped.join("; ")}`
-            : `Exported ${what} to ${path.split(/[\\/]/).pop()}`,
+            ? t("exportMenu.exportedLeftBehind", { what, skipped: report.skipped.join("; ") })
+            : t("exportMenu.exportedTo", { what, name: path.split(/[\\/]/).pop() }),
         );
         return;
       } else await api.exportProjectJson(path);
-      toast.info(`Exported ${suffix} to ${path.split(/[\\/]/).pop()}`);
+      toast.info(t("exportMenu.exportedSuffixTo", { suffix, name: path.split(/[\\/]/).pop() }));
     } catch (e) {
       toast.error(e);
     }
@@ -68,7 +74,7 @@ export function ExportMenu({ project }: { project: ProjectInfo }) {
       });
       if (!path) return;
       await saveCopy.mutateAsync(path);
-      toast.info(`Saved a copy to ${path.split(/[\\/]/).pop()}`);
+      toast.info(t("exportMenu.savedCopyTo", { name: path.split(/[\\/]/).pop() }));
     } catch (e) {
       toast.error(e);
     }
@@ -78,23 +84,33 @@ export function ExportMenu({ project }: { project: ProjectInfo }) {
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button className="flex items-center gap-1 hover:text-fg" data-testid="export-menu">
-          <Download className="size-3.5" /> Export
+          <Download className="size-3.5" /> {t("exportMenu.export")}
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" side="top">
-        <DropdownMenuItem onSelect={() => run("codebook")}>Codebook (CSV)</DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => run("codebookJson")}>
-          Codebook (JSON, reusable)
+        <DropdownMenuItem onSelect={() => run("codebook")}>
+          {t("exportMenu.codebookCsv")}
         </DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => run("excerpts")}>All excerpts (CSV)</DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => run("activity")}>Activity log (CSV)</DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => run("project")}>Whole project (JSON)</DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => run("codebookJson")}>
+          {t("exportMenu.codebookJson")}
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => run("excerpts")}>
+          {t("exportMenu.excerptsCsv")}
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => run("activity")}>
+          {t("exportMenu.activityCsv")}
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => run("project")}>
+          {t("exportMenu.projectJson")}
+        </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={() => run("refi")} data-testid="export-refi">
-          REFI-QDA (.qdpx)…
+          {t("exportMenu.refi")}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={() => void runSaveCopy()}>Save a copy as…</DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => void runSaveCopy()}>
+          {t("exportMenu.saveCopyAs")}
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );

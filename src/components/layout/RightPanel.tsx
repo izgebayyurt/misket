@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useWorkspace } from "@/state/workspace";
 import { ExcerptInspector } from "@/components/excerpts/ExcerptInspector";
 import { MemoList } from "@/components/memos/MemoList";
@@ -18,6 +19,7 @@ type Scope = "document" | "code" | "project";
 
 /** Context panel: the focused excerpt, or memos for the document/code/project. */
 export function RightPanel() {
+  const { t } = useTranslation();
   const focusedId = useWorkspace((s) => s.focusedExcerptId);
   const view = useWorkspace((s) => s.view);
   const selectedCodeId = useWorkspace((s) => s.selectedCodeId);
@@ -77,13 +79,17 @@ export function RightPanel() {
               <button
                 key={s}
                 className={cn(
-                  "flex-1 py-1.5 capitalize text-fg-muted hover:text-fg disabled:opacity-40",
+                  "flex-1 py-1.5 text-fg-muted hover:text-fg disabled:opacity-40",
                   effectiveScope === s && "border-b-2 border-accent font-medium text-fg",
                 )}
                 disabled={(s === "document" && !documentId) || (s === "code" && !selectedCodeId)}
                 onClick={() => setScope(s)}
               >
-                {s}
+                {s === "document"
+                  ? t("rightPanel.scope.document")
+                  : s === "code"
+                    ? t("rightPanel.scope.code")
+                    : t("rightPanel.scope.project")}
               </button>
             ))}
           </div>
@@ -97,10 +103,10 @@ export function RightPanel() {
             target={target}
             heading={
               effectiveScope === "document"
-                ? (docs?.find((d) => d.id === documentId)?.name ?? "Document")
+                ? (docs?.find((d) => d.id === documentId)?.name ?? t("rightPanel.scope.document"))
                 : effectiveScope === "code"
-                  ? pathOf(tree, selectedCodeId ?? "") || "Code"
-                  : "Project memos"
+                  ? pathOf(tree, selectedCodeId ?? "") || t("rightPanel.scope.code")
+                  : t("rightPanel.projectMemos")
             }
           />
           {effectiveScope === "code" && selectedCodeId ? (

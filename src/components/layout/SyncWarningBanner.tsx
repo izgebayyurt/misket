@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { save } from "@tauri-apps/plugin-dialog";
 import { AlertTriangle, X } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import type { ProjectInfo } from "@/api/types";
 import { useSaveProjectCopy } from "@/queries/backup";
@@ -38,6 +39,7 @@ const FILTER = [{ name: "Misket project", extensions: ["misket"] }];
  * without deleting it.
  */
 export function SyncWarningBanner({ project }: { project: ProjectInfo }) {
+  const { t } = useTranslation();
   const [dismissed, setDismissed] = useState(() => isDismissed(project.path));
   const [moving, setMoving] = useState(false);
   const saveCopy = useSaveProjectCopy();
@@ -61,7 +63,7 @@ export function SyncWarningBanner({ project }: { project: ProjectInfo }) {
       await saveCopy.mutateAsync(withExt);
       await openProject.mutateAsync(withExt);
       removeRecent.mutate(originalPath);
-      toast.info("Moved the project. The original file was left in place, just in case.");
+      toast.info(t("syncWarning.moved"));
     } catch (e) {
       toast.error(e);
     } finally {
@@ -83,12 +85,12 @@ export function SyncWarningBanner({ project }: { project: ProjectInfo }) {
         disabled={moving}
         data-testid="move-project"
       >
-        {moving ? "Moving…" : "Move project…"}
+        {moving ? t("syncWarning.moving") : t("syncWarning.moveProject")}
       </Button>
       <button
         className="rounded p-1 text-fg-muted hover:bg-panel"
         onClick={onDismiss}
-        aria-label="Dismiss"
+        aria-label={t("common.dismiss")}
         data-testid="dismiss-sync-warning"
       >
         <X className="size-4" />

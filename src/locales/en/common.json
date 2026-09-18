@@ -73,7 +73,96 @@
   },
   "common": {
     "loading": "Loading…",
-    "refresh": "Refresh"
+    "refresh": "Refresh",
+    "dismiss": "Dismiss"
+  },
+  "toaster": {
+    "saidTimes_one": "Said {{count, number}} time",
+    "saidTimes_other": "Said {{count, number}} times"
+  },
+  "syncWarning": {
+    "moved": "Moved the project. The original file was left in place, just in case.",
+    "moving": "Moving…",
+    "moveProject": "Move project…"
+  },
+  "exportMenu": {
+    "export": "Export",
+    "codebookCsv": "Codebook (CSV)",
+    "codebookJson": "Codebook (JSON, reusable)",
+    "excerptsCsv": "All excerpts (CSV)",
+    "activityCsv": "Activity log (CSV)",
+    "projectJson": "Whole project (JSON)",
+    "refi": "REFI-QDA (.qdpx)…",
+    "saveCopyAs": "Save a copy as…",
+    "sources_one": "{{count, number}} source",
+    "sources_other": "{{count, number}} sources",
+    "codesCount_one": "{{count, number}} code",
+    "codesCount_other": "{{count, number}} codes",
+    "codingsCount_one": "{{count, number}} coding",
+    "codingsCount_other": "{{count, number}} codings",
+    "exportedLeftBehind": "Exported {{what}}; left behind: {{skipped}}",
+    "exportedTo": "Exported {{what}} to {{name}}",
+    "exportedSuffixTo": "Exported {{suffix}} to {{name}}",
+    "savedCopyTo": "Saved a copy to {{name}}"
+  },
+  "about": {
+    "version": "Version {{version}}",
+    "blurb": "Open-source qualitative coding, on your own machine. Your project is a single SQLite file; nothing leaves your computer.",
+    "license": "MIT licensed. Source and issues: github.com/izgebayyurt/misket",
+    "copying": "Copying…",
+    "copyDiagnostics": "Copy diagnostics",
+    "diagnosticsCopied": "Diagnostics copied",
+    "copyHint": "Copies the app version, OS, webview and the last 50 log lines (redacted the same way an opt-in crash report would be) — never document text, codes, memos or file names."
+  },
+  "backups": {
+    "title": "Backups",
+    "description": "A timestamped copy is kept automatically before deletes and merges.",
+    "none": "No backups yet.",
+    "restore": "Restore",
+    "restored": "Restored backup from {{name}}",
+    "confirmTitle": "Restore this backup?",
+    "confirmDescription": "Replace the current project with this backup? A copy of the current state is kept first."
+  },
+  "updateBanner": {
+    "available": "Misket {{version}} is available",
+    "restarting": ": restarting…",
+    "downloading": " — downloading…{{percent}}",
+    "releaseNotes": "Release notes",
+    "install": "Install and restart",
+    "restartingButton": "Restarting…",
+    "skip": "Skip this version",
+    "later": "Later"
+  },
+  "rightPanel": {
+    "scope": {
+      "document": "Document",
+      "code": "Code",
+      "project": "Project"
+    },
+    "projectMemos": "Project memos"
+  },
+  "statusBar": {
+    "counts": "{{documents, number}} documents · {{codes, number}} codes · {{excerpts, number}} excerpts",
+    "last": "Last: {{label}}",
+    "quickCodeHint": "{{chord}} applies \"{{name}}\" to the selection or focused excerpt",
+    "quickCode": "Quick code: {{name}}",
+    "refiHint": "Import a REFI-QDA (.qdpx) project from NVivo, ATLAS.ti, MAXQDA or another QDA tool",
+    "refi": "Import REFI-QDA…",
+    "pullHint": "Merge another researcher's copy of this project into yours",
+    "pull": "Pull from a copy…",
+    "backups": "Backups…",
+    "about": "About",
+    "closeProject": "Close project"
+  },
+  "sidebar": {
+    "documents": "Documents",
+    "codes": "Codes",
+    "overview": "Overview",
+    "descriptors": "Descriptors",
+    "manageDescriptors": "Manage descriptors",
+    "excerpts": "Excerpts",
+    "analysis": "Analysis",
+    "search": "Search"
   },
   "history": {
     "title": "History",

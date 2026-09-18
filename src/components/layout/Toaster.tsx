@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { X } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { useToasts, type Toast } from "@/state/toasts";
 import { cn } from "@/lib/utils";
 
@@ -22,6 +23,7 @@ export function Toaster() {
  * the system asks for less motion).
  */
 function ToastRow({ toast, onDismiss }: { toast: Toast; onDismiss: () => void }) {
+  const { t } = useTranslation();
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (toast.nudge === 0) return;
@@ -48,7 +50,7 @@ function ToastRow({ toast, onDismiss }: { toast: Toast; onDismiss: () => void })
       {toast.nudge > 0 ? (
         <span
           className="shrink-0 rounded-full bg-muted px-1.5 text-[10px] tabular-nums text-fg-muted"
-          title={`Said ${toast.nudge + 1} times`}
+          title={t("toaster.saidTimes", { count: toast.nudge + 1 })}
           data-testid="toast-repeat-count"
         >
           ×{toast.nudge + 1}
@@ -57,7 +59,7 @@ function ToastRow({ toast, onDismiss }: { toast: Toast; onDismiss: () => void })
       <button
         onClick={onDismiss}
         className="rounded p-0.5 text-fg-muted hover:bg-muted"
-        aria-label="Dismiss"
+        aria-label={t("common.dismiss")}
       >
         <X className="size-3.5" />
       </button>

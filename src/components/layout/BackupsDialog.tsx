@@ -1,9 +1,11 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { useBackups, useRestoreBackup } from "@/queries/backup";
 import { toast } from "@/state/toasts";
+import { currentLocale } from "@/lib/i18n";
 import type { BackupInfo } from "@/api/types";
 
 function formatSize(bytes: number): string {
@@ -17,6 +19,8 @@ function fileName(path: string): string {
 }
 
 export function BackupsDialog({ onClose }: { onClose: () => void }) {
+  const { t } = useTranslation();
+  const locale = currentLocale();
   const { data: backups, isLoading } = useBackups();
   const restore = useRestoreBackup();
   const [pending, setPending] = useState<BackupInfo | null>(null);
@@ -27,7 +31,7 @@ export function BackupsDialog({ onClose }: { onClose: () => void }) {
     setPending(null);
     try {
       await restore.mutateAsync(path);
-      toast.info(`Restored backup from ${fileName(path)}`);
+      toast.info(t("backups.restored", { name: fileName(path) }));
       onClose();
     } catch (e) {
       toast.error(e);
@@ -36,14 +40,11 @@ export function BackupsDialog({ onClose }: { onClose: () => void }) {
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent
-        title="Backups"
-        description="A timestamped copy is kept automatically before deletes and merges."
-      >
+      <DialogContent title={t("backups.title")} description={t("backups.description")}>
         {isLoading ? (
-          <p className="text-sm text-fg-muted">Loading…</p>
+          <p className="text-sm text-fg-muted">{t("common.loading")}</p>
         ) : !backups || backups.length === 0 ? (
-          <p className="text-sm text-fg-muted">No backups yet.</p>
+          <p className="text-sm text-fg-muted">{t("backups.none")}</p>
         ) : (
           <ul className="max-h-80 space-y-1 overflow-y-auto">
             {backups.map((b) => (
@@ -52,13 +53,17 @@ export function BackupsDialog({ onClose }: { onClose: () => void }) {
                 className="flex items-center justify-between gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-muted"
               >
                 <div className="min-w-0 flex-1">
-                  <div className="truncate">{new Date(b.createdAt).toLocaleString()}</div>
+                  <div className="truncate">
+                    {new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short" }).format(
+                      new Date(b.createdAt),
+                    )}
+                  </div>
                   <div className="truncate text-xs text-fg-muted">
                     {b.reason} · {formatSize(b.sizeBytes)}
                   </div>
                 </div>
                 <Button size="sm" variant="outline" onClick={() => setPending(b)}>
-                  Restore
+                  {t("backups.restore")}
                 </Button>
               </li>
             ))}
@@ -67,9 +72,9 @@ export function BackupsDialog({ onClose }: { onClose: () => void }) {
       </DialogContent>
       {pending ? (
         <ConfirmDialog
-          title="Restore this backup?"
-          description="Replace the current project with this backup? A copy of the current state is kept first."
-          confirmLabel="Restore"
+          title={t("backups.confirmTitle")}
+          description={t("backups.confirmDescription")}
+          confirmLabel={t("backups.restore")}
           onConfirm={() => void confirmRestore()}
           onCancel={() => setPending(null)}
         />

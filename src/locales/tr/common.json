@@ -73,7 +73,96 @@
   },
   "common": {
     "loading": "Yükleniyor…",
-    "refresh": "Yenile"
+    "refresh": "Yenile",
+    "dismiss": "Kapat"
+  },
+  "toaster": {
+    "saidTimes_one": "{{count, number}} kez söylendi",
+    "saidTimes_other": "{{count, number}} kez söylendi"
+  },
+  "syncWarning": {
+    "moved": "Proje taşındı. Ne olur ne olmaz diye orijinal dosya yerinde bırakıldı.",
+    "moving": "Taşınıyor…",
+    "moveProject": "Projeyi taşı…"
+  },
+  "exportMenu": {
+    "export": "Dışa aktar",
+    "codebookCsv": "Kod defteri (CSV)",
+    "codebookJson": "Kod defteri (JSON, yeniden kullanılabilir)",
+    "excerptsCsv": "Tüm alıntılar (CSV)",
+    "activityCsv": "Etkinlik günlüğü (CSV)",
+    "projectJson": "Tüm proje (JSON)",
+    "refi": "REFI-QDA (.qdpx)…",
+    "saveCopyAs": "Farklı kopya kaydet…",
+    "sources_one": "{{count, number}} kaynak",
+    "sources_other": "{{count, number}} kaynak",
+    "codesCount_one": "{{count, number}} kod",
+    "codesCount_other": "{{count, number}} kod",
+    "codingsCount_one": "{{count, number}} kodlama",
+    "codingsCount_other": "{{count, number}} kodlama",
+    "exportedLeftBehind": "{{what}} dışa aktarıldı; dışarıda kalan: {{skipped}}",
+    "exportedTo": "{{what}} {{name}} konumuna dışa aktarıldı",
+    "exportedSuffixTo": "{{suffix}}, {{name}} konumuna dışa aktarıldı",
+    "savedCopyTo": "Kopya {{name}} konumuna kaydedildi"
+  },
+  "about": {
+    "version": "Sürüm {{version}}",
+    "blurb": "Kendi bilgisayarında açık kaynaklı nitel kodlama. Projen tek bir SQLite dosyasıdır; hiçbir şey bilgisayarından çıkmaz.",
+    "license": "MIT lisanslı. Kaynak kod ve sorunlar: github.com/izgebayyurt/misket",
+    "copying": "Kopyalanıyor…",
+    "copyDiagnostics": "Tanılamayı kopyala",
+    "diagnosticsCopied": "Tanılama kopyalandı",
+    "copyHint": "Uygulama sürümünü, işletim sistemini, webview'i ve son 50 günlük satırını kopyalar (opt-in bir çökme raporuyla aynı şekilde gizlenmiş) — belge metnin, kodların, notların veya dosya adların asla kopyalanmaz."
+  },
+  "backups": {
+    "title": "Yedekler",
+    "description": "Silme ve birleştirme işlemlerinden önce otomatik olarak zaman damgalı bir kopya tutulur.",
+    "none": "Henüz yedek yok.",
+    "restore": "Geri yükle",
+    "restored": "{{name}} yedeğinden geri yüklendi",
+    "confirmTitle": "Bu yedek geri yüklensin mi?",
+    "confirmDescription": "Mevcut proje bu yedekle değiştirilsin mi? Önce mevcut durumun bir kopyası tutulur."
+  },
+  "updateBanner": {
+    "available": "Misket {{version}} kullanılabilir",
+    "restarting": ": yeniden başlatılıyor…",
+    "downloading": " — indiriliyor…{{percent}}",
+    "releaseNotes": "Sürüm notları",
+    "install": "Yükle ve yeniden başlat",
+    "restartingButton": "Yeniden başlatılıyor…",
+    "skip": "Bu sürümü atla",
+    "later": "Sonra"
+  },
+  "rightPanel": {
+    "scope": {
+      "document": "Belge",
+      "code": "Kod",
+      "project": "Proje"
+    },
+    "projectMemos": "Proje notları"
+  },
+  "statusBar": {
+    "counts": "{{documents, number}} belge · {{codes, number}} kod · {{excerpts, number}} alıntı",
+    "last": "Son: {{label}}",
+    "quickCodeHint": "{{chord}} seçime veya odaklanılan alıntıya \"{{name}}\" uygular",
+    "quickCode": "Hızlı kod: {{name}}",
+    "refiHint": "NVivo, ATLAS.ti, MAXQDA veya başka bir nitel veri analizi aracından bir REFI-QDA (.qdpx) projesi içe aktar",
+    "refi": "REFI-QDA içe aktar…",
+    "pullHint": "Başka bir araştırmacının bu projenin kopyasını seninkiyle birleştir",
+    "pull": "Bir kopyadan çek…",
+    "backups": "Yedekler…",
+    "about": "Hakkında",
+    "closeProject": "Projeyi kapat"
+  },
+  "sidebar": {
+    "documents": "Belgeler",
+    "codes": "Kodlar",
+    "overview": "Genel bakış",
+    "descriptors": "Betimleyiciler",
+    "manageDescriptors": "Betimleyicileri yönet",
+    "excerpts": "Alıntılar",
+    "analysis": "Analiz",
+    "search": "Ara"
   },
   "history": {
     "title": "Tarihçe",
