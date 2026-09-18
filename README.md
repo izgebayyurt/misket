@@ -81,6 +81,22 @@ keyboard-friendly interface without a subscription.
   (undoable, like every other change). If you would rather keep everything
   together, the import dialog can copy the files into a `<project>.media/`
   folder beside the project instead.
+- **Line a transcript up with its recording**: import `.srt` or `.vtt`
+  subtitles and they arrive as a timestamped transcript — one paragraph per
+  cue, `[0:04] Alice: …` — already carrying an alignment point per cue. Link
+  any text document to a recording from its row menu ("Link recording…", or
+  import one and link it in a single undoable step) and a compact player
+  strip appears above the text: play/pause, timecode, speed and "Follow
+  playback". Click a paragraph to seek the recording to it, `Ctrl`/`⌘`+click
+  for the exact word, and the passage being read lights up and scrolls itself
+  into view as it plays. Coding a stretch of the recording draws a faint band
+  over the words it covers, and a passage of the transcript offers "Play this
+  excerpt" and "Code the recording" — which codes the same stretch of tape
+  with the same codes, in one undoable step. Alignment points come from the
+  cues, from timestamps the transcript format already captures ("Build
+  anchors from timestamps" in the transcript chip), or from `Alt`+`A` while
+  the recording plays; they show as small ticks in the left gutter and are
+  removed from a tick's menu. Everything between two of them is interpolated.
 - **Find your place in a long transcript**: paragraph numbers in the gutter
   (optional), `Ctrl`/`⌘`+`G` to go to one, `Ctrl`/`⌘`+`Home`/`End` to jump to
   the top or bottom, and a reading position remembered per document so
@@ -403,9 +419,8 @@ together, [docs/DATA_MODEL.md](docs/DATA_MODEL.md) for the schema, and
 
 ## Roadmap
 
-- **Milestone 2**: image regions and audio/video time ranges are in;
-  transcript alignment (jumping between a recording and its transcript) is
-  next.
+- **Milestone 2**: image regions, audio/video time ranges and transcript
+  alignment are all in.
 - Full-text search, REFI-QDA import/export, project sharing.
 
 ## License
