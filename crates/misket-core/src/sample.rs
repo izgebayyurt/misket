@@ -159,6 +159,7 @@ pub fn create_sample_project(path: &Path) -> Result<()> {
                 source_format: "txt".into(),
                 text: raw.to_string(),
                 allow_duplicate: false,
+                anchors: vec![],
             },
         )?;
         doc_texts.insert(d.key.clone(), doc.text.unwrap_or_default());

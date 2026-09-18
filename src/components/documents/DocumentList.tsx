@@ -11,6 +11,7 @@ import {
   Upload,
 } from "lucide-react";
 import { useDeleteDocument, useDocuments, useRenameDocument } from "@/queries/documents";
+import { useLinkMediaDocument } from "@/queries/align";
 import { useWorkspace } from "@/state/workspace";
 import { Button } from "@/components/ui/button";
 import {
@@ -31,6 +32,7 @@ import { cn } from "@/lib/utils";
 import { useImportFiles } from "./useImportFiles";
 import { useRelinkMedia } from "./useRelinkMedia";
 import { ImportFolderDialog } from "./ImportFolderDialog";
+import { LinkRecordingDialog } from "./LinkRecordingDialog";
 import { DocumentSets } from "./DocumentSets";
 import { AddToSetMenu } from "@/components/sets/AddToSetMenu";
 import { toast } from "@/state/toasts";
@@ -44,6 +46,7 @@ export function DocumentList() {
   const [renaming, setRenaming] = useState<DocumentSummary | null>(null);
   const [deleting, setDeleting] = useState<DocumentSummary | null>(null);
   const [folder, setFolder] = useState<string | null>(null);
+  const [linking, setLinking] = useState<DocumentSummary | null>(null);
 
   async function chooseFolder() {
     const dir = await pickFolder();
@@ -125,6 +128,24 @@ export function DocumentList() {
                           data-testid="document-media-missing"
                         />
                       ) : null}
+                      {d.transcriptId ? (
+                        <span
+                          className="shrink-0 rounded border border-border px-1 text-[10px] uppercase text-fg-muted"
+                          title="A transcript is linked to this recording"
+                          data-testid="document-transcript-badge"
+                        >
+                          transcript
+                        </span>
+                      ) : null}
+                      {d.linkedMediaId ? (
+                        <span
+                          className="shrink-0 rounded border border-border px-1 text-[10px] uppercase text-fg-muted"
+                          title="Linked to a recording"
+                          data-testid="document-linked-badge"
+                        >
+                          aligned
+                        </span>
+                      ) : null}
                       {d.sourceFormat ? (
                         <span
                           className="shrink-0 rounded border border-border px-1 text-[10px] uppercase text-fg-muted"
@@ -155,6 +176,7 @@ export function DocumentList() {
                           doc={d}
                           onRename={() => setRenaming(d)}
                           onDelete={() => setDeleting(d)}
+                          onLinkRecording={() => setLinking(d)}
                           menu={dropdownMenuPrimitives}
                         />
                       </DropdownMenuContent>
@@ -166,6 +188,7 @@ export function DocumentList() {
                     doc={d}
                     onRename={() => setRenaming(d)}
                     onDelete={() => setDeleting(d)}
+                    onLinkRecording={() => setLinking(d)}
                     menu={contextMenuPrimitives}
                   />
                 </ContextMenuContent>
@@ -178,6 +201,7 @@ export function DocumentList() {
       {renaming ? <RenameDialog doc={renaming} onClose={() => setRenaming(null)} /> : null}
       {deleting ? <DeleteDialog doc={deleting} onClose={() => setDeleting(null)} /> : null}
       {folder ? <ImportFolderDialog dir={folder} onClose={() => setFolder(null)} /> : null}
+      {linking ? <LinkRecordingDialog doc={linking} onClose={() => setLinking(null)} /> : null}
     </div>
   );
 }
@@ -187,15 +211,19 @@ function DocumentRowMenuItems({
   doc,
   onRename,
   onDelete,
+  onLinkRecording,
   menu,
 }: {
   doc: DocumentSummary;
   onRename: () => void;
   onDelete: () => void;
+  onLinkRecording: () => void;
   menu: MenuPrimitives;
 }) {
   const { Item } = menu;
   const relink = useRelinkMedia();
+  const link = useLinkMediaDocument();
+  const openDocument = useWorkspace((s) => s.openDocument);
   return (
     <>
       <Item onSelect={onRename}>Rename…</Item>
@@ -203,6 +231,27 @@ function DocumentRowMenuItems({
         <Item onSelect={() => void relink.pickAndRelink(doc.id)}>
           {doc.mediaMissing ? "Relink the missing file…" : "Relink…"}
         </Item>
+      ) : null}
+      {doc.kind === "text" ? (
+        <Item onSelect={onLinkRecording} data-testid="document-link-recording">
+          {doc.linkedMediaId ? "Link another recording…" : "Link recording…"}
+        </Item>
+      ) : null}
+      {doc.kind === "text" && doc.linkedMediaId ? (
+        <Item
+          onSelect={() =>
+            link
+              .mutateAsync({ documentId: doc.id, mediaId: null })
+              .then(() => toast.info("Unlinked. Undo with Ctrl/⌘+Z."))
+              .catch(toast.error)
+          }
+          data-testid="document-unlink-recording"
+        >
+          Unlink the recording
+        </Item>
+      ) : null}
+      {doc.kind === "video" && doc.transcriptId ? (
+        <Item onSelect={() => openDocument(doc.transcriptId!)}>Open its transcript</Item>
       ) : null}
       <AddToSetMenu kind="document" memberId={doc.id} memberLabel={doc.name} menu={menu} />
       <Item danger onSelect={onDelete}>

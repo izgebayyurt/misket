@@ -6,6 +6,7 @@ import { formatWeightWithLabel } from "@/core/weights";
 import { cn } from "@/lib/utils";
 import { MediaThumbnail } from "./MediaThumbnail";
 import { RegionThumbnail } from "./RegionThumbnail";
+import { TranscriptExcerptActions } from "./TranscriptExcerptActions";
 
 interface Props {
   row: Row;
@@ -124,6 +125,14 @@ export function ExcerptRow({ row, selected = false, active, onOpen, onToggle }: 
           </span>
         </span>
       </button>
+      <TranscriptExcerptActions
+        excerptId={row.id}
+        documentId={row.documentId}
+        kind={row.kind}
+        startPos={row.startPos}
+        endPos={row.endPos}
+        compact
+      />
     </li>
   );
 }
