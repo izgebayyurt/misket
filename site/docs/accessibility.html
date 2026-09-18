@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Accessibility</title>
+    <meta
+      name="description"
+      content="What Misket supports for screen readers and keyboard-only use, how contrast is checked in both themes, and how to report an accessibility bug."
+    />
+    <link rel="stylesheet" href="../style.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="site-header">
+      <div class="wrap">
+        <a class="brand" href="../index.html"><span class="dot">●</span> Misket</a>
+        <nav class="site-nav" aria-label="Site">
+          <a href="../index.html">Home</a>
+          <a href="install.html">Install</a>
+          <a href="tutorial.html">Tutorial</a>
+          <a href="shortcuts.html">Shortcuts</a>
+          <a href="assistance.html">Assistance</a>
+          <a href="data.html">Data &amp; privacy</a>
+          <a href="accessibility.html" aria-current="page">Accessibility</a>
+          <a href="https://github.com/izgebayyurt/misket">GitHub</a>
+        </nav>
+      </div>
+    </header>
+
+    <main id="main" class="prose narrow">
+      <h1>Accessibility</h1>
+      <p class="lede">
+        Misket is built to be used entirely with the keyboard and to make sense read aloud. This
+        page says plainly what is supported today, what is not yet, and where to report something
+        that does not work for you.
+      </p>
+
+      <h2>Screen readers</h2>
+      <ul>
+        <li>
+          Every icon-only button has an <code>aria-label</code> — the lucide icons themselves are
+          marked <code>aria-hidden</code> by the icon library, so they never announce twice.
+        </li>
+        <li>
+          Dialogs carry a real title and description (Radix UI's own console warning for a missing
+          one is clean throughout); closing one returns focus to what opened it.
+        </li>
+        <li>
+          The code tree is a proper <code>role="tree"</code>, with <code>treeitem</code>,
+          <code>aria-expanded</code>, <code>aria-level</code> and <code>aria-selected</code>, and
+          arrow-key navigation.
+        </li>
+        <li>
+          The sidebar's Documents/Codes switcher and the analysis view's list of analyses use
+          <code>tablist</code>/<code>tab</code>/<code>tabpanel</code> and <code>nav</code>/<code
+            >aria-current</code
+          >
+          respectively; the document list and the excerpt browser's rows are focusable, named list
+          items.
+        </li>
+        <li>
+          Toasts are <code>role="status"</code> (an error toast is <code>role="alert"</code>, so it
+          interrupts rather than queues).
+        </li>
+        <li>
+          Inside the document text, the contract that makes overlapping highlights possible — every
+          character lives in a <code>span[data-s]</code> with a single text node and nothing else —
+          means a coded range cannot carry a visible label of its own. It is named for assistive
+          technology instead: a <code>title</code> and <code>aria-description</code> on the span
+          naming its codes (for example <code>Coded: Autonomy, Trust</code>), the text container
+          itself is <code>role="document"</code> with the open document's name, and the currently
+          focused excerpt carries <code>aria-current</code>.
+        </li>
+      </ul>
+
+      <h2>Keyboard</h2>
+      <p>
+        Everything in Misket is reachable without a mouse — the full reference is on the
+        <a href="shortcuts.html">Shortcuts</a> page. A few things specific to accessibility:
+      </p>
+      <ul>
+        <li>
+          <strong>Skip to document</strong> is the first focusable element in the workspace, before
+          the sidebar.
+        </li>
+        <li>
+          Every focusable element has a visible focus ring in both light and dark themes
+          (<code>:focus-visible</code>, not removed by a CSS reset). There is no positive
+          <code>tabindex</code> anywhere.
+        </li>
+        <li>
+          Dialogs trap focus while open (Radix UI) and hand it back on close; the code palette
+          (<kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>K</kbd>) returns focus to the document.
+        </li>
+        <li>
+          <kbd>Tab</kbd>/<kbd>Shift</kbd>+<kbd>Tab</kbd> move between excerpts while the open
+          document, image or media pane's own neutral surface has focus — where it lands right after
+          you open or navigate to one. The moment focus is on an actual control instead — a sidebar
+          button, a dialog, a menu — <kbd>Tab</kbd> goes back to moving focus normally, so nothing
+          outside the document is ever unreachable by keyboard.
+        </li>
+      </ul>
+
+      <h2>Contrast, in both themes</h2>
+      <p>
+        Every text-on-background and focus-ring-on-background colour pair in Misket's design tokens
+        clears
+        <a href="https://www.w3.org/WAI/WCAG21/Understanding/contrast-minimum.html">WCAG AA</a>:
+        4.5:1 for text, 3:1 for a focus ring and for the boundary of an input, a select or the
+        outline button style. This is checked in code (<code>src/core/contrast.test.ts</code>)
+        against the actual tokens in both the light and dark theme, not eyeballed once and left to
+        drift — including the tint a highlight mixes under coded text, checked against the lightest
+        and darkest colours in the default code-colour palette.
+      </p>
+      <p>
+        Motion respects <code>prefers-reduced-motion</code>: the toast "said again" shake and the
+        flash when you jump to a coded excerpt both drop their animation and fall back to what they
+        were signalling (a repeat count, a highlighted outline) without it.
+      </p>
+
+      <h2>What is not there yet</h2>
+      <ul>
+        <li>
+          There is no way yet to place the very first text selection with the keyboard alone in a
+          document with no excerpts: extending a selection by word
+          (<kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>←</kbd>/<kbd>→</kbd>) needs either a live selection
+          or a focused excerpt to grow from. A screen reader's own virtual cursor already places a
+          real selection Misket reads correctly; a sighted keyboard-only user currently cannot start
+          one without a first click.
+        </li>
+        <li>
+          Audio and video have no caption track — Misket does not transcribe a recording's audio
+          automatically.
+        </li>
+      </ul>
+
+      <h2>Report a problem</h2>
+      <p>
+        If something does not work for you with a screen reader, with the keyboard alone, or at a
+        contrast setting your operating system asks for, please
+        <a href="https://github.com/izgebayyurt/misket/issues">open an issue</a>. Say which screen
+        reader and browser engine you were using if relevant (Misket's window is WebKit on Linux,
+        WebView2 on Windows, WKWebView on macOS) — accessibility reports are treated as bugs, not
+        feature requests.
+      </p>
+    </main>
+
+    <footer class="site-footer">
+      <div class="wrap">
+        <span>Misket is free software, MIT-licensed.</span>
+        <span
+          ><a href="https://github.com/izgebayyurt/misket">Source on GitHub</a> ·
+          <a href="https://github.com/izgebayyurt/misket/blob/main/ROADMAP.md">Roadmap</a></span
+        >
+      </div>
+    </footer>
+  </body>
+</html>
