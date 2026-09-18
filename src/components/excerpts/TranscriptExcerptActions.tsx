@@ -58,6 +58,11 @@ export function TranscriptExcerptActions({
         variant="ghost"
         onClick={play}
         title={`Play ${formatTimecode(startMs)}–${formatTimecode(endMs)} of the recording`}
+        aria-label={
+          compact
+            ? `Play ${formatTimecode(startMs)}–${formatTimecode(endMs)} of the recording`
+            : undefined
+        }
         data-testid="play-excerpt"
       >
         <Play className="size-3.5" />
