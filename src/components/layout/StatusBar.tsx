@@ -68,7 +68,11 @@ export function StatusBar({ project }: { project: ProjectInfo }) {
       <button className="hover:text-fg" onClick={() => setBackups(true)}>
         Backups…
       </button>
-      <button className="hover:text-fg" onClick={() => setSettingsOpen(true)}>
+      <button
+        className="hover:text-fg"
+        onClick={() => setSettingsOpen(true)}
+        data-testid="open-settings"
+      >
         Settings
       </button>
       <button className="hover:text-fg" onClick={() => setAbout(true)}>

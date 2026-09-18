@@ -43,6 +43,73 @@ pub fn actor(conn: &Connection) -> String {
     .unwrap_or_default()
 }
 
+/// Who (or rather, what) helped with the writes that follow on this
+/// connection.
+///
+/// The actor never changes: a suggestion only ever becomes a change because a
+/// person clicked it, so the history still credits the person. This is the
+/// extra note that says the person had help, and which provider and model
+/// gave it — the audit trail researchers ask for before they will let an
+/// assistant near their coding (`docs/research/user-criticisms.md`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AssistedBy {
+    pub provider: String,
+    pub model: String,
+}
+
+/// Mark every write on this connection as human-accepted assistance until it
+/// is cleared with `None`.
+///
+/// Per-connection `TEMP` state, exactly like [`set_actor`]: it never reaches
+/// the project file, and two people with the same project open cannot see
+/// each other's. The Tauri layer sets it around one command and clears it
+/// again, so the window is a single call.
+pub fn set_assisted(conn: &Connection, by: Option<&AssistedBy>) -> Result<()> {
+    conn.execute_batch(
+        "CREATE TEMP TABLE IF NOT EXISTS activity_assist (provider TEXT NOT NULL, model TEXT NOT NULL)",
+    )?;
+    conn.execute("DELETE FROM temp.activity_assist", [])?;
+    if let Some(by) = by {
+        conn.execute(
+            "INSERT INTO temp.activity_assist (provider, model) VALUES (?1, ?2)",
+            [by.provider.trim(), by.model.trim()],
+        )?;
+    }
+    Ok(())
+}
+
+/// The mark [`set_assisted`] left on this connection, if any.
+pub fn assisted(conn: &Connection) -> Option<AssistedBy> {
+    conn.query_row(
+        "SELECT provider, model FROM temp.activity_assist LIMIT 1",
+        [],
+        |r| {
+            Ok(AssistedBy {
+                provider: r.get(0)?,
+                model: r.get(1)?,
+            })
+        },
+    )
+    .ok()
+}
+
+/// Fold the connection's assistance mark, if it has one, into a `detail`
+/// payload. A payload that is not an object is left alone.
+fn with_assisted(conn: &Connection, detail: Value) -> Value {
+    let Some(by) = assisted(conn) else {
+        return detail;
+    };
+    let mut detail = detail;
+    if let Some(obj) = detail.as_object_mut() {
+        obj.insert("assisted".into(), Value::Bool(true));
+        obj.insert(
+            "assistedBy".into(),
+            json!({ "provider": by.provider, "model": by.model }),
+        );
+    }
+    detail
+}
+
 /// Append one entry under the current head. `detail` is stored verbatim as
 /// `detail_json`; `forward` and `inverse` are the replay payloads.
 #[allow(clippy::too_many_arguments)]
@@ -93,7 +160,7 @@ pub fn record(
         target_kind,
         target_id,
         summary.as_ref(),
-        &detail,
+        &with_assisted(conn, detail),
         forward,
         inverse,
     )?;
@@ -642,6 +709,109 @@ mod tests {
         );
         assert_eq!(history[1].detail["endPos"]["from"], json!(7));
         assert_eq!(history[1].detail["endPos"]["to"], json!(11));
+    }
+
+    #[test]
+    fn assistance_is_a_note_on_the_detail_not_a_different_actor() {
+        use crate::db::{codes, documents, excerpts};
+        use crate::models::{ApplyCodesInput, NewDocument};
+
+        let p = OpenProject::in_memory("t").unwrap();
+        set_actor(&p.conn, "Ada").unwrap();
+        let doc = documents::create(
+            &p.conn,
+            NewDocument {
+                name: "Doc".into(),
+                source_format: "txt".into(),
+                text: "one two three".into(),
+                source_path: None,
+                allow_duplicate: false,
+                anchors: vec![],
+            },
+        )
+        .unwrap();
+        let code = codes::tests::mk(&p.conn, "Alpha", None);
+
+        // Unmarked: no `assisted` key at all, so old payloads and new ones
+        // that had no help read the same.
+        excerpts::apply_codes(
+            &p.conn,
+            ApplyCodesInput {
+                document_id: doc.summary.id.clone(),
+                kind: None,
+                start_pos: Some(0),
+                end_pos: Some(3),
+                geometry: None,
+                code_ids: vec![code.id.clone()],
+            },
+        )
+        .unwrap();
+
+        set_assisted(
+            &p.conn,
+            Some(&AssistedBy {
+                provider: "anthropic".into(),
+                model: "claude-sonnet-5".into(),
+            }),
+        )
+        .unwrap();
+        excerpts::apply_codes(
+            &p.conn,
+            ApplyCodesInput {
+                document_id: doc.summary.id.clone(),
+                kind: None,
+                start_pos: Some(4),
+                end_pos: Some(7),
+                geometry: None,
+                code_ids: vec![code.id.clone()],
+            },
+        )
+        .unwrap();
+        set_assisted(&p.conn, None).unwrap();
+
+        let page = list(&p.conn, &ActivityFilter::default()).unwrap();
+        let entries: Vec<_> = page.entries.iter().rev().collect();
+        let plain = entries
+            .iter()
+            .find(|e| e.detail["startPos"] == json!(0))
+            .unwrap();
+        let helped = entries
+            .iter()
+            .find(|e| e.detail["startPos"] == json!(4))
+            .unwrap();
+        assert!(plain.detail.get("assisted").is_none());
+        assert_eq!(helped.detail["assisted"], json!(true));
+        assert_eq!(helped.detail["assistedBy"]["provider"], json!("anthropic"));
+        assert_eq!(
+            helped.detail["assistedBy"]["model"],
+            json!("claude-sonnet-5")
+        );
+        // The human is still the one who did it.
+        assert_eq!(helped.actor, "Ada");
+        assert_eq!(plain.actor, "Ada");
+    }
+
+    #[test]
+    fn the_assistance_mark_is_per_connection_and_clearable() {
+        let p = OpenProject::in_memory("t").unwrap();
+        assert_eq!(assisted(&p.conn), None);
+        let by = AssistedBy {
+            provider: "openAiCompatible".into(),
+            model: "  llama3  ".into(),
+        };
+        set_assisted(&p.conn, Some(&by)).unwrap();
+        assert_eq!(assisted(&p.conn).unwrap().model, "llama3");
+        set_assisted(&p.conn, None).unwrap();
+        assert_eq!(assisted(&p.conn), None);
+        let n: i64 = p
+            .conn
+            .query_row(
+                "SELECT count(*) FROM main.sqlite_master WHERE name = 'activity_assist'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(n, 0);
     }
 
     #[test]

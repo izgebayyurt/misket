@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { Code, WeightScale } from "@/api/types";
+import type { AssistedRef, Code, WeightScale } from "@/api/types";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter } from "@/components/ui/dialog";
 import { Input, Textarea } from "@/components/ui/input";
@@ -9,6 +9,7 @@ import { nextColor, pathOf } from "@/core/codeTree";
 import { useCodeTree } from "@/queries/codes";
 import { formatWeight, validateWeightScale } from "@/core/weights";
 import { toast } from "@/state/toasts";
+import { DraftDefinitionButton } from "@/components/assist/DraftDefinition";
 
 type Props =
   | {
@@ -16,6 +17,10 @@ type Props =
       parentId: string | null;
       onClose: () => void;
       onCreated?: (code: Code) => void;
+      /** Prefill the name — a "new code" suggestion the person clicked. */
+      initialName?: string;
+      /** Set when the name came from a draft, so the history entry says so. */
+      assisted?: AssistedRef;
     }
   | { mode: "edit"; code: Code; onClose: () => void };
 
@@ -25,12 +30,24 @@ export function CodeDialog(props: Props) {
   const create = useCreateCode();
   const update = useUpdateCode();
   const editing = props.mode === "edit" ? props.code : null;
-  const [name, setName] = useState(editing?.name ?? "");
+  const [name, setName] = useState(
+    editing?.name ?? (props.mode === "create" ? (props.initialName ?? "") : ""),
+  );
   const [color, setColor] = useState(editing?.color ?? nextColor(codes ?? []));
   const [description, setDescription] = useState(editing?.description ?? "");
   const [inclusion, setInclusion] = useState(editing?.inclusion ?? "");
   const [exclusion, setExclusion] = useState(editing?.exclusion ?? "");
   const [shortcut, setShortcut] = useState(editing?.shortcut ?? "");
+  /**
+   * Whether anything in this form started life as a draft. It rides along on
+   * the save so the history entry can say the person had help; the fields
+   * themselves are whatever is in the form when they press Save.
+   */
+  const [assisted, setAssisted] = useState<AssistedRef | undefined>(
+    props.mode === "create" ? props.assisted : undefined,
+  );
+  /** A quotation the draft picked out as the clearest instance, if any. */
+  const [draftedExample, setDraftedExample] = useState("");
 
   // A weight scale is edit-only: a fresh code has nowhere for a rating to
   // live yet, and giving it one is exactly the same "edit code" action as
@@ -90,10 +107,12 @@ export function CodeDialog(props: Props) {
           exclusion,
           parentId: props.parentId,
           shortcut: shortcut || null,
+          assisted,
         });
         props.onCreated?.(created);
       } else {
         await update.mutateAsync({
+          assisted,
           id: props.code.id,
           patch: {
             name,
@@ -181,6 +200,29 @@ export function CodeDialog(props: Props) {
               data-testid="code-exclusion"
             />
           </div>
+          {editing ? (
+            <div>
+              <DraftDefinitionButton
+                codeId={editing.id}
+                codeName={name || editing.name}
+                onDraft={(d, by) => {
+                  // Straight into the form, still editable, still unsaved.
+                  if (d.description) setDescription(d.description);
+                  if (d.inclusion) setInclusion(d.inclusion);
+                  if (d.exclusion) setExclusion(d.exclusion);
+                  setDraftedExample(d.example);
+                  setAssisted(by);
+                }}
+              />
+              {draftedExample ? (
+                <p className="mt-1 text-[11px] text-fg-muted" data-testid="drafted-example">
+                  The draft picked this out as the clearest instance:{" "}
+                  <q className="italic">{draftedExample}</q> — find that excerpt and use its
+                  &ldquo;Use as example&rdquo; button if you agree.
+                </p>
+              ) : null}
+            </div>
+          ) : null}
           <div>
             <label className="text-xs font-medium text-fg-muted" htmlFor="code-shortcut">
               Hotkey (a letter or digit; press it with text selected to apply this code)

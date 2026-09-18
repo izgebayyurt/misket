@@ -54,6 +54,11 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useMediaPlayback } from "./useMediaPlayback";
 import { TranscriptStrip } from "./TranscriptStrip";
+import { paragraphContext } from "@/core/assist/context";
+import { SuggestCodes } from "@/components/assist/SuggestCodes";
+import { useAssistEnabled } from "@/components/assist/useAssist";
+import { CodeDialog } from "@/components/codebook/CodeDialog";
+import type { AssistedRef } from "@/api/types";
 import { SelectionToolbar } from "./SelectionToolbar";
 import { ExcerptPopover } from "./ExcerptPopover";
 import { DocumentTitle } from "./DocumentTitle";
@@ -107,6 +112,29 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
   const [findStem, setFindStem] = useState(false);
   const [findIndex, setFindIndex] = useState(0);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  /**
+   * An open "Suggest codes" panel: which passage it is about and where it
+   * sits. It keeps its own copy of the range so that losing the browser
+   * selection — which clicking a chip does — cannot apply a code to the
+   * wrong place.
+   */
+  const [suggesting, setSuggesting] = useState<{
+    start: number;
+    end: number;
+    passage: string;
+    before: string;
+    after: string;
+    top: number;
+    left: number;
+  } | null>(null);
+  /** A "new code" suggestion the person clicked: the dialog, prefilled. */
+  const [newCodeFrom, setNewCodeFrom] = useState<{
+    name: string;
+    assisted: AssistedRef;
+    start: number;
+    end: number;
+  } | null>(null);
+  const suggestEnabled = useAssistEnabled("suggestCodes");
   const [goToOpen, setGoToOpen] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const showParagraphNumbers = useSettings((s) => s.settings.showParagraphNumbers);
@@ -1077,6 +1105,59 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
   );
 
   /**
+   * Open the suggestions panel for the current selection, with a paragraph of
+   * context either side. The passage and its range are copied out now, so the
+   * panel keeps working after the browser selection goes away.
+   */
+  function openSuggestions() {
+    const p = useWorkspace.getState().pendingSelection;
+    if (p?.kind !== "text" || !doc?.text || !toolbarPos) return;
+    const chars = Array.from(doc.text);
+    const passage = chars.slice(p.start, p.end).join("");
+    const { before, after } = paragraphContext(doc.text, p.start, p.end);
+    setSuggesting({
+      start: p.start,
+      end: p.end,
+      passage,
+      before,
+      after,
+      top: toolbarPos.top,
+      left: toolbarPos.left,
+    });
+  }
+
+  /**
+   * Accept one suggestion. This is the ordinary coding path — same command,
+   * same coder, same undo step — with one extra note saying the person had
+   * help, and from which model.
+   */
+  const applySuggested = useCallback(
+    (codeId: string, assisted: AssistedRef) => {
+      const target = suggesting;
+      if (!target) return;
+      applyCodes.mutate(
+        {
+          documentId,
+          startPos: target.start,
+          endPos: target.end,
+          codeIds: [codeId],
+          assisted,
+        },
+        {
+          onSuccess: (r) => {
+            window.getSelection()?.removeAllRanges();
+            setPending(null);
+            setSuggesting(null);
+            setFocusedId(r.excerpt.id);
+          },
+          onError: (e) => toast.error(e),
+        },
+      );
+    },
+    [applyCodes, documentId, setFocusedId, setPending, suggesting],
+  );
+
+  /**
    * Apply one code to whatever is currently the target — the pending text
    * selection, else the focused excerpt. Shared by the code hotkeys and by
    * quick-code; returns whether there was anything to code at all.
@@ -1396,7 +1477,67 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
           </>
         ) : null}
         {toolbarPos && pending ? (
-          <SelectionToolbar pos={toolbarPos} onCode={() => setPaletteOpen(true)} />
+          <SelectionToolbar
+            pos={toolbarPos}
+            onCode={() => setPaletteOpen(true)}
+            onSuggest={suggestEnabled ? openSuggestions : undefined}
+          />
+        ) : null}
+        {newCodeFrom ? (
+          <CodeDialog
+            mode="create"
+            parentId={null}
+            initialName={newCodeFrom.name}
+            assisted={newCodeFrom.assisted}
+            onClose={() => setNewCodeFrom(null)}
+            onCreated={(code) => {
+              // Creating it and applying it are two steps the person took,
+              // and both say they had help.
+              applyCodes.mutate(
+                {
+                  documentId,
+                  startPos: newCodeFrom.start,
+                  endPos: newCodeFrom.end,
+                  codeIds: [code.id],
+                  assisted: newCodeFrom.assisted,
+                },
+                {
+                  onSuccess: (r) => {
+                    window.getSelection()?.removeAllRanges();
+                    setPending(null);
+                    setSuggesting(null);
+                    setFocusedId(r.excerpt.id);
+                  },
+                  onError: (e) => toast.error(e),
+                },
+              );
+              setNewCodeFrom(null);
+            }}
+          />
+        ) : null}
+        {suggesting ? (
+          <div
+            className="absolute z-20 w-80 max-w-[90%]"
+            style={{ top: suggesting.top + 30, left: suggesting.left }}
+            onMouseDown={(e) => e.preventDefault()}
+          >
+            <SuggestCodes
+              key={`${suggesting.start}-${suggesting.end}`}
+              passage={suggesting.passage}
+              contextBefore={suggesting.before}
+              contextAfter={suggesting.after}
+              onApply={applySuggested}
+              onNewCode={(name, assisted) =>
+                setNewCodeFrom({
+                  name,
+                  assisted,
+                  start: suggesting.start,
+                  end: suggesting.end,
+                })
+              }
+              onClose={() => setSuggesting(null)}
+            />
+          </div>
         ) : null}
         {popover && excerptById.get(popover.id) ? (
           <ExcerptPopover
