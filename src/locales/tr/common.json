@@ -1446,5 +1446,27 @@
     "codeSets": "Kod kümeleri",
     "documentSets": "Kayıt kümeleri",
     "showExcerptsInSet": "\"{{name}}\" kümesindeki alıntıları göster"
+  },
+  "codePalette": {
+    "pickACode": "Bir kod seçin",
+    "targetCodeRegion": "Bölgeyi kodla",
+    "targetCodeStretch": "Aralığı kodla",
+    "targetCodeSelection": "Seçimi kodla",
+    "targetAddToExcerpt": "Alıntıya ekle",
+    "targetNone": "Hedef yok",
+    "noTargetHint": "Önce biraz metin seçin, bir bölge çizin, bir aralık işaretleyin ya da bir alıntıya odaklanın.",
+    "applyACode": "Bir kod uygula",
+    "inputPlaceholder": "Bir kod adı yazın veya >yeni kod",
+    "createCode": "Kod oluştur",
+    "emptyNoCodesYet": "Henüz kod yok. Oluşturmak için >ad yazın.",
+    "emptyNoMatch": "Eşleşen kod yok. Oluşturmak için >ad yazın.",
+    "applied": "uygulandı",
+    "hintPick": "seç",
+    "hintApply": "uygula",
+    "hintPickAndKeepOpen": "seç ve açık tut",
+    "hintApplyAndKeepOpen": "uygula ve açık tut",
+    "hintNamesAfterSelection": "> seçimden sonra bir kod adlandırır",
+    "hintNameCreates": ">ad oluşturur",
+    "hintEscClose": "esc kapat"
   }
 }

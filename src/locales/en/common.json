@@ -1446,5 +1446,27 @@
     "codeSets": "Code sets",
     "documentSets": "Document sets",
     "showExcerptsInSet": "Show excerpts in \"{{name}}\""
+  },
+  "codePalette": {
+    "pickACode": "Pick a code",
+    "targetCodeRegion": "Code region",
+    "targetCodeStretch": "Code stretch",
+    "targetCodeSelection": "Code selection",
+    "targetAddToExcerpt": "Add to excerpt",
+    "targetNone": "No target",
+    "noTargetHint": "Select some text, draw a region, mark a stretch, or focus an excerpt first.",
+    "applyACode": "Apply a code",
+    "inputPlaceholder": "Type a code name, or >new code",
+    "createCode": "Create code",
+    "emptyNoCodesYet": "No codes yet. Type >name to create one.",
+    "emptyNoMatch": "No matching code. Type >name to create it.",
+    "applied": "applied",
+    "hintPick": "pick",
+    "hintApply": "apply",
+    "hintPickAndKeepOpen": "pick and keep open",
+    "hintApplyAndKeepOpen": "apply and keep open",
+    "hintNamesAfterSelection": "> names a code after the selection",
+    "hintNameCreates": ">name creates",
+    "hintEscClose": "esc close"
   }
 }
