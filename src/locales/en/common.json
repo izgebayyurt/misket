@@ -1034,6 +1034,48 @@
       "footerSubcodesIncluded": ", sub-codes included",
       "footerNExplainSpeaker": "An excerpt belongs to the turn it starts in, so one transcript feeds several columns and n is the documents that speaker appears in.",
       "footerNExplainDocument": "A document belongs to exactly one column, so a row adds up to its total;"
+    },
+    "exportRasterizeError": "Could not rasterize the chart.",
+    "exportCanvasError": "Could not get a 2D canvas context.",
+    "exportEncodeError": "Could not encode the PNG.",
+    "clustering": {
+      "empty": "Nothing to cluster yet: two or more codes need to co-occur (be applied to overlapping passages) before they can be grouped by similarity.",
+      "similarityMatrix": "Similarity matrix (ordered by the dendrogram)",
+      "clusterCount_one": "{{count, number}} cluster",
+      "clusterCount_other": "{{count, number}} clusters",
+      "cutHeight": "Cut height",
+      "clusterLabel": "Cluster {{n}} ({{count}})",
+      "createParentEllipsis": "Create parent code from cluster…",
+      "footerExplain": "Similarity is {{method}} over each pair of codes' excerpt sets. Use the cut-height slider to change how many clusters that makes; double-click a leaf to see that code's excerpts.",
+      "methodJaccard": "the Jaccard index",
+      "methodCosine": "cosine similarity",
+      "dendrogramLabel": "Code similarity dendrogram",
+      "similarityCellTitle": "{{rowPath}} × {{colPath}}: {{value}}",
+      "createParentLabel": "Create \"{{name}}\" from a cluster of {{count, number}} codes",
+      "createParentTitle": "Create parent code from cluster",
+      "createParentDescription_one": "Moves {{count, number}} code under a new top-level code, as one undoable step.",
+      "createParentDescription_other": "Moves {{count, number}} codes under a new top-level code, as one undoable step.",
+      "newCodeName": "New code name",
+      "colorLabel": "Color",
+      "create": "Create"
+    },
+    "framework": {
+      "configureMatrix": "Configure matrix",
+      "newMatrix": "New framework matrix",
+      "dialogDescription": "Cases down the side, themes across the top; you write the summary in each cell.",
+      "nameLabel": "Name",
+      "namePlaceholder": "Access to care, wave 1",
+      "rowsLabel": "Rows (cases)",
+      "everyDocument": "Every document",
+      "documentsInSet": "Documents in a set",
+      "chooseDocumentSet": "Choose a document set…",
+      "rowPerDescriptorValue": "One row per value of a descriptor",
+      "chooseField": "Choose a field…",
+      "columnsLabel": "Columns (themes)",
+      "codesInSet": "Codes in a set",
+      "chooseCodeSet": "Choose a code set…",
+      "pickedCodes": "Picked codes",
+      "emptyCodebook": "The codebook is empty."
     }
   }
 }

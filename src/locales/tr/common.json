@@ -1034,6 +1034,48 @@
       "footerSubcodesIncluded": ", alt kodlar dahil",
       "footerNExplainSpeaker": "Bir alıntı, başladığı konuşmaya aittir, bu yüzden bir çeviriyazı birden çok sütunu besler ve n, o konuşmacının göründüğü belge sayısıdır.",
       "footerNExplainDocument": "Bir belge tam olarak bir sütuna aittir, bu yüzden bir satır kendi toplamına ulaşır;"
+    },
+    "exportRasterizeError": "Grafik rasterleştirilemedi.",
+    "exportCanvasError": "2D tuval bağlamı alınamadı.",
+    "exportEncodeError": "PNG kodlanamadı.",
+    "clustering": {
+      "empty": "Henüz kümelenecek bir şey yok: benzerliğe göre gruplanabilmeleri için iki veya daha fazla kodun birlikte oluşması (örtüşen pasajlara uygulanması) gerekir.",
+      "similarityMatrix": "Benzerlik matrisi (dendrograma göre sıralı)",
+      "clusterCount_one": "{{count, number}} küme",
+      "clusterCount_other": "{{count, number}} küme",
+      "cutHeight": "Kesim yüksekliği",
+      "clusterLabel": "Küme {{n}} ({{count}})",
+      "createParentEllipsis": "Kümeden üst kod oluştur…",
+      "footerExplain": "Benzerlik, her kod çiftinin alıntı kümeleri üzerinden {{method}} olarak hesaplanır. Kaç küme oluşacağını değiştirmek için kesim yüksekliği kaydırıcısını kullanın; bir kodun alıntılarını görmek için bir yaprağa çift tıklayın.",
+      "methodJaccard": "Jaccard indeksi",
+      "methodCosine": "kosinüs benzerliği",
+      "dendrogramLabel": "Kod benzerliği dendrogramı",
+      "similarityCellTitle": "{{rowPath}} × {{colPath}}: {{value}}",
+      "createParentLabel": "\"{{name}}\" kodunu {{count, number}} kodluk bir kümeden oluştur",
+      "createParentTitle": "Kümeden üst kod oluştur",
+      "createParentDescription_one": "{{count, number}} kodu, geri alınabilir tek bir adımla yeni bir üst düzey kodun altına taşır.",
+      "createParentDescription_other": "{{count, number}} kodu, geri alınabilir tek bir adımla yeni bir üst düzey kodun altına taşır.",
+      "newCodeName": "Yeni kod adı",
+      "colorLabel": "Renk",
+      "create": "Oluştur"
+    },
+    "framework": {
+      "configureMatrix": "Matrisi yapılandır",
+      "newMatrix": "Yeni çerçeve matrisi",
+      "dialogDescription": "Vakalar kenarda, temalar üstte; özeti her hücreye siz yazarsınız.",
+      "nameLabel": "Ad",
+      "namePlaceholder": "Bakıma erişim, 1. dalga",
+      "rowsLabel": "Satırlar (vakalar)",
+      "everyDocument": "Her belge",
+      "documentsInSet": "Bir kümedeki belgeler",
+      "chooseDocumentSet": "Bir belge kümesi seçin…",
+      "rowPerDescriptorValue": "Bir betimleyicinin her değeri için bir satır",
+      "chooseField": "Bir alan seçin…",
+      "columnsLabel": "Sütunlar (temalar)",
+      "codesInSet": "Bir kümedeki kodlar",
+      "chooseCodeSet": "Bir kod kümesi seçin…",
+      "pickedCodes": "Seçilen kodlar",
+      "emptyCodebook": "Kod defteri boş."
     }
   }
 }

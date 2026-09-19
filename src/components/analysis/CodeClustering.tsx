@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import { Boxes } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import {
   averageLinkage,
   cutTree,
@@ -46,6 +47,7 @@ function clusterColorScale(clusters: string[][]): Map<string, string> {
 }
 
 export function CodeClustering() {
+  const { t } = useTranslation();
   const [documentIds, setDocumentIds] = useState<string[]>([]);
   const [documentSetIds, setDocumentSetIds] = useState<string[]>([]);
   const [coderIds, setCoderIds] = useState<string[]>([]);
@@ -116,11 +118,7 @@ export function CodeClustering() {
           svgRef={svgRef}
           disabled
         />
-        <EmptyNote>
-          {isPending
-            ? "Counting…"
-            : "Nothing to cluster yet: two or more codes need to co-occur (be applied to overlapping passages) before they can be grouped by similarity."}
-        </EmptyNote>
+        <EmptyNote>{isPending ? t("analysis.counting") : t("analysis.clustering.empty")}</EmptyNote>
       </div>
     );
   }
@@ -153,7 +151,7 @@ export function CodeClustering() {
             onOpenExcerpts={(id) => openExcerpts({ codeIds: [id], includeDescendants: false })}
           />
           <h3 className="mt-6 mb-2 text-xs font-medium text-fg-muted">
-            Similarity matrix (ordered by the dendrogram)
+            {t("analysis.clustering.similarityMatrix")}
           </h3>
           <SimilarityHeatmap
             order={leafOrder}
@@ -173,7 +171,7 @@ export function CodeClustering() {
         <div className="w-64 shrink-0 overflow-auto p-3" data-testid="cluster-list">
           <div className="mb-2 flex items-center justify-between">
             <h3 className="text-xs font-medium text-fg-muted">
-              {clusters.length} cluster{clusters.length === 1 ? "" : "s"}
+              {t("analysis.clustering.clusterCount", { count: clusters.length })}
             </h3>
             <input
               type="range"
@@ -184,7 +182,7 @@ export function CodeClustering() {
               onChange={(e) => setCutHeight(Number(e.target.value))}
               className="w-24 accent-[var(--accent)]"
               data-testid="cluster-cut-height"
-              aria-label="Cut height"
+              aria-label={t("analysis.clustering.cutHeight")}
             />
           </div>
           <ul className="space-y-2">
@@ -193,7 +191,7 @@ export function CodeClustering() {
                 <div className="mb-1 flex items-center gap-1.5">
                   <ColorDot color={clusterColor.get(members[0]!) ?? NEUTRAL} />
                   <span className="font-medium">
-                    Cluster {i + 1} ({members.length})
+                    {t("analysis.clustering.clusterLabel", { n: i + 1, count: members.length })}
                   </span>
                 </div>
                 <ul className="space-y-0.5">
@@ -211,7 +209,7 @@ export function CodeClustering() {
                     onClick={() => setDialogMembers(members)}
                     data-testid="create-parent-from-cluster"
                   >
-                    Create parent code from cluster…
+                    {t("analysis.clustering.createParentEllipsis")}
                   </button>
                 ) : null}
               </li>
@@ -220,9 +218,13 @@ export function CodeClustering() {
         </div>
       </div>
       <p className="border-t border-border px-4 py-2 text-xs text-fg-muted">
-        Similarity is {method === "jaccard" ? "the Jaccard index" : "cosine similarity"} over each
-        pair of codes&rsquo; excerpt sets. Use the cut-height slider to change how many clusters
-        that makes; double-click a leaf to see that code&rsquo;s excerpts.
+        {t("analysis.clustering.footerExplain", {
+          method: t(
+            method === "jaccard"
+              ? "analysis.clustering.methodJaccard"
+              : "analysis.clustering.methodCosine",
+          ),
+        })}
       </p>
       {dialogMembers ? (
         <CreateParentDialog memberIds={dialogMembers} onClose={() => setDialogMembers(null)} />
@@ -307,6 +309,7 @@ function Dendrogram({
   clusterColor: Map<string, string>;
   onOpenExcerpts: (id: string) => void;
 }) {
+  const { t } = useTranslation();
   if (!tree || leafOrder.length < 2) return null;
   const height = leafOrder.length * ROW_HEIGHT + 8;
   const plotWidth = 260;
@@ -352,7 +355,7 @@ function Dendrogram({
       width={width}
       height={height}
       role="img"
-      aria-label="Code similarity dendrogram"
+      aria-label={t("analysis.clustering.dendrogramLabel")}
       data-testid="dendrogram-svg"
     >
       <line
@@ -404,6 +407,7 @@ function SimilarityHeatmap({
   pairCount: (a: string, b: string) => number;
   onOpenExcerpts: (a: string, b: string) => void;
 }) {
+  const { t } = useTranslation();
   if (order.length < 2) return null;
   return (
     <table className="border-separate border-spacing-0 text-xs" data-testid="similarity-matrix">
@@ -458,7 +462,11 @@ function SimilarityHeatmap({
                         : "",
                   )}
                   style={diagonal ? undefined : shade(s, 1)}
-                  title={`${pathOf(tree, row)} × ${pathOf(tree, col)}: ${s.toFixed(2)}`}
+                  title={t("analysis.clustering.similarityCellTitle", {
+                    rowPath: pathOf(tree, row),
+                    colPath: pathOf(tree, col),
+                    value: s.toFixed(2),
+                  })}
                   onClick={() => onOpenExcerpts(row, col)}
                 >
                   {diagonal ? "" : s > 0.005 ? s.toFixed(2).replace(/^0\./, ".") : ""}
@@ -473,6 +481,7 @@ function SimilarityHeatmap({
 }
 
 function CreateParentDialog({ memberIds, onClose }: { memberIds: string[]; onClose: () => void }) {
+  const { t } = useTranslation();
   const tree = useCodeTree();
   const { data: codes } = useCodes();
   const create = useCreateParentFromCluster();
@@ -487,7 +496,10 @@ function CreateParentDialog({ memberIds, onClose }: { memberIds: string[]; onClo
         name: name.trim(),
         color,
         memberIds,
-        label: `Create "${name.trim()}" from a cluster of ${memberIds.length} codes`,
+        label: t("analysis.clustering.createParentLabel", {
+          name: name.trim(),
+          count: memberIds.length,
+        }),
       });
       onClose();
     } catch (err) {
@@ -497,11 +509,10 @@ function CreateParentDialog({ memberIds, onClose }: { memberIds: string[]; onClo
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent title="Create parent code from cluster">
+      <DialogContent title={t("analysis.clustering.createParentTitle")}>
         <form onSubmit={submit} className="space-y-3">
           <p className="text-xs text-fg-muted">
-            Moves {memberIds.length} code{memberIds.length === 1 ? "" : "s"} under a new top-level
-            code, as one undoable step.
+            {t("analysis.clustering.createParentDescription", { count: memberIds.length })}
           </p>
           <ul className="max-h-24 space-y-0.5 overflow-auto rounded-md border border-border p-2 text-xs">
             {memberIds.map((id) => (
@@ -513,7 +524,7 @@ function CreateParentDialog({ memberIds, onClose }: { memberIds: string[]; onClo
           </ul>
           <div>
             <label className="text-xs font-medium text-fg-muted" htmlFor="cluster-parent-name">
-              New code name
+              {t("analysis.clustering.newCodeName")}
             </label>
             <Input
               id="cluster-parent-name"
@@ -525,21 +536,23 @@ function CreateParentDialog({ memberIds, onClose }: { memberIds: string[]; onClo
             />
           </div>
           <div>
-            <span className="text-xs font-medium text-fg-muted">Color</span>
+            <span className="text-xs font-medium text-fg-muted">
+              {t("analysis.clustering.colorLabel")}
+            </span>
             <div className="mt-1">
               <ColorPicker value={color} onChange={setColor} />
             </div>
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button
               type="submit"
               disabled={!name.trim() || create.isPending}
               data-testid="cluster-parent-submit"
             >
-              <Boxes /> Create
+              <Boxes /> {t("analysis.clustering.create")}
             </Button>
           </DialogFooter>
         </form>
