@@ -157,6 +157,8 @@ because a bare full stop everywhere else in Misket is a full stop.
 
 ## Transcription
 
+On macOS the app needs 10.15 or newer: whisper.cpp uses `std::filesystem`, so `bundle.macOS.minimumSystemVersion` and the workflows' `MACOSX_DEPLOYMENT_TARGET` are both set to 10.15 and must move together.
+
 Turning a recording into a transcript runs on the machine, with whisper.cpp
 through the `whisper-rs` bindings. It lives in `src-tauri/src/transcribe/`
 rather than in `misket-core`, because none of it is domain logic over the

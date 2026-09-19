@@ -7,6 +7,11 @@ on:
 permissions:
   contents: write
 
+# whisper.cpp uses std::filesystem, which Apple ships from macOS 10.15;
+# Tauri's default target is 10.13. Keep in step with bundle.macOS.minimumSystemVersion.
+env:
+  MACOSX_DEPLOYMENT_TARGET: "10.15"
+
 jobs:
   build:
     name: Build (${{ matrix.name }})
