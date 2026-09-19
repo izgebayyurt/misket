@@ -1468,5 +1468,47 @@
     "hintNamesAfterSelection": "> names a code after the selection",
     "hintNameCreates": ">name creates",
     "hintEscClose": "esc close"
+  },
+  "refi": {
+    "import": {
+      "title": "Import a REFI-QDA project",
+      "descriptionWithPreview": "{{fileName}}, written by {{origin}}.",
+      "descriptionNoPreview": "Choose a .qdpx file exported by NVivo, ATLAS.ti, MAXQDA, QualCoder or another QDA tool.",
+      "unnamedTool": "an unnamed tool",
+      "reading": "Reading {{fileName}}…",
+      "unnamedProject": "An unnamed REFI-QDA project",
+      "nothingToImport": "There is nothing in {{fileName}} that Misket can read.",
+      "rows": {
+        "textSources": "text sources",
+        "pictures": "pictures",
+        "codes": "codes",
+        "codings": "codings",
+        "users": "users",
+        "notes": "notes",
+        "variables": "variables",
+        "sets": "sets"
+      },
+      "modeLegend": "How it should arrive",
+      "modeMergeTitle": "Merge into this project",
+      "modeMergeHint": "Documents you already have are matched by their text, codes by their full name; everything else is added.",
+      "modeReplaceTitle": "Take it as this project",
+      "modeReplaceDisabledHint": "Only available in a project with no documents and no codes.",
+      "modeReplaceHint": "Everything arrives with the identities the file gives it.",
+      "unsupportedHeading": "What will not come over",
+      "units": {
+        "documents_one": "{{count, number}} document",
+        "documents_other": "{{count, number}} documents",
+        "codes_one": "{{count, number}} code",
+        "codes_other": "{{count, number}} codes",
+        "excerpts_one": "{{count, number}} excerpt",
+        "excerpts_other": "{{count, number}} excerpts",
+        "codings_one": "{{count, number}} coding",
+        "codings_other": "{{count, number}} codings",
+        "memos_one": "{{count, number}} memo",
+        "memos_other": "{{count, number}} memos"
+      },
+      "toastImported": "Imported “{{label}}”: {{what}}; undo with {{shortcut}}",
+      "toastImportedNothingNew": "Imported “{{label}}”: nothing new; undo with {{shortcut}}"
+    }
   }
 }

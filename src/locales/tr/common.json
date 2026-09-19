@@ -1468,5 +1468,47 @@
     "hintNamesAfterSelection": "> seçimden sonra bir kod adlandırır",
     "hintNameCreates": ">ad oluşturur",
     "hintEscClose": "esc kapat"
+  },
+  "refi": {
+    "import": {
+      "title": "Bir REFI-QDA projesi içe aktar",
+      "descriptionWithPreview": "{{fileName}}, {{origin}} tarafından yazılmış.",
+      "descriptionNoPreview": "NVivo, ATLAS.ti, MAXQDA, QualCoder veya başka bir NVA aracıyla dışa aktarılmış bir .qdpx dosyası seçin.",
+      "unnamedTool": "adsız bir araç",
+      "reading": "{{fileName}} okunuyor…",
+      "unnamedProject": "Adsız bir REFI-QDA projesi",
+      "nothingToImport": "{{fileName}} içinde Misket'in okuyabileceği bir şey yok.",
+      "rows": {
+        "textSources": "metin kaynağı",
+        "pictures": "görsel",
+        "codes": "kod",
+        "codings": "kodlama",
+        "users": "kullanıcı",
+        "notes": "not",
+        "variables": "değişken",
+        "sets": "küme"
+      },
+      "modeLegend": "Nasıl aktarılacağı",
+      "modeMergeTitle": "Bu projeye birleştir",
+      "modeMergeHint": "Sahip olduğunuz kayıtlar metinlerine göre, kodlar tam adına göre eşleştirilir; geri kalan her şey eklenir.",
+      "modeReplaceTitle": "Bunu proje olarak al",
+      "modeReplaceDisabledHint": "Yalnızca kaydı ve kodu olmayan bir projede kullanılabilir.",
+      "modeReplaceHint": "Her şey dosyanın verdiği kimliklerle gelir.",
+      "unsupportedHeading": "Aktarılmayacaklar",
+      "units": {
+        "documents_one": "{{count, number}} kayıt",
+        "documents_other": "{{count, number}} kayıt",
+        "codes_one": "{{count, number}} kod",
+        "codes_other": "{{count, number}} kod",
+        "excerpts_one": "{{count, number}} alıntı",
+        "excerpts_other": "{{count, number}} alıntı",
+        "codings_one": "{{count, number}} kodlama",
+        "codings_other": "{{count, number}} kodlama",
+        "memos_one": "{{count, number}} not",
+        "memos_other": "{{count, number}} not"
+      },
+      "toastImported": "“{{label}}” içe aktarıldı: {{what}}; geri almak için {{shortcut}}",
+      "toastImportedNothingNew": "“{{label}}” içe aktarıldı: yeni bir şey yok; geri almak için {{shortcut}}"
+    }
   }
 }
