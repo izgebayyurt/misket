@@ -206,7 +206,7 @@
     "importCodebook": "Import codebook…",
     "exportCodebook": "Export codebook…",
     "exportedTo": "Exported codebook to {{name}}",
-    "noCodesYet": "No codes yet. Create one, or type <kbd>&gt;name</kbd> in the palette ({{chord}}) while coding.",
+    "noCodesYet": "No codes yet. Create one, or type <kbd>>name</kbd> in the palette ({{chord}}) while coding.",
     "expand": "Expand",
     "collapse": "Collapse",
     "codeActions": "Code actions",

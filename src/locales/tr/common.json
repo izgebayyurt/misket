@@ -206,7 +206,7 @@
     "importCodebook": "Kod defteri içe aktar…",
     "exportCodebook": "Kod defteri dışa aktar…",
     "exportedTo": "Kod defteri {{name}} konumuna dışa aktarıldı",
-    "noCodesYet": "Henüz kod yok. Bir tane oluştur, ya da kodlarken palette'te <kbd>&gt;ad</kbd> yazarak oluştur ({{chord}}).",
+    "noCodesYet": "Henüz kod yok. Bir tane oluştur, ya da kodlarken palette'te <kbd>>ad</kbd> yazarak oluştur ({{chord}}).",
     "expand": "Genişlet",
     "collapse": "Daralt",
     "codeActions": "Kod eylemleri",
