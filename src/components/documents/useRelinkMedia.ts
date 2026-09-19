@@ -1,6 +1,8 @@
 import { useCallback } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
+import { useTranslation } from "react-i18next";
 import { MEDIA_EXTENSIONS } from "@/core/media";
+import { describe } from "@/core/keymap";
 import { useRelinkMediaDocument } from "@/queries/documents";
 import { toast } from "@/state/toasts";
 
@@ -13,6 +15,7 @@ import { toast } from "@/state/toasts";
  * (`document.relinked`), which is why the toast says so.
  */
 export function useRelinkMedia() {
+  const { t } = useTranslation();
   const relink = useRelinkMediaDocument();
 
   const pickAndRelink = useCallback(
@@ -25,14 +28,14 @@ export function useRelinkMedia() {
       if (typeof picked !== "string") return false;
       try {
         await relink.mutateAsync({ id: documentId, path: picked });
-        toast.info("Relinked. Undo with Ctrl/⌘+Z if that was the wrong file.");
+        toast.info(t("documents.relinkToast.toastRelinked", { shortcut: describe("undo") }));
         return true;
       } catch (e) {
         toast.error(e);
         return false;
       }
     },
-    [relink],
+    [relink, t],
   );
 
   return { pickAndRelink, isPending: relink.isPending };

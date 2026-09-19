@@ -1,4 +1,5 @@
 import { convertFileSrc } from "@tauri-apps/api/core";
+import i18next from "@/lib/i18n";
 import { ensureTessdataFile, listTessdataLanguages } from "@/api/ocr";
 import type { OcrAssetPaths } from "@/core/importers/pdfOcr";
 
@@ -25,7 +26,9 @@ function ensureEngSeeded(): Promise<string> {
   seededEngDir ??= (async () => {
     const res = await fetch(BUNDLED_ENG_URL);
     if (!res.ok) {
-      throw new Error(`Could not load the bundled OCR language data (HTTP ${res.status}).`);
+      throw new Error(
+        i18next.t("documents.ocrRuntime.couldNotLoadBundledData", { status: res.status }),
+      );
     }
     const bytes = new Uint8Array(await res.arrayBuffer());
     return ensureTessdataFile("eng.traineddata", bytes);

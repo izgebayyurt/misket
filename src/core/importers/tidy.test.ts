@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import i18n from "@/lib/i18n";
 import {
   analyzeWhitespace,
   DEFAULT_TIDY_OPTIONS,
@@ -7,6 +8,8 @@ import {
   tidyText,
   type TidyOptions,
 } from "./tidy";
+
+const t = i18n.t.bind(i18n);
 
 const ALL_ON: TidyOptions = {
   collapseBlankLines: true,
@@ -189,13 +192,13 @@ describe("tidyText", () => {
 
 describe("summarizeWhitespace", () => {
   it("returns nothing for a clean report", () => {
-    expect(summarizeWhitespace(analyzeWhitespace("Clean.\nText."))).toEqual([]);
+    expect(summarizeWhitespace(analyzeWhitespace("Clean.\nText."), t)).toEqual([]);
   });
 
   it("describes each non-zero metric", () => {
     const text = "a  \n\n\n\nb\u00A0c\td\nlowercase after this";
     const report = analyzeWhitespace(text);
-    const parts = summarizeWhitespace(report);
+    const parts = summarizeWhitespace(report, t);
     expect(parts.length).toBeGreaterThan(0);
     expect(parts.join(" / ")).toContain("blank lines");
   });

@@ -165,31 +165,32 @@ export function tidyText(text: string, options: TidyOptions): string {
   return lines.join("\n");
 }
 
+/** `src/core` stays framework-free (see CLAUDE.md), so `summarizeWhitespace`
+ * takes a translator instead of importing `react-i18next` itself. */
+export type TidyT = (key: string, params?: Record<string, unknown>) => string;
+
 /** Short phrases describing what a report found, for a compact summary in the UI. */
-export function summarizeWhitespace(report: WhitespaceReport): string[] {
+export function summarizeWhitespace(report: WhitespaceReport, t: TidyT): string[] {
   const parts: string[] = [];
   if (report.blankLineRuns > 0) {
     parts.push(
-      `${report.blankLineRuns} run${report.blankLineRuns === 1 ? "" : "s"} of blank lines (up to ${report.maxBlankRun} in a row)`,
+      t("documents.tidy.blankLineRuns", {
+        count: report.blankLineRuns,
+        max: report.maxBlankRun,
+      }),
     );
   }
   if (report.trailingSpaceLines > 0) {
-    parts.push(
-      `${report.trailingSpaceLines} line${report.trailingSpaceLines === 1 ? "" : "s"} with trailing spaces`,
-    );
+    parts.push(t("documents.tidy.trailingSpaceLines", { count: report.trailingSpaceLines }));
   }
   if (report.tabLines > 0) {
-    parts.push(`${report.tabLines} line${report.tabLines === 1 ? "" : "s"} with tabs`);
+    parts.push(t("documents.tidy.tabLines", { count: report.tabLines }));
   }
   if (report.hardWrappedLines > 0) {
-    parts.push(
-      `${report.hardWrappedLines} hard-wrapped line${report.hardWrappedLines === 1 ? "" : "s"}`,
-    );
+    parts.push(t("documents.tidy.hardWrappedLines", { count: report.hardWrappedLines }));
   }
   if (report.nonBreakingSpaces > 0) {
-    parts.push(
-      `${report.nonBreakingSpaces} non-breaking space${report.nonBreakingSpaces === 1 ? "" : "s"}`,
-    );
+    parts.push(t("documents.tidy.nonBreakingSpaces", { count: report.nonBreakingSpaces }));
   }
   return parts;
 }
