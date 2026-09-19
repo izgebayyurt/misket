@@ -10,16 +10,26 @@ import type { WeightScale } from "@/api/types";
  * backend confirms it.
  */
 
+/** A translator, so this module can hand back a localized problem
+ * description without importing react/i18next itself (src/core stays
+ * framework-free — see CLAUDE.md). The caller passes `useTranslation()`'s
+ * `t`. */
+export type WeightsT = (key: string, params?: Record<string, unknown>) => string;
+
 /** `min < max`, `step > 0`, `default` within `[min, max]`. */
-export function validateWeightScale(scale: WeightScale): string | null {
+export function validateWeightScale(scale: WeightScale, t: WeightsT): string | null {
   if (!(scale.min < scale.max)) {
-    return `min (${scale.min}) must be less than max (${scale.max})`;
+    return t("codebook.weightScale.problemMinMax", { min: scale.min, max: scale.max });
   }
   if (!(scale.step > 0)) {
-    return `step (${scale.step}) must be greater than zero`;
+    return t("codebook.weightScale.problemStep", { step: scale.step });
   }
   if (scale.default < scale.min || scale.default > scale.max) {
-    return `default (${scale.default}) must be between ${scale.min} and ${scale.max}`;
+    return t("codebook.weightScale.problemDefault", {
+      default: scale.default,
+      min: scale.min,
+      max: scale.max,
+    });
   }
   return null;
 }

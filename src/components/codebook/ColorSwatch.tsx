@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { PALETTE } from "@/core/codeTree";
 import { cn } from "@/lib/utils";
 
@@ -12,8 +13,13 @@ export function ColorDot({ color, className }: { color: string; className?: stri
 }
 
 export function ColorPicker({ value, onChange }: { value: string; onChange: (c: string) => void }) {
+  const { t } = useTranslation();
   return (
-    <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Color">
+    <div
+      className="flex flex-wrap gap-1.5"
+      role="radiogroup"
+      aria-label={t("analysis.clustering.colorLabel")}
+    >
       {PALETTE.map((c) => (
         <button
           key={c}

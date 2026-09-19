@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { WeightScale } from "@/api/types";
+import i18n from "@/lib/i18n";
 import {
   fitsWeightScale,
   formatWeight,
@@ -20,17 +21,19 @@ const sentiment: WeightScale = {
 };
 
 describe("validateWeightScale", () => {
+  const t = i18n.t.bind(i18n);
+
   it("rejects min >= max, step <= 0 and an out-of-range default", () => {
-    expect(validateWeightScale({ min: 5, max: 1, step: 1, default: 3 })).toMatch(/min/);
-    expect(validateWeightScale({ min: 1, max: 5, step: 0, default: 3 })).toMatch(/step/);
-    expect(validateWeightScale({ min: 1, max: 5, step: -1, default: 3 })).toMatch(/step/);
-    expect(validateWeightScale({ min: 1, max: 5, step: 1, default: 6 })).toMatch(/default/);
-    expect(validateWeightScale({ min: 1, max: 5, step: 1, default: 0 })).toMatch(/default/);
+    expect(validateWeightScale({ min: 5, max: 1, step: 1, default: 3 }, t)).toMatch(/min/);
+    expect(validateWeightScale({ min: 1, max: 5, step: 0, default: 3 }, t)).toMatch(/step/);
+    expect(validateWeightScale({ min: 1, max: 5, step: -1, default: 3 }, t)).toMatch(/step/);
+    expect(validateWeightScale({ min: 1, max: 5, step: 1, default: 6 }, t)).toMatch(/default/);
+    expect(validateWeightScale({ min: 1, max: 5, step: 1, default: 0 }, t)).toMatch(/default/);
   });
 
   it("accepts a well-formed scale", () => {
-    expect(validateWeightScale(intensity)).toBeNull();
-    expect(validateWeightScale(sentiment)).toBeNull();
+    expect(validateWeightScale(intensity, t)).toBeNull();
+    expect(validateWeightScale(sentiment, t)).toBeNull();
   });
 });
 

@@ -1,4 +1,5 @@
 import { Star } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { useCodes } from "@/queries/codes";
 import { useExcerptDetail } from "@/queries/excerpts";
 import { useWorkspace } from "@/state/workspace";
@@ -10,6 +11,7 @@ import { useWorkspace } from "@/state/workspace";
  * this is where the whole thing is readable.
  */
 export function CodeDefinition({ codeId }: { codeId: string }) {
+  const { t } = useTranslation();
   const { data: codes } = useCodes();
   const code = codes?.find((c) => c.id === codeId);
   const { data: example } = useExcerptDetail(code?.exampleExcerptId ?? null);
@@ -22,24 +24,30 @@ export function CodeDefinition({ codeId }: { codeId: string }) {
   return (
     <section className="border-b border-border p-3" data-testid="code-definition">
       <h3 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-fg-muted">
-        Definition
+        {t("codebook.definition.title")}
       </h3>
       <dl className="space-y-1.5 text-sm">
         {code.description ? (
           <div>
-            <dt className="text-[11px] uppercase tracking-wide text-fg-muted">Means</dt>
+            <dt className="text-[11px] uppercase tracking-wide text-fg-muted">
+              {t("codebook.definition.means")}
+            </dt>
             <dd className="whitespace-pre-wrap">{code.description}</dd>
           </div>
         ) : null}
         {code.inclusion ? (
           <div>
-            <dt className="text-[11px] uppercase tracking-wide text-fg-muted">Include when</dt>
+            <dt className="text-[11px] uppercase tracking-wide text-fg-muted">
+              {t("codebook.dialog.inclusionLabel")}
+            </dt>
             <dd className="whitespace-pre-wrap">{code.inclusion}</dd>
           </div>
         ) : null}
         {code.exclusion ? (
           <div>
-            <dt className="text-[11px] uppercase tracking-wide text-fg-muted">Exclude when</dt>
+            <dt className="text-[11px] uppercase tracking-wide text-fg-muted">
+              {t("codebook.dialog.exclusionLabel")}
+            </dt>
             <dd className="whitespace-pre-wrap">{code.exclusion}</dd>
           </div>
         ) : null}
@@ -47,20 +55,20 @@ export function CodeDefinition({ codeId }: { codeId: string }) {
       {code.exampleExcerptId ? (
         <div className="mt-2">
           <p className="flex items-center gap-1 text-[11px] uppercase tracking-wide text-fg-muted">
-            <Star className="size-3 fill-current text-accent" /> Example
+            <Star className="size-3 fill-current text-accent" /> {t("codebook.definition.example")}
           </p>
           {example ? (
             <button
               type="button"
               className="mt-0.5 w-full rounded border-l-2 border-accent bg-muted/60 px-2 py-1 text-left hover:bg-muted"
               onClick={() => openDocument(example.documentId, example.id)}
-              title="Open this excerpt in its document"
+              title={t("codebook.definition.openExcerptHint")}
             >
               <span className="block font-serif text-[13px] leading-snug">{example.snapshot}</span>
               <span className="mt-0.5 block text-[11px] text-fg-muted">{example.documentName}</span>
             </button>
           ) : (
-            <p className="mt-0.5 text-[13px] text-fg-muted">Loading…</p>
+            <p className="mt-0.5 text-[13px] text-fg-muted">{t("common.loading")}</p>
           )}
         </div>
       ) : null}

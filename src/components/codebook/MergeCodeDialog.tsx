@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { Code } from "@/api/types";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter } from "@/components/ui/dialog";
@@ -10,6 +11,7 @@ import { toast } from "@/state/toasts";
 import { cn } from "@/lib/utils";
 
 export function MergeCodeDialog({ code, onClose }: { code: Code; onClose: () => void }) {
+  const { t } = useTranslation();
   const tree = useCodeTree();
   const merge = useMergeCode();
   const [query, setQuery] = useState("");
@@ -21,12 +23,12 @@ export function MergeCodeDialog({ code, onClose }: { code: Code; onClose: () => 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent
-        title={`Merge "${code.name}" into…`}
-        description="Its excerpts, sub-codes and memos move to the target code. You can undo this."
+        title={t("codebook.mergeDialog.title", { name: code.name })}
+        description={t("codebook.mergeDialog.description")}
       >
         <Input
           autoFocus
-          placeholder="Filter codes"
+          placeholder={t("codebook.mergeDialog.filterCodes")}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
@@ -47,12 +49,14 @@ export function MergeCodeDialog({ code, onClose }: { code: Code; onClose: () => 
             </li>
           ))}
           {candidates.length === 0 ? (
-            <li className="px-2 py-2 text-sm text-fg-muted">No other codes.</li>
+            <li className="px-2 py-2 text-sm text-fg-muted">
+              {t("codebook.mergeDialog.noOtherCodes")}
+            </li>
           ) : null}
         </ul>
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>
-            Cancel
+            {t("common.cancel")}
           </Button>
           <Button
             disabled={!targetId || merge.isPending}
@@ -66,7 +70,7 @@ export function MergeCodeDialog({ code, onClose }: { code: Code; onClose: () => 
               }
             }}
           >
-            Merge
+            {t("codebook.mergeDialog.merge")}
           </Button>
         </DialogFooter>
       </DialogContent>

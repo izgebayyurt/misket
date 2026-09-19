@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { Code } from "@/api/types";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter } from "@/components/ui/dialog";
@@ -15,6 +16,7 @@ import { cn } from "@/lib/utils";
  * survive — this is the "I split this theme in two" move — so it is undoable.
  */
 export function MoveExcerptsDialog({ code, onClose }: { code: Code; onClose: () => void }) {
+  const { t } = useTranslation();
   const tree = useCodeTree();
   const retag = useRetagCode();
   const [query, setQuery] = useState("");
@@ -26,18 +28,19 @@ export function MoveExcerptsDialog({ code, onClose }: { code: Code; onClose: () 
 
   async function move() {
     if (!targetId) return;
-    const target = tree.byId.get(targetId)?.code.name ?? "another code";
+    const target =
+      tree.byId.get(targetId)?.code.name ?? t("codebook.moveExcerptsDialog.anotherCode");
     try {
       const report = await retag.mutateAsync({
         fromCodeId: code.id,
         toCodeId: targetId,
-        label: `Move ${count} excerpt${count === 1 ? "" : "s"} to ${target}`,
+        label: t("codebook.moveExcerptsDialog.moveLabel", { count, target }),
       });
       const moved = report.moved.length + report.alreadyHad.length;
       toast.info(
         moved
-          ? `Moved ${moved} excerpt${moved === 1 ? "" : "s"} from "${code.name}" to "${target}".`
-          : `"${code.name}" has no excerpts to move.`,
+          ? t("codebook.moveExcerptsDialog.moved", { count: moved, from: code.name, to: target })
+          : t("codebook.moveExcerptsDialog.noneToMove", { name: code.name }),
       );
       onClose();
     } catch (e) {
@@ -48,12 +51,12 @@ export function MoveExcerptsDialog({ code, onClose }: { code: Code; onClose: () 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent
-        title={`Move excerpts from "${code.name}" to…`}
-        description={`Its ${count} excerpt${count === 1 ? "" : "s"} are re-tagged with the code you pick. "${code.name}" stays in the codebook, with its sub-codes and memos, but loses its excerpts. This can be undone.`}
+        title={t("codebook.moveExcerptsDialog.title", { name: code.name })}
+        description={t("codebook.moveExcerptsDialog.description", { count, name: code.name })}
       >
         <Input
           autoFocus
-          placeholder="Filter codes"
+          placeholder={t("codebook.mergeDialog.filterCodes")}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
@@ -74,15 +77,17 @@ export function MoveExcerptsDialog({ code, onClose }: { code: Code; onClose: () 
             </li>
           ))}
           {candidates.length === 0 ? (
-            <li className="px-2 py-2 text-sm text-fg-muted">No other codes.</li>
+            <li className="px-2 py-2 text-sm text-fg-muted">
+              {t("codebook.mergeDialog.noOtherCodes")}
+            </li>
           ) : null}
         </ul>
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>
-            Cancel
+            {t("common.cancel")}
           </Button>
           <Button disabled={!targetId || retag.isPending} onClick={() => void move()}>
-            Move excerpts
+            {t("codebook.moveExcerptsDialog.moveExcerpts")}
           </Button>
         </DialogFooter>
       </DialogContent>

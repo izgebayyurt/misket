@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { Trans, useTranslation } from "react-i18next";
 import type { CodebookImportMode } from "@/api/types";
 import { previewCodebookImport, type CodebookImportPreview } from "@/core/codebookImport";
 import { flattenTree, pathOf } from "@/core/codeTree";
@@ -24,6 +25,7 @@ export function ImportCodebookDialog({
   text: string;
   onClose: () => void;
 }) {
+  const { t } = useTranslation();
   const { data: codes } = useCodes();
   const tree = useCodeTree();
   const importCodebook = useImportCodebook();
@@ -35,11 +37,11 @@ export function ImportCodebookDialog({
     { ok: true; value: CodebookImportPreview } | { ok: false; error: string }
   >(() => {
     try {
-      return { ok: true, value: previewCodebookImport(text, existingPaths) };
+      return { ok: true, value: previewCodebookImport(text, existingPaths, t) };
     } catch (e) {
       return { ok: false, error: e instanceof Error ? e.message : String(e) };
     }
-  }, [text, existingPaths]);
+  }, [text, existingPaths, t]);
   const parentCandidates = flattenTree(tree);
 
   async function confirm() {
@@ -51,10 +53,11 @@ export function ImportCodebookDialog({
       });
       const skipped = report.skippedShortcuts.length;
       toast.info(
-        `Imported: ${report.created} created, ${report.matched} matched` +
-          (skipped
-            ? `, ${skipped} shortcut${skipped === 1 ? "" : "s"} skipped (already taken)`
-            : "."),
+        t("codebook.import.importedSummary", {
+          created: report.created,
+          matched: report.matched,
+          skippedSuffix: skipped ? t("codebook.import.skippedSuffix", { count: skipped }) : ".",
+        }),
       );
       onClose();
     } catch (e) {
@@ -67,29 +70,36 @@ export function ImportCodebookDialog({
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent
-        title="Import codebook"
-        description={`Importing ${fileName ?? path}. You can undo the whole import from History.`}
+        title={t("codebook.import.title")}
+        description={t("codebook.import.description", { name: fileName ?? path })}
       >
         <div className="space-y-4">
           {preview.ok ? (
             <div className="rounded-md border border-border bg-muted/40 p-3 text-sm">
               <p>
-                <span className="font-medium">{preview.value.totalCodes}</span> code
-                {preview.value.totalCodes === 1 ? "" : "s"} in this{" "}
-                {preview.value.format.toUpperCase()} file
-                {preview.value.matchedCount > 0
-                  ? ` — ${preview.value.matchedCount} match existing codes by name, ${preview.value.newCount} would be new.`
-                  : "; none match an existing code by name."}
+                {t("codebook.import.summary", {
+                  count: preview.value.totalCodes,
+                  format: preview.value.format.toUpperCase(),
+                  matchSuffix:
+                    preview.value.matchedCount > 0
+                      ? t("codebook.import.summaryMatched", {
+                          matched: preview.value.matchedCount,
+                          added: preview.value.newCount,
+                        })
+                      : t("codebook.import.summaryNoneMatched"),
+                })}
               </p>
             </div>
           ) : (
             <p className="rounded-md border border-danger/40 bg-danger/10 p-3 text-sm text-danger">
-              Could not read this file: {preview.error}
+              {t("codebook.import.couldNotRead", { error: preview.error })}
             </p>
           )}
 
           <fieldset className="space-y-1.5">
-            <legend className="text-xs font-medium text-fg-muted">Mode</legend>
+            <legend className="text-xs font-medium text-fg-muted">
+              {t("codebook.import.mode")}
+            </legend>
             <label className="flex items-start gap-2 text-sm">
               <input
                 type="radio"
@@ -98,8 +108,10 @@ export function ImportCodebookDialog({
                 onChange={() => setMode("merge")}
               />
               <span>
-                <span className="font-medium">Merge</span> — match existing codes by name; fill in
-                missing descriptions and colors, and add anything new.
+                <Trans
+                  i18nKey="codebook.import.modeMerge"
+                  components={{ b: <span className="font-medium" /> }}
+                />
               </span>
             </label>
             <label className="flex items-start gap-2 text-sm">
@@ -110,15 +122,19 @@ export function ImportCodebookDialog({
                 onChange={() => setMode("add-under")}
               />
               <span>
-                <span className="font-medium">Add under a code</span> — import everything as new,
-                nested under a code you pick (or at the root), without matching.
+                <Trans
+                  i18nKey="codebook.import.modeAddUnder"
+                  components={{ b: <span className="font-medium" /> }}
+                />
               </span>
             </label>
           </fieldset>
 
           {mode === "add-under" ? (
             <div>
-              <p className="mb-1 text-xs font-medium text-fg-muted">Parent (optional)</p>
+              <p className="mb-1 text-xs font-medium text-fg-muted">
+                {t("codebook.import.parentOptional")}
+              </p>
               <ul className="max-h-40 overflow-y-auto rounded-md border border-border">
                 <li>
                   <button
@@ -129,7 +145,7 @@ export function ImportCodebookDialog({
                     )}
                     onClick={() => setParentId(null)}
                   >
-                    At the root
+                    {t("codebook.import.atRoot")}
                   </button>
                 </li>
                 {parentCandidates.map((n) => (
@@ -153,10 +169,10 @@ export function ImportCodebookDialog({
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>
-            Cancel
+            {t("common.cancel")}
           </Button>
           <Button disabled={!preview.ok || importCodebook.isPending} onClick={confirm}>
-            Import
+            {t("documents.importAction")}
           </Button>
         </DialogFooter>
       </DialogContent>

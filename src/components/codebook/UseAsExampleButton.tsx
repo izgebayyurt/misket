@@ -1,4 +1,5 @@
 import { Star } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { useCodes, useSetCodeExample } from "@/queries/codes";
 import { toast } from "@/state/toasts";
 import { cn } from "@/lib/utils";
@@ -21,11 +22,12 @@ export function UseAsExampleButton({
   excerptId: string;
   className?: string;
 }) {
+  const { t } = useTranslation();
   const { data: codes } = useCodes();
   const setExample = useSetCodeExample();
   const code = codes?.find((c) => c.id === codeId);
   const isExample = code?.exampleExcerptId === excerptId;
-  const name = code?.name ?? "this code";
+  const name = code?.name ?? t("documentView.defaultCodeName");
 
   return (
     <button
@@ -37,10 +39,14 @@ export function UseAsExampleButton({
       )}
       title={
         isExample
-          ? `This is the example excerpt for “${name}”. Click to clear it.`
-          : `Use as the example excerpt for “${name}”`
+          ? t("codebook.useAsExample.clearHint", { name })
+          : t("codebook.useAsExample.useHint", { name })
       }
-      aria-label={isExample ? `Clear example for ${name}` : `Use as example for ${name}`}
+      aria-label={
+        isExample
+          ? t("codebook.useAsExample.clearAria", { name })
+          : t("codebook.useAsExample.useAria", { name })
+      }
       aria-pressed={isExample}
       disabled={setExample.isPending}
       onClick={() =>

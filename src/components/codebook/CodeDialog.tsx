@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Trans, useTranslation } from "react-i18next";
 import type { AssistedRef, Code, WeightScale } from "@/api/types";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter } from "@/components/ui/dialog";
@@ -25,6 +26,7 @@ type Props =
   | { mode: "edit"; code: Code; onClose: () => void };
 
 export function CodeDialog(props: Props) {
+  const { t } = useTranslation();
   const { data: codes } = useCodes();
   const tree = useCodeTree();
   const create = useCreateCode();
@@ -73,7 +75,7 @@ export function CodeDialog(props: Props) {
     if (!hasScale) return { scale: null, error: null };
     const [min, max, step, def] = [scaleMin, scaleMax, scaleStep, scaleDefault].map(Number);
     if ([min, max, step, def].some((n) => Number.isNaN(n))) {
-      return { scale: null, error: "Weight scale: min, max, step and default must be numbers." };
+      return { scale: null, error: t("codebook.weightScale.errorNotNumbers") };
     }
     const labels: Record<string, string> = {};
     if (labelMin.trim()) labels[formatWeight(min!)] = labelMin.trim();
@@ -85,8 +87,10 @@ export function CodeDialog(props: Props) {
       default: def!,
       ...(Object.keys(labels).length > 0 ? { labels } : {}),
     };
-    const problem = validateWeightScale(scale);
-    return problem ? { scale: null, error: `Weight scale: ${problem}.` } : { scale, error: null };
+    const problem = validateWeightScale(scale, t);
+    return problem
+      ? { scale: null, error: t("codebook.weightScale.error", { problem }) }
+      : { scale, error: null };
   }
 
   async function submit(e: React.FormEvent) {
@@ -134,12 +138,18 @@ export function CodeDialog(props: Props) {
   return (
     <Dialog open onOpenChange={(o) => !o && props.onClose()}>
       <DialogContent
-        title={editing ? "Edit code" : parentPath ? `New code under ${parentPath}` : "New code"}
+        title={
+          editing
+            ? t("codebook.dialog.editTitle")
+            : parentPath
+              ? t("codebook.dialog.newUnderTitle", { parent: parentPath })
+              : t("codebook.dialog.newTitle")
+        }
       >
         <form onSubmit={submit} className="space-y-3">
           <div>
             <label className="text-xs font-medium text-fg-muted" htmlFor="code-name">
-              Name
+              {t("codebook.dialog.nameLabel")}
             </label>
             <Input
               id="code-name"
@@ -151,7 +161,9 @@ export function CodeDialog(props: Props) {
             />
           </div>
           <div>
-            <span className="text-xs font-medium text-fg-muted">Color</span>
+            <span className="text-xs font-medium text-fg-muted">
+              {t("analysis.clustering.colorLabel")}
+            </span>
             <div className="mt-1">
               <ColorPicker value={color} onChange={setColor} />
             </div>
@@ -161,7 +173,7 @@ export function CodeDialog(props: Props) {
               the description is shown in the palette while coding. */}
           <div>
             <label className="text-xs font-medium text-fg-muted" htmlFor="code-desc">
-              Description — what it means
+              {t("codebook.dialog.descriptionLabel")}
             </label>
             <Textarea
               id="code-desc"
@@ -169,12 +181,12 @@ export function CodeDialog(props: Props) {
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               className="mt-1"
-              placeholder="What this code stands for…"
+              placeholder={t("codebook.dialog.descriptionPlaceholder")}
             />
           </div>
           <div>
             <label className="text-xs font-medium text-fg-muted" htmlFor="code-inclusion">
-              Include when
+              {t("codebook.dialog.inclusionLabel")}
             </label>
             <Textarea
               id="code-inclusion"
@@ -182,13 +194,13 @@ export function CodeDialog(props: Props) {
               value={inclusion}
               onChange={(e) => setInclusion(e.target.value)}
               className="mt-1"
-              placeholder="Apply this code when…"
+              placeholder={t("codebook.dialog.inclusionPlaceholder")}
               data-testid="code-inclusion"
             />
           </div>
           <div>
             <label className="text-xs font-medium text-fg-muted" htmlFor="code-exclusion">
-              Exclude when
+              {t("codebook.dialog.exclusionLabel")}
             </label>
             <Textarea
               id="code-exclusion"
@@ -196,7 +208,7 @@ export function CodeDialog(props: Props) {
               value={exclusion}
               onChange={(e) => setExclusion(e.target.value)}
               className="mt-1"
-              placeholder="Do not apply it when… (and what to use instead)"
+              placeholder={t("codebook.dialog.exclusionPlaceholder")}
               data-testid="code-exclusion"
             />
           </div>
@@ -216,16 +228,18 @@ export function CodeDialog(props: Props) {
               />
               {draftedExample ? (
                 <p className="mt-1 text-[11px] text-fg-muted" data-testid="drafted-example">
-                  The draft picked this out as the clearest instance:{" "}
-                  <q className="italic">{draftedExample}</q> — find that excerpt and use its
-                  &ldquo;Use as example&rdquo; button if you agree.
+                  <Trans
+                    i18nKey="codebook.dialog.draftedExample"
+                    values={{ example: draftedExample }}
+                    components={{ q: <q className="italic" /> }}
+                  />
                 </p>
               ) : null}
             </div>
           ) : null}
           <div>
             <label className="text-xs font-medium text-fg-muted" htmlFor="code-shortcut">
-              Hotkey (a letter or digit; press it with text selected to apply this code)
+              {t("codebook.dialog.hotkeyLabel")}
             </label>
             <Input
               id="code-shortcut"
@@ -247,14 +261,14 @@ export function CodeDialog(props: Props) {
                   onChange={(e) => setHasScale(e.target.checked)}
                   data-testid="weight-scale-toggle"
                 />
-                Weight scale — rate each application on a numeric scale
+                {t("codebook.dialog.weightScaleToggle")}
               </label>
               {hasScale ? (
                 <div className="mt-2 space-y-2">
                   <div className="grid grid-cols-4 gap-2">
                     <div>
                       <label className="text-[11px] text-fg-muted" htmlFor="scale-min">
-                        Min
+                        {t("codebook.dialog.scaleMin")}
                       </label>
                       <Input
                         id="scale-min"
@@ -266,7 +280,7 @@ export function CodeDialog(props: Props) {
                     </div>
                     <div>
                       <label className="text-[11px] text-fg-muted" htmlFor="scale-max">
-                        Max
+                        {t("codebook.dialog.scaleMax")}
                       </label>
                       <Input
                         id="scale-max"
@@ -278,7 +292,7 @@ export function CodeDialog(props: Props) {
                     </div>
                     <div>
                       <label className="text-[11px] text-fg-muted" htmlFor="scale-step">
-                        Step
+                        {t("codebook.dialog.scaleStep")}
                       </label>
                       <Input
                         id="scale-step"
@@ -290,7 +304,7 @@ export function CodeDialog(props: Props) {
                     </div>
                     <div>
                       <label className="text-[11px] text-fg-muted" htmlFor="scale-default">
-                        Default
+                        {t("codebook.dialog.scaleDefault")}
                       </label>
                       <Input
                         id="scale-default"
@@ -304,43 +318,44 @@ export function CodeDialog(props: Props) {
                   <div className="grid grid-cols-2 gap-2">
                     <div>
                       <label className="text-[11px] text-fg-muted" htmlFor="scale-label-min">
-                        Label for {scaleMin || "min"} (optional)
+                        {t("codebook.dialog.labelFor", {
+                          value: scaleMin || t("codebook.dialog.scaleMin"),
+                        })}
                       </label>
                       <Input
                         id="scale-label-min"
                         value={labelMin}
                         onChange={(e) => setLabelMin(e.target.value)}
-                        placeholder="e.g. weak"
+                        placeholder={t("codebook.dialog.labelExampleWeak")}
                         className="mt-0.5"
                       />
                     </div>
                     <div>
                       <label className="text-[11px] text-fg-muted" htmlFor="scale-label-max">
-                        Label for {scaleMax || "max"} (optional)
+                        {t("codebook.dialog.labelFor", {
+                          value: scaleMax || t("codebook.dialog.scaleMax"),
+                        })}
                       </label>
                       <Input
                         id="scale-label-max"
                         value={labelMax}
                         onChange={(e) => setLabelMax(e.target.value)}
-                        placeholder="e.g. strong"
+                        placeholder={t("codebook.dialog.labelExampleStrong")}
                         className="mt-0.5"
                       />
                     </div>
                   </div>
-                  <p className="text-[11px] text-fg-muted">
-                    Every fresh coding of this code starts at the default; clearing the scale
-                    removes every weight recorded under it.
-                  </p>
+                  <p className="text-[11px] text-fg-muted">{t("codebook.dialog.scaleHint")}</p>
                 </div>
               ) : null}
             </div>
           ) : null}
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={props.onClose}>
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button type="submit" disabled={!name.trim()} data-testid="code-submit">
-              {editing ? "Save" : "Create"}
+              {t(editing ? "common.save" : "analysis.clustering.create")}
             </Button>
           </DialogFooter>
         </form>
