@@ -1707,5 +1707,16 @@
   "updates": {
     "notConfigured": "Automatic updates aren't set up for this build yet.",
     "upToDate": "Misket is up to date."
+  },
+  "errors": {
+    "appError": {
+      "noProjectOpen": "No project open",
+      "notFound": "Not found",
+      "conflict": "Conflict",
+      "validation": "Not allowed",
+      "newerSchema": "Newer version needed",
+      "io": "File error",
+      "db": "Database error"
+    }
   }
 }

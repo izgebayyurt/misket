@@ -1707,5 +1707,16 @@
   "updates": {
     "notConfigured": "Bu sürüm için otomatik güncellemeler henüz ayarlanmadı.",
     "upToDate": "Misket güncel."
+  },
+  "errors": {
+    "appError": {
+      "noProjectOpen": "Açık proje yok",
+      "notFound": "Bulunamadı",
+      "conflict": "Çakışma",
+      "validation": "İzin verilmiyor",
+      "newerSchema": "Daha yeni bir sürüm gerekiyor",
+      "io": "Dosya hatası",
+      "db": "Veritabanı hatası"
+    }
   }
 }

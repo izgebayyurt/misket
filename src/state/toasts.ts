@@ -1,4 +1,7 @@
 import { create } from "zustand";
+import { AppError } from "@/api/client";
+import type { AppErrorCode } from "@/api/types";
+import i18next from "@/lib/i18n";
 import { log } from "@/api/log";
 
 /**
@@ -96,11 +99,33 @@ export const useToasts = create<ToastState>((set, get) => ({
   },
 }));
 
+/**
+ * A short translated headline for each `AppErrorCode`, shown ahead of the
+ * error's own (English, backend-written — see `AppError`) message. The enum
+ * is small and closed (mirrors `crates/misket-core/src/models.rs`), so this
+ * stays a plain lookup rather than needing the backend to send its own
+ * localized text.
+ */
+const APP_ERROR_HEADLINE_KEYS: Record<AppErrorCode, string> = {
+  NoProjectOpen: "errors.appError.noProjectOpen",
+  NotFound: "errors.appError.notFound",
+  Conflict: "errors.appError.conflict",
+  Validation: "errors.appError.validation",
+  NewerSchema: "errors.appError.newerSchema",
+  Io: "errors.appError.io",
+  Db: "errors.appError.db",
+};
+
 export const toast = {
   info: (message: string, options?: ToastOptions) =>
     useToasts.getState().push("info", message, options),
   error: (e: unknown, options?: ToastOptions) => {
-    const message = e instanceof Error ? e.message : String(e);
+    const message =
+      e instanceof AppError
+        ? `${i18next.t(APP_ERROR_HEADLINE_KEYS[e.code])}: ${e.message}`
+        : e instanceof Error
+          ? e.message
+          : String(e);
     // `client.ts`'s `invoke` already logs every command failure by code and
     // message; this also catches errors raised outside a command (a bad
     // drag-and-drop file, a client-side validation) that only ever surface
