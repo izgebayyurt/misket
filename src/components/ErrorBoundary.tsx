@@ -1,5 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { getDiagnostics } from "@/api/diagnostics";
 import { log } from "@/api/log";
@@ -43,6 +44,7 @@ export class ErrorBoundary extends Component<Props, State> {
 }
 
 function ErrorScreen({ error, onReset }: { error: Error; onReset: () => void }) {
+  const { t } = useTranslation();
   async function copyDetails() {
     let diagnostics: Awaited<ReturnType<typeof getDiagnostics>> | null = null;
     try {
@@ -79,24 +81,20 @@ function ErrorScreen({ error, onReset }: { error: Error; onReset: () => void }) 
       role="alert"
       className="flex h-screen flex-col items-center justify-center gap-4 bg-bg p-8 text-center text-fg"
     >
-      <h1 className="font-serif text-2xl">Something went wrong</h1>
-      <p className="max-w-md text-sm text-fg-muted">
-        Misket ran into an unexpected error and could not continue showing this screen. Your project
-        file itself has not been touched — try reopening it. If this keeps happening, copy the
-        details below and open an issue.
-      </p>
+      <h1 className="font-serif text-2xl">{t("errorBoundary.title")}</h1>
+      <p className="max-w-md text-sm text-fg-muted">{t("errorBoundary.explanation")}</p>
       <pre className="max-h-40 max-w-lg overflow-auto rounded-md border border-border bg-panel p-3 text-left text-xs text-fg-muted">
         {error.message}
       </pre>
       <div className="flex gap-2">
         <Button type="button" variant="outline" onClick={() => void copyDetails()}>
-          Copy details
+          {t("errorBoundary.copyDetails")}
         </Button>
         <Button type="button" variant="outline" onClick={() => void openLog()}>
-          Open log
+          {t("errorBoundary.openLog")}
         </Button>
         <Button type="button" onClick={onReset}>
-          Try again
+          {t("errorBoundary.tryAgain")}
         </Button>
       </div>
     </div>

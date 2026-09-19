@@ -1682,5 +1682,12 @@
       "defaultThreadsHint": "default {{count, number}} (one fewer than this machine has)",
       "ffmpegHint": "Audio files need nothing else. Misket reads the sound out of most mp4 and mkv video on its own, but for the rest it falls back to <code>ffmpeg</code>, which it could not find on your PATH."
     }
+  },
+  "errorBoundary": {
+    "title": "Something went wrong",
+    "explanation": "Misket ran into an unexpected error and could not continue showing this screen. Your project file itself has not been touched — try reopening it. If this keeps happening, copy the details below and open an issue.",
+    "copyDetails": "Copy details",
+    "openLog": "Open log",
+    "tryAgain": "Try again"
   }
 }

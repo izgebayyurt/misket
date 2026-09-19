@@ -1682,5 +1682,12 @@
       "defaultThreadsHint": "varsayılan {{count, number}} (bu bilgisayardakinden bir eksik)",
       "ffmpegHint": "Ses dosyaları başka bir şeye ihtiyaç duymaz. Misket çoğu mp4 ve mkv görüntüsünün sesini kendi başına okur, ama geri kalanı için PATH'inizde bulamadığı <code>ffmpeg</code>'e başvurur."
     }
+  },
+  "errorBoundary": {
+    "title": "Bir şeyler ters gitti",
+    "explanation": "Misket beklenmeyen bir hatayla karşılaştı ve bu ekranı göstermeye devam edemedi. Proje dosyanızın kendisine dokunulmadı — yeniden açmayı deneyin. Bu tekrar olursa, aşağıdaki ayrıntıları kopyalayıp bir sorun bildirin.",
+    "copyDetails": "Ayrıntıları kopyala",
+    "openLog": "Günlüğü aç",
+    "tryAgain": "Tekrar dene"
   }
 }
