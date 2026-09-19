@@ -154,3 +154,60 @@ remain the same code for all three. The player's bare keys (space, `J`/`L`,
 `,`/`.`, `[`/`]`) live in their own table in `src/core/keymap.ts` and are
 matched by the view itself rather than by the application-wide listener,
 because a bare full stop everywhere else in Misket is a full stop.
+
+## Transcription
+
+Turning a recording into a transcript runs on the machine, with whisper.cpp
+through the `whisper-rs` bindings. It lives in `src-tauri/src/transcribe/`
+rather than in `misket-core`, because none of it is domain logic over the
+project database: it is decoding, inference and formatting, and what it
+produces is an ordinary `documents::create` call.
+
+**It is an optional feature.** `whisper` is on by default, so release builds
+ship transcription, but the crate has to compile and pass its tests with
+`--no-default-features` — whisper.cpp is a C++ build that wants CMake, and a
+packager who does not want that dependency should still get a working Misket.
+Only `engine::WhisperEngine` is behind the flag; decoding, the model registry,
+the formatting and the command layer are compiled either way, and
+`engine::load` returns a clear error instead of an engine. CI runs clippy and
+the tests both ways (one extra step each, which is cheaper than a second job).
+
+That split falls out of `engine::Engine`, a three-method trait over "samples
+in, segments out, with progress and a cancel flag". `StubEngine` implements
+it too, so the whole path — decode, resample, segment, format, anchor, create
+the document, link it, undo it — is unit-tested without a 75 MiB model file.
+The one test that needs a real model reads `MISKET_WHISPER_MODEL` and prints a
+note when it is unset, rather than being an `#[ignore]` nobody ever runs.
+
+**Audio in.** `transcribe::audio` decodes with Symphonia (mp3, aac/alac,
+vorbis, flac, PCM; ISO-MP4 and Matroska containers) and resamples to the
+16 kHz mono `f32` every Whisper model is trained on. The resampler is a
+windowed-sinc convolution written out in forty lines rather than a
+dependency — linear interpolation aliases 44.1 kHz speech badly enough to cost
+accuracy, and the rate ratios involved are exactly what a low-pass sinc is
+for. A container Symphonia cannot open falls back to `ffmpeg` on `PATH`, which
+is why the docs say video may need ffmpeg and audio never does.
+
+**Models.** Nothing is bundled and nothing is fetched until someone presses
+Download. `transcribe::models` holds the catalogue (id, size, the SHA-1
+whisper.cpp publishes in its `models/README.md`) and downloads into
+`<app data>/models/whisper/` through a `.part` file, resuming with a `Range`
+request and verifying the digest before the rename. Model ids reach the
+filesystem, so anything that is not a catalogue id has to be a bare file name;
+`installed_path` refuses a path.
+
+**Running one.** `start_transcription` validates on the calling thread (so the
+dialog can show why it will not run) and then hands the job to a worker, which
+emits `transcription:progress` and `transcription:done`; a two-hour interview
+is too long to hold an `invoke` open. Cancel flags live in `AppState` in two
+small registries keyed by document id and model id, claimed with `start_job`
+so a double-click cannot start two runs over one recording.
+
+**Out the other end.** The document is plain text, one paragraph per segment
+(or per N seconds), each opening `[mm:ss]`, with an anchor per paragraph
+mapping its code-point offset to its millisecond. `save_transcript` writes the
+document, its anchors and the link to the recording inside one `history::group`
+— a transcript sitting in the project unlinked from its recording is not a
+state anyone asked for, so one undo takes the whole thing back. No speaker
+labels are produced: Whisper does not diarise, and deriving "Speaker 1" from
+pauses would put a guess into the data where a coder reads a fact.

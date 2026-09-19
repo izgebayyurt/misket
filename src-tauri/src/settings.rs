@@ -132,6 +132,28 @@ pub struct AppSettings {
     /// one still shows.
     #[serde(default)]
     pub skipped_update_version: Option<String>,
+    /// The Whisper model transcription uses, as an id from
+    /// `transcribe::models::CATALOGUE` or the file name of one added by hand.
+    /// `None` — the default — means nothing has been downloaded yet, and the
+    /// Transcribe dialog says so rather than fetching anything.
+    #[serde(default)]
+    pub whisper_model: Option<String>,
+    /// An ISO-639-1 code, or `None`/"auto" to let Whisper detect it.
+    #[serde(default)]
+    pub whisper_language: Option<String>,
+    /// Whisper's translate task: English out, whatever went in.
+    #[serde(default)]
+    pub whisper_translate: bool,
+    /// Decoding threads; `None` is one fewer than the machine has.
+    #[serde(default)]
+    pub whisper_threads: Option<u32>,
+    /// Open each transcript paragraph with `[mm:ss]`.
+    #[serde(default = "default_true")]
+    pub whisper_timestamps: bool,
+    /// `None` is one paragraph per segment; `Some(n)` groups segments into
+    /// paragraphs of at least n seconds.
+    #[serde(default)]
+    pub whisper_group_seconds: Option<i64>,
 }
 
 impl Default for AppSettings {
@@ -157,6 +179,12 @@ impl Default for AppSettings {
             report_format: ReportFormat::default(),
             check_for_updates_automatically: default_true(),
             skipped_update_version: None,
+            whisper_model: None,
+            whisper_language: None,
+            whisper_translate: false,
+            whisper_threads: None,
+            whisper_timestamps: default_true(),
+            whisper_group_seconds: None,
         }
     }
 }
@@ -301,6 +329,12 @@ mod tests {
             report_format: ReportFormat::Sentry,
             check_for_updates_automatically: false,
             skipped_update_version: Some("0.2.0".into()),
+            whisper_model: Some("small".into()),
+            whisper_language: Some("tr".into()),
+            whisper_translate: true,
+            whisper_threads: Some(4),
+            whisper_timestamps: false,
+            whisper_group_seconds: Some(30),
         };
         write(&path, &settings).unwrap();
         assert_eq!(read(&path).unwrap(), settings);
@@ -339,6 +373,15 @@ mod tests {
         assert_eq!(settings.report_format, ReportFormat::Json);
         assert!(settings.check_for_updates_automatically);
         assert_eq!(settings.skipped_update_version, None);
+        assert_eq!(
+            settings.whisper_model, None,
+            "nothing is downloaded by default"
+        );
+        assert_eq!(settings.whisper_language, None);
+        assert!(!settings.whisper_translate);
+        assert_eq!(settings.whisper_threads, None);
+        assert!(settings.whisper_timestamps);
+        assert_eq!(settings.whisper_group_seconds, None);
     }
 
     #[test]

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, Pause, Play } from "lucide-react";
+import { AlertTriangle, Captions, Pause, Play } from "lucide-react";
 import { mediaFileUrl } from "@/api/media";
 import { useCodes } from "@/queries/codes";
 import { useApplyCodes, useDeleteExcerpt, useDocumentExcerpts } from "@/queries/excerpts";
@@ -10,6 +10,7 @@ import {
   useSetMediaPeaks,
 } from "@/queries/documents";
 import { useRelinkMedia } from "@/components/documents/useRelinkMedia";
+import { TranscribeDialog } from "@/components/documents/TranscribeDialog";
 import { useQueryClient } from "@tanstack/react-query";
 import { keys } from "@/queries/keys";
 import {
@@ -109,6 +110,7 @@ export function MediaView({ documentId, focusExcerptId, seekToMs }: Props) {
   const setPaletteOpen = useWorkspace((s) => s.setPaletteOpen);
 
   const [renaming, setRenaming] = useState(false);
+  const [transcribeOpen, setTranscribeOpen] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   const media = doc?.media ?? null;
@@ -540,6 +542,17 @@ export function MediaView({ documentId, focusExcerptId, seekToMs }: Props) {
         <span className="hidden text-xs text-fg-muted lg:inline">
           space plays · J/L ±5s · [ and ] mark in and out
         </span>
+        <Button
+          size="sm"
+          variant="outline"
+          className="shrink-0"
+          disabled={missing}
+          onClick={() => setTranscribeOpen(true)}
+          title="Transcribe this recording on this machine"
+          data-testid="media-transcribe"
+        >
+          <Captions /> Transcribe…
+        </Button>
         <label className="flex shrink-0 items-center gap-1 text-xs text-fg-muted">
           Speed
           <select
@@ -651,6 +664,10 @@ export function MediaView({ documentId, focusExcerptId, seekToMs }: Props) {
           </>
         )}
       </div>
+
+      {transcribeOpen && doc ? (
+        <TranscribeDialog doc={doc} onClose={() => setTranscribeOpen(false)} />
+      ) : null}
 
       {confirmDeleteId ? (
         <ConfirmDialog

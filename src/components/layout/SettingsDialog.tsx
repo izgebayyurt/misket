@@ -11,6 +11,7 @@ import { useTessdataLanguages } from "@/queries/ocr";
 import { sendReportNow } from "@/api/diagnostics";
 import { toast } from "@/state/toasts";
 import { LogViewerDialog } from "./LogViewerDialog";
+import { TranscriptionSettings } from "./TranscriptionSettings";
 import type { Language, ReportFormat, Theme } from "@/api/types";
 
 const THEME_OPTIONS: { value: Theme; labelKey: string }[] = [
@@ -188,6 +189,8 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
           </section>
 
           <OcrLanguagesSection />
+
+          <TranscriptionSettings />
 
           <AssistSettingsSection />
 

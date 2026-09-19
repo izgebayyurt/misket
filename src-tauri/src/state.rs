@@ -1,9 +1,11 @@
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 use std::path::PathBuf;
 use std::sync::Mutex;
 
 use misket_core::db::OpenProject;
 use misket_core::{AppError, Result};
+
+use crate::transcribe::Cancel;
 
 /// How many candidate media files can be staged for measuring at once. An
 /// import measures each file, one after another, so a handful is plenty.
@@ -26,6 +28,11 @@ pub struct AppState {
     /// loopback HTTP server's origin and this run's token (`crate::media`).
     /// `None` only if the listener could not be bound at all.
     pub media_server: Mutex<Option<(String, String)>>,
+    /// Cancel flags for transcriptions in flight, keyed by the recording's
+    /// document id — one run per recording at a time (`crate::transcribe`).
+    pub transcriptions: Mutex<HashMap<String, Cancel>>,
+    /// Cancel flags for model downloads in flight, keyed by model id.
+    pub model_downloads: Mutex<HashMap<String, Cancel>>,
 }
 
 impl AppState {
@@ -54,6 +61,37 @@ impl AppState {
             probes.pop_front();
         }
         Ok(())
+    }
+
+    /// Claim the right to run `key`, handing back a fresh cancel flag.
+    /// `Conflict` if something is already running under that key, which is
+    /// what stops a double-click starting two transcriptions of one file.
+    pub fn start_job(&self, map: &Mutex<HashMap<String, Cancel>>, key: &str) -> Result<Cancel> {
+        let mut jobs = map
+            .lock()
+            .map_err(|_| AppError::Db("job lock poisoned".into()))?;
+        if jobs.contains_key(key) {
+            return Err(AppError::Conflict("that is already running".into()));
+        }
+        let flag = Cancel::default();
+        jobs.insert(key.to_string(), flag.clone());
+        Ok(flag)
+    }
+
+    /// Set the cancel flag for `key`, if it is running.
+    pub fn cancel_job(&self, map: &Mutex<HashMap<String, Cancel>>, key: &str) {
+        if let Ok(jobs) = map.lock() {
+            if let Some(flag) = jobs.get(key) {
+                flag.store(true, std::sync::atomic::Ordering::Relaxed);
+            }
+        }
+    }
+
+    /// Forget `key` once its job has finished, however it finished.
+    pub fn finish_job(&self, map: &Mutex<HashMap<String, Cancel>>, key: &str) {
+        if let Ok(mut jobs) = map.lock() {
+            jobs.remove(key);
+        }
     }
 
     /// The path staged under `token`, if it is still staged.
