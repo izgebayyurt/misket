@@ -344,7 +344,10 @@ describe("collapseDays", () => {
     expect(header?.kind).toBe("day");
     if (header?.kind !== "day") return;
     expect(header.count).toBe(2);
-    expect(header.digest).toEqual({ items: [{ phraseKey: "codeCreated", count: 2 }], moreCount: 0 });
+    expect(header.digest).toEqual({
+      items: [{ phraseKey: "codeCreated", count: 2 }],
+      moreCount: 0,
+    });
     expect(header.hasHead).toBe(false);
   });
 

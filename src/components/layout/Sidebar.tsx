@@ -25,7 +25,11 @@ export function Sidebar({ project }: { project: ProjectInfo }) {
           {project.name}
         </div>
       </div>
-      <div className="flex border-b border-border text-sm" role="tablist" aria-label={t("sidebar.title")}>
+      <div
+        className="flex border-b border-border text-sm"
+        role="tablist"
+        aria-label={t("sidebar.title")}
+      >
         {(["documents", "codes"] as const).map((tabId) => (
           <button
             key={tabId}

@@ -33,9 +33,6 @@ describe("Toaster under tr", () => {
     // "Dismiss" — proves useTranslation() picked up the tr resources.
     expect(screen.getByLabelText("Kapat")).toBeInTheDocument();
     // The pluralized, interpolated repeat-count title.
-    expect(screen.getByTestId("toast-repeat-count")).toHaveAttribute(
-      "title",
-      "2 kez söylendi",
-    );
+    expect(screen.getByTestId("toast-repeat-count")).toHaveAttribute("title", "2 kez söylendi");
   });
 });

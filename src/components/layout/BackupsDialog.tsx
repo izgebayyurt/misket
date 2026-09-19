@@ -54,9 +54,10 @@ export function BackupsDialog({ onClose }: { onClose: () => void }) {
               >
                 <div className="min-w-0 flex-1">
                   <div className="truncate">
-                    {new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short" }).format(
-                      new Date(b.createdAt),
-                    )}
+                    {new Intl.DateTimeFormat(locale, {
+                      dateStyle: "medium",
+                      timeStyle: "short",
+                    }).format(new Date(b.createdAt))}
                   </div>
                   <div className="truncate text-xs text-fg-muted">
                     {b.reason} · {formatSize(b.sizeBytes)}

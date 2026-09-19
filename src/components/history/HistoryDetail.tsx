@@ -53,7 +53,8 @@ export function HistoryDetail({
       >
         <p className="text-sm text-fg-muted">
           {t("history.pickAStep")}
-          <span className="font-medium"> {t("history.goToPoint")}</span> {t("history.isItsOwnButton")}
+          <span className="font-medium"> {t("history.goToPoint")}</span>{" "}
+          {t("history.isItsOwnButton")}
         </p>
       </aside>
     );

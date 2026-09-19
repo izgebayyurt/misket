@@ -20,18 +20,14 @@ async function goToPoint(id: number) {
 export function CodeHistory({ codeId }: { codeId: string }) {
   const { t } = useTranslation();
   const { data } = useCodeHistory(codeId);
-  return (
-    <Timeline entries={data} empty={t("history.emptyForCode")} testId="code-history" />
-  );
+  return <Timeline entries={data} empty={t("history.emptyForCode")} testId="code-history" />;
 }
 
 /** One excerpt's trail: coded, recoded, adjusted, split, merged. */
 export function ExcerptHistory({ excerptId }: { excerptId: string }) {
   const { t } = useTranslation();
   const { data } = useExcerptHistory(excerptId);
-  return (
-    <Timeline entries={data} empty={t("history.emptyForExcerpt")} testId="excerpt-history" />
-  );
+  return <Timeline entries={data} empty={t("history.emptyForExcerpt")} testId="excerpt-history" />;
 }
 
 /**

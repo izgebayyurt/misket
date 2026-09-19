@@ -69,11 +69,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
             <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-fg-muted">
               {t("settings.language.label")}
             </label>
-            <div
-              className="flex gap-1"
-              role="radiogroup"
-              aria-label={t("settings.language.label")}
-            >
+            <div className="flex gap-1" role="radiogroup" aria-label={t("settings.language.label")}>
               {LANGUAGE_OPTIONS.map((o) => (
                 <Button
                   key={o.value}

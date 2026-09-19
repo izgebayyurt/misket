@@ -40,7 +40,10 @@ export function StatusBar({ project }: { project: ProjectInfo }) {
       {quickCode ? (
         <span
           className="truncate"
-          title={t("statusBar.quickCodeHint", { chord: describe("quickCode"), name: quickCode.name })}
+          title={t("statusBar.quickCodeHint", {
+            chord: describe("quickCode"),
+            name: quickCode.name,
+          })}
           data-testid="quick-code-hint"
         >
           {t("statusBar.quickCode", { name: quickCode.name })}

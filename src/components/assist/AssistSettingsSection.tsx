@@ -67,7 +67,9 @@ export function AssistSettingsSection() {
       // Test what is on screen, not what was saved 400ms ago.
       await flushSettings();
       const reply = await api.testAssistConnection();
-      setTested(t("assist.testAnswered", { model: reply.model, text: reply.text.trim().slice(0, 80) }));
+      setTested(
+        t("assist.testAnswered", { model: reply.model, text: reply.text.trim().slice(0, 80) }),
+      );
     } catch (e) {
       setTested(null);
       log.error("assist connection test failed", {
@@ -180,7 +182,9 @@ export function AssistSettingsSection() {
             type="password"
             value={key}
             placeholder={
-              status?.hasKey ? t("assist.apiKeyStoredPlaceholder") : t("assist.apiKeyPastePlaceholder")
+              status?.hasKey
+                ? t("assist.apiKeyStoredPlaceholder")
+                : t("assist.apiKeyPastePlaceholder")
             }
             onChange={(e) => setKey(e.target.value)}
             autoComplete="off"

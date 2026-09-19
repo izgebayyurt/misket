@@ -449,6 +449,35 @@ Found something that does not work with a screen reader or the keyboard
 alone? Please [open an issue](https://github.com/izgebayyurt/misket/issues) —
 accessibility bugs are treated as bugs, not feature requests.
 
+## Languages
+
+Misket's interface is available in **English** and **Türkçe**. Settings →
+Language offers System (follows your OS/browser locale), English or Türkçe;
+the choice is saved and applied immediately, no restart needed.
+
+- Under the hood this is [i18next](https://www.i18next.com/) +
+  [react-i18next](https://react.i18next.com/), with one resource file per
+  language: [`src/locales/en/common.json`](src/locales/en/common.json) and
+  [`src/locales/tr/common.json`](src/locales/tr/common.json). English is the
+  source of truth for which keys exist; Turkish mirrors its shape.
+- Dates, relative times ("5 minutes ago"), and numbers (thousands
+  separators) go through `Intl` in the active locale rather than
+  hand-rolled formatting, so they read correctly in either language.
+- Some text is deliberately **not** translated: the activity log's stored
+  summaries and the history detail panel's raw field values (an audit
+  trail, written once in the language active at the time — see
+  [docs/DATA_MODEL.md](docs/DATA_MODEL.md#activity-log-language)), CSV/JSON
+  export headers (for interoperability with other tools), and backend error
+  messages (`AppError.message`, which carry a `code` the frontend can map to
+  a translated headline where one exists).
+- `pnpm i18n:check` (part of `pnpm check`) scans `src/**` for every `t(...)`
+  key and fails if either locale is missing a key a component uses, or if a
+  key in a locale file is not referenced anywhere.
+
+Want to add a language, or improve the Turkish translation? See
+[site/docs/translating.html](site/docs/translating.html) (also published on
+the docs site) for how the resource files and the check script fit together.
+
 ## Install
 
 Builds for macOS, Windows and Linux are published on the

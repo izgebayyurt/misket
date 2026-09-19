@@ -7,7 +7,7 @@ describe("resolveLocale", () => {
     expect(resolveLocale("tr", "en-US")).toBe("tr");
   });
 
-  it("reads the system locale when the setting is \"system\"", () => {
+  it('reads the system locale when the setting is "system"', () => {
     expect(resolveLocale("system", "tr-TR")).toBe("tr");
     expect(resolveLocale("system", "tr")).toBe("tr");
     expect(resolveLocale("system", "en-GB")).toBe("en");

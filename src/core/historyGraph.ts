@@ -242,10 +242,7 @@ export function dayKey(iso: string): string {
  * {@link formatDayDate}.
  */
 export type DayLabel =
-  | { kind: "today" }
-  | { kind: "yesterday" }
-  | { kind: "undated" }
-  | { kind: "date"; day: string };
+  { kind: "today" } | { kind: "yesterday" } | { kind: "undated" } | { kind: "date"; day: string };
 
 export function dayLabelInfo(day: string, now: number = Date.now()): DayLabel {
   if (day === "") return { kind: "undated" };

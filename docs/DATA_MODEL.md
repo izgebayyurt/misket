@@ -898,6 +898,40 @@ compaction clears the payloads of the new root.
 empty means "before the first node". `history_root_child` is the same idea for
 redo at the very beginning.
 
+### Activity log language
+
+`summary` (and `group_summary`, and the humanized `detail_json` field labels
+the history detail panel shows) is generated once, at write time, in whatever
+UI language was active then — and it stays that way. This is deliberate, not
+an oversight the frontend's i18n work (roadmap 29) left behind:
+
+- It is an **audit trail**. The whole point of `forward_json`/`inverse_json`
+  plus a human-readable `summary` next to them is that a reviewer, years
+  later, can read exactly what happened without re-deriving it. Re-rendering
+  an old summary in today's UI language on every read would mean the record
+  on screen depends on a setting that has nothing to do with when the change
+  happened — and a project pulled between two coders with different UI
+  languages would show a mix that changes depending on who is looking, which
+  is worse than a mix that does not change.
+- `kind` (`code.merged_into`, `excerpt.split`, …) is the stable, structured,
+  language-independent value — everything that actually needs to reason about
+  what happened (filtering, grouping, `dayDigest`) reads `kind`, never
+  `summary`. The frontend's `kindLabel()` (`src/core/activity.ts`) and the day
+  digest's phrase keys (`src/core/historyGraph.ts`) turn `kind` into UI text
+  through `t()` at render time, so _that_ part of the history view is fully
+  translated even though the stored `summary` sitting next to it is not.
+- Applying the same reasoning one level down: `detail_json`'s keys are
+  arbitrary, per-`kind` field names (`startPos`, `codeIds`, …) with no fixed
+  vocabulary across the whole domain model to translate against, so the
+  detail panel's `humanizeKey()` (`src/core/historyDetail.ts`) mechanically
+  titlecases them rather than looking them up in a resource file.
+
+Exports (`export::activity_csv` and friends) and `AppError.message` follow the
+same rule for the same reason: `src/api/export.ts`'s CSV headers stay English
+for tool interoperability, and a Rust-side error's `message` stays English
+(with a `code` the frontend maps to a translated headline where one exists) —
+see the "Languages" section of the README.
+
 ### The tree
 
 Undo walks toward the root, redo toward a leaf. An edit made _after_ an undo
