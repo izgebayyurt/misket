@@ -23,6 +23,7 @@ import { SyncWarningBanner } from "./SyncWarningBanner";
 import { UpdateBanner } from "./UpdateBanner";
 
 export function Workspace({ project }: { project: ProjectInfo }) {
+  const { t } = useTranslation();
   const view = useWorkspace((s) => s.view);
   const settingsOpen = useWorkspace((s) => s.settingsOpen);
   const setSettingsOpen = useWorkspace((s) => s.setSettingsOpen);
@@ -51,7 +52,7 @@ export function Workspace({ project }: { project: ProjectInfo }) {
           mainRef.current?.focus();
         }}
       >
-        Skip to document
+        {t("workspace.skipToDocument")}
       </a>
       <UpdateBanner />
       <SyncWarningBanner project={project} />

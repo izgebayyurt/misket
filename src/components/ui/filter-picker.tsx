@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { ChevronDown, X } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -22,6 +23,7 @@ export function FilterPicker({
   children: (query: string) => React.ReactNode;
   testId: string;
 }) {
+  const { t } = useTranslation();
   const [query, setQuery] = useState("");
   return (
     <div className="flex items-center">
@@ -39,7 +41,7 @@ export function FilterPicker({
         </PopoverTrigger>
         <PopoverContent className="w-72 p-1">
           <Input
-            placeholder="Filter"
+            placeholder={t("common.filter")}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             className="mb-1 h-7 text-xs"
@@ -51,7 +53,7 @@ export function FilterPicker({
         <button
           className="ml-0.5 rounded p-0.5 text-fg-muted hover:bg-muted"
           onClick={onClear}
-          aria-label="Clear"
+          aria-label={t("common.clear")}
         >
           <X className="size-3" />
         </button>

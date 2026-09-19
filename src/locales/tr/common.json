@@ -76,10 +76,13 @@
     "loading": "Yükleniyor…",
     "refresh": "Yenile",
     "dismiss": "Kapat",
+    "close": "Kapat",
     "cancel": "Vazgeç",
     "save": "Kaydet",
     "rename": "Yeniden adlandır",
-    "deleteEllipsis": "Sil…"
+    "deleteEllipsis": "Sil…",
+    "filter": "Filtrele",
+    "clear": "Temizle"
   },
   "assist": {
     "title": "Yapay Zeka Desteği",
@@ -226,6 +229,7 @@
     "moveProject": "Projeyi taşı…"
   },
   "workspace": {
+    "skipToDocument": "Belgeye atla",
     "emptyTitle": "Henüz açık bir şey yok",
     "emptyHint": "Kenar çubuğundan bir transkript, not veya görsel içe aktar, ya da metin, Markdown, Word, PDF veya görsel dosyalarını bu pencerenin herhangi bir yerine sürükle."
   },

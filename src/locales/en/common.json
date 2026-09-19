@@ -76,10 +76,13 @@
     "loading": "Loading…",
     "refresh": "Refresh",
     "dismiss": "Dismiss",
+    "close": "Close",
     "cancel": "Cancel",
     "save": "Save",
     "rename": "Rename",
-    "deleteEllipsis": "Delete…"
+    "deleteEllipsis": "Delete…",
+    "filter": "Filter",
+    "clear": "Clear"
   },
   "assist": {
     "title": "Assistance",
@@ -226,6 +229,7 @@
     "moveProject": "Move project…"
   },
   "workspace": {
+    "skipToDocument": "Skip to document",
     "emptyTitle": "Nothing open yet",
     "emptyHint": "Import a transcript, notes or an image from the sidebar, or drop text, Markdown, Word, PDF or image files anywhere in this window."
   },

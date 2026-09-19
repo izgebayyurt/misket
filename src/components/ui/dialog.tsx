@@ -1,6 +1,7 @@
 import * as React from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 
 export const Dialog = DialogPrimitive.Root;
@@ -13,7 +14,9 @@ export const DialogContent = React.forwardRef<
     title: string;
     description?: string;
   }
->(({ className, children, title, description, ...props }, ref) => (
+>(({ className, children, title, description, ...props }, ref) => {
+  const { t } = useTranslation();
+  return (
   <DialogPrimitive.Portal>
     <DialogPrimitive.Overlay className="fixed inset-0 z-40 bg-black/30 data-[state=open]:animate-in data-[state=open]:fade-in-0" />
     <DialogPrimitive.Content
@@ -38,14 +41,15 @@ export const DialogContent = React.forwardRef<
       <div className="-mx-5 mt-4 min-h-0 flex-1 overflow-y-auto px-5">{children}</div>
       <DialogPrimitive.Close
         className="absolute right-3 top-3 rounded-sm p-1 text-fg-muted hover:bg-muted hover:text-fg"
-        aria-label="Close"
+        aria-label={t("common.close")}
         data-testid="dialog-close"
       >
         <X className="size-4" />
       </DialogPrimitive.Close>
     </DialogPrimitive.Content>
   </DialogPrimitive.Portal>
-));
+  );
+});
 DialogContent.displayName = "DialogContent";
 
 export function DialogFooter({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
