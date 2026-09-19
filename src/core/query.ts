@@ -12,12 +12,30 @@ export const MAX_NEAR_CHARS = 10_000_000;
 
 export const QUERY_OPS: QueryOp[] = ["and", "or", "not", "near"];
 
+/**
+ * This module is pure (no react/i18next import — see CLAUDE.md), but the
+ * sentences it builds ("A and B", "“and” needs at least 1 code") are
+ * user-visible, so every function that assembles one takes a translator and
+ * hands back already-localized text rather than English. The caller passes
+ * `useTranslation()`'s `t` — see `src/components/excerpts/QueryBuilder.tsx`.
+ */
+export type QueryT = (key: string, params?: Record<string, unknown>) => string;
+
+/** The translation key for how each operator reads (the picker, and the
+ * word joining terms in a sentence). */
+export const OP_LABEL_KEY: Record<QueryOp, string> = {
+  and: "excerpts.query.op.and",
+  or: "excerpts.query.op.or",
+  not: "excerpts.query.op.not",
+  near: "excerpts.query.op.near",
+};
+
 /** What each operator does, for the builder's help text. */
-export const OP_HELP: Record<QueryOp, string> = {
-  and: "both, on the same or overlapping passages",
-  or: "either one",
-  not: "the first, where the second does not overlap it",
-  near: "the first, close to the second",
+export const OP_HELP_KEY: Record<QueryOp, string> = {
+  and: "excerpts.query.help.and",
+  or: "excerpts.query.help.or",
+  not: "excerpts.query.help.not",
+  near: "excerpts.query.help.near",
 };
 
 export function isCodeRef(term: QueryTerm): term is CodeRef {
@@ -53,24 +71,24 @@ export function withinFor(op: QueryOp, within: QueryWithin | null | undefined): 
  * enforces, checked early so the builder can grey out "Apply" instead of
  * bouncing off an error toast.
  */
-export function validate(query: Query, depth = 0): string | null {
-  if (depth > MAX_DEPTH) return "This query nests too deeply.";
-  if (!QUERY_OPS.includes(query.op)) return `Unknown operator “${query.op}”.`;
+export function validate(query: Query, t: QueryT, depth = 0): string | null {
+  if (depth > MAX_DEPTH) return t("excerpts.query.errors.tooDeep");
+  if (!QUERY_OPS.includes(query.op)) return t("excerpts.query.errors.unknownOp", { op: query.op });
   const need = minTerms(query.op);
   if (query.terms.length < need) {
-    return `“${query.op}” needs at least ${need} code${need === 1 ? "" : "s"}.`;
+    return t("excerpts.query.errors.needsAtLeast", { op: t(OP_LABEL_KEY[query.op]), count: need });
   }
   const within = query.within;
   if (query.op === "near" && within?.kind === "chars") {
     if (!Number.isFinite(within.n) || within.n < 0 || within.n > MAX_NEAR_CHARS) {
-      return `A distance of ${within.n} characters is out of range.`;
+      return t("excerpts.query.errors.outOfRange", { n: within.n });
     }
   }
   for (const term of query.terms) {
     if (isCodeRef(term)) {
-      if (!term.codeId.trim()) return "Every row needs a code.";
+      if (!term.codeId.trim()) return t("excerpts.query.errors.needsCode");
     } else {
-      const inner = validate(term, depth + 1);
+      const inner = validate(term, t, depth + 1);
       if (inner) return inner;
     }
   }
@@ -78,26 +96,36 @@ export function validate(query: Query, depth = 0): string | null {
 }
 
 /** The scope as it reads in a sentence: "(same paragraph)". */
-function describeWithin(within: QueryWithin | null | undefined): string {
+function describeWithin(within: QueryWithin | null | undefined, t: QueryT): string {
   if (within?.kind === "chars") {
-    return ` (within ${within.n} character${within.n === 1 ? "" : "s"})`;
+    return ` ${t("excerpts.query.withinChars", { count: within.n })}`;
   }
-  return " (same paragraph)";
+  return ` ${t("excerpts.query.withinParagraph")}`;
 }
 
-function describeTerm(term: QueryTerm, codeName: (id: string) => string, depth: number): string {
+function describeTerm(
+  term: QueryTerm,
+  codeName: (id: string) => string,
+  t: QueryT,
+  depth: number,
+): string {
   if (isCodeRef(term)) {
-    const name = codeName(term.codeId) || "?";
-    return term.includeDescendants ? name : `${name} (no sub-codes)`;
+    const name = codeName(term.codeId) || t("excerpts.query.unknownCode");
+    return term.includeDescendants ? name : t("excerpts.query.termNoSubcodes", { name });
   }
-  const inner = describe(term, codeName, depth + 1);
+  const inner = describe(term, codeName, t, depth + 1);
   return depth === 0 && term.terms.length > 1 ? `(${inner})` : inner;
 }
 
-function describe(query: Query, codeName: (id: string) => string, depth: number): string {
-  const parts = query.terms.map((t) => describeTerm(t, codeName, depth));
-  const joined = parts.join(` ${query.op} `);
-  return query.op === "near" ? joined + describeWithin(query.within) : joined;
+function describe(
+  query: Query,
+  codeName: (id: string) => string,
+  t: QueryT,
+  depth: number,
+): string {
+  const parts = query.terms.map((term) => describeTerm(term, codeName, t, depth));
+  const joined = parts.join(` ${t(OP_LABEL_KEY[query.op])} `);
+  return query.op === "near" ? joined + describeWithin(query.within, t) : joined;
 }
 
 /**
@@ -108,9 +136,10 @@ function describe(query: Query, codeName: (id: string) => string, depth: number)
 export function describeQuery(
   query: Query | null | undefined,
   codeName: (id: string) => string,
+  t: QueryT,
 ): string {
   if (!query) return "";
-  return describe(query, codeName, 0);
+  return describe(query, codeName, t, 0);
 }
 
 // ------------------------------------------------------------ small edits

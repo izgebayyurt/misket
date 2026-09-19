@@ -1,4 +1,5 @@
 import { Film, Play } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { posToMs } from "@/core/align";
 import { formatTimecode } from "@/core/media";
 import { useDocument } from "@/queries/documents";
@@ -34,6 +35,7 @@ export function TranscriptExcerptActions({
   endPos,
   compact,
 }: Props) {
+  const { t } = useTranslation();
   const isText = kind === "text" && startPos !== null && endPos !== null;
   const { data: doc } = useDocument(isText ? documentId : null);
   const linkedMediaId = doc?.linkedMediaId ?? null;
@@ -57,16 +59,22 @@ export function TranscriptExcerptActions({
         size="sm"
         variant="ghost"
         onClick={play}
-        title={`Play ${formatTimecode(startMs)}–${formatTimecode(endMs)} of the recording`}
+        title={t("excerpts.playRange", {
+          start: formatTimecode(startMs),
+          end: formatTimecode(endMs),
+        })}
         aria-label={
           compact
-            ? `Play ${formatTimecode(startMs)}–${formatTimecode(endMs)} of the recording`
+            ? t("excerpts.playRange", {
+                start: formatTimecode(startMs),
+                end: formatTimecode(endMs),
+              })
             : undefined
         }
         data-testid="play-excerpt"
       >
         <Play className="size-3.5" />
-        {compact ? null : "Play this excerpt"}
+        {compact ? null : t("excerpts.playThis")}
       </Button>
       {compact ? null : (
         <Button
@@ -75,15 +83,13 @@ export function TranscriptExcerptActions({
           onClick={() =>
             void codeRecording
               .mutateAsync(excerptId)
-              .then(() =>
-                toast.info("Coded the same stretch of the recording. Undo with Ctrl/⌘+Z."),
-              )
+              .then(() => toast.info(t("excerpts.codedRecording")))
               .catch(toast.error)
           }
-          title="Code the same stretch of the recording with these codes"
+          title={t("excerpts.codeRecordingHint")}
           data-testid="code-recording"
         >
-          <Film className="size-3.5" /> Code the recording
+          <Film className="size-3.5" /> {t("excerpts.codeRecording")}
         </Button>
       )}
     </div>

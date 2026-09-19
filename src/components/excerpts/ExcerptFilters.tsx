@@ -1,4 +1,5 @@
 import { X } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { useCodeTree } from "@/queries/codes";
 import { useDocuments } from "@/queries/documents";
 import { useProjectSpeakers } from "@/queries/transcripts";
@@ -53,6 +54,7 @@ interface Props {
 }
 
 export function ExcerptFilters(p: Props) {
+  const { t } = useTranslation();
   const tree = useCodeTree();
   const { data: docs } = useDocuments();
   const { data: codeSets } = useSets("code");
@@ -74,12 +76,19 @@ export function ExcerptFilters(p: Props) {
 
   return (
     <div className="flex flex-wrap items-center gap-2 border-b border-border bg-panel px-4 py-2 text-sm">
-      <h2 className="mr-2 font-serif text-lg font-medium">Excerpts</h2>
+      <h2 className="mr-2 font-serif text-lg font-medium">{t("excerpts.filters.title")}</h2>
       <FilterPicker
         label={
           codeCount
-            ? `${codeCount} code${codeCount > 1 ? "s" : ""}${p.codeSetIds.length ? " / set" : ""}`
-            : "Any code"
+            ? t(
+                p.codeSetIds.length
+                  ? "excerpts.filters.codeCountWithSet"
+                  : "excerpts.filters.codeCount",
+                {
+                  count: codeCount,
+                },
+              )
+            : t("excerpts.filters.anyCode")
         }
         active={codeCount > 0}
         onClear={() => {
@@ -96,7 +105,7 @@ export function ExcerptFilters(p: Props) {
                 checked={p.includeDescendants}
                 onChange={(e) => p.onIncludeDescendants(e.target.checked)}
               />
-              Include sub-codes
+              {t("excerpts.filters.includeSubcodes")}
             </label>
             <label className="mb-1 flex items-center gap-2 px-2 py-1 text-xs text-fg-muted">
               <input
@@ -105,7 +114,7 @@ export function ExcerptFilters(p: Props) {
                 onChange={(e) => p.onRequireAllCodes(e.target.checked)}
                 data-testid="filter-require-all"
               />
-              Match all selected codes
+              {t("excerpts.filters.matchAllCodes")}
             </label>
             <SetsPickerGroup
               sets={codeSets}
@@ -136,10 +145,13 @@ export function ExcerptFilters(p: Props) {
       <FilterPicker
         label={
           docCount
-            ? `${docCount} document${docCount > 1 ? "s" : ""}${
-                p.documentSetIds.length ? " / set" : ""
-              }`
-            : "Any document"
+            ? t(
+                p.documentSetIds.length
+                  ? "excerpts.filters.documentCountWithSet"
+                  : "excerpts.filters.documentCount",
+                { count: docCount },
+              )
+            : t("excerpts.filters.anyDocument")
         }
         active={docCount > 0}
         onClear={() => {
@@ -176,7 +188,7 @@ export function ExcerptFilters(p: Props) {
       </FilterPicker>
       {codeCount > 1 ? (
         <span className="text-xs text-fg-muted" data-testid="code-match-mode">
-          {p.requireAllCodes ? "all of" : "any of"}
+          {p.requireAllCodes ? t("excerpts.filters.matchAllOf") : t("excerpts.filters.matchAnyOf")}
         </span>
       ) : null}
       {p.overlapsCodeId ? (
@@ -184,11 +196,13 @@ export function ExcerptFilters(p: Props) {
           className="flex items-center gap-1 rounded-md border border-accent bg-accent/10 px-2 py-1 text-xs"
           data-testid="overlaps-code-chip"
         >
-          overlapping {overlapsCode?.name ?? p.overlapsCodeId}
+          {t("excerpts.filters.overlapping", { name: overlapsCode?.name ?? p.overlapsCodeId })}
           <button
             className="rounded p-0.5 text-fg-muted hover:bg-muted"
             onClick={() => p.onOverlapsCodeId(null)}
-            aria-label={`Remove overlapping ${overlapsCode?.name ?? p.overlapsCodeId} filter`}
+            aria-label={t("excerpts.filters.removeOverlapping", {
+              name: overlapsCode?.name ?? p.overlapsCodeId,
+            })}
           >
             <X className="size-3" />
           </button>
@@ -198,8 +212,8 @@ export function ExcerptFilters(p: Props) {
         <FilterPicker
           label={
             p.speakers.length
-              ? `${p.speakers.length} speaker${p.speakers.length > 1 ? "s" : ""}`
-              : "Any speaker"
+              ? t("excerpts.filters.speakerCount", { count: p.speakers.length })
+              : t("excerpts.filters.anySpeaker")
           }
           active={p.speakers.length > 0}
           onClear={() => p.onSpeakers([])}
@@ -231,8 +245,12 @@ export function ExcerptFilters(p: Props) {
         <FilterPicker
           label={
             p.weightRange
-              ? `${weightCode?.name ?? p.weightRange.codeId} ${p.weightRange.min}–${p.weightRange.max}`
-              : "Weight between"
+              ? t("excerpts.filters.weightLabel", {
+                  name: weightCode?.name ?? p.weightRange.codeId,
+                  min: p.weightRange.min,
+                  max: p.weightRange.max,
+                })
+              : t("excerpts.filters.weightBetween")
           }
           active={!!p.weightRange}
           onClear={() => p.onWeightRange(null)}
@@ -244,7 +262,7 @@ export function ExcerptFilters(p: Props) {
                 <div className="flex items-center gap-2 border-b border-border px-2 pb-2">
                   <Input
                     type="number"
-                    aria-label="Minimum weight"
+                    aria-label={t("excerpts.filters.minWeight")}
                     className="h-7"
                     min={weightCode.weightScale.min}
                     max={weightCode.weightScale.max}
@@ -257,7 +275,7 @@ export function ExcerptFilters(p: Props) {
                   <span className="text-fg-muted">–</span>
                   <Input
                     type="number"
-                    aria-label="Maximum weight"
+                    aria-label={t("excerpts.filters.maxWeight")}
                     className="h-7"
                     min={weightCode.weightScale.min}
                     max={weightCode.weightScale.max}
@@ -304,11 +322,11 @@ export function ExcerptFilters(p: Props) {
           checked={p.uncodedOnly}
           onChange={(e) => p.onUncodedOnly(e.target.checked)}
         />
-        Uncoded only
+        {t("excerpts.filters.uncodedOnly")}
       </label>
       <SavedFilters current={p.filter} onApply={p.onApplyFilter} />
       <span className="ml-auto text-xs text-fg-muted" data-testid="excerpt-total">
-        {p.total} excerpt{p.total === 1 ? "" : "s"}
+        {t("excerpts.filters.total", { count: p.total })}
       </span>
     </div>
   );
