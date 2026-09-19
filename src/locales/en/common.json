@@ -84,7 +84,8 @@
     "filter": "Filter",
     "clear": "Clear",
     "done": "Done",
-    "delete": "Delete"
+    "delete": "Delete",
+    "copy": "Copy"
   },
   "assist": {
     "title": "Assistance",
@@ -1560,6 +1561,52 @@
       "alreadyCoded_other": "{{count, number}} already coded",
       "nothingNew": "nothing new",
       "toastCoded": "Coded {{what}} with {{codeName}}."
+    }
+  },
+  "layout": {
+    "logs": {
+      "levelAll": "All",
+      "levelInfo": "Info",
+      "levelWarnings": "Warnings",
+      "levelErrors": "Errors",
+      "copiedToClipboard": "Copied to clipboard",
+      "logsCleared": "Logs cleared",
+      "title": "Logs",
+      "description": "Kept for 7 days, on this computer only. Nothing here is sent anywhere unless you turn on crash reporting below and send a report.",
+      "revealInFolder": "Reveal in folder",
+      "levelGroupLabel": "Level",
+      "searchPlaceholder": "Search…",
+      "nothingLoggedYet": "Nothing logged yet.",
+      "noLinesMatch": "No lines match.",
+      "clearLogs": "Clear logs",
+      "clearLogsConfirmTitle": "Clear logs?",
+      "clearLogsConfirmDescription": "Deletes every log file on this computer. This cannot be undone."
+    },
+    "transcription": {
+      "downloadFailed": "The download failed.",
+      "downloadPaused": "Download paused. Press Download to resume.",
+      "addedModel": "Added {{id}}.",
+      "title": "Transcription",
+      "noBuildSupport": "This build of Misket was compiled without transcription support.",
+      "explanation": "Audio and video are transcribed on this machine with Whisper. Nothing is sent anywhere; the model file is downloaded once, from the <link>whisper.cpp</link> model repository, and checked against its published checksum.",
+      "receivedOfTotal": "{{received}} of {{total}}",
+      "pausedAt": "Paused at {{size}} — Download resumes it",
+      "inUse": "in use",
+      "stopDownloading": "Stop downloading {{label}}",
+      "stop": "Stop",
+      "useForTranscription": "Use {{label}} for transcription",
+      "use": "Use",
+      "deleteModel": "Delete {{label}}",
+      "resumeDownloading": "Resume downloading {{label}}",
+      "downloadModel": "Download {{label}}",
+      "resume": "Resume",
+      "download": "Download",
+      "downloadingModel": "Downloading {{label}}",
+      "whereModelsAreKept": "Where models are kept",
+      "addModelFileEllipsis": "Add model file…",
+      "threads": "Threads",
+      "defaultThreadsHint": "default {{count, number}} (one fewer than this machine has)",
+      "ffmpegHint": "Audio files need nothing else. Misket reads the sound out of most mp4 and mkv video on its own, but for the rest it falls back to <code>ffmpeg</code>, which it could not find on your PATH."
     }
   }
 }

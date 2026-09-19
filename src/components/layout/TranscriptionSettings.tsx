@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
+import { Trans, useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -31,6 +32,7 @@ interface DownloadState {
  * can take a `ggml-*.bin` copied across on a stick instead.
  */
 export function TranscriptionSettings() {
+  const { t } = useTranslation();
   const { data: support } = useTranscriptionSupport();
   const { data: library, isLoading, refetch } = useWhisperModels();
   const settings = useSettings((s) => s.settings);
@@ -59,8 +61,8 @@ export function TranscriptionSettings() {
         return next;
       });
       void refetch();
-      if (e.status === "failed") toast.error(e.message ?? "The download failed.");
-      if (e.status === "cancelled") toast.info("Download paused. Press Download to resume.");
+      if (e.status === "failed") toast.error(e.message ?? t("layout.transcription.downloadFailed"));
+      if (e.status === "cancelled") toast.info(t("layout.transcription.downloadPaused"));
     })
       .then(keep)
       .catch(() => {});
@@ -69,7 +71,7 @@ export function TranscriptionSettings() {
       cancelled = true;
       unlisteners.forEach((fn) => fn());
     };
-  }, [refetch]);
+  }, [refetch, t]);
 
   async function addFile() {
     const picked = await open({
@@ -83,7 +85,7 @@ export function TranscriptionSettings() {
       const id = await addWhisperModelFile(picked);
       await refetch();
       update({ whisperModel: id });
-      toast.info(`Added ${id}.`);
+      toast.info(t("layout.transcription.addedModel", { id }));
     } catch (e) {
       toast.error(e);
     } finally {
@@ -109,36 +111,47 @@ export function TranscriptionSettings() {
   return (
     <section data-testid="settings-transcription">
       <h3 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-fg-muted">
-        Transcription
+        {t("layout.transcription.title")}
       </h3>
       {support && !support.available ? (
-        <p className="text-xs text-fg-muted">
-          This build of Misket was compiled without transcription support.
-        </p>
+        <p className="text-xs text-fg-muted">{t("layout.transcription.noBuildSupport")}</p>
       ) : (
         <>
           <p className="mb-2 text-xs text-fg-muted">
-            Audio and video are transcribed on this machine with Whisper. Nothing is sent anywhere;
-            the model file is downloaded once, from the{" "}
-            <a
-              href="https://huggingface.co/ggerganov/whisper.cpp"
-              target="_blank"
-              rel="noreferrer"
-              className="underline"
-            >
-              whisper.cpp
-            </a>{" "}
-            model repository, and checked against its published checksum.
+            <Trans
+              i18nKey="layout.transcription.explanation"
+              components={{
+                // Trans replaces this element's children with the matching
+                // span of the translated string; the fallback text here is
+                // only what a screen reader (or a missing-translation
+                // fallback) would ever actually see as its content.
+                link: (
+                  <a
+                    href="https://huggingface.co/ggerganov/whisper.cpp"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="underline"
+                  >
+                    whisper.cpp
+                  </a>
+                ),
+              }}
+            />
           </p>
 
           <ul className="divide-y divide-border rounded border border-border">
-            {isLoading ? <li className="px-2 py-2 text-sm text-fg-muted">Loading…</li> : null}
+            {isLoading ? (
+              <li className="px-2 py-2 text-sm text-fg-muted">{t("common.loading")}</li>
+            ) : null}
             {library?.models.map((m) => {
               const download = downloads[m.id];
               const status = download
-                ? `${formatSize(download.received)} of ${formatSize(download.total)}`
+                ? t("layout.transcription.receivedOfTotal", {
+                    received: formatSize(download.received),
+                    total: formatSize(download.total),
+                  })
                 : m.partialBytes > 0 && !m.installed
-                  ? `Paused at ${formatSize(m.partialBytes)} — Download resumes it`
+                  ? t("layout.transcription.pausedAt", { size: formatSize(m.partialBytes) })
                   : m.note;
               return (
                 <li key={m.id} className="px-2 py-1.5 text-sm">
@@ -159,7 +172,7 @@ export function TranscriptionSettings() {
                         className="shrink-0 rounded bg-accent/15 px-1 text-[10px] uppercase text-accent"
                         data-testid={`settings-whisper-in-use-${m.id}`}
                       >
-                        in use
+                        {t("layout.transcription.inUse")}
                       </span>
                     ) : null}
                     <span className="flex-1" />
@@ -168,10 +181,10 @@ export function TranscriptionSettings() {
                         size="sm"
                         variant="outline"
                         onClick={() => void cancelWhisperModelDownload(m.id)}
-                        aria-label={`Stop downloading ${m.label}`}
+                        aria-label={t("layout.transcription.stopDownloading", { label: m.label })}
                         data-testid={`settings-whisper-stop-${m.id}`}
                       >
-                        Stop
+                        {t("layout.transcription.stop")}
                       </Button>
                     ) : m.installed ? (
                       <>
@@ -180,20 +193,22 @@ export function TranscriptionSettings() {
                           variant={selected === m.id ? "secondary" : "outline"}
                           disabled={selected === m.id}
                           onClick={() => update({ whisperModel: m.id })}
-                          aria-label={`Use ${m.label} for transcription`}
+                          aria-label={t("layout.transcription.useForTranscription", {
+                            label: m.label,
+                          })}
                           data-testid={`settings-whisper-use-${m.id}`}
                         >
-                          Use
+                          {t("layout.transcription.use")}
                         </Button>
                         <Button
                           size="sm"
                           variant="ghost"
                           disabled={busy}
                           onClick={() => void remove(m)}
-                          aria-label={`Delete ${m.label}`}
+                          aria-label={t("layout.transcription.deleteModel", { label: m.label })}
                           data-testid={`settings-whisper-delete-${m.id}`}
                         >
-                          Delete
+                          {t("common.delete")}
                         </Button>
                       </>
                     ) : (
@@ -202,10 +217,16 @@ export function TranscriptionSettings() {
                         variant="outline"
                         disabled={!m.known}
                         onClick={() => void downloadWhisperModel(m.id)}
-                        aria-label={`${m.partialBytes > 0 ? "Resume downloading" : "Download"} ${m.label}`}
+                        aria-label={
+                          m.partialBytes > 0
+                            ? t("layout.transcription.resumeDownloading", { label: m.label })
+                            : t("layout.transcription.downloadModel", { label: m.label })
+                        }
                         data-testid={`settings-whisper-download-${m.id}`}
                       >
-                        {m.partialBytes > 0 ? "Resume" : "Download"}
+                        {m.partialBytes > 0
+                          ? t("layout.transcription.resume")
+                          : t("layout.transcription.download")}
                       </Button>
                     )}
                   </div>
@@ -214,7 +235,7 @@ export function TranscriptionSettings() {
                     <div
                       className="mt-1 h-1 w-full overflow-hidden rounded-full bg-muted"
                       role="progressbar"
-                      aria-label={`Downloading ${m.label}`}
+                      aria-label={t("layout.transcription.downloadingModel", { label: m.label })}
                       aria-valuenow={download.percent}
                       aria-valuemin={0}
                       aria-valuemax={100}
@@ -236,7 +257,7 @@ export function TranscriptionSettings() {
               value={library?.dir ?? ""}
               className="font-mono text-xs"
               onFocus={(e) => e.currentTarget.select()}
-              aria-label="Where models are kept"
+              aria-label={t("layout.transcription.whereModelsAreKept")}
               data-testid="settings-whisper-dir"
             />
             <Button
@@ -247,12 +268,12 @@ export function TranscriptionSettings() {
               onClick={() => void addFile()}
               data-testid="settings-whisper-add-file"
             >
-              Add model file…
+              {t("layout.transcription.addModelFileEllipsis")}
             </Button>
           </div>
 
           <label className="mt-3 flex items-center gap-2 text-sm">
-            Threads
+            {t("layout.transcription.threads")}
             <input
               type="number"
               min={1}
@@ -266,15 +287,15 @@ export function TranscriptionSettings() {
               data-testid="settings-whisper-threads"
             />
             <span className="text-xs text-fg-muted">
-              default {support?.defaultThreads ?? 1} (one fewer than this machine has)
+              {t("layout.transcription.defaultThreadsHint", {
+                count: support?.defaultThreads ?? 1,
+              })}
             </span>
           </label>
 
           {support && !support.ffmpeg ? (
             <p className="mt-2 text-xs text-fg-muted" data-testid="settings-whisper-ffmpeg">
-              Audio files need nothing else. Misket reads the sound out of most mp4 and mkv video on
-              its own, but for the rest it falls back to <code>ffmpeg</code>, which it could not
-              find on your PATH.
+              <Trans i18nKey="layout.transcription.ffmpegHint" components={{ code: <code /> }} />
             </p>
           ) : null}
         </>

@@ -84,7 +84,8 @@
     "filter": "Filtrele",
     "clear": "Temizle",
     "done": "Bitti",
-    "delete": "Sil"
+    "delete": "Sil",
+    "copy": "Kopyala"
   },
   "assist": {
     "title": "Yapay Zeka Desteği",
@@ -1560,6 +1561,52 @@
       "alreadyCoded_other": "{{count, number}} zaten kodlanmış",
       "nothingNew": "yeni bir şey yok",
       "toastCoded": "{{codeName}} ile {{what}} kodlandı."
+    }
+  },
+  "layout": {
+    "logs": {
+      "levelAll": "Tümü",
+      "levelInfo": "Bilgi",
+      "levelWarnings": "Uyarılar",
+      "levelErrors": "Hatalar",
+      "copiedToClipboard": "Panoya kopyalandı",
+      "logsCleared": "Günlükler temizlendi",
+      "title": "Günlükler",
+      "description": "Yalnızca bu bilgisayarda 7 gün saklanır. Aşağıdan çökme raporlamayı açıp bir rapor göndermediğiniz sürece buradaki hiçbir şey herhangi bir yere gönderilmez.",
+      "revealInFolder": "Klasörde göster",
+      "levelGroupLabel": "Düzey",
+      "searchPlaceholder": "Ara…",
+      "nothingLoggedYet": "Henüz bir şey kaydedilmedi.",
+      "noLinesMatch": "Eşleşen satır yok.",
+      "clearLogs": "Günlükleri temizle",
+      "clearLogsConfirmTitle": "Günlükler temizlensin mi?",
+      "clearLogsConfirmDescription": "Bu bilgisayardaki tüm günlük dosyalarını siler. Bu geri alınamaz."
+    },
+    "transcription": {
+      "downloadFailed": "İndirme başarısız oldu.",
+      "downloadPaused": "İndirme duraklatıldı. Devam etmek için İndir'e basın.",
+      "addedModel": "{{id}} eklendi.",
+      "title": "Çeviriyazı",
+      "noBuildSupport": "Misket'in bu sürümü çeviriyazı desteği olmadan derlenmiş.",
+      "explanation": "Ses ve görüntü bu bilgisayarda Whisper ile çeviriyazıya geçirilir. Hiçbir şey herhangi bir yere gönderilmez; model dosyası <link>whisper.cpp</link> model deposundan bir kez indirilir ve yayımlanan sağlama toplamına göre denetlenir.",
+      "receivedOfTotal": "{{total}} üzerinden {{received}}",
+      "pausedAt": "{{size}} noktasında duraklatıldı — İndir bunu sürdürür",
+      "inUse": "kullanımda",
+      "stopDownloading": "{{label}} indirmesini durdur",
+      "stop": "Durdur",
+      "useForTranscription": "Çeviriyazı için {{label}} kullan",
+      "use": "Kullan",
+      "deleteModel": "{{label}} modelini sil",
+      "resumeDownloading": "{{label}} indirmesini sürdür",
+      "downloadModel": "{{label}} indir",
+      "resume": "Sürdür",
+      "download": "İndir",
+      "downloadingModel": "{{label}} indiriliyor",
+      "whereModelsAreKept": "Modellerin tutulduğu yer",
+      "addModelFileEllipsis": "Model dosyası ekle…",
+      "threads": "İş parçacığı",
+      "defaultThreadsHint": "varsayılan {{count, number}} (bu bilgisayardakinden bir eksik)",
+      "ffmpegHint": "Ses dosyaları başka bir şeye ihtiyaç duymaz. Misket çoğu mp4 ve mkv görüntüsünün sesini kendi başına okur, ama geri kalanı için PATH'inizde bulamadığı <code>ffmpeg</code>'e başvurur."
     }
   }
 }
