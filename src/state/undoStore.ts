@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import i18next from "@/lib/i18n";
 import { historyRedo, historyUndo } from "@/api/history";
 import { queryClient } from "@/queries/client";
 import { TOAST_KEYS, toast } from "./toasts";
@@ -41,9 +42,9 @@ export const useUndoStore = create<UndoStore>((set, get) => ({
       await refresh();
       if (node) {
         set({ lastLabel: node.summary });
-        toast.info(`Undid: ${node.summary}`, timeTravel);
+        toast.info(i18next.t("undo.undidToast", { summary: node.summary }), timeTravel);
       } else {
-        toast.info("Nothing left to undo", timeTravel);
+        toast.info(i18next.t("undo.nothingToUndo"), timeTravel);
       }
     } catch (e) {
       toast.error(e, timeTravel);
@@ -59,9 +60,9 @@ export const useUndoStore = create<UndoStore>((set, get) => ({
       await refresh();
       if (node) {
         set({ lastLabel: node.summary });
-        toast.info(`Redid: ${node.summary}`, timeTravel);
+        toast.info(i18next.t("undo.redidToast", { summary: node.summary }), timeTravel);
       } else {
-        toast.info("Nothing to redo", timeTravel);
+        toast.info(i18next.t("undo.nothingToRedo"), timeTravel);
       }
     } catch (e) {
       toast.error(e, timeTravel);

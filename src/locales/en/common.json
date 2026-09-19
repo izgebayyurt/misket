@@ -708,7 +708,14 @@
       "projectRenamed_other": "{{count, number}} project renames",
       "pull_one": "{{count, number}} pull",
       "pull_other": "{{count, number}} pulls"
-    }
+    },
+    "movedTo": "Moved to: {{summary}}",
+    "forkedHere": "Forked \"{{name}}\" here",
+    "branchRenamed": "Branch renamed: {{name}}",
+    "branchNameCleared": "Branch name cleared",
+    "nothingToCompact": "Nothing to compact",
+    "compacted_one": "Compacted: dropped {{count, number}} step",
+    "compacted_other": "Compacted: dropped {{count, number}} steps"
   },
   "activity": {
     "kind": "Kind",
@@ -1689,5 +1696,15 @@
     "copyDetails": "Copy details",
     "openLog": "Open log",
     "tryAgain": "Try again"
+  },
+  "undo": {
+    "undidToast": "Undid: {{summary}}",
+    "nothingToUndo": "Nothing left to undo",
+    "redidToast": "Redid: {{summary}}",
+    "nothingToRedo": "Nothing to redo"
+  },
+  "updates": {
+    "notConfigured": "Automatic updates aren't set up for this build yet.",
+    "upToDate": "Misket is up to date."
   }
 }

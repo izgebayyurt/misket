@@ -708,7 +708,14 @@
       "projectRenamed_other": "{{count, number}} proje yeniden adlandırma",
       "pull_one": "{{count, number}} çekme",
       "pull_other": "{{count, number}} çekme"
-    }
+    },
+    "movedTo": "Şuraya gidildi: {{summary}}",
+    "forkedHere": "\"{{name}}\" burada dallandı",
+    "branchRenamed": "Dal yeniden adlandırıldı: {{name}}",
+    "branchNameCleared": "Dal adı temizlendi",
+    "nothingToCompact": "Sıkıştırılacak bir şey yok",
+    "compacted_one": "Sıkıştırıldı: {{count, number}} adım bırakıldı",
+    "compacted_other": "Sıkıştırıldı: {{count, number}} adım bırakıldı"
   },
   "activity": {
     "kind": "Tür",
@@ -1689,5 +1696,15 @@
     "copyDetails": "Ayrıntıları kopyala",
     "openLog": "Günlüğü aç",
     "tryAgain": "Tekrar dene"
+  },
+  "undo": {
+    "undidToast": "Geri alındı: {{summary}}",
+    "nothingToUndo": "Geri alınacak bir şey kalmadı",
+    "redidToast": "Yinelendi: {{summary}}",
+    "nothingToRedo": "Yinelenecek bir şey yok"
+  },
+  "updates": {
+    "notConfigured": "Bu sürüm için otomatik güncellemeler henüz ayarlanmadı.",
+    "upToDate": "Misket güncel."
   }
 }

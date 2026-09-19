@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { check as pluginCheck, Update, type DownloadEvent } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
+import i18next from "@/lib/i18n";
 import { e2eCheckUpdate, getE2eConfig } from "@/api/e2e";
 import { getUpdaterStatus } from "@/api/updater";
 import { shouldShowUpdateBanner } from "@/core/updates";
@@ -85,7 +86,7 @@ export const useUpdates = create<UpdatesState>((set, get) => ({
           );
           set({ status: "idle" });
           if (announce) {
-            toast.info("Automatic updates aren't set up for this build yet.");
+            toast.info(i18next.t("updates.notConfigured"));
           }
           return;
         }
@@ -104,7 +105,7 @@ export const useUpdates = create<UpdatesState>((set, get) => ({
 
       if (!show || !update) {
         set({ status: "idle", info: null });
-        if (announce) toast.info("Misket is up to date.");
+        if (announce) toast.info(i18next.t("updates.upToDate"));
         return;
       }
       set({

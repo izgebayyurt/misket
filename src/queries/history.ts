@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import i18next from "@/lib/i18n";
 import * as api from "@/api/history";
 import type { HistoryNode } from "@/api/types";
 import { keys } from "./keys";
@@ -44,7 +45,9 @@ export function useHistoryNode(id: number | null) {
 export async function checkoutHistoryNode(id: number): Promise<void> {
   const node = await api.historyCheckout(id);
   await queryClient.invalidateQueries();
-  toast.info(`Moved to: ${node.summary}`, { key: TOAST_KEYS.timeTravel });
+  toast.info(i18next.t("history.movedTo", { summary: node.summary }), {
+    key: TOAST_KEYS.timeTravel,
+  });
 }
 
 /**
@@ -58,14 +61,16 @@ export async function forkHistoryNode(id: number, name: string): Promise<History
   await api.historyCheckout(id);
   const node = await api.historyFork(name);
   await queryClient.invalidateQueries();
-  toast.info(`Forked "${name}" here`);
+  toast.info(i18next.t("history.forkedHere", { name }));
   return node;
 }
 
 export async function renameHistoryBranch(id: number, name: string | null): Promise<void> {
   await api.historyRenameBranch(id, name);
   await queryClient.invalidateQueries({ queryKey: keys.history });
-  toast.info(name ? `Branch renamed: ${name}` : "Branch name cleared");
+  toast.info(
+    name ? i18next.t("history.branchRenamed", { name }) : i18next.t("history.branchNameCleared"),
+  );
 }
 
 export async function compactHistoryBefore(id: number): Promise<void> {
@@ -73,7 +78,7 @@ export async function compactHistoryBefore(id: number): Promise<void> {
   await queryClient.invalidateQueries();
   toast.info(
     report.droppedNodes === 0
-      ? "Nothing to compact"
-      : `Compacted: dropped ${report.droppedNodes.toLocaleString()} step${report.droppedNodes === 1 ? "" : "s"}`,
+      ? i18next.t("history.nothingToCompact")
+      : i18next.t("history.compacted", { count: report.droppedNodes }),
   );
 }
