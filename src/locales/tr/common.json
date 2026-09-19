@@ -1333,5 +1333,60 @@
     "descriptorsTable": "Betimleyiciler tablosu",
     "manageDescriptors": "Betimleyicileri yönet",
     "noneYetHint": "Henüz betimleyici yok. Yer veya görüşme dalgası gibi özellikleri kaydetmek için <btn>bazılarını tanımlayın</btn>."
+  },
+  "memos": {
+    "titlePlaceholder": "Başlık",
+    "deleteMemo": "Notu sil",
+    "bodyPlaceholder": "Bir not yazın…",
+    "newMemo": "Yeni not",
+    "memo": "Not",
+    "noneYet": "Henüz not yok."
+  },
+  "merge": {
+    "pull": {
+      "title": "Başka bir kopyadan çek",
+      "descriptionWithPlan": "{{name}} kişisinde olup sizde olmayan her şey bu projeye eklenir. Sizdeki hiçbir şey kaldırılmaz ve onların dosyasına hiçbir şey yazılmaz.",
+      "descriptionNoPlan": "Başka bir araştırmacının bu projenin kopyasını seçin.",
+      "reading": "{{fileName}} okunuyor…",
+      "differentProject": "<bold>Bu farklı bir proje</bold>, bunun başka bir kopyası değil. İçindeki her şey yeni içerik olarak eklenecek.",
+      "fromCopy": "{{name}} kişisinin kopyasından",
+      "nothingNewHint": "Yeni bir şey yok — {{fileName}} içindeki her şeye zaten sahipsiniz. Kenar çubuğundaki güvenilirlik, ikinizin kodladıklarını karşılaştırır.",
+      "rows": {
+        "documents": "kayıt",
+        "codes": "kod",
+        "excerpts": "alıntı",
+        "codings": "kodlama",
+        "memos": "not",
+        "descriptorValues": "kayıt özniteliği",
+        "sets": "küme",
+        "filters": "kayıtlı filtre",
+        "frameworkCells": "çerçeve özeti"
+      },
+      "newRow": "yeni {{label}}",
+      "alreadyHere_one": "({{count, number}} zaten burada)",
+      "alreadyHere_other": "({{count, number}} zaten burada)",
+      "whoCodedWhat": "Kim neyi kodladı",
+      "youSuffix": "(siz)",
+      "comingOver": "{{total, number}} kodlamadan {{incoming, number}} tanesi geliyor",
+      "conflictsHeading_one": "İkiniz de bunu değiştirmişsiniz — neyin kalacağını seçin",
+      "conflictsHeading_other": "İkiniz de bunları değiştirmişsiniz — neyin kalacağını seçin",
+      "yours": "Sizinki",
+      "empty": "boş",
+      "units": {
+        "codings_one": "{{count, number}} kodlama",
+        "codings_other": "{{count, number}} kodlama",
+        "excerpts_one": "{{count, number}} alıntı",
+        "excerpts_other": "{{count, number}} alıntı",
+        "codes_one": "{{count, number}} kod",
+        "codes_other": "{{count, number}} kod",
+        "documents_one": "{{count, number}} kayıt",
+        "documents_other": "{{count, number}} kayıt",
+        "memos_one": "{{count, number}} not",
+        "memos_other": "{{count, number}} not"
+      },
+      "toastPulled": "{{name}} kişisinden {{what}} çekildi; geri almak için {{shortcut}}",
+      "toastNothingNew": "{{name}} kişisinin kopyasında yeni bir şey yok",
+      "pull": "Çek"
+    }
   }
 }

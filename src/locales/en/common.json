@@ -1333,5 +1333,60 @@
     "descriptorsTable": "Descriptors table",
     "manageDescriptors": "Manage descriptors",
     "noneYetHint": "No descriptors yet. <btn>Define some</btn> to record attributes like site or interview wave."
+  },
+  "memos": {
+    "titlePlaceholder": "Title",
+    "deleteMemo": "Delete memo",
+    "bodyPlaceholder": "Write a memo…",
+    "newMemo": "New memo",
+    "memo": "Memo",
+    "noneYet": "No memos yet."
+  },
+  "merge": {
+    "pull": {
+      "title": "Pull from another copy",
+      "descriptionWithPlan": "Everything {{name}} has and you do not, added to this project. Nothing of yours is removed, and nothing is written to their file.",
+      "descriptionNoPlan": "Choose another researcher's copy of this project.",
+      "reading": "Reading {{fileName}}…",
+      "differentProject": "<bold>This is a different project</bold>, not another copy of this one. Everything in it will arrive as new material.",
+      "fromCopy": "From {{name}}'s copy",
+      "nothingNewHint": "Nothing new — you already have everything in {{fileName}}. Reliability in the sidebar compares what the two of you coded.",
+      "rows": {
+        "documents": "documents",
+        "codes": "codes",
+        "excerpts": "excerpts",
+        "codings": "codings",
+        "memos": "memos",
+        "descriptorValues": "document attributes",
+        "sets": "sets",
+        "filters": "saved filters",
+        "frameworkCells": "framework summaries"
+      },
+      "newRow": "new {{label}}",
+      "alreadyHere_one": "({{count, number}} already here)",
+      "alreadyHere_other": "({{count, number}} already here)",
+      "whoCodedWhat": "Who coded what",
+      "youSuffix": "(you)",
+      "comingOver": "{{incoming, number}} of {{total, number}} coming over",
+      "conflictsHeading_one": "You have both changed this — pick what to keep",
+      "conflictsHeading_other": "You have both changed these — pick what to keep",
+      "yours": "Yours",
+      "empty": "empty",
+      "units": {
+        "codings_one": "{{count, number}} coding",
+        "codings_other": "{{count, number}} codings",
+        "excerpts_one": "{{count, number}} excerpt",
+        "excerpts_other": "{{count, number}} excerpts",
+        "codes_one": "{{count, number}} code",
+        "codes_other": "{{count, number}} codes",
+        "documents_one": "{{count, number}} document",
+        "documents_other": "{{count, number}} documents",
+        "memos_one": "{{count, number}} memo",
+        "memos_other": "{{count, number}} memos"
+      },
+      "toastPulled": "Pulled {{what}} by {{name}}; undo with {{shortcut}}",
+      "toastNothingNew": "Nothing new in {{name}}'s copy",
+      "pull": "Pull"
+    }
   }
 }
