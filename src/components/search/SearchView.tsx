@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Search, Sparkles } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import type { SearchHit } from "@/api/types";
 import { useProjectSearch } from "@/queries/search";
 import { useWorkspace } from "@/state/workspace";
@@ -33,6 +34,7 @@ function groupByDocument(hits: SearchHit[]): DocumentGroup[] {
 
 /** Project-wide "find in project": debounced search across every document. */
 export function SearchView({ initialQuery }: { initialQuery?: string } = {}) {
+  const { t } = useTranslation();
   const [input, setInput] = useState(initialQuery ?? "");
   const [debounced, setDebounced] = useState(initialQuery ?? "");
   const [stem, setStem] = useState(false);
@@ -53,16 +55,14 @@ export function SearchView({ initialQuery }: { initialQuery?: string } = {}) {
   return (
     <div className="flex h-full flex-col" data-testid="search-view">
       <div className="flex items-center gap-2 border-b border-border bg-panel px-4 py-2">
-        <h2 className="mr-1 font-serif text-lg font-medium">Search</h2>
+        <h2 className="mr-1 font-serif text-lg font-medium">{t("search.title")}</h2>
         <div className="relative max-w-md flex-1">
           <Search className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-fg-muted" />
           <Input
             autoFocus
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder={
-              regexMode ? "Search with a regular expression…" : "Search across all documents…"
-            }
+            placeholder={regexMode ? t("search.placeholderRegex") : t("search.placeholderPlain")}
             className="h-8 pl-7"
             data-testid="search-input"
           />
@@ -79,18 +79,14 @@ export function SearchView({ initialQuery }: { initialQuery?: string } = {}) {
             })
           }
           aria-pressed={regexMode}
-          title="Treat the query as a regular expression"
+          title={t("search.regexToggleTitle")}
           data-testid="regex-toggle"
         >
           .*
         </Button>
         <label
           className="flex shrink-0 items-center gap-1.5 text-xs text-fg-muted"
-          title={
-            regexMode
-              ? "Not available with a regular expression"
-              : "Also match other forms of the same word (e.g. “code” finds “coding”)"
-          }
+          title={regexMode ? t("search.matchWordFormsUnavailable") : t("search.matchWordFormsHint")}
         >
           <input
             type="checkbox"
@@ -99,11 +95,11 @@ export function SearchView({ initialQuery }: { initialQuery?: string } = {}) {
             onChange={(e) => setStem(e.target.checked)}
             data-testid="search-match-word-forms"
           />
-          Match word forms
+          {t("search.matchWordForms")}
         </label>
         {hasQuery && !invalidRegex ? (
           <span className="ml-auto text-xs text-fg-muted" data-testid="search-total">
-            {hits?.length ?? 0} match{hits?.length === 1 ? "" : "es"}
+            {t("search.matchCount", { count: hits?.length ?? 0 })}
           </span>
         ) : null}
         {hasQuery && !invalidRegex && hits && hits.length > 0 ? (
@@ -113,7 +109,7 @@ export function SearchView({ initialQuery }: { initialQuery?: string } = {}) {
             onClick={() => setAutoCoding(true)}
             data-testid="auto-code-all"
           >
-            <Sparkles /> Auto-code all {hits.length} match{hits.length === 1 ? "" : "es"}…
+            <Sparkles /> {t("search.autoCodeAll", { count: hits.length })}
           </Button>
         ) : null}
       </div>
@@ -123,9 +119,11 @@ export function SearchView({ initialQuery }: { initialQuery?: string } = {}) {
             {invalidRegex}
           </p>
         ) : !hasQuery ? (
-          <p className="p-6 text-sm text-fg-muted">Type to search across every document.</p>
+          <p className="p-6 text-sm text-fg-muted">{t("search.typeToSearchHint")}</p>
         ) : groups.length === 0 && !isFetching ? (
-          <p className="p-6 text-sm text-fg-muted">Nothing matches “{debounced.trim()}”.</p>
+          <p className="p-6 text-sm text-fg-muted">
+            {t("search.noMatches", { query: debounced.trim() })}
+          </p>
         ) : (
           groups.map((g) => (
             <div key={g.documentId}>

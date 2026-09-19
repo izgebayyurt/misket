@@ -1510,5 +1510,56 @@
       "toastImported": "Imported “{{label}}”: {{what}}; undo with {{shortcut}}",
       "toastImportedNothingNew": "Imported “{{label}}”: nothing new; undo with {{shortcut}}"
     }
+  },
+  "search": {
+    "title": "Search",
+    "placeholderRegex": "Search with a regular expression…",
+    "placeholderPlain": "Search across all documents…",
+    "regexToggleTitle": "Treat the query as a regular expression",
+    "matchWordFormsUnavailable": "Not available with a regular expression",
+    "matchWordFormsHint": "Also match other forms of the same word (e.g. “code” finds “coding”)",
+    "matchWordForms": "Match word forms",
+    "matchCount_one": "{{count, number}} match",
+    "matchCount_other": "{{count, number}} matches",
+    "autoCodeAll_one": "Auto-code all {{count, number}} match…",
+    "autoCodeAll_other": "Auto-code all {{count, number}} matches…",
+    "typeToSearchHint": "Type to search across every document.",
+    "noMatches": "Nothing matches “{{query}}”.",
+    "autoCode": {
+      "scopeMatchLabel": "Just the match",
+      "scopeMatchHint": "Code exactly what matched",
+      "scopeSentenceLabel": "The whole sentence",
+      "scopeSentenceHint": "Expand each match to its sentence",
+      "scopeParagraphLabel": "The whole paragraph",
+      "scopeParagraphHint": "Expand each match to its paragraph",
+      "scopeNoun": {
+        "match": "match",
+        "sentence": "sentence",
+        "paragraph": "paragraph"
+      },
+      "title": "Auto-code {{matches}}…",
+      "description": "Creates one excerpt per range (reusing any that already exist there) and tags it with the code you pick.",
+      "codeLabel": "Code",
+      "changeEllipsis": "Change…",
+      "chooseACodeEllipsis": "Choose a code…",
+      "codeWhatLabel": "Code what",
+      "workingOutRanges": "Working out the ranges…",
+      "previewShared_one": "This will create or reuse {{count, number}} excerpt for {{matches}} (some share a {{scope}}).",
+      "previewShared_other": "This will create or reuse {{count, number}} excerpts for {{matches}} (some share a {{scope}}).",
+      "previewEachOf": "This will create or reuse an excerpt for each of {{matches}}.",
+      "submitButton_one": "Auto-code {{count, number}} match",
+      "submitButton_other": "Auto-code {{count, number}} matches",
+      "pickCodeLabel": "Auto-code {{matches}}",
+      "thisCodeFallback": "this code",
+      "historyLabel": "Auto-code {{matches}} with {{codeName}}",
+      "newExcerpts_one": "{{count, number}} new excerpt",
+      "newExcerpts_other": "{{count, number}} new excerpts",
+      "existingExcerpts_one": "{{count, number}} existing excerpt",
+      "existingExcerpts_other": "{{count, number}} existing excerpts",
+      "alreadyCoded_one": "{{count, number}} already coded",
+      "alreadyCoded_other": "{{count, number}} already coded",
+      "nothingNew": "nothing new",
+      "toastCoded": "Coded {{what}} with {{codeName}}."
+    }
   }
 }

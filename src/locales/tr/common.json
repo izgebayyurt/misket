@@ -1510,5 +1510,56 @@
       "toastImported": "“{{label}}” içe aktarıldı: {{what}}; geri almak için {{shortcut}}",
       "toastImportedNothingNew": "“{{label}}” içe aktarıldı: yeni bir şey yok; geri almak için {{shortcut}}"
     }
+  },
+  "search": {
+    "title": "Ara",
+    "placeholderRegex": "Düzenli ifadeyle arayın…",
+    "placeholderPlain": "Tüm kayıtlarda arayın…",
+    "regexToggleTitle": "Sorguyu düzenli ifade olarak değerlendir",
+    "matchWordFormsUnavailable": "Düzenli ifadeyle kullanılamaz",
+    "matchWordFormsHint": "Aynı kelimenin diğer biçimlerini de eşleştir (örn. “kod” “kodlama”yı bulur)",
+    "matchWordForms": "Kelime biçimlerini eşleştir",
+    "matchCount_one": "{{count, number}} eşleşme",
+    "matchCount_other": "{{count, number}} eşleşme",
+    "autoCodeAll_one": "{{count, number}} eşleşmenin tümünü otomatik kodla…",
+    "autoCodeAll_other": "{{count, number}} eşleşmenin tümünü otomatik kodla…",
+    "typeToSearchHint": "Her kayıtta aramak için yazmaya başlayın.",
+    "noMatches": "“{{query}}” ile eşleşen bir şey yok.",
+    "autoCode": {
+      "scopeMatchLabel": "Yalnızca eşleşme",
+      "scopeMatchHint": "Tam olarak eşleşeni kodla",
+      "scopeSentenceLabel": "Tüm cümle",
+      "scopeSentenceHint": "Her eşleşmeyi cümlesine genişlet",
+      "scopeParagraphLabel": "Tüm paragraf",
+      "scopeParagraphHint": "Her eşleşmeyi paragrafına genişlet",
+      "scopeNoun": {
+        "match": "eşleşme",
+        "sentence": "cümle",
+        "paragraph": "paragraf"
+      },
+      "title": "{{matches}} otomatik kodla…",
+      "description": "Her aralık için bir alıntı oluşturur (orada zaten var olanları yeniden kullanır) ve seçtiğiniz kodu ona uygular.",
+      "codeLabel": "Kod",
+      "changeEllipsis": "Değiştir…",
+      "chooseACodeEllipsis": "Bir kod seçin…",
+      "codeWhatLabel": "Ne kodlanacak",
+      "workingOutRanges": "Aralıklar hesaplanıyor…",
+      "previewShared_one": "Bu, {{matches}} için {{count, number}} alıntı oluşturur veya yeniden kullanır (bazıları bir {{scope}} paylaşıyor).",
+      "previewShared_other": "Bu, {{matches}} için {{count, number}} alıntı oluşturur veya yeniden kullanır (bazıları bir {{scope}} paylaşıyor).",
+      "previewEachOf": "Bu, {{matches}} için birer alıntı oluşturur veya yeniden kullanır.",
+      "submitButton_one": "{{count, number}} eşleşmeyi otomatik kodla",
+      "submitButton_other": "{{count, number}} eşleşmeyi otomatik kodla",
+      "pickCodeLabel": "{{matches}} otomatik kodla",
+      "thisCodeFallback": "bu kod",
+      "historyLabel": "{{matches}} otomatik kodla ({{codeName}})",
+      "newExcerpts_one": "{{count, number}} yeni alıntı",
+      "newExcerpts_other": "{{count, number}} yeni alıntı",
+      "existingExcerpts_one": "{{count, number}} var olan alıntı",
+      "existingExcerpts_other": "{{count, number}} var olan alıntı",
+      "alreadyCoded_one": "{{count, number}} zaten kodlanmış",
+      "alreadyCoded_other": "{{count, number}} zaten kodlanmış",
+      "nothingNew": "yeni bir şey yok",
+      "toastCoded": "{{codeName}} ile {{what}} kodlandı."
+    }
   }
 }
