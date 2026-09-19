@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { Trans, useTranslation } from "react-i18next";
 import { flattenTree, pathOf } from "@/core/codeTree";
 import { matrixCsv } from "@/core/csv";
 import { useCodeByDescriptor } from "@/queries/analysis";
@@ -31,6 +32,7 @@ import { shade } from "./shade";
 const SPEAKER_FIELD_ID = "speaker";
 
 export function CodeByDescriptorMatrix() {
+  const { t } = useTranslation();
   const { data: descriptorFields } = useDescriptorFields();
   const { data: projectSpeakers } = useProjectSpeakers();
   const [fieldId, setFieldId] = useState<string | null>(null);
@@ -52,7 +54,7 @@ export function CodeByDescriptorMatrix() {
     if (projectSpeakers?.length) {
       list.push({
         id: SPEAKER_FIELD_ID,
-        name: "Speaker",
+        name: t("analysis.descriptor.speakerField"),
         kind: "text",
         options: projectSpeakers,
         sortOrder: -1,
@@ -62,7 +64,7 @@ export function CodeByDescriptorMatrix() {
       });
     }
     return list;
-  }, [descriptorFields, projectSpeakers]);
+  }, [descriptorFields, projectSpeakers, t]);
 
   // The first field is the useful default: picking one is a second click
   // nobody wants when the project has only one descriptor.
@@ -140,7 +142,7 @@ export function CodeByDescriptorMatrix() {
         className="rounded-md border border-border bg-bg px-2 py-1 text-xs"
         value={field?.id ?? ""}
         onChange={(e) => setFieldId(e.target.value)}
-        aria-label="Descriptor"
+        aria-label={t("analysis.descriptor.fieldLabel")}
         data-testid="crosstab-field"
       >
         {fields.map((f) => (
@@ -151,7 +153,9 @@ export function CodeByDescriptorMatrix() {
       </select>
       <FilterPicker
         label={
-          codeIds.length ? `${codeIds.length} code${codeIds.length > 1 ? "s" : ""}` : "All codes"
+          codeIds.length
+            ? t("excerpts.filters.codeCount", { count: codeIds.length })
+            : t("analysis.allCodes")
         }
         active={codeIds.length > 0}
         onClear={() => setCodeIds([])}
@@ -166,7 +170,7 @@ export function CodeByDescriptorMatrix() {
                 onChange={(e) => setIncludeSub(e.target.checked)}
                 data-testid="include-sub-codes"
               />
-              Include sub-codes
+              {t("excerpts.filters.includeSubcodes")}
             </label>
             {flattenTree(tree)
               .filter((n) => pathOf(tree, n.code.id).toLowerCase().includes(query.toLowerCase()))
@@ -205,25 +209,25 @@ export function CodeByDescriptorMatrix() {
         className="rounded-md border border-border bg-bg px-2 py-1 text-xs"
         value={mode}
         onChange={(e) => setMode(e.target.value as CrosstabMode)}
-        aria-label="Count"
+        aria-label={t("analysis.descriptor.countLabel")}
         data-testid="crosstab-mode"
       >
-        <option value="excerpts">Count excerpts</option>
-        <option value="documents">Count documents</option>
+        <option value="excerpts">{t("analysis.descriptor.countExcerpts")}</option>
+        <option value="documents">{t("analysis.descriptor.countDocuments")}</option>
       </select>
       <select
         className="rounded-md border border-border bg-bg px-2 py-1 text-xs"
         value={measure}
         onChange={(e) => setMeasure(e.target.value as CrosstabMeasure)}
-        aria-label="Measure"
+        aria-label={t("analysis.descriptor.measureLabel")}
         data-testid="crosstab-measure"
       >
-        <option value="count">Counts</option>
-        <option value="meanWeight">Mean weight</option>
+        <option value="count">{t("analysis.descriptor.measureCounts")}</option>
+        <option value="meanWeight">{t("analysis.descriptor.measureMeanWeight")}</option>
       </select>
       {isNumber ? (
         <label className="flex items-center gap-1.5 text-xs text-fg-muted">
-          Bins
+          {t("analysis.descriptor.bins")}
           <input
             type="number"
             min={1}
@@ -247,11 +251,7 @@ export function CodeByDescriptorMatrix() {
   if (!fields.length) {
     return (
       <div className="flex h-full flex-col" data-testid="analysis-crosstab">
-        <EmptyNote>
-          Nothing to compare codes across yet. Define a document attribute — a site, an interview
-          wave, an age group — and set it on a few documents, or import a transcript and compare
-          codes across its speakers.
-        </EmptyNote>
+        <EmptyNote>{t("analysis.descriptor.noFields")}</EmptyNote>
       </div>
     );
   }
@@ -262,10 +262,10 @@ export function CodeByDescriptorMatrix() {
       {!rows.length || !columns.length ? (
         <EmptyNote>
           {isPending
-            ? "Counting…"
+            ? t("analysis.counting")
             : bySpeaker
-              ? "Nothing to cross-tabulate yet: code some passages in a transcript."
-              : `Nothing to cross-tabulate yet: give some documents a value for “${field?.name}” and code them.`}
+              ? t("analysis.descriptor.emptyBySpeaker")
+              : t("analysis.descriptor.emptyByField", { field: field?.name })}
         </EmptyNote>
       ) : (
         <div className="min-h-0 flex-1 overflow-auto p-3">
@@ -280,9 +280,9 @@ export function CodeByDescriptorMatrix() {
                     key={c.label}
                     className="sticky top-0 z-20 min-w-16 bg-bg px-2 py-1 text-center align-bottom font-normal"
                     scope="col"
-                    title={`${data?.documentsPerColumn[i] ?? 0} document${
-                      data?.documentsPerColumn[i] === 1 ? "" : "s"
-                    }`}
+                    title={t("excerpts.filters.documentCount", {
+                      count: data?.documentsPerColumn[i] ?? 0,
+                    })}
                   >
                     <span className="block max-w-32 truncate">{c.label}</span>
                     <span className="block text-fg-muted">
@@ -294,7 +294,7 @@ export function CodeByDescriptorMatrix() {
                   className="sticky top-0 z-20 min-w-16 bg-bg px-2 py-1 text-center align-bottom font-medium"
                   scope="col"
                 >
-                  Total
+                  {t("analysis.descriptor.total")}
                 </th>
               </tr>
             </thead>
@@ -328,11 +328,21 @@ export function CodeByDescriptorMatrix() {
                           title={
                             isWeight
                               ? weight != null
-                                ? `${pathOf(tree, r.codeId)} × ${column.label}: mean weight ${formatWeight(weight)}`
-                                : `${pathOf(tree, r.codeId)} × ${column.label}: no rated codings`
-                              : `${pathOf(tree, r.codeId)} × ${column.label}: ${n} ${unit}${
-                                  n === 1 ? "" : "s"
-                                }`
+                                ? t("analysis.descriptor.cellTitleMeanWeight", {
+                                    path: pathOf(tree, r.codeId),
+                                    column: column.label,
+                                    weight: formatWeight(weight),
+                                  })
+                                : t("analysis.descriptor.cellTitleNoRated", {
+                                    path: pathOf(tree, r.codeId),
+                                    column: column.label,
+                                  })
+                              : t(
+                                  unit === "document"
+                                    ? "analysis.descriptor.cellTitleDocuments"
+                                    : "analysis.descriptor.cellTitleExcerpts",
+                                  { path: pathOf(tree, r.codeId), column: column.label, count: n },
+                                )
                           }
                           onClick={() => {
                             // The "(no speaker)" column has no filter that
@@ -374,7 +384,7 @@ export function CodeByDescriptorMatrix() {
                   className="sticky left-0 z-10 bg-bg py-0 pr-2 text-left font-medium"
                   scope="row"
                 >
-                  Total
+                  {t("analysis.descriptor.total")}
                 </th>
                 {columnTotals.map((n, i) => (
                   <td
@@ -391,16 +401,23 @@ export function CodeByDescriptorMatrix() {
             </tbody>
           </table>
           <p className="mt-3 max-w-prose text-xs text-fg-muted">
-            {data?.mode === "documents"
-              ? "Each cell counts the documents with that value that carry the code at least once"
-              : "Each cell counts the excerpts carrying the code in documents with that value"}
-            {includeSub ? ", sub-codes included" : ""}. <em>n</em> is how many documents fall in the
-            column.{" "}
-            {bySpeaker
-              ? "An excerpt belongs to the turn it starts in, so one transcript feeds several columns and n is the documents that speaker appears in."
-              : "A document belongs to exactly one column, so a row adds up to its total;"}{" "}
-            a column total counts an excerpt once per code it carries. Click a cell to browse those
-            excerpts.
+            <Trans
+              i18nKey="analysis.descriptor.footerExplain"
+              values={{
+                cellCount: t(
+                  data?.mode === "documents"
+                    ? "analysis.descriptor.footerCellCountDocuments"
+                    : "analysis.descriptor.footerCellCountExcerpts",
+                ),
+                subcodes: includeSub ? t("analysis.descriptor.footerSubcodesIncluded") : "",
+                nExplain: t(
+                  bySpeaker
+                    ? "analysis.descriptor.footerNExplainSpeaker"
+                    : "analysis.descriptor.footerNExplainDocument",
+                ),
+              }}
+              components={{ em: <em /> }}
+            />
           </p>
         </div>
       )}
