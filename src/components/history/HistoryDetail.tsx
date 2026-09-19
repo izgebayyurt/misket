@@ -1,6 +1,8 @@
 import { AudioLines, BookMarked, Crosshair, FileText, GitFork, Layers } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import type { HistoryRef } from "@/api/types";
 import { absoluteTime, kindLabel, relativeTime } from "@/core/activity";
+import { currentLocale } from "@/lib/i18n";
 import { detailFields } from "@/core/historyDetail";
 import { useHistoryNode } from "@/queries/history";
 import { useWorkspace } from "@/state/workspace";
@@ -21,6 +23,11 @@ import { cn } from "@/lib/utils";
  * Every reference is resolved by `history_node` against the project as it is
  * now, so something that has since been deleted says so instead of offering
  * a link that goes nowhere.
+ *
+ * `data.summary`, `kindLabel(...)` and the raw `detail` field labels/values
+ * (`DetailTable`) are not translated — they are stored, English audit-trail
+ * text and mechanically humanized JSON keys from an open-ended payload; see
+ * `docs/DATA_MODEL.md` "Activity log language".
  */
 export function HistoryDetail({
   nodeId,
@@ -34,6 +41,8 @@ export function HistoryDetail({
   /** Jump the list to another step (a compound step's member, the parent). */
   onSelectNode: (id: number) => void;
 }) {
+  const { t } = useTranslation();
+  const locale = currentLocale();
   const { data, isLoading, error } = useHistoryNode(nodeId);
 
   if (nodeId == null) {
@@ -43,8 +52,9 @@ export function HistoryDetail({
         data-testid="history-detail"
       >
         <p className="text-sm text-fg-muted">
-          Pick a step to see what it did. Nothing moves until you say so:
-          <span className="font-medium"> Go to this point</span> is a button of its own.
+          {t("history.pickAStep")}
+          <span className="font-medium"> {t("history.goToPoint")}</span>{" "}
+          {t("history.isItsOwnButton")}
         </p>
       </aside>
     );
@@ -56,10 +66,10 @@ export function HistoryDetail({
       data-testid="history-detail"
     >
       {isLoading ? (
-        <p className="p-4 text-sm text-fg-muted">Loading…</p>
+        <p className="p-4 text-sm text-fg-muted">{t("common.loading")}</p>
       ) : error || !data ? (
         <p className="p-4 text-sm text-danger">
-          {error instanceof Error ? error.message : "That step could not be read."}
+          {error instanceof Error ? error.message : t("history.stepUnreadable")}
         </p>
       ) : (
         <>
@@ -70,8 +80,12 @@ export function HistoryDetail({
             <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-fg-muted">
               <span>{kindLabel(data.kind)}</span>
               {data.actor ? <span>· {data.actor}</span> : null}
-              <span title={absoluteTime(data.at)}>· {relativeTime(data.at)}</span>
-              {data.stepCount > 1 ? <span>· {data.stepCount} changes in one step</span> : null}
+              <span title={absoluteTime(data.at, locale)}>
+                · {relativeTime(data.at, undefined, locale)}
+              </span>
+              {data.stepCount > 1 ? (
+                <span>· {t("history.changesInOneStep", { count: data.stepCount })}</span>
+              ) : null}
             </p>
             {data.branchName ? (
               <p className="mt-2 inline-flex items-center gap-1 rounded-full border border-accent px-2 py-0.5 text-[11px] text-fg">
@@ -79,17 +93,14 @@ export function HistoryDetail({
               </p>
             ) : null}
             {data.isHead ? (
-              <p className="mt-2 text-xs font-medium text-accent">The project is at this step.</p>
+              <p className="mt-2 text-xs font-medium text-accent">{t("history.projectAtStep")}</p>
             ) : data.applied ? null : (
               <p className="mt-2 text-xs text-fg-muted" data-testid="history-detail-unapplied">
-                Not in force: the project has been taken back past this step, or is on another
-                branch. What it did is described below all the same.
+                {t("history.notInForce")}
               </p>
             )}
             {data.undoable ? null : (
-              <p className="mt-2 text-xs text-fg-muted">
-                This step carries no inverse, so it cannot be replayed backwards.
-              </p>
+              <p className="mt-2 text-xs text-fg-muted">{t("history.noInverse")}</p>
             )}
             <div className="mt-3 flex flex-wrap gap-2">
               <Button
@@ -97,9 +108,9 @@ export function HistoryDetail({
                 onClick={onCheckout}
                 disabled={data.isHead}
                 data-testid="history-detail-checkout"
-                title="Move the project to this step (G)"
+                title={t("history.moveProjectHere")}
               >
-                <Crosshair /> Go to this point
+                <Crosshair /> {t("history.goToPoint")}
               </Button>
               <Button
                 size="sm"
@@ -107,7 +118,7 @@ export function HistoryDetail({
                 onClick={onFork}
                 data-testid="history-detail-fork"
               >
-                <GitFork /> Fork here…
+                <GitFork /> {t("history.forkHere")}
               </Button>
             </div>
           </div>
@@ -115,7 +126,7 @@ export function HistoryDetail({
           {data.refs.length > 0 ? (
             <section className="border-b border-border p-3">
               <h3 className="mb-2 text-[11px] font-medium uppercase tracking-wide text-fg-muted">
-                What it touched
+                {t("history.whatItTouched")}
               </h3>
               <ul className="space-y-2" data-testid="history-detail-refs">
                 {data.refs.map((r) => (
@@ -132,7 +143,8 @@ export function HistoryDetail({
           {data.members.length > 0 ? (
             <section className="border-b border-border p-3">
               <h3 className="mb-2 flex items-center gap-1 text-[11px] font-medium uppercase tracking-wide text-fg-muted">
-                <Layers className="size-3" /> The {data.members.length} changes inside
+                <Layers className="size-3" />{" "}
+                {t("history.changesInside", { count: data.members.length })}
               </h3>
               <ol className="space-y-1 text-xs" data-testid="history-detail-members">
                 {data.members.map((m) => (
@@ -153,7 +165,7 @@ export function HistoryDetail({
                 onClick={() => onSelectNode(data.parentId!)}
                 data-testid="history-detail-parent"
               >
-                Show the step before this one
+                {t("history.showStepBefore")}
               </button>
             </div>
           ) : null}
@@ -165,11 +177,14 @@ export function HistoryDetail({
 
 /** The step's `detail` payload as a plain key-value list. */
 function DetailTable({ detail }: { detail: Record<string, unknown> }) {
+  const { t } = useTranslation();
   const fields = detailFields(detail);
   if (fields.length === 0) return null;
   return (
     <section className="border-b border-border p-3">
-      <h3 className="mb-2 text-[11px] font-medium uppercase tracking-wide text-fg-muted">Detail</h3>
+      <h3 className="mb-2 text-[11px] font-medium uppercase tracking-wide text-fg-muted">
+        {t("history.detail")}
+      </h3>
       <dl className="space-y-1 text-xs" data-testid="history-detail-fields">
         {fields.map((f) => (
           <div key={f.key} className="flex gap-2">
@@ -184,6 +199,7 @@ function DetailTable({ detail }: { detail: Record<string, unknown> }) {
 
 /** One resolved reference, with the way to go and look at it. */
 function RefRow({ ref_ }: { ref_: HistoryRef }) {
+  const { t } = useTranslation();
   const openDocument = useWorkspace((s) => s.openDocument);
   const setSidebarTab = useWorkspace((s) => s.setSidebarTab);
   const setSelectedCodeId = useWorkspace((s) => s.setSelectedCodeId);
@@ -211,7 +227,7 @@ function RefRow({ ref_ }: { ref_: HistoryRef }) {
               }}
               data-testid="history-show-in-codebook"
             >
-              <BookMarked className="size-3" /> Show in codebook
+              <BookMarked className="size-3" /> {t("history.showInCodebook")}
             </button>
           ) : null}
         </div>
@@ -252,9 +268,9 @@ function RefRow({ ref_ }: { ref_: HistoryRef }) {
             {isMedia ? <AudioLines className="size-3" /> : <FileText className="size-3" />}
             {ref_.exists
               ? isMedia
-                ? "Show in the recording"
-                : "Show in document"
-              : "Show where it was"}
+                ? t("history.showInRecording")
+                : t("history.showInDocument")
+              : t("history.showWhereItWas")}
           </button>
         ) : null}
       </div>
@@ -276,7 +292,7 @@ function RefRow({ ref_ }: { ref_: HistoryRef }) {
               onClick={() => openDocument(ref_.id)}
               data-testid="history-open-document"
             >
-              Open document
+              {t("history.openDocument")}
             </button>
           ) : null}
         </div>

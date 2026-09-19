@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { describe } from "@/core/keymap";
 import type { ProjectInfo } from "@/api/types";
 import { cn } from "@/lib/utils";
@@ -10,11 +11,13 @@ import { DescriptorsDialog } from "@/components/descriptors/DescriptorsDialog";
 import { BarChart3, History, Home, List, Search, Settings2, Tags } from "lucide-react";
 
 export function Sidebar({ project }: { project: ProjectInfo }) {
+  const { t } = useTranslation();
   const tab = useWorkspace((s) => s.sidebarTab);
   const setTab = useWorkspace((s) => s.setSidebarTab);
   const view = useWorkspace((s) => s.view);
   const setView = useWorkspace((s) => s.setView);
   const [descriptors, setDescriptors] = useState(false);
+  const TAB_LABELS = { documents: t("sidebar.documents"), codes: t("sidebar.codes") } as const;
   return (
     <aside className="flex w-64 shrink-0 flex-col border-r border-border bg-panel">
       <div className="border-b border-border px-3 py-2">
@@ -22,30 +25,34 @@ export function Sidebar({ project }: { project: ProjectInfo }) {
           {project.name}
         </div>
       </div>
-      <div className="flex border-b border-border text-sm" role="tablist" aria-label="Sidebar">
-        {(["documents", "codes"] as const).map((t) => (
+      <div
+        className="flex border-b border-border text-sm"
+        role="tablist"
+        aria-label={t("sidebar.title")}
+      >
+        {(["documents", "codes"] as const).map((tabId) => (
           <button
-            key={t}
+            key={tabId}
             role="tab"
-            id={`sidebar-tab-${t}`}
-            aria-selected={tab === t}
-            aria-controls={`sidebar-panel-${t}`}
-            tabIndex={tab === t ? 0 : -1}
+            id={`sidebar-tab-${tabId}`}
+            aria-selected={tab === tabId}
+            aria-controls={`sidebar-panel-${tabId}`}
+            tabIndex={tab === tabId ? 0 : -1}
             className={cn(
-              "flex-1 py-1.5 capitalize text-fg-muted outline-none hover:text-fg focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus",
-              tab === t && "border-b-2 border-accent font-medium text-fg",
+              "flex-1 py-1.5 text-fg-muted outline-none hover:text-fg focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus",
+              tab === tabId && "border-b-2 border-accent font-medium text-fg",
             )}
-            onClick={() => setTab(t)}
+            onClick={() => setTab(tabId)}
             onKeyDown={(e) => {
               if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
               e.preventDefault();
-              const other = t === "documents" ? "codes" : "documents";
+              const other = tabId === "documents" ? "codes" : "documents";
               setTab(other);
               document.getElementById(`sidebar-tab-${other}`)?.focus();
             }}
-            data-testid={`tab-${t}`}
+            data-testid={`tab-${tabId}`}
           >
-            {t}
+            {TAB_LABELS[tabId]}
           </button>
         ))}
       </div>
@@ -61,7 +68,7 @@ export function Sidebar({ project }: { project: ProjectInfo }) {
       >
         {tab === "documents" ? <DocumentList /> : <CodeTree />}
       </div>
-      <nav className="space-y-1 border-t border-border p-2" aria-label="Views">
+      <nav className="space-y-1 border-t border-border p-2" aria-label={t("sidebar.views")}>
         <Button
           variant={view.kind === "overview" ? "secondary" : "ghost"}
           className="w-full justify-start"
@@ -69,7 +76,7 @@ export function Sidebar({ project }: { project: ProjectInfo }) {
           aria-current={view.kind === "overview" ? "page" : undefined}
           data-testid="open-overview"
         >
-          <Home /> Overview
+          <Home /> {t("sidebar.overview")}
           <span className="ml-auto text-xs text-fg-muted">{describe("overview")}</span>
         </Button>
         <Button
@@ -79,7 +86,7 @@ export function Sidebar({ project }: { project: ProjectInfo }) {
           aria-current={view.kind === "history" ? "page" : undefined}
           data-testid="open-history"
         >
-          <History /> History
+          <History /> {t("history.title")}
           <span className="ml-auto text-xs text-fg-muted">{describe("history")}</span>
         </Button>
         {tab === "documents" ? (
@@ -91,14 +98,14 @@ export function Sidebar({ project }: { project: ProjectInfo }) {
               aria-current={view.kind === "descriptorTable" ? "page" : undefined}
               data-testid="open-descriptor-table"
             >
-              <Tags /> Descriptors
+              <Tags /> {t("sidebar.descriptors")}
             </Button>
             <Button
               variant="ghost"
               size="icon"
               onClick={() => setDescriptors(true)}
-              title="Manage descriptors"
-              aria-label="Manage descriptors"
+              title={t("sidebar.manageDescriptors")}
+              aria-label={t("sidebar.manageDescriptors")}
               data-testid="open-descriptors"
             >
               <Settings2 />
@@ -112,7 +119,7 @@ export function Sidebar({ project }: { project: ProjectInfo }) {
           aria-current={view.kind === "excerpts" ? "page" : undefined}
           data-testid="open-excerpts"
         >
-          <List /> Excerpts
+          <List /> {t("sidebar.excerpts")}
           <span className="ml-auto text-xs text-fg-muted">{describe("excerptBrowser")}</span>
         </Button>
         <Button
@@ -122,7 +129,7 @@ export function Sidebar({ project }: { project: ProjectInfo }) {
           aria-current={view.kind === "analysis" ? "page" : undefined}
           data-testid="open-analysis"
         >
-          <BarChart3 /> Analysis
+          <BarChart3 /> {t("sidebar.analysis")}
           <span className="ml-auto text-xs text-fg-muted">{describe("analysis")}</span>
         </Button>
         <Button
@@ -132,7 +139,7 @@ export function Sidebar({ project }: { project: ProjectInfo }) {
           aria-current={view.kind === "search" ? "page" : undefined}
           data-testid="open-search"
         >
-          <Search /> Search
+          <Search /> {t("sidebar.search")}
           <span className="ml-auto text-xs text-fg-muted">{describe("findInProject")}</span>
         </Button>
       </nav>

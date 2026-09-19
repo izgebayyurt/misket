@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { useTranslation } from "react-i18next";
 import type { ProjectInfo } from "@/api/types";
 import { Sidebar } from "./Sidebar";
 import { StatusBar } from "./StatusBar";
@@ -22,6 +23,7 @@ import { SyncWarningBanner } from "./SyncWarningBanner";
 import { UpdateBanner } from "./UpdateBanner";
 
 export function Workspace({ project }: { project: ProjectInfo }) {
+  const { t } = useTranslation();
   const view = useWorkspace((s) => s.view);
   const settingsOpen = useWorkspace((s) => s.settingsOpen);
   const setSettingsOpen = useWorkspace((s) => s.setSettingsOpen);
@@ -50,7 +52,7 @@ export function Workspace({ project }: { project: ProjectInfo }) {
           mainRef.current?.focus();
         }}
       >
-        Skip to document
+        {t("workspace.skipToDocument")}
       </a>
       <UpdateBanner />
       <SyncWarningBanner project={project} />
@@ -106,13 +108,11 @@ export function Workspace({ project }: { project: ProjectInfo }) {
 }
 
 function EmptyState() {
+  const { t } = useTranslation();
   return (
     <div className="flex h-full flex-col items-center justify-center text-center text-fg-muted">
-      <p className="font-serif text-2xl text-fg">Nothing open yet</p>
-      <p className="mt-2 max-w-sm text-sm">
-        Import a transcript, notes or an image from the sidebar, or drop text, Markdown, Word, PDF
-        or image files anywhere in this window.
-      </p>
+      <p className="font-serif text-2xl text-fg">{t("workspace.emptyTitle")}</p>
+      <p className="mt-2 max-w-sm text-sm">{t("workspace.emptyHint")}</p>
     </div>
   );
 }

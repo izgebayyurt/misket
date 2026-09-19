@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { ExcerptFilter } from "@/api/types";
 import { useExcerptQuery } from "@/queries/excerpts";
 import { useWorkspace } from "@/state/workspace";
@@ -32,6 +33,7 @@ import { toast } from "@/state/toasts";
 const PAGE = 200;
 
 export function ExcerptBrowser() {
+  const { t } = useTranslation();
   // The analysis views open the browser with a filter already set; it is read
   // once, on mount (Workspace remounts this component when it changes).
   const [state, setState] = useState<FilterState>(() => {
@@ -211,19 +213,21 @@ export function ExcerptBrowser() {
               onChange={() => setSelection(toggleAll(selection, rowIds))}
               data-testid="select-all-excerpts"
             />
-            Select all {rows.length} loaded
+            {t("excerptBrowser.selectAllLoaded", { count: rows.length })}
           </label>
-          {selectedIds.length > 0 ? <span>{selectedIds.length} selected</span> : null}
+          {selectedIds.length > 0 ? (
+            <span>{t("excerptBrowser.selectedCount", { count: selectedIds.length })}</span>
+          ) : null}
         </div>
       ) : null}
       <div className="min-h-0 flex-1 overflow-y-auto">
         {data && data.rows.length === 0 ? (
           <p className="p-6 text-sm text-fg-muted">
             {data.total === 0 && !isFiltered(state)
-              ? "No excerpts yet. Select text in a document and press the palette shortcut to code it."
+              ? t("excerptBrowser.emptyNone")
               : state.requireAllCodes && !state.overlapsCodeId && codePickCount(state) > 1
-                ? "No single excerpt carries all of these codes. Untick “match all selected codes” to see excerpts carrying any of them."
-                : "Nothing matches these filters."}
+                ? t("excerptBrowser.emptyNoSingleMatch")
+                : t("excerptBrowser.emptyNoMatch")}
           </p>
         ) : null}
         <ul ref={listRef} className="divide-y divide-border">
@@ -245,7 +249,7 @@ export function ExcerptBrowser() {
         {data && data.rows.length < data.total ? (
           <div className="p-3">
             <Button variant="outline" onClick={() => setPages((p) => p + 1)} disabled={isFetching}>
-              Load more ({data.total - data.rows.length} remaining)
+              {t("excerptBrowser.loadMore", { count: data.total - data.rows.length })}
             </Button>
           </div>
         ) : null}

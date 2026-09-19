@@ -19,6 +19,17 @@ pub enum Theme {
     Dark,
 }
 
+/// The UI language. `System` reads the OS/browser locale (`navigator.language`
+/// on the frontend) and falls back to English for anything not translated.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+pub enum Language {
+    #[default]
+    System,
+    En,
+    Tr,
+}
+
 fn default_font_size() -> f64 {
     17.0
 }
@@ -40,6 +51,9 @@ fn default_true() -> bool {
 pub struct AppSettings {
     #[serde(default)]
     pub theme: Theme,
+    /// The UI language; see [`Language`].
+    #[serde(default)]
+    pub language: Language,
     #[serde(default = "default_font_size")]
     pub editor_font_size: f64,
     #[serde(default = "default_line_height")]
@@ -146,6 +160,7 @@ impl Default for AppSettings {
     fn default() -> Self {
         AppSettings {
             theme: Theme::default(),
+            language: Language::default(),
             editor_font_size: default_font_size(),
             editor_line_height: default_line_height(),
             confirm_delete_excerpt: false,
@@ -291,6 +306,7 @@ mod tests {
         let path = dir.path().join("settings.json");
         let settings = AppSettings {
             theme: Theme::Dark,
+            language: Language::Tr,
             editor_font_size: 20.0,
             editor_line_height: 1.9,
             confirm_delete_excerpt: true,
@@ -339,6 +355,7 @@ mod tests {
         std::fs::write(&path, r#"{"theme":"light"}"#).unwrap();
         let settings = read(&path).unwrap();
         assert_eq!(settings.theme, Theme::Light);
+        assert_eq!(settings.language, Language::default());
         assert_eq!(settings.editor_font_size, default_font_size());
         assert_eq!(settings.editor_line_height, default_line_height());
         assert!(!settings.confirm_delete_excerpt);

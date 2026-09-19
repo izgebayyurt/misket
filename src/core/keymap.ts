@@ -176,14 +176,15 @@ export const MEDIA_SHORTCUTS: Record<MediaAction, Shortcut> = {
   mediaSetOut: { key: "]" },
 };
 
+/** `i18next` keys for each media action's label; resolve them with `t()`. */
 export const MEDIA_LABELS: Record<MediaAction, string> = {
-  mediaPlayPause: "Play / pause",
-  mediaBack: "Back 5 seconds",
-  mediaForward: "Forward 5 seconds",
-  mediaStepBack: "Back 100 ms",
-  mediaStepForward: "Forward 100 ms",
-  mediaSetIn: "Set the in-point here",
-  mediaSetOut: "Set the out-point here",
+  mediaPlayPause: "keymap.media.playPause",
+  mediaBack: "keymap.media.back",
+  mediaForward: "keymap.media.forward",
+  mediaStepBack: "keymap.media.stepBack",
+  mediaStepForward: "keymap.media.stepForward",
+  mediaSetIn: "keymap.media.setIn",
+  mediaSetOut: "keymap.media.setOut",
 };
 
 /** How far `J`/`L` scrub, in milliseconds. */
@@ -263,67 +264,74 @@ export function describeMedia(action: MediaAction): string {
   return describeShortcut(MEDIA_SHORTCUTS[action]);
 }
 
-/** Human-readable name for each action, shown in the keyboard reference overlay. */
+/**
+ * `i18next` keys for each action's human-readable name, shown in the keyboard
+ * reference overlay. This module stays framework-free (no `react-i18next`
+ * import — see CLAUDE.md), so it hands out *keys*; a component resolves them
+ * with `t(label(action))`. `src/locales/en/common.json`'s `keymap.*` block is
+ * the English text these keys point to, and `keymap.test.ts` checks that
+ * text (not the key) still appears in the docs site's cheatsheet.
+ */
 export const LABELS: Record<Action, string> = {
-  openProject: "Open project",
-  newProject: "New project",
-  import: "Import documents",
-  overview: "Project overview",
-  history: "History",
-  excerptBrowser: "Excerpt browser",
-  analysis: "Analysis views",
-  find: "Find in document",
-  findInProject: "Find in project",
-  tabDocuments: "Switch to Documents tab",
-  tabCodes: "Switch to Codes tab",
-  newMemo: "New memo",
-  palette: "Open code palette",
-  inVivoCode: "In vivo code from the selection",
-  quickCode: "Apply the last code used again",
-  settings: "Open settings",
-  shortcutsHelp: "Keyboard shortcuts",
-  undo: "Undo",
-  redo: "Redo",
-  nextExcerpt: "Next excerpt",
-  prevExcerpt: "Previous excerpt",
-  editExcerpt: "Edit focused excerpt",
-  deleteExcerpt: "Delete focused excerpt",
-  extendSelectionLeft: "Extend selection left",
-  extendSelectionRight: "Extend selection right",
-  excerptEndLeft: "Move excerpt end left by a word",
-  excerptEndRight: "Move excerpt end right by a word",
-  excerptEndLeftChar: "Move excerpt end left by a character",
-  excerptEndRightChar: "Move excerpt end right by a character",
-  excerptStartLeft: "Move excerpt start left by a word",
-  excerptStartRight: "Move excerpt start right by a word",
-  excerptStartLeftChar: "Move excerpt start left by a character",
-  excerptStartRightChar: "Move excerpt start right by a character",
-  splitExcerpt: "Split excerpt at the cursor",
-  mergeExcerpt: "Merge excerpt with its neighbour",
-  jumpTop: "Jump to the top of the document",
-  jumpBottom: "Jump to the bottom of the document",
-  goToParagraph: "Go to paragraph",
-  alignHere: "Align the transcript here with the playhead",
-  escape: "Cancel / close",
-  // One shared sentence across all nine digits: they are one control, not
-  // nine different shortcuts, and the docs site's cheatsheet only has to
-  // carry this string once for the keymap test to consider every one of
-  // them documented.
-  setWeight1: "Rate the last applied code, with an excerpt focused (1–9)",
-  setWeight2: "Rate the last applied code, with an excerpt focused (1–9)",
-  setWeight3: "Rate the last applied code, with an excerpt focused (1–9)",
-  setWeight4: "Rate the last applied code, with an excerpt focused (1–9)",
-  setWeight5: "Rate the last applied code, with an excerpt focused (1–9)",
-  setWeight6: "Rate the last applied code, with an excerpt focused (1–9)",
-  setWeight7: "Rate the last applied code, with an excerpt focused (1–9)",
-  setWeight8: "Rate the last applied code, with an excerpt focused (1–9)",
-  setWeight9: "Rate the last applied code, with an excerpt focused (1–9)",
+  openProject: "keymap.openProject",
+  newProject: "keymap.newProject",
+  import: "keymap.import",
+  overview: "keymap.overview",
+  history: "keymap.history",
+  excerptBrowser: "keymap.excerptBrowser",
+  analysis: "keymap.analysis",
+  find: "keymap.find",
+  findInProject: "keymap.findInProject",
+  tabDocuments: "keymap.tabDocuments",
+  tabCodes: "keymap.tabCodes",
+  newMemo: "keymap.newMemo",
+  palette: "keymap.palette",
+  inVivoCode: "keymap.inVivoCode",
+  quickCode: "keymap.quickCode",
+  settings: "keymap.settings",
+  shortcutsHelp: "keymap.shortcutsHelp",
+  undo: "keymap.undo",
+  redo: "keymap.redo",
+  nextExcerpt: "keymap.nextExcerpt",
+  prevExcerpt: "keymap.prevExcerpt",
+  editExcerpt: "keymap.editExcerpt",
+  deleteExcerpt: "keymap.deleteExcerpt",
+  extendSelectionLeft: "keymap.extendSelectionLeft",
+  extendSelectionRight: "keymap.extendSelectionRight",
+  excerptEndLeft: "keymap.excerptEndLeft",
+  excerptEndRight: "keymap.excerptEndRight",
+  excerptEndLeftChar: "keymap.excerptEndLeftChar",
+  excerptEndRightChar: "keymap.excerptEndRightChar",
+  excerptStartLeft: "keymap.excerptStartLeft",
+  excerptStartRight: "keymap.excerptStartRight",
+  excerptStartLeftChar: "keymap.excerptStartLeftChar",
+  excerptStartRightChar: "keymap.excerptStartRightChar",
+  splitExcerpt: "keymap.splitExcerpt",
+  mergeExcerpt: "keymap.mergeExcerpt",
+  jumpTop: "keymap.jumpTop",
+  jumpBottom: "keymap.jumpBottom",
+  goToParagraph: "keymap.goToParagraph",
+  alignHere: "keymap.alignHere",
+  escape: "keymap.escape",
+  // One shared key across all nine digits: they are one control, not nine
+  // different shortcuts (see `keymap.setWeight` in the locale file).
+  setWeight1: "keymap.setWeight",
+  setWeight2: "keymap.setWeight",
+  setWeight3: "keymap.setWeight",
+  setWeight4: "keymap.setWeight",
+  setWeight5: "keymap.setWeight",
+  setWeight6: "keymap.setWeight",
+  setWeight7: "keymap.setWeight",
+  setWeight8: "keymap.setWeight",
+  setWeight9: "keymap.setWeight",
 };
 
+/** The `i18next` key for each action's label; resolve it with `t()`. */
 export function label(action: Action): string {
   return LABELS[action];
 }
 
+/** The `i18next` key for each media action's label; resolve it with `t()`. */
 export function mediaLabel(action: MediaAction): string {
   return MEDIA_LABELS[action];
 }

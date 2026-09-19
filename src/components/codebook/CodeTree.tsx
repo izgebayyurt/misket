@@ -1,6 +1,7 @@
 import { describe } from "@/core/keymap";
 import { useMemo, useRef, useState } from "react";
 import { open, save } from "@tauri-apps/plugin-dialog";
+import { Trans, useTranslation } from "react-i18next";
 import { ChevronDown, ChevronRight, FileDown, MoreHorizontal, Plus } from "lucide-react";
 import type { Code } from "@/api/types";
 import * as exportApi from "@/api/export";
@@ -51,6 +52,7 @@ interface DropTarget {
 }
 
 export function CodeTree() {
+  const { t } = useTranslation();
   const { data: codes, isLoading } = useCodes();
   const tree = useCodeTree();
   const move = useMoveCode();
@@ -91,7 +93,7 @@ export function CodeTree() {
       });
       if (!path) return;
       await exportApi.exportCodebookJson(path);
-      toast.info(`Exported codebook to ${path.split(/[\\/]/).pop()}`);
+      toast.info(t("codebook.exportedTo", { name: path.split(/[\\/]/).pop() }));
     } catch (e) {
       toast.error(e);
     }
@@ -196,18 +198,18 @@ export function CodeTree() {
     <div className="flex h-full flex-col">
       <div className="flex gap-1 p-2">
         <Input
-          placeholder="Filter codes"
+          placeholder={t("codebook.filterCodes")}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           className="h-7 text-xs"
-          aria-label="Filter codes"
+          aria-label={t("codebook.filterCodes")}
         />
         <Button
           size="sm"
           variant="outline"
           onClick={() => setDialog({ kind: "create", parentId: null })}
-          title="New code"
-          aria-label="New code"
+          title={t("codebook.newCode")}
+          aria-label={t("codebook.newCode")}
           data-testid="new-code"
         >
           <Plus />
@@ -217,31 +219,36 @@ export function CodeTree() {
             <Button
               size="sm"
               variant="outline"
-              title="Import or export the codebook"
-              aria-label="Import or export the codebook"
+              title={t("codebook.importExport")}
+              aria-label={t("codebook.importExport")}
             >
               <FileDown />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuItem onSelect={() => pickCodebookFile()}>
-              Import codebook…
+              {t("codebook.importCodebook")}
             </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => exportCodebook()}>Export codebook…</DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => exportCodebook()}>
+              {t("codebook.exportCodebook")}
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
       {codes && codes.length === 0 ? (
         <p className="px-3 py-1 text-xs text-fg-muted">
-          No codes yet. Create one, or type <kbd>&gt;name</kbd> in the palette (
-          {describe("palette")}) while coding.
+          <Trans
+            i18nKey="codebook.noCodesYet"
+            values={{ chord: describe("palette") }}
+            components={{ kbd: <kbd /> }}
+          />
         </p>
       ) : null}
       {isLoading ? null : (
         <ul
           ref={listRef}
           role="tree"
-          aria-label="Codebook"
+          aria-label={t("codebook.title")}
           className="min-h-0 flex-1 overflow-y-auto pb-4"
           onDragLeave={(e) => {
             if (!listRef.current?.contains(e.relatedTarget as Node)) setDropTarget(null);
@@ -369,6 +376,7 @@ interface RowProps {
 }
 
 function CodeRow(p: RowProps) {
+  const { t } = useTranslation();
   const { code, children, depth } = p.node;
   const update = useUpdateCode();
 
@@ -435,7 +443,7 @@ function CodeRow(p: RowProps) {
               p.onToggle();
             }}
             tabIndex={-1}
-            aria-label={p.collapsed ? "Expand" : "Collapse"}
+            aria-label={p.collapsed ? t("codebook.expand") : t("codebook.collapse")}
           >
             {p.collapsed ? (
               <ChevronRight className="size-3.5" />
@@ -462,7 +470,7 @@ function CodeRow(p: RowProps) {
               <button
                 type="button"
                 className="rounded p-0.5 text-fg-muted opacity-0 hover:bg-border focus-visible:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100"
-                aria-label="Code actions"
+                aria-label={t("codebook.codeActions")}
                 onClick={(e) => e.stopPropagation()}
                 tabIndex={-1}
               >
@@ -508,31 +516,34 @@ function CodeRowMenuItems({
   onAction: RowProps["onAction"];
   menu: MenuPrimitives;
 }) {
+  const { t } = useTranslation();
   const { Item, Separator } = menu;
   return (
     <>
-      <Item onSelect={() => onAction("addChild")}>New sub-code</Item>
-      <Item onSelect={() => onAction("rename")}>Rename</Item>
-      <Item onSelect={() => onAction("edit")}>Edit…</Item>
-      <Item onSelect={() => onAction("merge")}>Merge into…</Item>
+      <Item onSelect={() => onAction("addChild")}>{t("codebook.newSubCode")}</Item>
+      <Item onSelect={() => onAction("rename")}>{t("common.rename")}</Item>
+      <Item onSelect={() => onAction("edit")}>{t("codebook.editEllipsis")}</Item>
+      <Item onSelect={() => onAction("merge")}>{t("codebook.mergeInto")}</Item>
       <Item onSelect={() => onAction("moveExcerpts")} disabled={code.excerptCount === 0}>
-        Move excerpts to…
+        {t("codebook.moveExcerptsTo")}
       </Item>
       {parentName ? (
-        <Item onSelect={() => onAction("rollUpInto")}>Roll up into {parentName}…</Item>
+        <Item onSelect={() => onAction("rollUpInto")}>
+          {t("codebook.rollUpInto", { name: parentName })}
+        </Item>
       ) : null}
       {childCount > 0 ? (
-        <Item onSelect={() => onAction("rollUpChildren")}>Roll up children…</Item>
+        <Item onSelect={() => onAction("rollUpChildren")}>{t("codebook.rollUpChildren")}</Item>
       ) : null}
       {childCount > 0 ? (
         <Item onSelect={() => onAction("review")} disabled={code.excerptCount === 0}>
-          Review excerpts…
+          {t("codebook.reviewExcerpts")}
         </Item>
       ) : null}
       <AddToSetMenu kind="code" memberId={code.id} memberLabel={code.name} menu={menu} />
       <Separator />
       <Item danger onSelect={() => onAction("delete")}>
-        Delete…
+        {t("common.deleteEllipsis")}
       </Item>
     </>
   );
@@ -547,6 +558,7 @@ function RenameInput({
   onCommit: (name: string) => void;
   onCancel: () => void;
 }) {
+  const { t } = useTranslation();
   const [name, setName] = useState(initial);
   return (
     <Input
@@ -560,7 +572,7 @@ function RenameInput({
         if (e.key === "Escape") onCancel();
       }}
       className="h-6 px-1 text-sm"
-      aria-label="Code name"
+      aria-label={t("codebook.codeName")}
     />
   );
 }

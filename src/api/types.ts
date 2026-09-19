@@ -55,11 +55,15 @@ export interface ProjectStats {
 // Mirrors AppSettings in src-tauri/src/settings.rs (app-level, not project data).
 export type Theme = "system" | "light" | "dark";
 
+/** The UI language; "system" reads `navigator.language` (see `src/core/locale.ts`). */
+export type Language = "system" | "en" | "tr";
+
 /** The wire shape a crash report is sent in; see `reporting::ReportFormat`. */
 export type ReportFormat = "json" | "sentry";
 
 export interface AppSettings {
   theme: Theme;
+  language: Language;
   editorFontSize: number;
   editorLineHeight: number;
   confirmDeleteExcerpt: boolean;

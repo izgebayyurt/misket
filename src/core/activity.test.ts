@@ -26,16 +26,21 @@ describe("relativeTime", () => {
   const now = Date.parse("2026-03-10T12:00:00Z");
 
   it("counts back in minutes, hours and days", () => {
-    expect(relativeTime("2026-03-10T11:59:40Z", now)).toBe("just now");
-    expect(relativeTime("2026-03-10T11:48:00Z", now)).toBe("12m ago");
-    expect(relativeTime("2026-03-10T07:00:00Z", now)).toBe("5h ago");
-    expect(relativeTime("2026-03-07T12:00:00Z", now)).toBe("3d ago");
+    expect(relativeTime("2026-03-10T11:59:40Z", now)).toBe("now");
+    expect(relativeTime("2026-03-10T11:48:00Z", now)).toBe("12 minutes ago");
+    expect(relativeTime("2026-03-10T07:00:00Z", now)).toBe("5 hours ago");
+    expect(relativeTime("2026-03-07T12:00:00Z", now)).toBe("3 days ago");
   });
 
   it("falls back to a date once it is a month old", () => {
     expect(relativeTime("2025-12-01T12:00:00Z", now)).toBe(
-      new Date("2025-12-01T12:00:00Z").toLocaleDateString(),
+      new Intl.DateTimeFormat("en").format(new Date("2025-12-01T12:00:00Z")),
     );
+  });
+
+  it("formats in the requested locale", () => {
+    expect(relativeTime("2026-03-10T11:48:00Z", now, "tr")).toBe("12 dakika önce");
+    expect(relativeTime("2026-03-07T12:00:00Z", now, "tr")).toBe("3 gün önce");
   });
 
   it("does not throw on nonsense", () => {

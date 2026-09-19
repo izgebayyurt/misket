@@ -1,4 +1,5 @@
 import { Download, Loader2, X } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { useUpdates } from "@/state/updates";
 
@@ -12,6 +13,7 @@ const RELEASES_URL = "https://github.com/izgebayyurt/misket/releases";
  * skipped.
  */
 export function UpdateBanner() {
+  const { t } = useTranslation();
   const status = useUpdates((s) => s.status);
   const info = useUpdates((s) => s.info);
   const progress = useUpdates((s) => s.progress);
@@ -36,10 +38,10 @@ export function UpdateBanner() {
     >
       <Download className="size-4 shrink-0 text-accent" aria-hidden />
       <p className="flex-1 leading-snug">
-        Misket {info.version} is available
-        {status === "installing" ? ": restarting…" : null}
+        {t("updateBanner.available", { version: info.version })}
+        {status === "installing" ? t("updateBanner.restarting") : null}
         {status === "downloading"
-          ? ` — downloading…${percent !== null ? ` ${percent}%` : ""}`
+          ? t("updateBanner.downloading", { percent: percent !== null ? ` ${percent}%` : "" })
           : null}
         {error ? <span className="text-danger"> — {error}</span> : null}
       </p>
@@ -49,7 +51,7 @@ export function UpdateBanner() {
         rel="noreferrer"
         className="whitespace-nowrap underline hover:text-fg"
       >
-        Release notes
+        {t("updateBanner.releaseNotes")}
       </a>
       <Button
         size="sm"
@@ -58,7 +60,7 @@ export function UpdateBanner() {
         data-testid="install-update"
       >
         {downloading ? <Loader2 className="size-4 animate-spin" /> : null}
-        {status === "installing" ? "Restarting…" : "Install and restart"}
+        {status === "installing" ? t("updateBanner.restartingButton") : t("updateBanner.install")}
       </Button>
       <button
         className="whitespace-nowrap hover:text-fg"
@@ -66,12 +68,12 @@ export function UpdateBanner() {
         disabled={downloading}
         data-testid="skip-update"
       >
-        Skip this version
+        {t("updateBanner.skip")}
       </button>
       <button
         className="rounded p-1 text-fg-muted hover:bg-panel"
         onClick={later}
-        aria-label="Later"
+        aria-label={t("updateBanner.later")}
         disabled={downloading}
         data-testid="dismiss-update-banner"
       >

@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Translating Misket</title>
+    <meta
+      name="description"
+      content="How Misket's interface is translated, what stays in English on purpose, and how to add or improve a language."
+    />
+    <link rel="stylesheet" href="../style.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="site-header">
+      <div class="wrap">
+        <a class="brand" href="../index.html"><span class="dot">●</span> Misket</a>
+        <nav class="site-nav" aria-label="Site">
+          <a href="../index.html">Home</a>
+          <a href="install.html">Install</a>
+          <a href="tutorial.html">Tutorial</a>
+          <a href="shortcuts.html">Shortcuts</a>
+          <a href="transcription.html">Transcription</a>
+          <a href="assistance.html">Assistance</a>
+          <a href="data.html">Data &amp; privacy</a>
+          <a href="accessibility.html">Accessibility</a>
+          <a href="translating.html" aria-current="page">Translating</a>
+          <a href="https://github.com/izgebayyurt/misket">GitHub</a>
+        </nav>
+      </div>
+    </header>
+
+    <main id="main" class="prose narrow">
+      <h1>Translating Misket</h1>
+      <p class="lede">
+        Misket's interface ships in English and Türkçe today. Settings → Language switches between
+        them (or follows your OS/browser locale) with no restart. This page is for anyone who wants
+        to improve the Turkish translation or add another language.
+      </p>
+
+      <h2>How it fits together</h2>
+      <p>
+        The app uses <a href="https://www.i18next.com/">i18next</a> and
+        <a href="https://react.i18next.com/">react-i18next</a>. Every user-visible string in
+        <code>src/components/**</code> is a call like <code>t("settings.you.title")</code> rather
+        than literal English text; the key is a stable, dotted identifier grouped by area
+        (<code>codebook.rename</code>, <code>history.goToPoint</code>), never the English sentence
+        itself. Two JSON files hold the actual text, one per language, with the same shape:
+      </p>
+      <ul>
+        <li><code>src/locales/en/common.json</code> — the source of truth for which keys exist.</li>
+        <li><code>src/locales/tr/common.json</code> — the Turkish text for every one of them.</li>
+      </ul>
+      <p>
+        A count-dependent string has two forms per language, suffixed <code>_one</code> and
+        <code>_other</code> (<code>"stepCount_one": "{{count}} change"</code>,
+        <code>"stepCount_other": "{{count}} changes"</code>) — i18next picks the right one from the
+        <code>count</code> you pass it. Turkish only ever needs one wording (Turkish nouns don't
+        change after a numeral), so its <code>_one</code> and <code>_other</code> entries are
+        identical text; they are both still present, so a future language with real plural forms is
+        unsurprising rather than a special case. Dates, relative times and numbers are not baked
+        into the JSON at all — they go through <code>Intl.DateTimeFormat</code>,
+        <code>Intl.RelativeTimeFormat</code>, <code>Intl.NumberFormat</code> and
+        <code>Intl.ListFormat</code> in the active locale at the point they're displayed, so a
+        thousands separator or a weekday name is always correct for the language on screen.
+      </p>
+
+      <h2>Adding or improving a translation</h2>
+      <ol>
+        <li>
+          Edit the matching key in <code>src/locales/&lt;lang&gt;/common.json</code> (<code
+            >src/locales/tr/common.json</code
+          >
+          for Turkish). Keep placeholders like <code>{{name}}</code> or
+          <code>{{count, number}}</code> exactly as they are — only the surrounding words move.
+        </li>
+        <li>
+          To add a new language: copy <code>src/locales/en/common.json</code> to
+          <code>src/locales/&lt;code&gt;/common.json</code> and translate every value (not the
+          keys); register it in <code>src/lib/i18n.ts</code>'s <code>resources</code> and
+          <code>src/core/locale.ts</code>'s <code>SUPPORTED_LOCALES</code>; add it to
+          <code>LANGUAGE_OPTIONS</code> in <code>src/components/layout/SettingsDialog.tsx</code> and
+          the Rust <code>Language</code> enum in <code>src-tauri/src/settings.rs</code>.
+        </li>
+        <li>
+          Run <code>pnpm i18n:check</code> (also part of <code>pnpm check</code>): it scans every
+          <code>t(...)</code> call under <code>src/**</code> and fails if a key a component uses is
+          missing from either locale file, or if a key in a locale file is not used anywhere — so a
+          typo'd key or a stray leftover string is caught immediately, not after release.
+        </li>
+        <li>
+          <code>pnpm test</code> mounts a real component under Turkish and checks a Turkish string
+          renders, and checks the plural-form and <code>Intl</code>-formatting rules for both
+          locales — worth running alongside the check script.
+        </li>
+      </ol>
+
+      <h2>What is deliberately not translated</h2>
+      <ul>
+        <li>
+          <strong>The activity log and undo history.</strong> A step's stored summary ("Merged code
+          X into Y") and the raw fields in the history detail panel are an audit trail, written once
+          in whichever language was active at the time — translating them after the fact would mean
+          the record no longer says what actually happened. See
+          <a href="../../docs/DATA_MODEL.md#activity-log-language">docs/DATA_MODEL.md</a>.
+        </li>
+        <li>
+          <strong>Export headers.</strong> CSV and JSON column names stay in English so exports open
+          predictably in other tools and scripts that expect them.
+        </li>
+        <li>
+          <strong>Backend error messages.</strong> A Rust-side <code>AppError.message</code> stays
+          English (it is meant for logs and bug reports as much as for the screen), but carries a
+          <code>code</code> the frontend can map to a translated headline where one exists.
+        </li>
+      </ul>
+
+      <h2>Terminology</h2>
+      <p>
+        The Turkish translation uses established Turkish qualitative-research vocabulary: kod
+        (code), kod defteri (codebook), alıntı (excerpt/quote), not/memo (memo), betimleyici
+        (descriptor), kodlayıcı (coder), güvenilirlik (reliability), birlikte oluşum
+        (co-occurrence), ağırlık (weight), tarihçe (history), dal (branch), çatal (fork). Product
+        names (Misket, REFI-QDA, OCR) are never translated.
+      </p>
+
+      <p>
+        Questions or a translation to contribute? Please
+        <a href="https://github.com/izgebayyurt/misket/issues">open an issue</a> or a pull request.
+      </p>
+    </main>
+
+    <footer class="site-footer">
+      <div class="wrap">
+        <span>Misket is free software, MIT-licensed.</span>
+        <span
+          ><a href="https://github.com/izgebayyurt/misket">Source on GitHub</a> ·
+          <a href="https://github.com/izgebayyurt/misket/blob/main/ROADMAP.md">Roadmap</a></span
+        >
+      </div>
+    </footer>
+  </body>
+</html>

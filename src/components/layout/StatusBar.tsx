@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { ProjectInfo } from "@/api/types";
 import { useCloseProject } from "@/queries/project";
 import { useUndoStore } from "@/state/undoStore";
@@ -12,6 +13,7 @@ import { PullDialog } from "@/components/merge/PullDialog";
 import { RefiImportDialog } from "@/components/refi/RefiImportDialog";
 
 export function StatusBar({ project }: { project: ProjectInfo }) {
+  const { t } = useTranslation();
   const close = useCloseProject();
   const lastLabel = useUndoStore((s) => s.lastLabel);
   const [about, setAbout] = useState(false);
@@ -26,25 +28,33 @@ export function StatusBar({ project }: { project: ProjectInfo }) {
   return (
     <footer className="flex h-7 items-center gap-4 border-t border-border bg-panel px-3 text-xs text-fg-muted">
       <span data-testid="status-counts">
-        {project.counts.documents} documents · {project.counts.codes} codes ·{" "}
-        {project.counts.excerpts} excerpts
+        {t("statusBar.counts", {
+          documents: project.counts.documents,
+          codes: project.counts.codes,
+          excerpts: project.counts.excerpts,
+        })}
       </span>
-      {lastLabel ? <span className="truncate">Last: {lastLabel}</span> : null}
+      {lastLabel ? (
+        <span className="truncate">{t("statusBar.last", { label: lastLabel })}</span>
+      ) : null}
       {quickCode ? (
         <span
           className="truncate"
-          title={`${describe("quickCode")} applies "${quickCode.name}" to the selection or focused excerpt`}
+          title={t("statusBar.quickCodeHint", {
+            chord: describe("quickCode"),
+            name: quickCode.name,
+          })}
           data-testid="quick-code-hint"
         >
-          Quick code: {quickCode.name}
+          {t("statusBar.quickCode", { name: quickCode.name })}
         </span>
       ) : null}
       <span className="flex-1" />
       <ExportMenu project={project} />
       <button
         className="hover:text-fg"
-        aria-label="Keyboard shortcuts"
-        title="Keyboard shortcuts"
+        aria-label={t("keymap.shortcutsHelp")}
+        title={t("keymap.shortcutsHelp")}
         onClick={() => setShortcutsHelpOpen(true)}
       >
         ?
@@ -52,34 +62,34 @@ export function StatusBar({ project }: { project: ProjectInfo }) {
       <button
         className="hover:text-fg"
         onClick={() => setRefi(true)}
-        title="Import a REFI-QDA (.qdpx) project from NVivo, ATLAS.ti, MAXQDA or another QDA tool"
+        title={t("statusBar.refiHint")}
         data-testid="open-refi-import"
       >
-        Import REFI-QDA…
+        {t("statusBar.refi")}
       </button>
       <button
         className="hover:text-fg"
         onClick={() => setPull(true)}
-        title="Merge another researcher's copy of this project into yours"
+        title={t("statusBar.pullHint")}
         data-testid="open-pull"
       >
-        Pull from a copy…
+        {t("statusBar.pull")}
       </button>
       <button className="hover:text-fg" onClick={() => setBackups(true)}>
-        Backups…
+        {t("statusBar.backups")}
       </button>
       <button
         className="hover:text-fg"
         onClick={() => setSettingsOpen(true)}
         data-testid="open-settings"
       >
-        Settings
+        {t("settings.title")}
       </button>
       <button className="hover:text-fg" onClick={() => setAbout(true)}>
-        About
+        {t("statusBar.about")}
       </button>
       <button className="hover:text-fg" onClick={() => close.mutate()}>
-        Close project
+        {t("statusBar.closeProject")}
       </button>
       {about ? <AboutDialog onClose={() => setAbout(false)} /> : null}
       {backups ? <BackupsDialog onClose={() => setBackups(false)} /> : null}

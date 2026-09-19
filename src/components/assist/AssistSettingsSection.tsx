@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Check, Loader2 } from "lucide-react";
+import { Trans, useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import * as api from "@/api/assist";
@@ -17,9 +18,9 @@ import {
 import { MAX_CODEBOOK_CODES } from "@/core/assist/codebook";
 import { useAssistRequests, useAssistStatus } from "./useAssist";
 
-const PROVIDERS: { value: AssistProvider; label: string }[] = [
-  { value: "anthropic", label: "Anthropic" },
-  { value: "openAiCompatible", label: "OpenAI-compatible" },
+const PROVIDERS: { value: AssistProvider; labelKey: string }[] = [
+  { value: "anthropic", labelKey: "assist.providers.anthropic" },
+  { value: "openAiCompatible", labelKey: "assist.providers.openAiCompatible" },
 ];
 
 /**
@@ -31,6 +32,7 @@ const PROVIDERS: { value: AssistProvider; label: string }[] = [
  * request this session made, with its size but never its content.
  */
 export function AssistSettingsSection() {
+  const { t } = useTranslation();
   const settings = useSettings((s) => s.settings.assist);
   const update = useSettings((s) => s.update);
   const qc = useQueryClient();
@@ -52,7 +54,7 @@ export function AssistSettingsSection() {
       await api.setAssistApiKey(key);
       setKey("");
       await refreshStatus();
-      toast.info(key.trim() ? "API key saved to the system keychain." : "API key removed.");
+      toast.info(key.trim() ? t("assist.keySaved") : t("assist.keyRemoved"));
     } catch (e) {
       toast.error(e, { key: TOAST_KEYS.assist });
     }
@@ -65,7 +67,9 @@ export function AssistSettingsSection() {
       // Test what is on screen, not what was saved 400ms ago.
       await flushSettings();
       const reply = await api.testAssistConnection();
-      setTested(`${reply.model} answered: ${reply.text.trim().slice(0, 80)}`);
+      setTested(
+        t("assist.testAnswered", { model: reply.model, text: reply.text.trim().slice(0, 80) }),
+      );
     } catch (e) {
       setTested(null);
       log.error("assist connection test failed", {
@@ -84,16 +88,12 @@ export function AssistSettingsSection() {
   return (
     <section data-testid="settings-assist">
       <h3 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-fg-muted">
-        Assistance
+        {t("assist.title")}
       </h3>
-      <p className="mb-3 text-xs text-fg-muted">
-        Misket can ask a language model for suggestions. It is off until you switch it on, it never
-        applies anything by itself, and everything it proposes is something you accept by clicking
-        it. With nothing configured below, nothing ever leaves this computer.
-      </p>
+      <p className="mb-3 text-xs text-fg-muted">{t("assist.blurb")}</p>
 
       <span className="mb-1 block text-sm" id="assist-provider-label">
-        Provider
+        {t("assist.provider")}
       </span>
       <div className="flex gap-1" role="radiogroup" aria-labelledby="assist-provider-label">
         {PROVIDERS.map((p) => (
@@ -107,7 +107,7 @@ export function AssistSettingsSection() {
             onClick={() => patch({ provider: p.value })}
             data-testid={`assist-provider-${p.value}`}
           >
-            {p.label}
+            {t(p.labelKey)}
           </Button>
         ))}
         {settings.provider === "openAiCompatible" ? (
@@ -118,17 +118,17 @@ export function AssistSettingsSection() {
             onClick={() =>
               patch({ baseUrl: status?.ollamaBaseUrl ?? "http://localhost:11434/v1", model: "" })
             }
-            title="A model running on this machine. No key, nothing over the network."
+            title={t("assist.ollamaPresetHint")}
             data-testid="assist-preset-ollama"
           >
-            Local (Ollama)
+            {t("assist.ollamaPreset")}
           </Button>
         ) : null}
       </div>
 
       <div className="mt-3">
         <label className="mb-1 block text-sm" htmlFor="assist-base-url">
-          Base URL {settings.provider === "anthropic" ? "(optional)" : ""}
+          {t("assist.baseUrl")} {settings.provider === "anthropic" ? t("assist.optional") : ""}
         </label>
         <Input
           id="assist-base-url"
@@ -143,22 +143,16 @@ export function AssistSettingsSection() {
         />
         <p className="mt-1 text-xs text-fg-muted">
           {settings.provider === "anthropic" ? (
-            <>
-              Leave it empty for Anthropic&rsquo;s own API. Set it to point at a gateway or proxy
-              that speaks the Messages API; Misket adds <code>/v1/messages</code>.
-            </>
+            <Trans i18nKey="assist.baseUrlHintAnthropic" components={{ code: <code /> }} />
           ) : (
-            <>
-              Anything that speaks the OpenAI chat API: Ollama, LM Studio, llama.cpp, a university
-              gateway, OpenAI itself. Misket adds <code>/chat/completions</code>.
-            </>
+            <Trans i18nKey="assist.baseUrlHintOpenAi" components={{ code: <code /> }} />
           )}
         </p>
       </div>
 
       <div className="mt-3">
         <label className="mb-1 block text-sm" htmlFor="assist-model">
-          Model
+          {t("assist.model")}
         </label>
         <Input
           id="assist-model"
@@ -179,20 +173,25 @@ export function AssistSettingsSection() {
 
       <div className="mt-3">
         <label className="mb-1 block text-sm" htmlFor="assist-key">
-          API key {settings.provider === "openAiCompatible" ? "(often not needed locally)" : ""}
+          {t("assist.apiKey")}{" "}
+          {settings.provider === "openAiCompatible" ? t("assist.apiKeyOftenNotNeeded") : ""}
         </label>
         <div className="flex items-center gap-2">
           <Input
             id="assist-key"
             type="password"
             value={key}
-            placeholder={status?.hasKey ? "•••••••• (a key is stored)" : "Paste a key to store it"}
+            placeholder={
+              status?.hasKey
+                ? t("assist.apiKeyStoredPlaceholder")
+                : t("assist.apiKeyPastePlaceholder")
+            }
             onChange={(e) => setKey(e.target.value)}
             autoComplete="off"
             data-testid="assist-key"
           />
           <Button type="button" size="sm" onClick={() => void saveKey()} disabled={!key.trim()}>
-            Save
+            {t("common.save")}
           </Button>
           <Button
             type="button"
@@ -203,20 +202,17 @@ export function AssistSettingsSection() {
               void api
                 .clearAssistApiKey()
                 .then(refreshStatus)
-                .then(() => toast.info("API key removed."))
+                .then(() => toast.info(t("assist.keyRemoved")))
                 .catch((e) => toast.error(e, { key: TOAST_KEYS.assist }))
             }
           >
-            Forget
+            {t("assist.forget")}
           </Button>
         </div>
         <p className="mt-1 text-xs text-fg-muted">
-          Stored in your operating system&rsquo;s keychain, never in Misket&rsquo;s settings file
-          and never in a project.
-          {status?.keyFromEnv ? " Currently using the key from MISKET_ASSIST_API_KEY." : ""}
-          {status && !status.keychainAvailable
-            ? " This computer has no usable keychain, so a key typed here lasts only until Misket closes."
-            : ""}
+          {t("assist.keyHint")}
+          {status?.keyFromEnv ? ` ${t("assist.keyHintEnvVar")}` : ""}
+          {status && !status.keychainAvailable ? ` ${t("assist.keyHintNoKeychain")}` : ""}
         </p>
       </div>
 
@@ -229,7 +225,8 @@ export function AssistSettingsSection() {
           disabled={testing}
           data-testid="assist-test"
         >
-          {testing ? <Loader2 className="size-3.5 animate-spin" /> : null} Test connection
+          {testing ? <Loader2 className="size-3.5 animate-spin" /> : null}{" "}
+          {t("assist.testConnection")}
         </Button>
         {tested ? (
           <span
@@ -240,7 +237,9 @@ export function AssistSettingsSection() {
           </span>
         ) : null}
         {status?.blocked ? (
-          <span className="text-xs text-fg-muted">Not ready: {status.blocked}.</span>
+          <span className="text-xs text-fg-muted">
+            {t("assist.notReady", { reason: status.blocked })}
+          </span>
         ) : null}
       </div>
 
@@ -252,7 +251,7 @@ export function AssistSettingsSection() {
             onChange={(e) => patch({ suggestCodes: e.target.checked })}
             data-testid="assist-toggle-suggest-codes"
           />
-          Suggest codes for a selection
+          {t("assist.toggleSuggestCodes")}
         </label>
         <label className="flex items-center gap-2 text-sm">
           <input
@@ -261,7 +260,7 @@ export function AssistSettingsSection() {
             onChange={(e) => patch({ summariseCode: e.target.checked })}
             data-testid="assist-toggle-summarise"
           />
-          Summarise a code&rsquo;s excerpts
+          {t("assist.toggleSummarise")}
         </label>
         <label className="flex items-center gap-2 text-sm">
           <input
@@ -270,38 +269,42 @@ export function AssistSettingsSection() {
             onChange={(e) => patch({ suggestDefinition: e.target.checked })}
             data-testid="assist-toggle-definition"
           />
-          Suggest a definition for a code
+          {t("assist.toggleDefinition")}
         </label>
       </div>
 
       <div className="mt-3 rounded-md border border-border bg-muted/40 p-2.5">
-        <p className="text-xs font-semibold">What gets sent</p>
+        <p className="text-xs font-semibold">{t("assist.whatGetsSentTitle")}</p>
         <ul className="mt-1 list-disc space-y-0.5 pl-4 text-xs text-fg-muted">
           <li>
-            <strong>Suggesting codes:</strong> the passage you selected (up to{" "}
-            {MAX_PASSAGE_CHARS.toLocaleString()} characters), one paragraph either side of it (up to{" "}
-            {MAX_CONTEXT_CHARS.toLocaleString()} characters each), and your code names with their
-            definitions (up to {MAX_CODEBOOK_CODES}; past that, the ones whose wording is closest to
-            the passage).
+            <Trans
+              i18nKey="assist.whatGetsSentCodes"
+              values={{
+                passageChars: MAX_PASSAGE_CHARS,
+                contextChars: MAX_CONTEXT_CHARS,
+                maxCodes: MAX_CODEBOOK_CODES,
+              }}
+              components={{ strong: <strong /> }}
+            />
           </li>
           <li>
-            <strong>Summarising a code:</strong> up to {MAX_EXCERPTS} excerpts carrying that code,
-            with the document names, and the code&rsquo;s own name and definition.
+            <Trans
+              i18nKey="assist.whatGetsSentSummarise"
+              values={{ maxExcerpts: MAX_EXCERPTS }}
+              components={{ strong: <strong /> }}
+            />
           </li>
           <li>
-            <strong>Drafting a definition:</strong> the same excerpts, for one code with at least{" "}
-            {MIN_EXCERPTS_FOR_DEFINITION} of them.
+            <Trans
+              i18nKey="assist.whatGetsSentDefinition"
+              values={{ minExcerpts: MIN_EXCERPTS_FOR_DEFINITION }}
+              components={{ strong: <strong /> }}
+            />
           </li>
-          <li>
-            Never a whole document, never the project, never your memos, never anything for a
-            feature you have not switched on.
-          </li>
+          <li>{t("assist.whatGetsSentNever")}</li>
         </ul>
         {anythingOn && settings.provider === "anthropic" ? (
-          <p className="mt-1.5 text-xs text-fg-muted">
-            Anthropic is a service on the internet. If your ethics approval or data agreement does
-            not allow sending this material off the machine, use the Local (Ollama) preset instead.
-          </p>
+          <p className="mt-1.5 text-xs text-fg-muted">{t("assist.anthropicWarning")}</p>
         ) : null}
       </div>
 
@@ -312,18 +315,20 @@ export function AssistSettingsSection() {
           onClick={() => setShowLog((v) => !v)}
           data-testid="assist-log-toggle"
         >
-          {showLog ? "Hide" : "Show"} what was sent ({requests?.length ?? 0} this session)
+          {showLog
+            ? t("assist.hideLog", { count: requests?.length ?? 0 })
+            : t("assist.showLog", { count: requests?.length ?? 0 })}
         </button>
         {showLog ? (
           <div className="mt-1.5" data-testid="assist-log">
             <table className="w-full text-[11px]">
               <thead className="text-fg-muted">
                 <tr className="text-left">
-                  <th className="font-medium">When</th>
-                  <th className="font-medium">What</th>
-                  <th className="font-medium">Where</th>
-                  <th className="text-right font-medium">Sent</th>
-                  <th className="text-right font-medium">Back</th>
+                  <th className="font-medium">{t("assist.log.when")}</th>
+                  <th className="font-medium">{t("assist.log.what")}</th>
+                  <th className="font-medium">{t("assist.log.where")}</th>
+                  <th className="text-right font-medium">{t("assist.log.sent")}</th>
+                  <th className="text-right font-medium">{t("assist.log.back")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -343,7 +348,7 @@ export function AssistSettingsSection() {
               </tbody>
             </table>
             {(requests?.length ?? 0) === 0 ? (
-              <p className="text-xs text-fg-muted">Nothing has been sent.</p>
+              <p className="text-xs text-fg-muted">{t("assist.log.nothingSent")}</p>
             ) : (
               <Button
                 type="button"
@@ -356,13 +361,10 @@ export function AssistSettingsSection() {
                     .then(() => qc.invalidateQueries({ queryKey: ["assist", "requests"] }))
                 }
               >
-                Clear the list
+                {t("assist.log.clear")}
               </Button>
             )}
-            <p className="mt-1 text-[11px] text-fg-muted">
-              Sizes and times only — the list never holds the text itself, so it is safe to show
-              anyone. It covers this session; it is not written to disk.
-            </p>
+            <p className="mt-1 text-[11px] text-fg-muted">{t("assist.log.footer")}</p>
           </div>
         ) : null}
       </div>

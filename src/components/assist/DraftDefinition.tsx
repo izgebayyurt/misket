@@ -1,4 +1,5 @@
 import { Loader2, Sparkles } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { useExcerptQuery } from "@/queries/excerpts";
 import {
@@ -27,6 +28,7 @@ interface Props {
  * reaches the project until the dialog's own Save.
  */
 export function DraftDefinitionButton({ codeId, codeName, onDraft }: Props) {
+  const { t } = useTranslation();
   const enabled = useAssistEnabled("suggestDefinition");
   const { data: page } = useExcerptQuery({
     codeIds: [codeId],
@@ -68,8 +70,8 @@ export function DraftDefinitionButton({ codeId, codeName, onDraft }: Props) {
         data-testid="draft-definition"
         title={
           tooFew
-            ? `Needs at least ${MIN_EXCERPTS_FOR_DEFINITION} excerpts to draft from (this code has ${count}).`
-            : `Draft from this code's ${count} excerpts. Nothing is saved until you press Save.`
+            ? t("assist.draftDefinition.tooFewHint", { min: MIN_EXCERPTS_FOR_DEFINITION, count })
+            : t("assist.draftDefinition.readyHint", { count })
         }
       >
         {draft.busy ? (
@@ -77,16 +79,16 @@ export function DraftDefinitionButton({ codeId, codeName, onDraft }: Props) {
         ) : (
           <Sparkles className="size-3.5" />
         )}
-        Draft definition
+        {t("assist.draftDefinition.button")}
       </Button>
       {draft.busy ? (
         <button type="button" className="text-xs text-fg-muted underline" onClick={draft.cancel}>
-          Stop
+          {t("assist.stop")}
         </button>
       ) : null}
       {tooFew ? (
         <span className="text-[11px] text-fg-muted">
-          Needs {MIN_EXCERPTS_FOR_DEFINITION} excerpts ({count} so far).
+          {t("assist.draftDefinition.tooFewInline", { min: MIN_EXCERPTS_FOR_DEFINITION, count })}
         </span>
       ) : null}
       {draft.error ? (

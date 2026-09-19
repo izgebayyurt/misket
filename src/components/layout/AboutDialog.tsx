@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
 import { getVersion } from "@tauri-apps/api/app";
+import { useTranslation } from "react-i18next";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { getDiagnostics } from "@/api/diagnostics";
 import { toast } from "@/state/toasts";
 
 export function AboutDialog({ onClose }: { onClose: () => void }) {
+  const { t } = useTranslation();
   const [version, setVersion] = useState<string>("");
   const [build, setBuild] = useState<{ os: string; webview: string } | null>(null);
   const [copying, setCopying] = useState(false);
@@ -23,7 +25,7 @@ export function AboutDialog({ onClose }: { onClose: () => void }) {
     try {
       const d = await getDiagnostics();
       await navigator.clipboard.writeText(JSON.stringify(d, null, 2));
-      toast.info("Diagnostics copied");
+      toast.info(t("about.diagnosticsCopied"));
     } catch (e) {
       toast.error(e);
     } finally {
@@ -33,14 +35,12 @@ export function AboutDialog({ onClose }: { onClose: () => void }) {
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent title="Misket" description={version ? `Version ${version}` : undefined}>
-        <p className="text-sm">
-          Open-source qualitative coding, on your own machine. Your project is a single SQLite file;
-          nothing leaves your computer.
-        </p>
-        <p className="mt-2 text-sm text-fg-muted">
-          MIT licensed. Source and issues: github.com/izgebayyurt/misket
-        </p>
+      <DialogContent
+        title="Misket"
+        description={version ? t("about.version", { version }) : undefined}
+      >
+        <p className="text-sm">{t("about.blurb")}</p>
+        <p className="mt-2 text-sm text-fg-muted">{t("about.license")}</p>
         {build ? (
           <p className="mt-2 font-mono text-xs text-fg-muted">
             {build.os} · webview {build.webview}
@@ -54,12 +54,9 @@ export function AboutDialog({ onClose }: { onClose: () => void }) {
           onClick={() => void copyDiagnostics()}
           disabled={copying}
         >
-          {copying ? "Copying…" : "Copy diagnostics"}
+          {copying ? t("about.copying") : t("about.copyDiagnostics")}
         </Button>
-        <p className="mt-1 text-xs text-fg-muted">
-          Copies the app version, OS, webview and the last 50 log lines (redacted the same way an
-          opt-in crash report would be) — never document text, codes, memos or file names.
-        </p>
+        <p className="mt-1 text-xs text-fg-muted">{t("about.copyHint")}</p>
       </DialogContent>
     </Dialog>
   );

@@ -1,6 +1,8 @@
 import { MapPin } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { useCodeHistory, useExcerptHistory } from "@/queries/activity";
 import { absoluteTime, kindLabel, relativeTime } from "@/core/activity";
+import { currentLocale } from "@/lib/i18n";
 import { checkoutHistoryNode } from "@/queries/history";
 import { toast } from "@/state/toasts";
 import { Button } from "@/components/ui/button";
@@ -16,27 +18,24 @@ async function goToPoint(id: number) {
 
 /** One code's life in the codebook: the "living codebook" trail. */
 export function CodeHistory({ codeId }: { codeId: string }) {
+  const { t } = useTranslation();
   const { data } = useCodeHistory(codeId);
-  return (
-    <Timeline entries={data} empty="Nothing recorded for this code yet." testId="code-history" />
-  );
+  return <Timeline entries={data} empty={t("history.emptyForCode")} testId="code-history" />;
 }
 
 /** One excerpt's trail: coded, recoded, adjusted, split, merged. */
 export function ExcerptHistory({ excerptId }: { excerptId: string }) {
+  const { t } = useTranslation();
   const { data } = useExcerptHistory(excerptId);
-  return (
-    <Timeline
-      entries={data}
-      empty="Nothing recorded for this excerpt yet."
-      testId="excerpt-history"
-    />
-  );
+  return <Timeline entries={data} empty={t("history.emptyForExcerpt")} testId="excerpt-history" />;
 }
 
 /**
  * Oldest first, so it reads as a story rather than a feed, with a rule down
  * the left connecting the dots.
+ *
+ * `e.summary` and `kindLabel(e.kind)` are not translated — see the note in
+ * `ActivityFeed.tsx` and `docs/DATA_MODEL.md` "Activity log language".
  */
 function Timeline({
   entries,
@@ -47,10 +46,12 @@ function Timeline({
   empty: string;
   testId: string;
 }) {
+  const { t } = useTranslation();
+  const locale = currentLocale();
   return (
     <div className="border-b border-border p-3" data-testid={testId}>
       <h3 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-fg-muted">
-        History
+        {t("keymap.history")}
       </h3>
       {!entries ? null : entries.length === 0 ? (
         <p className="text-xs text-fg-muted">{empty}</p>
@@ -69,16 +70,16 @@ function Timeline({
                     size="sm"
                     variant="ghost"
                     className="h-5 shrink-0 px-1 text-[10px] opacity-0 group-hover:opacity-100"
-                    title="Go to this point"
+                    title={t("history.goToPoint")}
                     onClick={() => void goToPoint(e.id)}
                     data-testid="history-go-to-point"
                   >
-                    <MapPin className="size-3" /> Go to this point
+                    <MapPin className="size-3" /> {t("history.goToPoint")}
                   </Button>
                 )}
               </div>
-              <div className="text-fg-muted" title={absoluteTime(e.at)}>
-                {kindLabel(e.kind)} · {relativeTime(e.at)}
+              <div className="text-fg-muted" title={absoluteTime(e.at, locale)}>
+                {kindLabel(e.kind)} · {relativeTime(e.at, undefined, locale)}
                 {e.actor ? ` · ${e.actor}` : ""}
               </div>
               <Changes entry={e} />

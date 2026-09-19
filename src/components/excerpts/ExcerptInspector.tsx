@@ -1,5 +1,6 @@
 import { Sparkles, X } from "lucide-react";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { AssistedRef, Coding, WeightScale } from "@/api/types";
 import {
   useApplyCodes,
@@ -57,6 +58,7 @@ function WeightControl({
   documentId: string;
   meId?: string;
 }) {
+  const { t } = useTranslation();
   const setWeight = useSetExcerptWeight();
   const mine = meId ? codings.find((c) => c.coderId === meId) : codings[0];
   const others = codings.filter((c) => c !== mine);
@@ -69,7 +71,7 @@ function WeightControl({
       data-testid="weight-control"
     >
       {values.length <= 9 ? (
-        <div className="flex items-center gap-0.5" role="group" aria-label="Weight">
+        <div className="flex items-center gap-0.5" role="group" aria-label={t("excerpts.weight")}>
           {values.map((v) => (
             <button
               key={v}
@@ -97,7 +99,7 @@ function WeightControl({
           value={mine?.weight ?? ""}
           onChange={(e) => rate(e.target.value === "" ? null : Number(e.target.value))}
           className="h-5 w-14 rounded border border-border bg-panel px-1 text-[10px]"
-          aria-label="Weight"
+          aria-label={t("excerpts.weight")}
         />
       )}
       {others.map((c) => (
@@ -112,6 +114,7 @@ function WeightControl({
 
 /** Right-panel view of the focused excerpt: context, codes, memos. */
 export function ExcerptInspector({ excerptId }: { excerptId: string }) {
+  const { t } = useTranslation();
   const { data: detail } = useExcerptDetail(excerptId);
   const tree = useCodeTree();
   const removeCode = useRemoveExcerptCode();
@@ -125,8 +128,12 @@ export function ExcerptInspector({ excerptId }: { excerptId: string }) {
   );
   if (!detail) return null;
   const me = coders?.find((c) => c.isLocal)?.id;
-  const nameOf = (coderId: string) =>
-    coderId === me ? "my" : `${coders?.find((c) => c.id === coderId)?.name ?? coderId}'s`;
+  const removeLabel = (coderId: string) =>
+    coderId === me
+      ? t("excerpts.removeMineCoding")
+      : t("excerpts.removeTheirCoding", {
+          name: coders?.find((c) => c.id === coderId)?.name ?? coderId,
+        });
   const remove = (codeId: string, coderId?: string) =>
     removeCode
       .mutateAsync({ id: detail.id, documentId: detail.documentId, codeId, coderId })
@@ -152,7 +159,7 @@ export function ExcerptInspector({ excerptId }: { excerptId: string }) {
     <div className="flex flex-col" data-testid="excerpt-inspector">
       <div className="border-b border-border p-3">
         <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-fg-muted">
-          Excerpt
+          {t("excerpts.excerpt")}
         </h3>
         {detail.kind === "image_region" ? (
           <>
@@ -206,21 +213,23 @@ export function ExcerptInspector({ excerptId }: { excerptId: string }) {
       </div>
       <div className="border-b border-border p-3">
         <div className="flex items-center justify-between">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-fg-muted">Codes</h3>
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-fg-muted">
+            {t("excerpts.codes")}
+          </h3>
           <div className="flex items-center">
             {suggestEnabled && detail.kind === "text" ? (
               <Button
                 size="sm"
                 variant="ghost"
                 onClick={() => setSuggesting((v) => !v)}
-                title="Ask for code suggestions. Nothing is applied until you click one."
+                title={t("excerpts.suggestHint")}
                 data-testid="inspector-suggest"
               >
-                <Sparkles className="size-3.5" /> Suggest
+                <Sparkles className="size-3.5" /> {t("excerpts.suggest")}
               </Button>
             ) : null}
             <Button size="sm" variant="ghost" onClick={() => setPaletteOpen(true)}>
-              Add
+              {t("excerpts.add")}
             </Button>
           </div>
         </div>
@@ -274,7 +283,7 @@ export function ExcerptInspector({ excerptId }: { excerptId: string }) {
                   {mineOnly ? (
                     <button
                       className="rounded p-0.5 text-fg-muted opacity-0 hover:bg-border group-hover:opacity-100"
-                      aria-label="Remove code"
+                      aria-label={t("excerpts.removeCode")}
                       onClick={() => void remove(id)}
                     >
                       <X className="size-3.5" />
@@ -283,7 +292,7 @@ export function ExcerptInspector({ excerptId }: { excerptId: string }) {
                     <DropdownMenu>
                       <DropdownMenuTrigger
                         className="rounded p-0.5 text-fg-muted opacity-0 hover:bg-border group-hover:opacity-100 data-[state=open]:opacity-100"
-                        aria-label="Remove code"
+                        aria-label={t("excerpts.removeCode")}
                       >
                         <X className="size-3.5" />
                       </DropdownMenuTrigger>
@@ -294,7 +303,7 @@ export function ExcerptInspector({ excerptId }: { excerptId: string }) {
                             danger
                             onSelect={() => void remove(id, coderId)}
                           >
-                            Remove {nameOf(coderId)} coding
+                            {removeLabel(coderId)}
                           </DropdownMenuItem>
                         ))}
                       </DropdownMenuContent>
@@ -315,11 +324,11 @@ export function ExcerptInspector({ excerptId }: { excerptId: string }) {
             );
           })}
           {detail.codeIds.length === 0 ? (
-            <li className="px-1 text-sm text-fg-muted">Uncoded.</li>
+            <li className="px-1 text-sm text-fg-muted">{t("excerpts.uncoded")}</li>
           ) : null}
         </ul>
       </div>
-      <MemoList target={{ excerptId }} heading="Memos" />
+      <MemoList target={{ excerptId }} heading={t("excerpts.memos")} />
       <ExcerptHistory excerptId={excerptId} />
     </div>
   );
@@ -343,6 +352,7 @@ function MediaRangeEditor({
   startMs: number;
   endMs: number;
 }) {
+  const { t } = useTranslation();
   const updateRange = useUpdateExcerptRange();
   const [draft, setDraft] = useState<{ in: string; out: string } | null>(null);
   const shown = draft ?? { in: formatTimecode(startMs), out: formatTimecode(endMs) };
@@ -352,7 +362,7 @@ function MediaRangeEditor({
     const end = parseTimecode(next.out);
     setDraft(null);
     if (start === null || end === null) {
-      toast.info("Times read as m:ss.s — for example 1:02.4.", {
+      toast.info(t("excerpts.timecodeHint"), {
         key: TOAST_KEYS.mediaTimecode,
       });
       return;
@@ -374,20 +384,22 @@ function MediaRangeEditor({
   return (
     <div className="mt-2 flex items-center gap-1.5" data-testid="media-range-editor">
       <TimeField
-        label="In"
+        label={t("excerpts.in")}
+        ariaLabel={t("excerpts.inPoint")}
         value={shown.in}
         onChange={(v) => setDraft({ ...shown, in: v })}
         onCommit={() => void commit(shown)}
       />
       <span className="text-fg-muted">–</span>
       <TimeField
-        label="Out"
+        label={t("excerpts.out")}
+        ariaLabel={t("excerpts.outPoint")}
         value={shown.out}
         onChange={(v) => setDraft({ ...shown, out: v })}
         onCommit={() => void commit(shown)}
       />
       <span className="text-[11px] text-fg-muted">
-        {formatTimecode(Math.max(0, endMs - startMs))} long
+        {t("excerpts.durationLong", { duration: formatTimecode(Math.max(0, endMs - startMs)) })}
       </span>
     </div>
   );
@@ -395,11 +407,13 @@ function MediaRangeEditor({
 
 function TimeField({
   label,
+  ariaLabel,
   value,
   onChange,
   onCommit,
 }: {
   label: string;
+  ariaLabel: string;
   value: string;
   onChange: (value: string) => void;
   onCommit: () => void;
@@ -409,7 +423,7 @@ function TimeField({
       {label}
       <Input
         value={value}
-        aria-label={`${label}-point`}
+        aria-label={ariaLabel}
         className="h-6 w-20 px-1 py-0 font-mono text-xs tabular-nums"
         onChange={(e) => onChange(e.target.value)}
         onBlur={onCommit}
