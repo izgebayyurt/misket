@@ -23,7 +23,7 @@ export function useRelinkMedia() {
       const picked = await open({
         multiple: false,
         directory: false,
-        filters: [{ name: "Audio and video", extensions: [...MEDIA_EXTENSIONS] }],
+        filters: [{ name: t("documents.filterMedia"), extensions: [...MEDIA_EXTENSIONS] }],
       });
       if (typeof picked !== "string") return false;
       try {

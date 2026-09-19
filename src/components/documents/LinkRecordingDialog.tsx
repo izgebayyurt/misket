@@ -51,7 +51,7 @@ export function LinkRecordingDialog({
     const file = await open({
       multiple: false,
       directory: false,
-      filters: [{ name: "Audio and video", extensions: [...MEDIA_EXTENSIONS] }],
+      filters: [{ name: t("documents.filterMedia"), extensions: [...MEDIA_EXTENSIONS] }],
     });
     if (typeof file !== "string") return;
     setImporting(true);

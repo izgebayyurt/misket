@@ -85,7 +85,13 @@
     "clear": "Clear",
     "done": "Done",
     "delete": "Delete",
-    "copy": "Copy"
+    "copy": "Copy",
+    "fileFilters": {
+      "misketProject": "Misket project",
+      "refiProject": "REFI-QDA project",
+      "whisperModel": "Whisper model",
+      "codebook": "Codebook"
+    }
   },
   "assist": {
     "title": "Assistance",

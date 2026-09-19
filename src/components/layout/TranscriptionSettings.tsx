@@ -77,7 +77,7 @@ export function TranscriptionSettings() {
     const picked = await open({
       multiple: false,
       directory: false,
-      filters: [{ name: "Whisper model", extensions: ["bin"] }],
+      filters: [{ name: t("common.fileFilters.whisperModel"), extensions: ["bin"] }],
     });
     if (typeof picked !== "string") return;
     setBusy(true);

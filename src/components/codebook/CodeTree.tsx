@@ -73,7 +73,7 @@ export function CodeTree() {
     try {
       const picked = await open({
         multiple: false,
-        filters: [{ name: "Codebook", extensions: ["json", "csv"] }],
+        filters: [{ name: t("common.fileFilters.codebook"), extensions: ["json", "csv"] }],
       });
       if (!picked) return;
       const path = Array.isArray(picked) ? picked[0]! : picked;

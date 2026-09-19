@@ -17,13 +17,13 @@ import { cn } from "@/lib/utils";
  * launched with `MISKET_E2E_PULL`, which names one so the smoke test never
  * has to drive a native file chooser (see `src-tauri/src/commands/e2e.rs`).
  */
-async function pickAnotherCopy(): Promise<string | null> {
+async function pickAnotherCopy(t: (key: string) => string): Promise<string | null> {
   const configured = await getE2eConfig().catch(() => null);
   if (configured?.pullPath) return configured.pullPath;
   const picked = await open({
     multiple: false,
     directory: false,
-    filters: [{ name: "Misket project", extensions: ["misket"] }],
+    filters: [{ name: t("common.fileFilters.misketProject"), extensions: ["misket"] }],
   });
   return typeof picked === "string" ? picked : null;
 }
@@ -94,7 +94,7 @@ export function PullDialog({ onClose }: { onClose: () => void }) {
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      const picked = await pickAnotherCopy();
+      const picked = await pickAnotherCopy(t);
       if (cancelled) return;
       if (!picked) {
         onClose();
@@ -116,7 +116,7 @@ export function PullDialog({ onClose }: { onClose: () => void }) {
     return () => {
       cancelled = true;
     };
-  }, [onClose]);
+  }, [onClose, t]);
 
   const fileName = useMemo(() => path?.split(/[\\/]/).pop() ?? "", [path]);
 

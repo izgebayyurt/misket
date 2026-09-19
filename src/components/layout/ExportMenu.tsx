@@ -34,7 +34,7 @@ export function ExportMenu({ project }: { project: ProjectInfo }) {
         defaultPath: `${stem(project)}-${suffix}.${ext}`,
         filters: [
           kind === "refi"
-            ? { name: "REFI-QDA project", extensions: ["qdpx"] }
+            ? { name: t("common.fileFilters.refiProject"), extensions: ["qdpx"] }
             : { name: ext.toUpperCase(), extensions: [ext] },
         ],
       });
@@ -70,7 +70,7 @@ export function ExportMenu({ project }: { project: ProjectInfo }) {
     try {
       const path = await save({
         defaultPath: `${stem(project)}-copy.misket`,
-        filters: [{ name: "Misket project", extensions: ["misket"] }],
+        filters: [{ name: t("common.fileFilters.misketProject"), extensions: ["misket"] }],
       });
       if (!path) return;
       await saveCopy.mutateAsync(path);

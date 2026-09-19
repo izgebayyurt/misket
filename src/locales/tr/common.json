@@ -85,7 +85,13 @@
     "clear": "Temizle",
     "done": "Bitti",
     "delete": "Sil",
-    "copy": "Kopyala"
+    "copy": "Kopyala",
+    "fileFilters": {
+      "misketProject": "Misket projesi",
+      "refiProject": "REFI-QDA projesi",
+      "whisperModel": "Whisper modeli",
+      "codebook": "Kod defteri"
+    }
   },
   "assist": {
     "title": "Yapay Zeka Desteği",

@@ -16,13 +16,13 @@ import { cn } from "@/lib/utils";
  * names one so the smoke test never has to drive a native file chooser
  * (see `src-tauri/src/commands/e2e.rs`).
  */
-async function pickQdpx(): Promise<string | null> {
+async function pickQdpx(t: (key: string) => string): Promise<string | null> {
   const configured = await getE2eConfig().catch(() => null);
   if (configured?.refiPath) return configured.refiPath;
   const picked = await open({
     multiple: false,
     directory: false,
-    filters: [{ name: "REFI-QDA project", extensions: ["qdpx"] }],
+    filters: [{ name: t("common.fileFilters.refiProject"), extensions: ["qdpx"] }],
   });
   return typeof picked === "string" ? picked : null;
 }
@@ -93,7 +93,7 @@ export function RefiImportDialog({ onClose }: { onClose: () => void }) {
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      const picked = await pickQdpx();
+      const picked = await pickQdpx(t);
       if (cancelled) return;
       if (!picked) {
         onClose();
@@ -115,7 +115,7 @@ export function RefiImportDialog({ onClose }: { onClose: () => void }) {
     return () => {
       cancelled = true;
     };
-  }, [onClose]);
+  }, [onClose, t]);
 
   const fileName = useMemo(() => path?.split(/[\\/]/).pop() ?? "", [path]);
 
