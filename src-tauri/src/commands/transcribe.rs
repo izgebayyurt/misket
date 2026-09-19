@@ -135,11 +135,7 @@ pub fn download_whisper_model(
             let handle = handle.clone();
             let id = id.clone();
             move |received: u64, total: u64| {
-                let percent = if total > 0 {
-                    ((received.min(total) * 100) / total) as u8
-                } else {
-                    0
-                };
+                let percent = (received.min(total) * 100).checked_div(total).unwrap_or(0) as u8;
                 let _ = handle.emit(
                     MODEL_PROGRESS_EVENT,
                     ModelProgressEvent {
