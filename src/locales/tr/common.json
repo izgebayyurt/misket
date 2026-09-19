@@ -1277,5 +1277,61 @@
       "onlyOneCoder": "Şimdilik sadece bir kodlayıcı var",
       "onlyOneCoderHint": "Kodlayıcılar arası güvenilirlik, aynı materyalin iki kişi tarafından kodlanmasını gerektirir. İkinci bir kodlayıcı, bu projenin kopyasını <menu>Dosya → Başka bir kopyadan çek…</menu> ile içeri aldığınızda görünür — her kodlama, onu yapan kurulumun kimliğini taşır, böylece Misket sizin çalışmanızı onlarınkinden ayırt edebilir."
     }
+  },
+  "descriptors": {
+    "kind": {
+      "text": "Metin",
+      "number": "Sayı",
+      "choice": "Seçenek",
+      "date": "Tarih"
+    },
+    "op": {
+      "eq": "şudur",
+      "neq": "şu değildir",
+      "contains": "içerir",
+      "gt": "sonrasındadır",
+      "lt": "öncesindedir",
+      "between": "arasındadır",
+      "in": "şunlardan biridir",
+      "empty": "boştur",
+      "notEmpty": "bir değeri vardır",
+      "gtNumber": "büyüktür",
+      "ltNumber": "küçüktür"
+    },
+    "genericName": "Betimleyici",
+    "form": {
+      "nameLabel": "Ad",
+      "namePlaceholder": "Yaş grubu",
+      "typeLabel": "Tür",
+      "frozenKindHint_one": "{{count, number}} belgenin bir değeri var; türü değiştirmek için önce onları temizleyin",
+      "frozenKindHint_other": "{{count, number}} belgenin bir değeri var; türü değiştirmek için önce onları temizleyin",
+      "optionsLabel": "Seçenekler, satır başına bir tane"
+    },
+    "filterChip": "Betimleyiciler",
+    "removeCondition": "{{condition}} koşulunu kaldır",
+    "value": "Değer",
+    "choose": "Seçin…",
+    "and": "ve",
+    "secondValue": "İkinci değer",
+    "addCondition": "Koşul ekle",
+    "title": "Betimleyiciler",
+    "manageFields": "Alanları yönet",
+    "tableEmpty": "Henüz betimleyici yok. Yer, görüşme dalgası veya yaş grubu gibi karşılaştırdığınız özellikler için alan ekleyin.",
+    "documentColumn": "Belge",
+    "dialogDescription": "Her belgede ayarlayabileceğiniz ve alıntıları filtreleyebileceğiniz özellikler.",
+    "dialogEmpty": "Henüz betimleyici yok. Yer, görüşme dalgası veya yaş grubu gibi karşılaştırdığınız özellikler için bir tane ekleyin.",
+    "moveUp": "{{name}} öğesini yukarı taşı",
+    "moveDown": "{{name}} öğesini aşağı taşı",
+    "editField": "{{name}} öğesini düzenle",
+    "deleteField": "{{name}} öğesini sil",
+    "add": "Ekle",
+    "addDescriptor": "Betimleyici ekle",
+    "deleteDialogTitle": "\"{{name}}\" silinsin mi?",
+    "deleteDialogWillLose_one": "{{count, number}} belge bu değeri kaybedecek. Tarihçeden geri alabilirsiniz.",
+    "deleteDialogWillLose_other": "{{count, number}} belge bu değeri kaybedecek. Tarihçeden geri alabilirsiniz.",
+    "deleteDialogNoneUse": "Onu kullanan belge yok. Tarihçeden geri alabilirsiniz.",
+    "descriptorsTable": "Betimleyiciler tablosu",
+    "manageDescriptors": "Betimleyicileri yönet",
+    "noneYetHint": "Henüz betimleyici yok. Yer veya görüşme dalgası gibi özellikleri kaydetmek için <btn>bazılarını tanımlayın</btn>."
   }
 }

@@ -1277,5 +1277,61 @@
       "onlyOneCoder": "Only one coder so far",
       "onlyOneCoderHint": "Inter-rater reliability needs two people's codings of the same material. A second coder appears once you pull their copy of this project in with <menu>File → Pull from another copy…</menu> — every coding carries the id of the install that made it, so Misket can tell your work from theirs."
     }
+  },
+  "descriptors": {
+    "kind": {
+      "text": "Text",
+      "number": "Number",
+      "choice": "Choice",
+      "date": "Date"
+    },
+    "op": {
+      "eq": "is",
+      "neq": "is not",
+      "contains": "contains",
+      "gt": "is after",
+      "lt": "is before",
+      "between": "is between",
+      "in": "is any of",
+      "empty": "is empty",
+      "notEmpty": "has any value",
+      "gtNumber": "is more than",
+      "ltNumber": "is less than"
+    },
+    "genericName": "Descriptor",
+    "form": {
+      "nameLabel": "Name",
+      "namePlaceholder": "Age group",
+      "typeLabel": "Type",
+      "frozenKindHint_one": "{{count, number}} document has a value; clear them to change the type",
+      "frozenKindHint_other": "{{count, number}} documents have a value; clear them to change the type",
+      "optionsLabel": "Options, one per line"
+    },
+    "filterChip": "Descriptors",
+    "removeCondition": "Remove {{condition}}",
+    "value": "Value",
+    "choose": "Choose…",
+    "and": "and",
+    "secondValue": "Second value",
+    "addCondition": "Add condition",
+    "title": "Descriptors",
+    "manageFields": "Manage fields",
+    "tableEmpty": "No descriptors yet. Add fields for the attributes you compare across, such as site, interview wave or age group.",
+    "documentColumn": "Document",
+    "dialogDescription": "Attributes you can set on each document and filter excerpts by.",
+    "dialogEmpty": "No descriptors yet. Add one for the attributes you compare across, such as site, interview wave or age group.",
+    "moveUp": "Move {{name}} up",
+    "moveDown": "Move {{name}} down",
+    "editField": "Edit {{name}}",
+    "deleteField": "Delete {{name}}",
+    "add": "Add",
+    "addDescriptor": "Add descriptor",
+    "deleteDialogTitle": "Delete \"{{name}}\"?",
+    "deleteDialogWillLose_one": "{{count, number}} document will lose this value. You can undo this from History.",
+    "deleteDialogWillLose_other": "{{count, number}} documents will lose this value. You can undo this from History.",
+    "deleteDialogNoneUse": "No document uses it. You can undo this from History.",
+    "descriptorsTable": "Descriptors table",
+    "manageDescriptors": "Manage descriptors",
+    "noneYetHint": "No descriptors yet. <btn>Define some</btn> to record attributes like site or interview wave."
   }
 }

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Settings2, Table } from "lucide-react";
+import { Trans, useTranslation } from "react-i18next";
 import { useDescriptorFields, useDocumentDescriptorValues } from "@/queries/descriptors";
 import { useWorkspace } from "@/state/workspace";
 import { DescriptorsDialog } from "./DescriptorsDialog";
@@ -7,6 +8,7 @@ import { DescriptorValueInput } from "./DescriptorValueInput";
 
 /** The document's attribute values, one input per field. */
 export function DocumentDescriptors({ documentId }: { documentId: string }) {
+  const { t } = useTranslation();
   const { data: fields } = useDescriptorFields();
   const { data: values } = useDocumentDescriptorValues(documentId);
   const setView = useWorkspace((s) => s.setView);
@@ -15,21 +17,23 @@ export function DocumentDescriptors({ documentId }: { documentId: string }) {
   return (
     <section className="border-b border-border p-3" data-testid="document-descriptors">
       <div className="flex items-center justify-between">
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-fg-muted">Descriptors</h3>
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-fg-muted">
+          {t("descriptors.title")}
+        </h3>
         <div className="flex items-center">
           <button
             className="rounded p-1 text-fg-muted hover:bg-muted hover:text-fg"
             onClick={() => setView({ kind: "descriptorTable" })}
-            title="Descriptors table"
-            aria-label="Descriptors table"
+            title={t("descriptors.descriptorsTable")}
+            aria-label={t("descriptors.descriptorsTable")}
           >
             <Table className="size-4" />
           </button>
           <button
             className="rounded p-1 text-fg-muted hover:bg-muted hover:text-fg"
             onClick={() => setManage(true)}
-            title="Manage descriptors"
-            aria-label="Manage descriptors"
+            title={t("descriptors.manageDescriptors")}
+            aria-label={t("descriptors.manageDescriptors")}
           >
             <Settings2 className="size-4" />
           </button>
@@ -37,14 +41,17 @@ export function DocumentDescriptors({ documentId }: { documentId: string }) {
       </div>
       {fields && fields.length === 0 ? (
         <p className="mt-1 text-xs text-fg-muted">
-          No descriptors yet.{" "}
-          <button
-            className="text-accent underline-offset-2 hover:underline"
-            onClick={() => setManage(true)}
-          >
-            Define some
-          </button>{" "}
-          to record attributes like site or interview wave.
+          <Trans
+            i18nKey="descriptors.noneYetHint"
+            components={{
+              btn: (
+                <button
+                  className="text-accent underline-offset-2 hover:underline"
+                  onClick={() => setManage(true)}
+                />
+              ),
+            }}
+          />
         </p>
       ) : null}
       <div className="mt-2 space-y-2">

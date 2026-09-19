@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { ChevronDown, X } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import type { DescriptorField, DescriptorFilter, DescriptorOp } from "@/api/types";
 import {
   defaultCondition,
@@ -29,6 +30,7 @@ export function DescriptorConditions({
   conditions: DescriptorFilter[];
   onChange: (v: DescriptorFilter[]) => void;
 }) {
+  const { t } = useTranslation();
   const { data: fields } = useDescriptorFields();
   const [open, setOpen] = useState(false);
 
@@ -52,7 +54,7 @@ export function DescriptorConditions({
             )}
             data-testid="filter-descriptors"
           >
-            Descriptors <ChevronDown className="size-3" />
+            {t("descriptors.filterChip")} <ChevronDown className="size-3" />
           </button>
         </PopoverTrigger>
         <PopoverContent className="w-80 p-3">
@@ -71,11 +73,13 @@ export function DescriptorConditions({
           className="flex items-center gap-1 rounded-md border border-accent bg-accent/10 px-2 py-1 text-xs"
           data-testid="descriptor-chip"
         >
-          {describeCondition(c, fields)}
+          {describeCondition(c, fields, t)}
           <button
             className="rounded p-0.5 text-fg-muted hover:bg-muted"
             onClick={() => onChange(conditions.filter((_, j) => j !== i))}
-            aria-label={`Remove ${describeCondition(c, fields)}`}
+            aria-label={t("descriptors.removeCondition", {
+              condition: describeCondition(c, fields, t),
+            })}
           >
             <X className="size-3" />
           </button>
@@ -92,6 +96,7 @@ function ConditionBuilder({
   fields: DescriptorField[];
   onAdd: (c: DescriptorFilter) => void;
 }) {
+  const { t } = useTranslation();
   const [draft, setDraft] = useState<DescriptorFilter>(() => defaultCondition(fields[0]!));
   const field = fields.find((f) => f.id === draft.fieldId) ?? fields[0]!;
   const ops = opsForKind(field.kind);
@@ -118,7 +123,7 @@ function ConditionBuilder({
           const next = fields.find((f) => f.id === e.target.value)!;
           setDraft(defaultCondition(next));
         }}
-        aria-label="Descriptor"
+        aria-label={t("analysis.descriptor.fieldLabel")}
         data-testid="condition-field"
       >
         {fields.map((f) => (
@@ -139,12 +144,12 @@ function ConditionBuilder({
             values: n === 0 ? [] : n === "many" ? [] : draft.values.slice(0, n),
           });
         }}
-        aria-label="Operator"
+        aria-label={t("excerpts.query.operator")}
         data-testid="condition-op"
       >
         {ops.map((op) => (
           <option key={op} value={op}>
-            {opLabel(op, field.kind)}
+            {opLabel(op, field.kind, t)}
           </option>
         ))}
       </select>
@@ -173,10 +178,10 @@ function ConditionBuilder({
           className={selectClass}
           value={draft.values[0] ?? ""}
           onChange={(e) => setValue(0, e.target.value)}
-          aria-label="Value"
+          aria-label={t("descriptors.value")}
           data-testid="condition-value"
         >
-          <option value="">Choose…</option>
+          <option value="">{t("descriptors.choose")}</option>
           {field.options.map((o) => (
             <option key={o} value={o}>
               {o}
@@ -190,20 +195,20 @@ function ConditionBuilder({
             step={field.kind === "number" ? "any" : undefined}
             value={draft.values[0] ?? ""}
             onChange={(e) => setValue(0, e.target.value)}
-            placeholder="Value"
-            aria-label="Value"
+            placeholder={t("descriptors.value")}
+            aria-label={t("descriptors.value")}
             data-testid="condition-value"
           />
           {count === 2 ? (
             <>
-              <span className="text-xs text-fg-muted">and</span>
+              <span className="text-xs text-fg-muted">{t("descriptors.and")}</span>
               <Input
                 type={inputType}
                 step={field.kind === "number" ? "any" : undefined}
                 value={draft.values[1] ?? ""}
                 onChange={(e) => setValue(1, e.target.value)}
-                placeholder="Value"
-                aria-label="Second value"
+                placeholder={t("descriptors.value")}
+                aria-label={t("descriptors.secondValue")}
               />
             </>
           ) : null}
@@ -216,7 +221,7 @@ function ConditionBuilder({
         disabled={!isConditionComplete(draft)}
         data-testid="add-condition"
       >
-        Add condition
+        {t("descriptors.addCondition")}
       </Button>
     </form>
   );

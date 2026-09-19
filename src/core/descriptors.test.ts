@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { DescriptorField } from "@/api/types";
+import i18n from "@/lib/i18n";
 import {
   defaultCondition,
   describeCondition,
@@ -10,6 +11,8 @@ import {
   opsForKind,
   parseOptions,
 } from "./descriptors";
+
+const t = i18n.t.bind(i18n);
 
 const field = (over: Partial<DescriptorField> = {}): DescriptorField => ({
   id: "f1",
@@ -40,10 +43,10 @@ describe("opsForKind", () => {
 
 describe("opLabel", () => {
   it("reads gt/lt as more/less for numbers and after/before for dates", () => {
-    expect(opLabel("gt", "number")).toBe("is more than");
-    expect(opLabel("lt", "number")).toBe("is less than");
-    expect(opLabel("gt", "date")).toBe("is after");
-    expect(opLabel("eq", "text")).toBe("is");
+    expect(opLabel("gt", "number", t)).toBe("is more than");
+    expect(opLabel("lt", "number", t)).toBe("is less than");
+    expect(opLabel("gt", "date", t)).toBe("is after");
+    expect(opLabel("eq", "text", t)).toBe("is");
   });
 });
 
@@ -103,22 +106,22 @@ describe("describeCondition", () => {
   const fields = [field(), field({ id: "f2", name: "Age", kind: "number", options: [] })];
 
   it("reads as a sentence", () => {
-    expect(describeCondition({ fieldId: "f1", op: "in", values: ["North", "South"] }, fields)).toBe(
-      "Site is any of North, South",
-    );
-    expect(describeCondition({ fieldId: "f1", op: "empty", values: [] }, fields)).toBe(
+    expect(
+      describeCondition({ fieldId: "f1", op: "in", values: ["North", "South"] }, fields, t),
+    ).toBe("Site is any of North, South");
+    expect(describeCondition({ fieldId: "f1", op: "empty", values: [] }, fields, t)).toBe(
       "Site is empty",
     );
-    expect(describeCondition({ fieldId: "f2", op: "between", values: ["18", "65"] }, fields)).toBe(
-      "Age is between 18–65",
-    );
-    expect(describeCondition({ fieldId: "f2", op: "gt", values: ["18"] }, fields)).toBe(
+    expect(
+      describeCondition({ fieldId: "f2", op: "between", values: ["18", "65"] }, fields, t),
+    ).toBe("Age is between 18–65");
+    expect(describeCondition({ fieldId: "f2", op: "gt", values: ["18"] }, fields, t)).toBe(
       "Age is more than 18",
     );
   });
 
   it("falls back when the field is gone", () => {
-    expect(describeCondition({ fieldId: "gone", op: "eq", values: ["x"] }, fields)).toBe(
+    expect(describeCondition({ fieldId: "gone", op: "eq", values: ["x"] }, fields, t)).toBe(
       "Descriptor is x",
     );
   });
