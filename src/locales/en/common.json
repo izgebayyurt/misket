@@ -904,7 +904,8 @@
       "empty": "(empty)"
     },
     "ocrRuntime": {
-      "couldNotLoadBundledData": "Could not load the bundled OCR language data (HTTP {{status}})."
+      "couldNotLoadBundledData": "Could not load the bundled OCR language data (HTTP {{status}}).",
+      "cannotRenderPage": "This browser cannot render a PDF page to a canvas."
     },
     "relinkToast": {
       "toastRelinked": "Relinked. Undo with {{shortcut}} if that was the wrong file."

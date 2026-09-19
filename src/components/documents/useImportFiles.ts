@@ -438,6 +438,7 @@ async function resolveScannedPdfs(
         languages,
         onProgress: ({ page, pages }) => useOcrProgressStore.getState().update(page, pages),
         signal: controller.signal,
+        t,
       });
       file.parsed.text = text;
       file.parsed.sourceFormat = OCR_SOURCE_FORMAT;

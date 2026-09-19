@@ -18,6 +18,10 @@ export interface OcrProgress {
   pages: number;
 }
 
+/** `src/core` stays framework-free (see CLAUDE.md), so `ocrPdf` takes a
+ * translator instead of importing `react-i18next` itself. */
+export type OcrT = (key: string, params?: Record<string, unknown>) => string;
+
 export interface OcrOptions {
   paths: OcrAssetPaths;
   /** Tesseract language codes to load, e.g. `["eng"]` or `["eng", "tur"]`.
@@ -31,6 +35,7 @@ export interface OcrOptions {
   /** Checked between pages (recognition of the current page still runs to
    * completion — tesseract.js has no way to abort mid-recognise). */
   signal?: AbortSignal;
+  t: OcrT;
 }
 
 const DEFAULT_DPI = 200;
@@ -50,7 +55,7 @@ export class OcrCancelledError extends Error {
  * importer joins pages (a blank line between pages, see `joinPages`).
  */
 export async function ocrPdf(bytes: Uint8Array, options: OcrOptions): Promise<string> {
-  const { paths, languages = ["eng"], dpi = DEFAULT_DPI, onProgress, signal } = options;
+  const { paths, languages = ["eng"], dpi = DEFAULT_DPI, onProgress, signal, t } = options;
   const scale = dpi / PDF_POINTS_PER_INCH;
 
   const task = pdfjs.getDocument({ data: bytes, useSystemFonts: true });
@@ -82,7 +87,7 @@ export async function ocrPdf(bytes: Uint8Array, options: OcrOptions): Promise<st
         canvas.height = Math.max(1, Math.ceil(viewport.height));
         const context = canvas.getContext("2d");
         if (!context) {
-          throw new Error("This browser cannot render a PDF page to a canvas.");
+          throw new Error(t("documents.ocrRuntime.cannotRenderPage"));
         }
         await page.render({ canvas, canvasContext: context, viewport }).promise;
         const {

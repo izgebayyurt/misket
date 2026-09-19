@@ -907,7 +907,8 @@
       "toastRelinked": "Yeniden bağlandı. Yanlış dosyaysa {{shortcut}} ile geri alın."
     },
     "ocrRuntime": {
-      "couldNotLoadBundledData": "Paketlenmiş NVA dil verisi yüklenemedi (HTTP {{status}})."
+      "couldNotLoadBundledData": "Paketlenmiş NVA dil verisi yüklenemedi (HTTP {{status}}).",
+      "cannotRenderPage": "Bu tarayıcı bir PDF sayfasını tuvale işleyemiyor."
     },
     "transcribe": {
       "etaLessThanAMinute": "bir dakikadan az kaldı",
