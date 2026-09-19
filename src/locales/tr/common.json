@@ -907,5 +907,74 @@
     "applyCodeBeforeRating": "Ağırlıklandırmadan önce \"{{name}}\" kodunu bu alıntıya uygulayın.",
     "codedByList": "Kodlayan: {{names}}",
     "codedList": "Kodlandı: {{names}}"
+  },
+  "analysis": {
+    "title": "Analiz",
+    "showNames": "Analiz adlarını göster",
+    "collapseToIcons": "Simgelere daralt",
+    "groups": {
+      "codes": "Kodlar",
+      "across": "Veriler arası",
+      "text": "Metin",
+      "team": "Ekip",
+      "mixed": "Karma"
+    },
+    "tabs": {
+      "frequencies": "Sıklıklar",
+      "cooccurrence": "Birlikte oluşum",
+      "treemap": "Ağaç haritası",
+      "clustering": "Kümeleme",
+      "matrix": "Belgeye göre",
+      "descriptor": "Betimleyiciye göre",
+      "framework": "Çerçeve",
+      "words": "Kelimeler",
+      "reliability": "Güvenilirlik",
+      "weights": "Ağırlıklar"
+    },
+    "allDocuments": "Tüm belgeler",
+    "allCodes": "Tüm kodlar",
+    "exportedTo": "{{name}} olarak dışa aktarıldı",
+    "counting": "Sayılıyor…",
+    "frequencies": {
+      "codeCount_one": "{{count, number}} kod",
+      "codeCount_other": "{{count, number}} kod",
+      "empty": "Henüz kod yok. Önce bir kod defteri oluşturup biraz metin kodlayın.",
+      "colCode": "Kod",
+      "colOwn": "Kendi",
+      "colWithSubcodes": "Alt kodlarla",
+      "colDocuments": "Belgeler",
+      "colLast30Days": "Son 30 gün",
+      "showExcerptsCoded": "{{path}} ile kodlanan alıntıları göster (alt kodlarla)",
+      "codedLast30Days_one": "Son 30 günde {{count, number}} alıntı kodlandı",
+      "codedLast30Days_other": "Son 30 günde {{count, number}} alıntı kodlandı"
+    },
+    "coOccurrence": {
+      "empty": "Henüz karşılaştıracak bir şey yok: önce örtüşen bazı pasajları kodlayın.",
+      "diagonalTitle_one": "{{path}}: {{count, number}} alıntı",
+      "diagonalTitle_other": "{{path}}: {{count, number}} alıntı",
+      "cellTitle_one": "{{rowPath}} × {{colPath}}: {{count, number}} örtüşen alıntı çifti",
+      "cellTitle_other": "{{rowPath}} × {{colPath}}: {{count, number}} örtüşen alıntı çifti",
+      "explain": "Her hücre, aynı belgede iki kodu da taşıyan örtüşen alıntı çiftlerini sayar; her ikisini de taşıyan bir alıntı bir kez sayılır. Köşegen, kodun kendi alıntı sayısıdır. Bu alıntıları görmek için bir hücreye tıklayın.",
+      "onlyUsedCodes": "Yalnızca kullanılan kodlar"
+    },
+    "allCodesLower": "tüm kodlar",
+    "matrix": {
+      "empty": "Bu tabloyu doldurmak için bir belge içe aktarıp bazı pasajları kodlayın.",
+      "cellTitle_one": "{{docName}} × {{path}}: {{count, number}} alıntı",
+      "cellTitle_other": "{{docName}} × {{path}}: {{count, number}} alıntı",
+      "explain": "Belge ve koda göre alıntılar. Bu alıntılara göz atmak için bir hücreye tıklayın.",
+      "explainWithSub": "Belge ve koda göre alıntılar, alt kodlar dahil. Bu alıntılara göz atmak için bir hücreye tıklayın."
+    },
+    "treemap": {
+      "ownOnly": "Yalnızca kendi alıntıları (alt kodlar hariç)",
+      "breadcrumb": "Ağaç haritası konum yolu",
+      "emptyDrilled": "Bu kodun altında alıntısı olan bir alt kod yok.",
+      "svgLabel": "{{name}} ağaç haritası",
+      "cellTitle_one": "{{path}}: {{count, number}} alıntı ({{of}} içinde %{{percent}}){{drillHint}}",
+      "cellTitle_other": "{{path}}: {{count, number}} alıntı ({{of}} içinde %{{percent}}){{drillHint}}",
+      "drillHint": " — içine girmek için tıklayın",
+      "footerOwn": "Alan, her kodun kendi alıntı sayısıdır. İçine girmek için alt kodu olan bir koda, alıntılarını görmek için çift tıklayın.",
+      "footerWithSub": "Alan, her kodun alt kodları dahil alıntı sayısıdır. İçine girmek için alt kodu olan bir koda, alıntılarını görmek için çift tıklayın."
+    }
   }
 }

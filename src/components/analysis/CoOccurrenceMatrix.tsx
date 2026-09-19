@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { flattenTree, pathOf } from "@/core/codeTree";
 import { matrixCsv } from "@/core/csv";
 import { useCoOccurrence } from "@/queries/analysis";
@@ -10,6 +11,7 @@ import { AnalysisToolbar, DocumentFilter, EmptyNote, ExportCsvButton } from "./s
 import { shade } from "./shade";
 
 export function CoOccurrenceMatrix() {
+  const { t } = useTranslation();
   const [documentIds, setDocumentIds] = useState<string[]>([]);
   const [documentSetIds, setDocumentSetIds] = useState<string[]>([]);
   const [onlyUsed, setOnlyUsed] = useState(true);
@@ -60,9 +62,7 @@ export function CoOccurrenceMatrix() {
           count={0}
         />
         <EmptyNote>
-          {isPending
-            ? "Counting…"
-            : "Nothing to compare yet: code some overlapping passages first."}
+          {isPending ? t("analysis.counting") : t("analysis.coOccurrence.empty")}
         </EmptyNote>
       </div>
     );
@@ -137,8 +137,15 @@ export function CoOccurrenceMatrix() {
                       style={diagonal ? undefined : shade(n, max)}
                       title={
                         diagonal
-                          ? `${pathOf(tree, row.id)}: ${n} excerpt${n === 1 ? "" : "s"}`
-                          : `${pathOf(tree, row.id)} × ${pathOf(tree, col.id)}: ${n} overlapping excerpt pair${n === 1 ? "" : "s"}`
+                          ? t("analysis.coOccurrence.diagonalTitle", {
+                              path: pathOf(tree, row.id),
+                              count: n,
+                            })
+                          : t("analysis.coOccurrence.cellTitle", {
+                              rowPath: pathOf(tree, row.id),
+                              colPath: pathOf(tree, col.id),
+                              count: n,
+                            })
                       }
                       onClick={() =>
                         n &&
@@ -163,9 +170,7 @@ export function CoOccurrenceMatrix() {
           </tbody>
         </table>
         <p className="mt-3 max-w-prose text-xs text-fg-muted">
-          Each cell counts pairs of overlapping excerpts in the same document carrying the two
-          codes; an excerpt carrying both counts once. The diagonal is the code&rsquo;s own excerpt
-          count. Click a cell to see those excerpts.
+          {t("analysis.coOccurrence.explain")}
         </p>
       </div>
     </div>
@@ -195,6 +200,7 @@ function Toolbar({
   csv: () => string;
   count: number;
 }) {
+  const { t } = useTranslation();
   return (
     <AnalysisToolbar>
       <DocumentFilter
@@ -211,11 +217,9 @@ function Toolbar({
           onChange={(e) => setOnlyUsed(e.target.checked)}
           data-testid="only-used-codes"
         />
-        Only codes in use
+        {t("analysis.coOccurrence.onlyUsedCodes")}
       </label>
-      <span className="text-xs text-fg-muted">
-        {count} code{count === 1 ? "" : "s"}
-      </span>
+      <span className="text-xs text-fg-muted">{t("excerpts.filters.codeCount", { count })}</span>
       <span className="ml-auto" />
       <ExportCsvButton name="co-occurrence" build={csv} disabled={!count} />
     </AnalysisToolbar>

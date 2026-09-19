@@ -37,7 +37,9 @@ export type AnalysisGroup = "codes" | "across" | "text" | "team" | "mixed";
 
 export interface AnalysisEntry {
   id: AnalysisTab;
-  label: string;
+  /** A translation key, not the label itself — this module is data, plain
+   * and framework-free; the nav resolves it with `t()` when it renders. */
+  labelKey: string;
   group: AnalysisGroup;
   /** A lucide icon; the only thing shown when the list is collapsed. */
   icon: ComponentType<{ className?: string }>;
@@ -49,34 +51,41 @@ export interface AnalysisEntry {
   shortcut?: string;
 }
 
-/** Group order and headings. A group with no entries is not drawn. */
-export const ANALYSIS_GROUPS: { id: AnalysisGroup; label: string }[] = [
-  { id: "codes", label: "Codes" },
-  { id: "across", label: "Across data" },
-  { id: "text", label: "Text" },
-  { id: "team", label: "Team" },
-  { id: "mixed", label: "Mixed" },
+/** Group order and headings (translation keys). A group with no entries is
+ * not drawn. */
+export const ANALYSIS_GROUPS: { id: AnalysisGroup; labelKey: string }[] = [
+  { id: "codes", labelKey: "analysis.groups.codes" },
+  { id: "across", labelKey: "analysis.groups.across" },
+  { id: "text", labelKey: "analysis.groups.text" },
+  { id: "team", labelKey: "analysis.groups.team" },
+  { id: "mixed", labelKey: "analysis.groups.mixed" },
 ];
 
 export const ANALYSES: AnalysisEntry[] = [
   {
     id: "frequencies",
-    label: "Frequencies",
+    labelKey: "analysis.tabs.frequencies",
     group: "codes",
     icon: BarChart3,
     component: CodeFrequencies,
   },
   {
     id: "cooccurrence",
-    label: "Co-occurrence",
+    labelKey: "analysis.tabs.cooccurrence",
     group: "codes",
     icon: Grid2x2,
     component: CoOccurrenceMatrix,
   },
-  { id: "treemap", label: "Treemap", group: "codes", icon: LayoutGrid, component: CodeTreemap },
+  {
+    id: "treemap",
+    labelKey: "analysis.tabs.treemap",
+    group: "codes",
+    icon: LayoutGrid,
+    component: CodeTreemap,
+  },
   {
     id: "clustering",
-    label: "Clustering",
+    labelKey: "analysis.tabs.clustering",
     group: "codes",
     icon: Network,
     component: CodeClustering,
@@ -84,37 +93,49 @@ export const ANALYSES: AnalysisEntry[] = [
   // Another codebook-shape analysis goes here, after Clustering, as one
   // entry of exactly this shape — plus its id in `AnalysisTab`
   // (`src/state/workspace.ts`) and nothing else:
-  //   { id: "overlap", label: "Overlap", group: "codes", icon: Layers, component: CodeOverlap },
+  //   { id: "overlap", labelKey: "analysis.tabs.overlap", group: "codes", icon: Layers, component: CodeOverlap },
   {
     id: "matrix",
-    label: "By document",
+    labelKey: "analysis.tabs.matrix",
     group: "across",
     icon: Table,
     component: CodeByDocumentMatrix,
   },
   {
     id: "descriptor",
-    label: "By descriptor",
+    labelKey: "analysis.tabs.descriptor",
     group: "across",
     icon: Tags,
     component: CodeByDescriptorMatrix,
   },
   {
     id: "framework",
-    label: "Framework",
+    labelKey: "analysis.tabs.framework",
     group: "across",
     icon: Table2,
     component: FrameworkMatrixView,
   },
-  { id: "words", label: "Words", group: "text", icon: Type, component: WordFrequencies },
+  {
+    id: "words",
+    labelKey: "analysis.tabs.words",
+    group: "text",
+    icon: Type,
+    component: WordFrequencies,
+  },
   {
     id: "reliability",
-    label: "Reliability",
+    labelKey: "analysis.tabs.reliability",
     group: "team",
     icon: Scale,
     component: ReliabilityView,
   },
-  { id: "weights", label: "Weights", group: "mixed", icon: Weight, component: WeightsView },
+  {
+    id: "weights",
+    labelKey: "analysis.tabs.weights",
+    group: "mixed",
+    icon: Weight,
+    component: WeightsView,
+  },
   // Another analysis that crosses the qualitative and the countable goes
   // here, in the "mixed" group — one entry, plus its id in `AnalysisTab`
   // (`src/state/workspace.ts`) and nothing else.

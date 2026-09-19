@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronRight } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { toCsv } from "@/core/csv";
 import { canLabel, layoutLevel, tintFor, treemapForest, type TreemapCode } from "@/core/treemap";
 import { pathOf } from "@/core/codeTree";
@@ -41,6 +42,7 @@ function pathTo(forest: TreemapCode[], id: string): TreemapCode[] | undefined {
 }
 
 export function CodeTreemap() {
+  const { t } = useTranslation();
   const [documentIds, setDocumentIds] = useState<string[]>([]);
   const [documentSetIds, setDocumentSetIds] = useState<string[]>([]);
   const [coderIds, setCoderIds] = useState<string[]>([]);
@@ -74,12 +76,12 @@ export function CodeTreemap() {
   const root: TreemapCode = useMemo(
     () => ({
       id: ALL_CODES_ID,
-      name: "All codes",
+      name: t("analysis.allCodes"),
       color: "var(--accent)",
       value: forest.reduce((s, n) => s + n.value, 0),
       children: forest,
     }),
-    [forest],
+    [forest, t],
   );
 
   // A code deleted, or filters that empty it out, should not leave the view
@@ -134,7 +136,7 @@ export function CodeTreemap() {
             onChange={(e) => setOwnOnly(e.target.checked)}
             data-testid="treemap-own-only"
           />
-          Own excerpts only (not sub-codes)
+          {t("analysis.treemap.ownOnly")}
         </label>
         <span className="ml-auto" />
         <ExportPngButton name="code-treemap" svgRef={svgRef} disabled={!cells.length} />
@@ -142,7 +144,7 @@ export function CodeTreemap() {
       </AnalysisToolbar>
       <nav
         className="flex items-center gap-1 border-b border-border bg-panel px-4 py-1.5 text-xs text-fg-muted"
-        aria-label="Treemap breadcrumb"
+        aria-label={t("analysis.treemap.breadcrumb")}
         data-testid="treemap-breadcrumb"
       >
         {crumbs.map((c, i) => (
@@ -167,10 +169,10 @@ export function CodeTreemap() {
         {!cells.length ? (
           <EmptyNote>
             {isPending
-              ? "Counting…"
+              ? t("analysis.counting")
               : depth > 0
-                ? "No sub-codes with excerpts under this code."
-                : "No codes yet. Build a codebook and code some text first."}
+                ? t("analysis.treemap.emptyDrilled")
+                : t("analysis.frequencies.empty")}
           </EmptyNote>
         ) : (
           <svg
@@ -179,7 +181,7 @@ export function CodeTreemap() {
             width="100%"
             height="100%"
             role="img"
-            aria-label={`Treemap of ${current.name}`}
+            aria-label={t("analysis.treemap.svgLabel", { name: current.name })}
             data-testid="treemap-svg"
           >
             {cells.map((cell) => {
@@ -212,7 +214,14 @@ export function CodeTreemap() {
                     strokeWidth={1}
                   >
                     <title>
-                      {`${pathOf(tree, cell.id)}: ${cell.value} excerpt${cell.value === 1 ? "" : "s"} (${(share * 100).toFixed(1)}% of ${current.id === ALL_CODES_ID ? "all codes" : current.name})${cell.code.children.length ? " — click to drill in" : ""}`}
+                      {t("analysis.treemap.cellTitle", {
+                        path: pathOf(tree, cell.id),
+                        count: cell.value,
+                        percent: (share * 100).toFixed(1),
+                        of:
+                          current.id === ALL_CODES_ID ? t("analysis.allCodesLower") : current.name,
+                        drillHint: cell.code.children.length ? t("analysis.treemap.drillHint") : "",
+                      })}
                     </title>
                   </rect>
                   {labelOk ? (
@@ -254,9 +263,7 @@ export function CodeTreemap() {
         )}
       </div>
       <p className="border-t border-border px-4 py-2 text-xs text-fg-muted">
-        Area is each code&rsquo;s distinct excerpt count
-        {ownOnly ? "" : ", including its sub-codes"}. Click a code with sub-codes to drill in,
-        double-click to see its excerpts.
+        {ownOnly ? t("analysis.treemap.footerOwn") : t("analysis.treemap.footerWithSub")}
       </p>
     </div>
   );

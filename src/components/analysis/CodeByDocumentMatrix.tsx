@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { flattenTree, pathOf } from "@/core/codeTree";
 import { matrixCsv } from "@/core/csv";
 import { useCodeByDocument, useCodeFrequencies } from "@/queries/analysis";
@@ -13,6 +14,7 @@ import { shade } from "./shade";
 const NO_DOCUMENT_FILTER: string[] = [];
 
 export function CodeByDocumentMatrix() {
+  const { t } = useTranslation();
   const [includeSub, setIncludeSub] = useState(false);
   const [onlyUsed, setOnlyUsed] = useState(true);
   const [coderIds, setCoderIds] = useState<string[]>([]);
@@ -60,7 +62,7 @@ export function CodeByDocumentMatrix() {
           onChange={(e) => setIncludeSub(e.target.checked)}
           data-testid="include-sub-codes"
         />
-        Include sub-codes
+        {t("excerpts.filters.includeSubcodes")}
       </label>
       <label className="flex items-center gap-1.5 text-xs">
         <input
@@ -69,11 +71,11 @@ export function CodeByDocumentMatrix() {
           onChange={(e) => setOnlyUsed(e.target.checked)}
           data-testid="only-used-codes"
         />
-        Only codes in use
+        {t("analysis.coOccurrence.onlyUsedCodes")}
       </label>
       <span className="text-xs text-fg-muted">
-        {documents.length} document{documents.length === 1 ? "" : "s"} · {codes.length} code
-        {codes.length === 1 ? "" : "s"}
+        {t("excerpts.filters.documentCount", { count: documents.length })} ·{" "}
+        {t("excerpts.filters.codeCount", { count: codes.length })}
       </span>
       <span className="ml-auto" />
       <ExportCsvButton
@@ -88,9 +90,7 @@ export function CodeByDocumentMatrix() {
     return (
       <div className="flex h-full flex-col" data-testid="analysis-matrix">
         {toolbar}
-        <EmptyNote>
-          {isPending ? "Counting…" : "Import a document and code some passages to fill this grid."}
-        </EmptyNote>
+        <EmptyNote>{isPending ? t("analysis.counting") : t("analysis.matrix.empty")}</EmptyNote>
       </div>
     );
   }
@@ -143,7 +143,11 @@ export function CodeByDocumentMatrix() {
                         (n ? "hover:outline hover:outline-accent" : "")
                       }
                       style={shade(n, max)}
-                      title={`${d.name} × ${pathOf(tree, c.id)}: ${n} excerpt${n === 1 ? "" : "s"}`}
+                      title={t("analysis.matrix.cellTitle", {
+                        docName: d.name,
+                        path: pathOf(tree, c.id),
+                        count: n,
+                      })}
                       onClick={() =>
                         n &&
                         openExcerpts({
@@ -163,8 +167,7 @@ export function CodeByDocumentMatrix() {
           </tbody>
         </table>
         <p className="mt-3 max-w-prose text-xs text-fg-muted">
-          Excerpts per document and code{includeSub ? ", sub-codes included" : ""}. Click a cell to
-          browse those excerpts.
+          {includeSub ? t("analysis.matrix.explainWithSub") : t("analysis.matrix.explain")}
         </p>
       </div>
     </div>

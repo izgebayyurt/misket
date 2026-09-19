@@ -907,5 +907,74 @@
     "applyCodeBeforeRating": "Apply \"{{name}}\" to this excerpt before rating it.",
     "codedByList": "Coded by: {{names}}",
     "codedList": "Coded: {{names}}"
+  },
+  "analysis": {
+    "title": "Analysis",
+    "showNames": "Show analysis names",
+    "collapseToIcons": "Collapse to icons",
+    "groups": {
+      "codes": "Codes",
+      "across": "Across data",
+      "text": "Text",
+      "team": "Team",
+      "mixed": "Mixed"
+    },
+    "tabs": {
+      "frequencies": "Frequencies",
+      "cooccurrence": "Co-occurrence",
+      "treemap": "Treemap",
+      "clustering": "Clustering",
+      "matrix": "By document",
+      "descriptor": "By descriptor",
+      "framework": "Framework",
+      "words": "Words",
+      "reliability": "Reliability",
+      "weights": "Weights"
+    },
+    "allDocuments": "All documents",
+    "allCodes": "All codes",
+    "exportedTo": "Exported to {{name}}",
+    "counting": "Counting…",
+    "frequencies": {
+      "codeCount_one": "{{count, number}} code",
+      "codeCount_other": "{{count, number}} codes",
+      "empty": "No codes yet. Build a codebook and code some text first.",
+      "colCode": "Code",
+      "colOwn": "Own",
+      "colWithSubcodes": "With sub-codes",
+      "colDocuments": "Documents",
+      "colLast30Days": "Last 30 days",
+      "showExcerptsCoded": "Show excerpts coded {{path}} (with sub-codes)",
+      "codedLast30Days_one": "{{count, number}} excerpt coded in the last 30 days",
+      "codedLast30Days_other": "{{count, number}} excerpts coded in the last 30 days"
+    },
+    "coOccurrence": {
+      "empty": "Nothing to compare yet: code some overlapping passages first.",
+      "diagonalTitle_one": "{{path}}: {{count, number}} excerpt",
+      "diagonalTitle_other": "{{path}}: {{count, number}} excerpts",
+      "cellTitle_one": "{{rowPath}} × {{colPath}}: {{count, number}} overlapping excerpt pair",
+      "cellTitle_other": "{{rowPath}} × {{colPath}}: {{count, number}} overlapping excerpt pairs",
+      "explain": "Each cell counts pairs of overlapping excerpts in the same document carrying the two codes; an excerpt carrying both counts once. The diagonal is the code's own excerpt count. Click a cell to see those excerpts.",
+      "onlyUsedCodes": "Only codes in use"
+    },
+    "allCodesLower": "all codes",
+    "matrix": {
+      "empty": "Import a document and code some passages to fill this grid.",
+      "cellTitle_one": "{{docName}} × {{path}}: {{count, number}} excerpt",
+      "cellTitle_other": "{{docName}} × {{path}}: {{count, number}} excerpts",
+      "explain": "Excerpts per document and code. Click a cell to browse those excerpts.",
+      "explainWithSub": "Excerpts per document and code, sub-codes included. Click a cell to browse those excerpts."
+    },
+    "treemap": {
+      "ownOnly": "Own excerpts only (not sub-codes)",
+      "breadcrumb": "Treemap breadcrumb",
+      "emptyDrilled": "No sub-codes with excerpts under this code.",
+      "svgLabel": "Treemap of {{name}}",
+      "cellTitle_one": "{{path}}: {{count, number}} excerpt ({{percent}}% of {{of}}){{drillHint}}",
+      "cellTitle_other": "{{path}}: {{count, number}} excerpts ({{percent}}% of {{of}}){{drillHint}}",
+      "drillHint": " — click to drill in",
+      "footerOwn": "Area is each code's distinct excerpt count. Click a code with sub-codes to drill in, double-click to see its excerpts.",
+      "footerWithSub": "Area is each code's distinct excerpt count, including its sub-codes. Click a code with sub-codes to drill in, double-click to see its excerpts."
+    }
   }
 }
