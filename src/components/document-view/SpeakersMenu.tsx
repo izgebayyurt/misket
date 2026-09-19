@@ -1,4 +1,5 @@
 import { Mic } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -37,6 +38,7 @@ function groupBySpeaker(turns: SpeakerTurn[]): SpeakerGroup[] {
  * with a single chosen code.
  */
 export function SpeakersMenu({ documentId }: { documentId: string }) {
+  const { t } = useTranslation();
   const { data: transcript } = useTranscript(documentId);
   const openCodePicker = useWorkspace((s) => s.openCodePicker);
   const autoCode = useAutoCode();
@@ -48,9 +50,9 @@ export function SpeakersMenu({ documentId }: { documentId: string }) {
 
   function codeAllTurnsOf(group: SpeakerGroup) {
     openCodePicker({
-      label: `Code all turns of ${group.speaker}`,
+      label: t("documentView.codeAllTurnsOf", { speaker: group.speaker }),
       onPick: async (codeId) => {
-        const codeName = tree.byId.get(codeId)?.code.name ?? "this code";
+        const codeName = tree.byId.get(codeId)?.code.name ?? t("documentView.defaultCodeName");
         const n = group.turns.length;
         try {
           const report = await autoCode.mutateAsync({
@@ -60,12 +62,23 @@ export function SpeakersMenu({ documentId }: { documentId: string }) {
               endPos: t.end,
             })),
             codeId,
-            label: `Code ${n} turn${n === 1 ? "" : "s"} of ${group.speaker} with ${codeName}`,
+            label: t("documentView.codeTurnsLabel", {
+              count: n,
+              speaker: group.speaker,
+              code: codeName,
+            }),
           });
           const touched = report.createdExcerptIds.length + report.reusedExcerptIds.length;
-          const already = report.alreadyCoded ? ` (${report.alreadyCoded} already coded)` : "";
+          const already = report.alreadyCoded
+            ? t("documentView.alreadyCodedSuffix", { count: report.alreadyCoded })
+            : "";
           toast.info(
-            `Coded ${touched} turn${touched === 1 ? "" : "s"} of ${group.speaker} with ${codeName}${already}.`,
+            t("documentView.codedTurns", {
+              count: touched,
+              speaker: group.speaker,
+              code: codeName,
+              already,
+            }),
           );
         } catch (e) {
           toast.error(e);
@@ -81,7 +94,7 @@ export function SpeakersMenu({ documentId }: { documentId: string }) {
           className="flex shrink-0 items-center gap-1 rounded-md border border-border px-2 py-1 text-xs text-fg-muted hover:bg-muted"
           data-testid="speakers-menu"
         >
-          <Mic className="size-3" /> Speakers ({groups.length})
+          <Mic className="size-3" /> {t("documentView.speakersButton", { count: groups.length })}
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-64">
@@ -94,14 +107,12 @@ export function SpeakersMenu({ documentId }: { documentId: string }) {
           >
             <span className="text-sm font-medium">{group.speaker}</span>
             <span className="text-xs text-fg-muted">
-              {group.turns.length} turn{group.turns.length === 1 ? "" : "s"} · code all with…
+              {t("documentView.turnsCodeAllWith", { count: group.turns.length })}
             </span>
           </DropdownMenuItem>
         ))}
         <DropdownMenuSeparator />
-        <p className="px-2 py-1 text-[11px] text-fg-muted">
-          Pick a speaker, then a code, to code every one of their turns at once.
-        </p>
+        <p className="px-2 py-1 text-[11px] text-fg-muted">{t("documentView.speakersHint")}</p>
       </DropdownMenuContent>
     </DropdownMenu>
   );

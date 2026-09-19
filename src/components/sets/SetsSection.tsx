@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { ChevronDown, ChevronRight, MoreHorizontal, Plus } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import type { SetInfo, SetKind } from "@/api/types";
 import {
   useDeleteSet,
@@ -41,6 +42,7 @@ export function SetsSection({
   options: MemberOption[];
   onOpen: (set: SetInfo) => void;
 }) {
+  const { t } = useTranslation();
   const { data: sets } = useSets(kind);
   const [dialog, setDialog] = useState<{ set?: SetInfo } | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
@@ -67,8 +69,8 @@ export function SetsSection({
           size="sm"
           variant="ghost"
           onClick={() => setDialog({})}
-          title={`New ${kind} set`}
-          aria-label={`New ${kind} set`}
+          title={t(kind === "code" ? "sets.newCodeSet" : "sets.newDocumentSet")}
+          aria-label={t(kind === "code" ? "sets.newCodeSet" : "sets.newDocumentSet")}
           data-testid={`new-${kind}-set`}
         >
           <Plus />
@@ -76,7 +78,7 @@ export function SetsSection({
       </div>
       {sets && sets.length === 0 ? (
         <p className="px-3 pb-2 text-xs text-fg-muted">
-          No sets yet. Group {kind === "code" ? "codes" : "documents"} you keep coming back to.
+          {t(kind === "code" ? "sets.emptyCode" : "sets.emptyDocument")}
         </p>
       ) : null}
       <ul className="pb-2">
@@ -97,7 +99,7 @@ export function SetsSection({
                       type="button"
                       className="rounded p-0.5 text-fg-muted hover:bg-border"
                       onClick={() => toggle(s.id)}
-                      aria-label={expanded.has(s.id) ? "Collapse" : "Expand"}
+                      aria-label={expanded.has(s.id) ? t("sets.collapse") : t("sets.expand")}
                       aria-expanded={expanded.has(s.id)}
                     >
                       {expanded.has(s.id) ? (
@@ -124,7 +126,7 @@ export function SetsSection({
                         type="button"
                         className="min-w-0 flex-1 truncate text-left"
                         onClick={() => onOpen(s)}
-                        title={`Show excerpts in "${s.name}"`}
+                        title={t("sets.showExcerptsIn", { name: s.name })}
                         data-testid="set-item"
                       >
                         {s.name}
@@ -138,7 +140,7 @@ export function SetsSection({
                         <button
                           type="button"
                           className="rounded p-0.5 text-fg-muted opacity-0 hover:bg-border focus-visible:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100"
-                          aria-label="Set actions"
+                          aria-label={t("sets.setActions")}
                         >
                           <MoreHorizontal className="size-4" />
                         </button>
@@ -187,20 +189,22 @@ function SetRowMenuItems({
   onDelete: () => void;
   menu: MenuPrimitives;
 }) {
+  const { t } = useTranslation();
   const { Item, Separator } = menu;
   return (
     <>
-      <Item onSelect={onRename}>Rename</Item>
-      <Item onSelect={onEditMembers}>Edit members…</Item>
+      <Item onSelect={onRename}>{t("common.rename")}</Item>
+      <Item onSelect={onEditMembers}>{t("sets.editMembers")}</Item>
       <Separator />
       <Item danger onSelect={onDelete}>
-        Delete
+        {t("common.delete")}
       </Item>
     </>
   );
 }
 
 function Members({ set, options }: { set: SetInfo; options: MemberOption[] }) {
+  const { t } = useTranslation();
   const { data: memberIds, isLoading } = useSetMembers(set.id);
   const remove = useRemoveFromSet();
   if (isLoading) return null;
@@ -208,7 +212,7 @@ function Members({ set, options }: { set: SetInfo; options: MemberOption[] }) {
     .map((id) => options.find((o) => o.id === id))
     .filter((o): o is MemberOption => !!o);
   if (members.length === 0)
-    return <p className="px-3 pb-1 pl-8 text-xs text-fg-muted">Empty set.</p>;
+    return <p className="px-3 pb-1 pl-8 text-xs text-fg-muted">{t("sets.emptySet")}</p>;
   return (
     <ul className="pb-1">
       {members.map((m) => (
@@ -224,13 +228,13 @@ function Members({ set, options }: { set: SetInfo; options: MemberOption[] }) {
           <button
             type="button"
             className="rounded px-1 opacity-0 hover:bg-border focus-visible:opacity-100 group-hover/member:opacity-100"
-            aria-label={`Remove ${m.label} from ${set.name}`}
+            aria-label={t("sets.removeMemberFrom", { member: m.label, set: set.name })}
             onClick={async () => {
               try {
                 await remove.mutateAsync({
                   setId: set.id,
                   memberId: m.id,
-                  label: `Remove "${m.label}" from "${set.name}"`,
+                  label: t("sets.removeMemberFromLabel", { member: m.label, set: set.name }),
                 });
               } catch (e) {
                 toast.error(e);
@@ -254,6 +258,7 @@ function RenameInput({
   onCommit: (name: string) => void;
   onCancel: () => void;
 }) {
+  const { t } = useTranslation();
   const [name, setName] = useState(initial);
   return (
     <Input
@@ -267,7 +272,7 @@ function RenameInput({
         if (e.key === "Escape") onCancel();
       }}
       className="h-6 px-1 text-sm"
-      aria-label="Set name"
+      aria-label={t("sets.setName")}
     />
   );
 }

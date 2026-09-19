@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { useCodeTree } from "@/queries/codes";
 import { flattenTree } from "@/core/codeTree";
 import { useWorkspace } from "@/state/workspace";
@@ -7,6 +8,7 @@ import type { MemberOption } from "@/components/sets/SetDialog";
 
 /** Code sets, listed under the code tree. Clicking one filters the browser. */
 export function CodeSets() {
+  const { t } = useTranslation();
   const tree = useCodeTree();
   const openExcerpts = useWorkspace((s) => s.openExcerpts);
   const options = useMemo<MemberOption[]>(
@@ -22,7 +24,7 @@ export function CodeSets() {
   return (
     <SetsSection
       kind="code"
-      title="Sets"
+      title={t("codebook.setsTitle")}
       options={options}
       onOpen={(s) => openExcerpts({ codeSetIds: [s.id] })}
     />

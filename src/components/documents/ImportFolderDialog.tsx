@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter } from "@/components/ui/dialog";
 import { useImportableFiles } from "@/queries/documents";
@@ -13,6 +14,7 @@ const fileName = (path: string) => path.split(/[\\/]/).pop() ?? path;
  * and duplicate detection still apply.
  */
 export function ImportFolderDialog({ dir, onClose }: { dir: string; onClose: () => void }) {
+  const { t } = useTranslation();
   const [recursive, setRecursive] = useState(false);
   const [importing, setImporting] = useState(false);
   const { data: files, isPending, error } = useImportableFiles(dir, recursive);
@@ -34,8 +36,8 @@ export function ImportFolderDialog({ dir, onClose }: { dir: string; onClose: () 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent
-        title="Import folder"
-        description={`Every txt, md, docx and pdf file in ${fileName(dir)}.`}
+        title={t("documents.importFolderTitle")}
+        description={t("documents.importFolderDescription", { name: fileName(dir) })}
       >
         <label className="flex items-center gap-2 text-sm">
           <input
@@ -44,15 +46,15 @@ export function ImportFolderDialog({ dir, onClose }: { dir: string; onClose: () 
             onChange={(e) => setRecursive(e.target.checked)}
             data-testid="import-folder-recursive"
           />
-          Include subfolders
+          {t("documents.includeSubfolders")}
         </label>
         <div className="mt-3 rounded-md border border-border">
           <p className="border-b border-border px-2 py-1.5 text-xs text-fg-muted">
             {error
-              ? "Could not read that folder."
+              ? t("documents.folderReadError")
               : isPending
-                ? "Scanning…"
-                : `${files?.length ?? 0} file${files?.length === 1 ? "" : "s"} to import`}
+                ? t("documents.scanning")
+                : t("documents.filesToImport", { count: files?.length ?? 0 })}
           </p>
           <ul
             className="max-h-48 overflow-y-auto px-2 py-1 text-sm"
@@ -64,22 +66,22 @@ export function ImportFolderDialog({ dir, onClose }: { dir: string; onClose: () 
               </li>
             ))}
             {files && files.length === 0 ? (
-              <li className="py-1 text-fg-muted">
-                Nothing importable here. Misket reads txt, md, docx and pdf files.
-              </li>
+              <li className="py-1 text-fg-muted">{t("documents.nothingImportable")}</li>
             ) : null}
           </ul>
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>
-            Cancel
+            {t("common.cancel")}
           </Button>
           <Button
             disabled={!files?.length || importing}
             onClick={() => void importAll()}
             data-testid="import-folder-confirm"
           >
-            Import {files?.length ? `${files.length} file${files.length === 1 ? "" : "s"}` : ""}
+            {files?.length
+              ? t("documents.importCount", { count: files.length })
+              : t("documents.importAction")}
           </Button>
         </DialogFooter>
       </DialogContent>

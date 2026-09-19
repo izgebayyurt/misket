@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { Film, Upload } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { MEDIA_EXTENSIONS } from "@/core/media";
 import { formatDuration } from "@/core/media";
 import type { DocumentSummary } from "@/api/types";
@@ -28,6 +29,7 @@ export function LinkRecordingDialog({
   doc: DocumentSummary;
   onClose: () => void;
 }) {
+  const { t } = useTranslation();
   const { data: docs } = useDocuments();
   const link = useLinkMediaDocument();
   const { importPaths } = useImportFiles();
@@ -53,7 +55,7 @@ export function LinkRecordingDialog({
     });
     if (typeof file !== "string") return;
     setImporting(true);
-    await historyBeginGroup(`Imported a recording and linked it to "${doc.name}"`);
+    await historyBeginGroup(t("documents.importedAndLinked", { name: doc.name }));
     try {
       const created = await importPaths([file], { openAfter: false });
       const mediaId = created[0];
@@ -71,13 +73,11 @@ export function LinkRecordingDialog({
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent
-        title={`Link a recording to “${doc.name}”`}
-        description="A linked transcript can be clicked to seek the recording, and a coded stretch of the recording shows up in the text."
+        title={t("documents.linkRecordingTitle", { name: doc.name })}
+        description={t("documents.linkRecordingDescription")}
       >
         {recordings.length === 0 ? (
-          <p className="text-sm text-fg-muted">
-            This project has no recordings yet. Import one and it will be linked straight away.
-          </p>
+          <p className="text-sm text-fg-muted">{t("documents.noRecordingsYet")}</p>
         ) : (
           <ul className="max-h-64 overflow-y-auto" data-testid="link-recording-list">
             {recordings.map((r) => (
@@ -99,7 +99,9 @@ export function LinkRecordingDialog({
                     {formatDuration(r.media?.durationMs ?? 0)}
                   </span>
                   {r.transcriptId && r.transcriptId !== doc.id ? (
-                    <span className="shrink-0 text-xs text-fg-muted">already transcribed</span>
+                    <span className="shrink-0 text-xs text-fg-muted">
+                      {t("documents.alreadyTranscribed")}
+                    </span>
                   ) : null}
                 </button>
               </li>
@@ -113,18 +115,18 @@ export function LinkRecordingDialog({
             disabled={importing}
             data-testid="link-recording-import"
           >
-            <Upload /> Import a recording…
+            <Upload /> {t("documents.importRecordingEllipsis")}
           </Button>
           <span className="flex-1" />
           <Button variant="ghost" onClick={onClose}>
-            Cancel
+            {t("common.cancel")}
           </Button>
           <Button
             disabled={!picked || importing}
             onClick={() => picked && void linkTo(picked)}
             data-testid="link-recording-confirm"
           >
-            Link
+            {t("documents.link")}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -1,4 +1,5 @@
 import { Sparkles, Tag } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { describe } from "@/core/keymap";
 
 interface Props {
@@ -13,10 +14,11 @@ interface Props {
 
 /** A small floating action anchored below the end of the current selection. */
 export function SelectionToolbar({ pos, onCode, onSuggest }: Props) {
+  const { t } = useTranslation();
   return (
     <div
       role="toolbar"
-      aria-label="Selection actions"
+      aria-label={t("documentView.selectionActions")}
       className="absolute z-20 flex items-center gap-1 rounded-md border border-border bg-panel p-0.5 shadow-md"
       style={{ top: pos.top, left: pos.left }}
       onMouseDown={(e) => e.preventDefault()}
@@ -27,7 +29,7 @@ export function SelectionToolbar({ pos, onCode, onSuggest }: Props) {
         className="flex items-center gap-1.5 rounded px-2 py-1 text-xs font-medium hover:bg-muted"
         onClick={onCode}
       >
-        <Tag className="size-3.5" /> Code
+        <Tag className="size-3.5" /> {t("documentView.code")}
         <kbd className="ml-1 text-fg-muted">{describe("palette")}</kbd>
       </button>
       {onSuggest ? (
@@ -35,10 +37,10 @@ export function SelectionToolbar({ pos, onCode, onSuggest }: Props) {
           type="button"
           className="flex items-center gap-1.5 rounded px-2 py-1 text-xs font-medium hover:bg-muted"
           onClick={onSuggest}
-          title="Ask for code suggestions. Nothing is applied until you click one."
+          title={t("excerpts.suggestHint")}
           data-testid="selection-suggest"
         >
-          <Sparkles className="size-3.5" /> Suggest
+          <Sparkles className="size-3.5" /> {t("excerpts.suggest")}
         </button>
       ) : null}
     </div>

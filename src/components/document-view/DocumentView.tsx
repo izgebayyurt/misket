@@ -1,4 +1,5 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useDocument } from "@/queries/documents";
 import { useCodes, useCodeTree } from "@/queries/codes";
 import { inVivoName, siblingNames, uniqueSiblingName } from "@/core/codeTree";
@@ -78,6 +79,7 @@ interface Props {
 }
 
 export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Props) {
+  const { t } = useTranslation();
   const { data: doc, error } = useDocument(documentId);
   const { data: excerpts } = useDocumentExcerpts(documentId);
   const { data: codes } = useCodes();
@@ -372,11 +374,12 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
     void qc.invalidateQueries({ queryKey: keys.document(linkedMediaId ?? "") });
     playback.setError(
       unsupportedHint(
-        linkedMedia?.name ?? "This recording",
+        linkedMedia?.name ?? t("documentView.thisRecording"),
         extensionOf(linkedMedia?.sourcePath ?? ""),
+        t,
       ),
     );
-  }, [linkedMedia?.name, linkedMedia?.sourcePath, linkedMediaId, playback, qc]);
+  }, [linkedMedia?.name, linkedMedia?.sourcePath, linkedMediaId, playback, qc, t]);
 
   useEffect(() => {
     if (playback.error) toast.error(new Error(playback.error), { key: TOAST_KEYS.mediaPlayback });
@@ -438,7 +441,7 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
         ? ws.pendingSelection.start
         : caretOffset();
     if (at === null) {
-      toast.info("Put the cursor in the transcript where the recording is now, then align.", {
+      toast.info(t("documentView.putCursorToAlign"), {
         key: TOAST_KEYS.alignHere,
       });
       return;
@@ -446,9 +449,9 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
     const ms = playback.positionRef.current;
     setAnchor
       .mutateAsync({ documentId, pos: at, ms })
-      .then(() => toast.info(`Aligned this point with ${formatTimecode(ms)}.`))
+      .then(() => toast.info(t("documentView.alignedPoint", { time: formatTimecode(ms) })))
       .catch(toast.error);
-  }, [caretOffset, documentId, linkedMediaId, playback.positionRef, setAnchor]);
+  }, [caretOffset, documentId, linkedMediaId, playback.positionRef, setAnchor, t]);
 
   // --- find in document -----------------------------------------------------
   const findResults = useMemo(
@@ -770,9 +773,9 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
           Math.max(nextBoundary(text, endPos, dir, granularity), startPos + 1),
         );
       }
-      commitRange(ex, startPos, endPos, "Adjust excerpt boundary");
+      commitRange(ex, startPos, endPos, t("documentView.adjustExcerptBoundary"));
     },
-    [commitRange, focusedExcerpt, text, total],
+    [commitRange, focusedExcerpt, t, text, total],
   );
 
   /** The touching or overlapping text excerpts on either side of the focused one. */
@@ -818,7 +821,7 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
       if (!ex) return;
       const point = at ?? caretOffset();
       if (point === null || point <= ex.startPos! || point >= ex.endPos!) {
-        toast.info("Put the cursor inside the excerpt to split it there.", {
+        toast.info(t("documentView.putCursorToSplit"), {
           key: TOAST_KEYS.splitExcerpt,
         });
         return;
@@ -826,7 +829,7 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
       setPopover(null);
       splitExcerpt.mutateAsync({ id: ex.id, documentId, at: point }).catch(toast.error);
     },
-    [caretOffset, documentId, focusedExcerpt, splitExcerpt],
+    [caretOffset, documentId, focusedExcerpt, splitExcerpt, t],
   );
 
   // --- drag handles --------------------------------------------------------
@@ -871,9 +874,9 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
       const d = drag;
       setDrag(null);
       const ex = excerptById.get(d.id);
-      if (ex) commitRange(ex, d.start, d.end, "Drag excerpt boundary");
+      if (ex) commitRange(ex, d.start, d.end, t("documentView.dragExcerptBoundary"));
     },
-    [commitRange, drag, excerptById],
+    [commitRange, drag, excerptById, t],
   );
 
   /** Keep the handles on the first and last client rect of the focused range. */
@@ -1218,13 +1221,13 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
     const ws = useWorkspace.getState();
     const p = ws.pendingSelection;
     if (p?.kind !== "text" || p.documentId !== documentId) {
-      toast.info("Select some text to name a code after it.", { key: TOAST_KEYS.inVivo });
+      toast.info(t("documentView.selectTextForInVivo"), { key: TOAST_KEYS.inVivo });
       return;
     }
     const quoted = text.slice(cpToUtf16(offsetMap, p.start), cpToUtf16(offsetMap, p.end));
     const base = inVivoName(quoted);
     if (!base) {
-      toast.info("That selection has no words to name a code after.", { key: TOAST_KEYS.inVivo });
+      toast.info(t("documentView.selectionHasNoWords"), { key: TOAST_KEYS.inVivo });
       return;
     }
     const parentId =
@@ -1241,11 +1244,11 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
       window.getSelection()?.removeAllRanges();
       setPending(null);
       setFocusedId(r.excerptId);
-      toast.info(`Created "${name}" and applied it.`);
+      toast.info(t("documentView.createdAndApplied", { name }));
     } catch (e) {
       toast.error(e);
     }
-  }, [documentId, inVivoCode, offsetMap, setFocusedId, setPending, text, tree]);
+  }, [documentId, inVivoCode, offsetMap, setFocusedId, setPending, t, text, tree]);
 
   useEffect(() => {
     return useShortcutActions.getState().register({ inVivoCode: () => void inVivo() });
@@ -1258,18 +1261,18 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
       quickCode: () => {
         const codeId = useWorkspace.getState().lastAppliedCodeId;
         if (!codeId) {
-          toast.info("No code has been applied yet — pick one from the palette first.", {
+          toast.info(t("documentView.noCodeApplied"), {
             key: TOAST_KEYS.quickCode,
           });
           return;
         }
         if (!applyCodeToTarget(codeId))
-          toast.info("Select some text or focus an excerpt to code first.", {
+          toast.info(t("documentView.selectTextToCode"), {
             key: TOAST_KEYS.codeTarget,
           });
       },
     });
-  }, [applyCodeToTarget]);
+  }, [applyCodeToTarget, t]);
 
   // With an excerpt focused, digit keys rate the last applied code on its
   // weight scale (snapped to the nearest step). A no-op — with a hint —
@@ -1279,22 +1282,22 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
   useEffect(() => {
     const rate = (value: number) => {
       if (!focusedId) {
-        toast.info("Focus an excerpt to rate it.");
+        toast.info(t("documentView.focusExcerptToRate"));
         return;
       }
       const codeId = useWorkspace.getState().lastAppliedCodeId;
       const code = codeId ? (codes ?? []).find((c) => c.id === codeId) : undefined;
       if (!code) {
-        toast.info("No code has been applied yet — pick one from the palette first.");
+        toast.info(t("documentView.noCodeApplied"));
         return;
       }
       if (!code.weightScale) {
-        toast.info(`"${code.name}" has no weight scale.`);
+        toast.info(t("documentView.noWeightScale", { name: code.name }));
         return;
       }
       const excerpt = excerptById.get(focusedId);
       if (!excerpt?.codeIds.includes(code.id)) {
-        toast.info(`Apply "${code.name}" to this excerpt before rating it.`);
+        toast.info(t("documentView.applyCodeBeforeRating", { name: code.name }));
         return;
       }
       setWeight.mutate({
@@ -1315,7 +1318,7 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
       setWeight8: () => rate(8),
       setWeight9: () => rate(9),
     });
-  }, [codes, documentId, excerptById, focusedId, setWeight]);
+  }, [codes, documentId, excerptById, focusedId, setWeight, t]);
 
   const onSegmentClick = useCallback(
     (e: React.MouseEvent, seg: Segment, paragraphStart: number) => {
@@ -1586,8 +1589,8 @@ export function DocumentView({ documentId, focusExcerptId, scrollToOffset }: Pro
         ) : null}
         {confirmDeleteId ? (
           <ConfirmDialog
-            title="Delete this excerpt?"
-            description="Its codes and memos go with it. You can undo with Ctrl/⌘+Z."
+            title={t("documentView.deleteExcerptTitle")}
+            description={t("documentView.deleteExcerptDescription")}
             onConfirm={() => {
               deleteExcerpt.mutate({ id: confirmDeleteId, documentId });
               setConfirmDeleteId(null);
@@ -1691,6 +1694,7 @@ interface ParagraphProps {
 }
 
 const Paragraph = memo(function Paragraph(p: ParagraphProps) {
+  const { t } = useTranslation();
   const cuts = p.turn?.cuts;
   // Where the speaker label ends: every segment before it is gutter, the rest
   // is what was said. `cuts` always ends at the label's own end.
@@ -1757,7 +1761,9 @@ const Paragraph = memo(function Paragraph(p: ParagraphProps) {
           .map((id) => p.nameById.get(id))
           .filter((name): name is string => !!name);
         const title = names.length
-          ? `${p.laneNoun === "coders" ? "Coded by" : "Coded"}: ${names.join(", ")}`
+          ? t(p.laneNoun === "coders" ? "documentView.codedByList" : "documentView.codedList", {
+              names: names.join(", "),
+            })
           : undefined;
         // Mouse-only shortcut: cycles overlapping excerpts and opens the
         // recode popover. Keyboard users reach the same excerpts through

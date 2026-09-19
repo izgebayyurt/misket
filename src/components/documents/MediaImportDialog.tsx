@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Trans, useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter } from "@/components/ui/dialog";
 import { formatDuration } from "@/core/media";
@@ -23,6 +24,7 @@ export function MediaImportDialog() {
 }
 
 function MediaImportDialogContent({ files, copyIntoProject }: MediaImportRequest) {
+  const { t } = useTranslation();
   const [copy, setCopy] = useState(copyIntoProject);
   const respond = useMediaImportPrompt((s) => s.respond);
   const update = useSettings((s) => s.update);
@@ -41,8 +43,8 @@ function MediaImportDialogContent({ files, copyIntoProject }: MediaImportRequest
   return (
     <Dialog open onOpenChange={(o) => !o && decide({ import: false })}>
       <DialogContent
-        title={files.length === 1 ? "Import this recording?" : `Import ${files.length} recordings?`}
-        description="Audio and video stay on disk: the project remembers where each file is rather than copying it in, so a project file with hours of interviews in it is still small enough to back up and email."
+        title={t("documents.importRecordingsTitle", { count: files.length })}
+        description={t("documents.importRecordingsDescription")}
         className="max-w-xl"
       >
         <ul
@@ -62,24 +64,26 @@ function MediaImportDialogContent({ files, copyIntoProject }: MediaImportRequest
             data-testid="media-import-copy"
           />
           <span>
-            Copy the files into the project folder
+            {t("documents.copyIntoProjectFolder")}
             <span className="block text-xs text-fg-muted">
-              Puts a copy in <code>&lt;project&gt;.media/</code> next to the project file and points
-              the documents at the copy, so the folder can be moved or shared as one piece. That
-              needs {formatBytes(totalBytes)} of disk.
+              <Trans
+                i18nKey="documents.copyIntoProjectFolderHint"
+                values={{ path: "<project>.media/", size: formatBytes(totalBytes) }}
+                components={{ code: <code /> }}
+              />
             </span>
           </span>
         </label>
         <DialogFooter>
           <Button variant="ghost" onClick={() => decide({ import: false })}>
-            Cancel
+            {t("common.cancel")}
           </Button>
           <Button
             autoFocus
             onClick={() => decide({ import: true })}
             data-testid="media-import-confirm"
           >
-            Import
+            {t("documents.importAction")}
           </Button>
         </DialogFooter>
       </DialogContent>

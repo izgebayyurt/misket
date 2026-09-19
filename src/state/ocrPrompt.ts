@@ -1,11 +1,13 @@
 import { create } from "zustand";
-import type { PdfQualityStats } from "@/core/importers/pdfQuality";
+import type { PdfQualityStats, ScannedPdfMessage } from "@/core/importers/pdfQuality";
 
-/** One PDF in the batch that looks scanned and needs a decision. */
+/** One PDF in the batch that looks scanned and needs a decision. `message`
+ * is structured data, not a sentence — the dialog turns it into text with
+ * `t()` (src/core stays framework-free; see CLAUDE.md). */
 export interface OcrFileInfo {
   name: string;
   stats: PdfQualityStats;
-  message: string;
+  message: ScannedPdfMessage;
 }
 
 export interface OcrPromptRequest {

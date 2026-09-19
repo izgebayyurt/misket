@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
+import { useTranslation } from "react-i18next";
 import { useImportFiles } from "./useImportFiles";
 
 /** Listens for OS-level file drops onto the window and imports them. */
 export function ImportDropzone() {
+  const { t } = useTranslation();
   const { importPaths } = useImportFiles();
   const [hover, setHover] = useState(false);
 
@@ -36,7 +38,7 @@ export function ImportDropzone() {
   if (!hover) return null;
   return (
     <div className="pointer-events-none absolute inset-2 z-30 flex items-center justify-center rounded-lg border-2 border-dashed border-accent bg-bg/80 text-lg text-accent">
-      Drop to import
+      {t("documents.dropToImport")}
     </div>
   );
 }

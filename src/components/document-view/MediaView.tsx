@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Captions, Pause, Play } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { mediaFileUrl } from "@/api/media";
 import { useCodes } from "@/queries/codes";
 import { useApplyCodes, useDeleteExcerpt, useDocumentExcerpts } from "@/queries/excerpts";
@@ -89,6 +90,7 @@ interface Band {
  * exactly as they do to selected text.
  */
 export function MediaView({ documentId, focusExcerptId, seekToMs }: Props) {
+  const { t } = useTranslation();
   const { data: doc, error } = useDocument(documentId);
   const { data: excerpts } = useDocumentExcerpts(documentId);
   const { data: codes } = useCodes();
@@ -370,13 +372,13 @@ export function MediaView({ documentId, focusExcerptId, seekToMs }: Props) {
       quickCode: () => {
         const codeId = useWorkspace.getState().lastAppliedCodeId;
         if (!codeId) {
-          toast.info("No code has been applied yet — pick one from the palette first.", {
+          toast.info(t("documentView.noCodeApplied"), {
             key: TOAST_KEYS.quickCode,
           });
           return;
         }
         if (!applyCodeToTarget(codeId))
-          toast.info("Mark a stretch with [ and ] to code it first.", {
+          toast.info(t("documentView.markStretchToCode"), {
             key: TOAST_KEYS.mediaTarget,
           });
       },
@@ -398,6 +400,7 @@ export function MediaView({ documentId, focusExcerptId, seekToMs }: Props) {
     moveFocus,
     range,
     setPaletteOpen,
+    t,
   ]);
 
   // --- the media keys ------------------------------------------------------
@@ -475,8 +478,8 @@ export function MediaView({ documentId, focusExcerptId, seekToMs }: Props) {
   const onPlaybackError = useCallback(() => {
     void qc.invalidateQueries({ queryKey: keys.document(documentId) });
     void qc.invalidateQueries({ queryKey: keys.documents });
-    setPlaybackError(unsupportedHint(doc?.name ?? "This recording", ext));
-  }, [doc?.name, documentId, ext, qc, setPlaybackError]);
+    setPlaybackError(unsupportedHint(doc?.name ?? t("documentView.thisRecording"), ext, t));
+  }, [doc?.name, documentId, ext, qc, setPlaybackError, t]);
 
   // --- relinking -----------------------------------------------------------
   const pickRelink = useCallback(async () => {
@@ -527,7 +530,8 @@ export function MediaView({ documentId, focusExcerptId, seekToMs }: Props) {
           className="min-w-0 max-w-80 truncate font-serif text-lg font-medium"
         />
         <span className="shrink-0 text-xs text-fg-muted" data-testid="media-duration">
-          {isVideo ? "video" : "audio"} · {formatDuration(durationMs)}
+          {isVideo ? t("documentView.video") : t("documentView.audio")} ·{" "}
+          {formatDuration(durationMs)}
         </span>
         {missing ? (
           <span
@@ -535,12 +539,12 @@ export function MediaView({ documentId, focusExcerptId, seekToMs }: Props) {
             data-testid="media-missing-badge"
           >
             <AlertTriangle className="size-3.5" />
-            File missing
+            {t("documentView.fileMissing")}
           </span>
         ) : null}
         <span className="flex-1" />
         <span className="hidden text-xs text-fg-muted lg:inline">
-          space plays · J/L ±5s · [ and ] mark in and out
+          {t("documentView.mediaKeysHint")}
         </span>
         <Button
           size="sm"
@@ -548,18 +552,18 @@ export function MediaView({ documentId, focusExcerptId, seekToMs }: Props) {
           className="shrink-0"
           disabled={missing}
           onClick={() => setTranscribeOpen(true)}
-          title="Transcribe this recording on this machine"
+          title={t("documentView.transcribeHint")}
           data-testid="media-transcribe"
         >
-          <Captions /> Transcribe…
+          <Captions /> {t("documents.transcribeEllipsis")}
         </Button>
         <label className="flex shrink-0 items-center gap-1 text-xs text-fg-muted">
-          Speed
+          {t("documentView.speed")}
           <select
             className="rounded border border-border bg-bg px-1 py-0.5 text-xs text-fg"
             value={speed}
             onChange={(e) => setSpeed(Number(e.target.value))}
-            aria-label="Playback speed"
+            aria-label={t("documentView.playbackSpeed")}
             data-testid="media-speed"
           >
             {SPEEDS.map((s) => (
@@ -627,7 +631,7 @@ export function MediaView({ documentId, focusExcerptId, seekToMs }: Props) {
                   type="button"
                   className="rounded p-1 text-fg-muted hover:bg-muted hover:text-fg"
                   onClick={togglePlay}
-                  aria-label={playing ? "Pause" : "Play"}
+                  aria-label={playing ? t("documentView.pause") : t("documentView.play")}
                   data-testid="media-play"
                 >
                   {playing ? <Pause className="size-4" /> : <Play className="size-4" />}
@@ -671,8 +675,8 @@ export function MediaView({ documentId, focusExcerptId, seekToMs }: Props) {
 
       {confirmDeleteId ? (
         <ConfirmDialog
-          title="Delete this excerpt?"
-          description="Its codes and memos go with it. You can undo with Ctrl/⌘+Z."
+          title={t("documentView.deleteExcerptTitle")}
+          description={t("documentView.deleteExcerptDescription")}
           onConfirm={() => {
             deleteExcerpt.mutate({ id: confirmDeleteId, documentId });
             setConfirmDeleteId(null);
@@ -765,28 +769,29 @@ function InOutControls({
   onCode: () => void;
   codable: boolean;
 }) {
+  const { t } = useTranslation();
   return (
     <div className="flex items-center gap-1.5 text-xs">
-      <Button size="sm" variant="ghost" onClick={onSetIn} title="Set the in-point here ( [ )">
-        Set in
+      <Button size="sm" variant="ghost" onClick={onSetIn} title={t("documentView.setInHint")}>
+        {t("documentView.setIn")}
       </Button>
-      <Button size="sm" variant="ghost" onClick={onSetOut} title="Set the out-point here ( ] )">
-        Set out
+      <Button size="sm" variant="ghost" onClick={onSetOut} title={t("documentView.setOutHint")}>
+        {t("documentView.setOut")}
       </Button>
       {range ? (
         <span className="tabular-nums text-fg-muted" data-testid="media-range">
           [{formatTimecode(range.startMs)}–{formatTimecode(range.endMs)}]
         </span>
       ) : (
-        <span className="text-fg-muted">no stretch marked</span>
+        <span className="text-fg-muted">{t("documentView.noStretchMarked")}</span>
       )}
       {codable ? (
         <>
           <Button size="sm" onClick={onCode} data-testid="media-code">
-            Code
+            {t("documentView.code")}
           </Button>
           <Button size="sm" variant="ghost" onClick={onClear}>
-            Clear
+            {t("common.clear")}
           </Button>
         </>
       ) : null}
@@ -822,6 +827,7 @@ function Timeline({
   onScrub,
   onPickBand,
 }: TimelineProps) {
+  const { t } = useTranslation();
   const pct = (ms: number) => (durationMs > 0 ? (ms / durationMs) * 100 : 0);
   return (
     <div className="select-none" data-testid="media-timeline">
@@ -854,7 +860,7 @@ function Timeline({
           </svg>
         ) : (
           <div className="absolute inset-0 flex items-center justify-center text-[11px] text-fg-muted">
-            {durationMs > 0 ? "" : "no timeline"}
+            {durationMs > 0 ? "" : t("documentView.noTimeline")}
           </div>
         )}
         {range ? (
@@ -890,7 +896,7 @@ function Timeline({
                 outline: b.id === focusedId ? "2px solid var(--focus)" : undefined,
               }}
               title={b.label}
-              aria-label={`Excerpt ${b.label}`}
+              aria-label={t("documentView.excerptLabel", { label: b.label })}
               onClick={() => onPickBand(b.id, b.startMs)}
               data-testid="media-band"
               data-x={b.id}
@@ -913,6 +919,7 @@ function MissingMediaNotice({
   onRelink: () => void;
   pending: boolean;
 }) {
+  const { t } = useTranslation();
   return (
     <div
       className="m-6 max-w-xl rounded-md border border-border bg-panel p-4"
@@ -920,22 +927,16 @@ function MissingMediaNotice({
     >
       <h3 className="mb-1 flex items-center gap-2 font-medium">
         <AlertTriangle className="size-4 text-danger" />
-        The file for “{name}” is not where it was
+        {t("documentView.fileNotWhereItWas", { name })}
       </h3>
-      <p className="text-sm text-fg-muted">
-        Audio and video are not copied into the project file, so a recording lives on disk and the
-        project remembers where. This one is no longer at:
-      </p>
+      <p className="text-sm text-fg-muted">{t("documentView.fileNotCopiedHint")}</p>
       <p className="my-2 break-all rounded bg-muted px-2 py-1 font-mono text-xs">
-        {sourcePath ?? "(no path recorded)"}
+        {sourcePath ?? t("documentView.noPathRecorded")}
       </p>
-      <p className="text-sm text-fg-muted">
-        Everything coded from it is safe — the excerpts, codes and memos are inside the project.
-        Point it at the file again and they all come back into view.
-      </p>
+      <p className="text-sm text-fg-muted">{t("documentView.everythingCodedIsSafe")}</p>
       <div className="mt-3">
         <Button onClick={onRelink} disabled={pending} data-testid="media-relink">
-          Relink…
+          {t("documents.relink")}
         </Button>
       </div>
     </div>
@@ -943,6 +944,7 @@ function MissingMediaNotice({
 }
 
 function PlaybackErrorNotice({ message, onRelink }: { message: string; onRelink: () => void }) {
+  const { t } = useTranslation();
   return (
     <div
       className="m-6 max-w-xl rounded-md border border-border bg-panel p-4"
@@ -950,12 +952,12 @@ function PlaybackErrorNotice({ message, onRelink }: { message: string; onRelink:
     >
       <h3 className="mb-1 flex items-center gap-2 font-medium">
         <AlertTriangle className="size-4 text-danger" />
-        This recording could not be played
+        {t("documentView.recordingCouldNotBePlayed")}
       </h3>
       <p className="text-sm text-fg-muted">{message}</p>
       <div className="mt-3">
         <Button variant="ghost" onClick={onRelink}>
-          Relink to another file…
+          {t("documentView.relinkToAnotherFile")}
         </Button>
       </div>
     </div>

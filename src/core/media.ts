@@ -53,20 +53,28 @@ export function isVideoMime(mime: string): boolean {
   return mime.startsWith("video/");
 }
 
+/** A translator, so this module can hand back a localized sentence without
+ * importing react/i18next itself (src/core stays framework-free — see
+ * CLAUDE.md). The caller passes `useTranslation()`'s `t`. */
+export type MediaT = (key: string, params?: Record<string, unknown>) => string;
+
 /**
  * Why a file may not play, as a sentence to show on import, or null when
  * there is no reason to expect trouble. The real answer only comes from
  * trying to load it; this is what to say *once it has failed*.
  */
-export function unsupportedHint(fileName: string, ext: string): string {
+export function unsupportedHint(fileName: string, ext: string, t: MediaT): string {
   const mime = mediaMimeForExtension(ext);
   if (!mime) {
-    return `${fileName} is not an audio or video file Misket knows (${MEDIA_EXTENSIONS.join(", ")}).`;
+    return t("documents.media.unknownType", {
+      name: fileName,
+      extensions: MEDIA_EXTENSIONS.join(", "),
+    });
   }
   if (RISKY_EXTENSIONS.has(ext.toLowerCase())) {
-    return `${fileName} could not be played. A .${ext} file is a container that may hold codecs this build cannot decode — converting it to MP4 (H.264/AAC) or WAV will work.`;
+    return t("documents.media.riskyContainer", { name: fileName, ext });
   }
-  return `${fileName} could not be played: its codec is not one this build can decode. Converting it to MP4 (H.264/AAC), WebM or WAV will work.`;
+  return t("documents.media.unsupportedCodec", { name: fileName });
 }
 
 /**

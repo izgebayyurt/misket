@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import type { SetKind } from "@/api/types";
 import { useAddToSet, useSets } from "@/queries/sets";
 import { dropdownMenuPrimitives, type MenuPrimitives } from "@/components/ui/menu";
@@ -20,13 +21,14 @@ export function AddToSetMenu({
   memberLabel: string;
   menu?: MenuPrimitives;
 }) {
+  const { t } = useTranslation();
   const { data: sets } = useSets(kind);
   const add = useAddToSet();
   const { Item, Sub, SubContent, SubTrigger } = menu;
   if (!sets?.length) return null;
   return (
     <Sub>
-      <SubTrigger data-testid="add-to-set">Add to set</SubTrigger>
+      <SubTrigger data-testid="add-to-set">{t("sets.addToSet")}</SubTrigger>
       <SubContent>
         {sets.map((s) => (
           <Item
@@ -36,7 +38,7 @@ export function AddToSetMenu({
                 await add.mutateAsync({
                   setId: s.id,
                   memberId,
-                  label: `Add "${memberLabel}" to "${s.name}"`,
+                  label: t("sets.addMemberToSetLabel", { member: memberLabel, set: s.name }),
                 });
               } catch (e) {
                 toast.error(e);

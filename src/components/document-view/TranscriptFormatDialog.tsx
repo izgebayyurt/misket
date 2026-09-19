@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Trans, useTranslation } from "react-i18next";
 import type { TranscriptFormat, TranscriptInfo, TranscriptPreset } from "@/api/types";
 import { previewTranscript } from "@/api/transcripts";
 import { buildOffsetMap, cpToUtf16 } from "@/core/offsets";
@@ -44,6 +45,7 @@ export function TranscriptFormatDialog({
   documentId: string;
   onClose: () => void;
 }) {
+  const { t } = useTranslation();
   const { data: current } = useTranscript(documentId);
   const { data: doc } = useDocument(documentId);
   const text = doc?.text ?? "";
@@ -100,7 +102,7 @@ export function TranscriptFormatDialog({
     try {
       await setFormat.mutateAsync({ documentId, format });
       if (asDefault) await setDefault.mutateAsync(format);
-      toast.info(`Reading this document as ${formatLabel(format)}.`);
+      toast.info(t("documentView.transcript.readingAs", { format: formatLabel(format, t) }));
       onClose();
     } catch (e) {
       toast.error(e);
@@ -110,7 +112,7 @@ export function TranscriptFormatDialog({
   async function redetect() {
     try {
       await setFormat.mutateAsync({ documentId, format: null });
-      toast.info("Detecting this document's transcript format again.");
+      toast.info(t("documentView.transcript.redetecting"));
       onClose();
     } catch (e) {
       toast.error(e);
@@ -120,8 +122,8 @@ export function TranscriptFormatDialog({
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent
-        title="Transcript format"
-        description="How this document marks who is speaking. The labels stay in the text; Misket lays them out beside it."
+        title={t("documentView.transcript.formatDialogTitle")}
+        description={t("documentView.transcript.formatDialogDescription")}
         className="max-w-lg"
         data-testid="transcript-dialog"
       >
@@ -150,7 +152,7 @@ export function TranscriptFormatDialog({
               onChange={() => setChoice("regex")}
               data-testid="transcript-preset-regex"
             />
-            <span className="font-medium">Custom pattern</span>
+            <span className="font-medium">{t("documentView.transcript.customPattern")}</span>
           </label>
           {choice === "regex" ? (
             <div className="pl-6">
@@ -160,13 +162,14 @@ export function TranscriptFormatDialog({
                 spellCheck={false}
                 placeholder={"^<<(?<speaker>[^>]+)>>[ \\t]*"}
                 onChange={(e) => setPattern(e.target.value)}
-                aria-label="Custom transcript pattern"
+                aria-label={t("documentView.transcript.customPatternLabel")}
                 data-testid="transcript-pattern"
               />
               <p className="mt-1 text-xs text-fg-muted">
-                A regular expression matched at the start of a line, with a named group{" "}
-                <code>(?&lt;speaker&gt;…)</code> and, if the labels carry one,{" "}
-                <code>(?&lt;time&gt;…)</code>.
+                <Trans
+                  i18nKey="documentView.transcript.patternHint"
+                  components={{ code1: <code />, code2: <code /> }}
+                />
               </p>
               {error ? (
                 <p className="mt-1 text-xs text-danger" data-testid="transcript-pattern-error">
@@ -183,8 +186,10 @@ export function TranscriptFormatDialog({
               onChange={() => setChoice("none")}
               data-testid="transcript-preset-none"
             />
-            <span className="font-medium">Not a transcript</span>
-            <span className="text-xs text-fg-muted">leave the text exactly as it is</span>
+            <span className="font-medium">{t("documentView.transcript.notATranscript")}</span>
+            <span className="text-xs text-fg-muted">
+              {t("documentView.transcript.leaveTextAsIs")}
+            </span>
           </label>
         </div>
 
@@ -193,20 +198,25 @@ export function TranscriptFormatDialog({
           data-testid="transcript-preview"
         >
           <p className="mb-1 text-xs font-medium uppercase tracking-wide text-fg-muted">
-            Preview
+            {t("documentView.transcript.preview")}
             {preview
-              ? ` — ${turns.length} turn${turns.length === 1 ? "" : "s"}, ${
-                  preview.speakers.length
-                } speaker${preview.speakers.length === 1 ? "" : "s"}`
+              ? t("documentView.transcript.previewCount", {
+                  turnsPart: t("documentView.transcript.turnsCount", { count: turns.length }),
+                  speakersPart: t("documentView.transcript.speakersCount", {
+                    count: preview.speakers.length,
+                  }),
+                })
               : ""}
           </p>
           {blank ? (
-            <p className="py-1 text-sm text-fg-muted">Type a pattern to see what it finds.</p>
+            <p className="py-1 text-sm text-fg-muted">
+              {t("documentView.transcript.typeToPreview")}
+            </p>
           ) : turns.length === 0 ? (
             <p className="py-1 text-sm text-fg-muted">
               {choice === "none"
-                ? "The document reads as plain text, with no speaker gutter."
-                : "This pattern finds no turns in this document."}
+                ? t("documentView.transcript.plainTextNotice")
+                : t("documentView.transcript.noTurnsFound")}
             </p>
           ) : (
             <ul className="space-y-0.5 text-sm">
@@ -230,18 +240,18 @@ export function TranscriptFormatDialog({
             onChange={(e) => setAsDefault(e.target.checked)}
             data-testid="transcript-as-default"
           />
-          Use as this project&rsquo;s default for new imports
+          {t("documentView.transcript.useAsDefault")}
         </label>
 
         <DialogFooter>
           <Button variant="outline" onClick={() => void redetect()}>
-            Detect again
+            {t("documentView.transcript.detectAgain")}
           </Button>
           <Button variant="outline" onClick={onClose}>
-            Cancel
+            {t("common.cancel")}
           </Button>
           <Button onClick={() => void apply()} disabled={!canApply || setFormat.isPending}>
-            Use this format
+            {t("documentView.transcript.useThisFormat")}
           </Button>
         </DialogFooter>
       </DialogContent>

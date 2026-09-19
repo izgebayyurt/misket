@@ -63,22 +63,23 @@ describe("classifyPdfQuality", () => {
 });
 
 describe("scannedPdfMessage", () => {
+  // The caller turns this into a sentence with `t()` (see
+  // src/components/documents/useImportFiles.ts) — this module stays pure,
+  // so these tests check the structured data it hands back.
   it("mentions the empty-page count when pages are literally empty", () => {
     const stats = classifyPdfQuality([0, 0, 500]);
-    expect(scannedPdfMessage(stats)).toBe(
-      "This PDF looks scanned: 2 of 3 pages have no text layer.",
-    );
+    expect(scannedPdfMessage(stats)).toEqual({ kind: "emptyPages", emptyPages: 2, totalPages: 3 });
   });
 
   it("handles a one-page PDF", () => {
     const stats = classifyPdfQuality([0]);
-    expect(scannedPdfMessage(stats)).toBe(
-      "This PDF looks scanned: 1 of 1 pages have no text layer.",
-    );
+    expect(scannedPdfMessage(stats)).toEqual({ kind: "emptyPages", emptyPages: 1, totalPages: 1 });
   });
 
   it("describes low-density text when no page is fully empty", () => {
     const stats = classifyPdfQuality([5, 8, 3, 10]);
-    expect(scannedPdfMessage(stats)).toMatch(/only about \d+ characters of text each/);
+    const message = scannedPdfMessage(stats);
+    expect(message.kind).toBe("sparseText");
+    expect((message as { avgCharsPerPage: number }).avgCharsPerPage).toBeGreaterThan(0);
   });
 });
