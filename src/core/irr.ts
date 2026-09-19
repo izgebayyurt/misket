@@ -9,18 +9,27 @@
 
 export type KappaBand = "none" | "poor" | "slight" | "fair" | "moderate" | "substantial" | "almost";
 
+/**
+ * A translator, so this module can hand back localized sentences without
+ * importing react/i18next itself (src/core stays framework-free — see
+ * CLAUDE.md). The caller passes `useTranslation()`'s `t`.
+ */
+export type IrrT = (key: string, params?: Record<string, unknown>) => string;
+
 export interface Band {
   id: KappaBand;
-  label: string;
+  /** A translation key, not the label itself — resolved with `t()` where
+   * it renders. */
+  labelKey: string;
 }
 
-const BANDS: { max: number; id: KappaBand; label: string }[] = [
-  { max: 0, id: "poor", label: "Poor" },
-  { max: 0.2, id: "slight", label: "Slight" },
-  { max: 0.4, id: "fair", label: "Fair" },
-  { max: 0.6, id: "moderate", label: "Moderate" },
-  { max: 0.8, id: "substantial", label: "Substantial" },
-  { max: 1, id: "almost", label: "Almost perfect" },
+const BANDS: { max: number; id: KappaBand; labelKey: string }[] = [
+  { max: 0, id: "poor", labelKey: "analysis.reliability.bandPoor" },
+  { max: 0.2, id: "slight", labelKey: "analysis.reliability.bandSlight" },
+  { max: 0.4, id: "fair", labelKey: "analysis.reliability.bandFair" },
+  { max: 0.6, id: "moderate", labelKey: "analysis.reliability.bandModerate" },
+  { max: 0.8, id: "substantial", labelKey: "analysis.reliability.bandSubstantial" },
+  { max: 1, id: "almost", labelKey: "analysis.reliability.bandAlmostPerfect" },
 ];
 
 /**
@@ -29,11 +38,11 @@ const BANDS: { max: number; id: KappaBand; label: string }[] = [
  */
 export function kappaBand(kappa: number | null | undefined): Band {
   if (kappa === null || kappa === undefined || Number.isNaN(kappa)) {
-    return { id: "none", label: "—" };
+    return { id: "none", labelKey: "analysis.reliability.bandNone" };
   }
-  if (kappa < 0) return { id: "poor", label: "Poor" };
+  if (kappa < 0) return { id: "poor", labelKey: "analysis.reliability.bandPoor" };
   const hit = BANDS.find((b) => b.max > 0 && kappa <= b.max) ?? BANDS[BANDS.length - 1]!;
-  return { id: hit.id, label: hit.label };
+  return { id: hit.id, labelKey: hit.labelKey };
 }
 
 /** Two decimals, or an em dash where kappa is undefined. */
@@ -71,17 +80,24 @@ export function kappaShade(kappa: number | null | undefined): {
  * The sentence the summary strip and the methods section want: what was
  * compared, over what, and how much of it there was.
  */
-export function describeScope(args: {
-  unit: "paragraph" | "turn" | "excerpt";
-  units: number;
-  documents: number;
-  codes: number;
-}): string {
-  const unit =
-    args.unit === "paragraph" ? "paragraph" : args.unit === "turn" ? "speaker turn" : "excerpt";
-  const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
-  return `${plural(args.units, unit)} across ${plural(args.documents, "document")}, ${plural(
-    args.codes,
-    "code",
-  )}`;
+export function describeScope(
+  args: {
+    unit: "paragraph" | "turn" | "excerpt";
+    units: number;
+    documents: number;
+    codes: number;
+  },
+  t: IrrT,
+): string {
+  const unitKey =
+    args.unit === "paragraph"
+      ? "analysis.reliability.unitParagraph"
+      : args.unit === "turn"
+        ? "analysis.reliability.unitTurn"
+        : "analysis.reliability.unitExcerpt";
+  return t("analysis.reliability.scopeSentence", {
+    units: t(unitKey, { count: args.units }),
+    documents: t("excerpts.filters.documentCount", { count: args.documents }),
+    codes: t("excerpts.filters.codeCount", { count: args.codes }),
+  });
 }

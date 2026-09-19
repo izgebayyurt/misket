@@ -1,17 +1,20 @@
 import { describe, expect, it } from "vitest";
+import i18n from "@/lib/i18n";
 import { describeScope, formatKappa, formatPercent, kappaBand, kappaShade } from "./irr";
+
+const t = i18n.t.bind(i18n);
 
 describe("kappaBand", () => {
   it("uses the Landis & Koch boundaries", () => {
-    expect(kappaBand(-0.3).label).toBe("Poor");
-    expect(kappaBand(0).label).toBe("Slight");
-    expect(kappaBand(0.2).label).toBe("Slight");
-    expect(kappaBand(0.21).label).toBe("Fair");
-    expect(kappaBand(0.4).label).toBe("Fair");
-    expect(kappaBand(0.6).label).toBe("Moderate");
-    expect(kappaBand(0.8).label).toBe("Substantial");
-    expect(kappaBand(0.81).label).toBe("Almost perfect");
-    expect(kappaBand(1).label).toBe("Almost perfect");
+    expect(t(kappaBand(-0.3).labelKey)).toBe("Poor");
+    expect(t(kappaBand(0).labelKey)).toBe("Slight");
+    expect(t(kappaBand(0.2).labelKey)).toBe("Slight");
+    expect(t(kappaBand(0.21).labelKey)).toBe("Fair");
+    expect(t(kappaBand(0.4).labelKey)).toBe("Fair");
+    expect(t(kappaBand(0.6).labelKey)).toBe("Moderate");
+    expect(t(kappaBand(0.8).labelKey)).toBe("Substantial");
+    expect(t(kappaBand(0.81).labelKey)).toBe("Almost perfect");
+    expect(t(kappaBand(1).labelKey)).toBe("Almost perfect");
   });
 
   it("has no band for an undefined kappa", () => {
@@ -57,13 +60,13 @@ describe("kappaShade", () => {
 
 describe("describeScope", () => {
   it("names the unit and pluralizes", () => {
-    expect(describeScope({ unit: "paragraph", units: 4, documents: 1, codes: 3 })).toBe(
+    expect(describeScope({ unit: "paragraph", units: 4, documents: 1, codes: 3 }, t)).toBe(
       "4 paragraphs across 1 document, 3 codes",
     );
-    expect(describeScope({ unit: "turn", units: 1, documents: 2, codes: 1 })).toBe(
+    expect(describeScope({ unit: "turn", units: 1, documents: 2, codes: 1 }, t)).toBe(
       "1 speaker turn across 2 documents, 1 code",
     );
-    expect(describeScope({ unit: "excerpt", units: 9, documents: 3, codes: 2 })).toBe(
+    expect(describeScope({ unit: "excerpt", units: 9, documents: 3, codes: 2 }, t)).toBe(
       "9 excerpts across 3 documents, 2 codes",
     );
   });
