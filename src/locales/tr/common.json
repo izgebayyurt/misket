@@ -1388,5 +1388,63 @@
       "toastNothingNew": "{{name}} kişisinin kopyasında yeni bir şey yok",
       "pull": "Çek"
     }
+  },
+  "overview": {
+    "pathCopied": "Yol kopyalandı",
+    "copyPathTitle": "Proje dosyasının yolunu kopyala",
+    "copyPath": "Yolu kopyala",
+    "projectMemo": "Proje notu",
+    "statistics": "İstatistikler",
+    "excerptsCodedLast30Days": "Son 30 günde kodlanan alıntılar",
+    "topCodes": "En çok kullanılan kodlar",
+    "activity": "Etkinlik",
+    "openHistory": "Tarihçeyi Aç",
+    "sets": "Kümeler",
+    "projectNameLabel": "Proje adı",
+    "renameHint": "Yeniden adlandırmak için tıklayın veya F2'ye basın",
+    "addProjectMemo": "Proje notu ekle",
+    "gettingStarted": "Başlarken",
+    "checklistImportDocument": "Bir kayıt içe aktarın",
+    "importEllipsis": "İçe aktar…",
+    "checklistCreateCode": "Bir kod oluşturun",
+    "newCodeEllipsis": "Yeni kod…",
+    "checklistCodeExcerpt": "Bir alıntı kodlayın",
+    "importDocumentFirst": "Önce bir kayıt içe aktarın",
+    "openADocument": "Bir kayıt açın",
+    "stats": {
+      "documents": "Kayıtlar",
+      "codes": "Kodlar",
+      "excerpts": "Alıntılar",
+      "codedExcerpts": "Kodlanmış alıntılar",
+      "memos": "Notlar",
+      "descriptorFields": "Kayıt öznitelikleri",
+      "imagesAndRecordings": "Görsel ve ses/görüntü kayıtları",
+      "charactersTranscribed": "Çeviriyazıya geçirilen karakter",
+      "lastActivity": "Son etkinlik"
+    },
+    "missingMedia": {
+      "heading_one": "{{count, number}} kayıt bulunamadı",
+      "heading_other": "{{count, number}} kayıt bulunamadı",
+      "explanation": "Ses ve görüntü dosyaları projenin içine kopyalanmaz, bu yüzden dışarıda taşınabilir veya yeniden adlandırılabilir. Onlardan kodlanan her şey hâlâ burada; her birini yeniden dosyasına yönlendirin.",
+      "noPathRecorded": "(kayıtlı yol yok)",
+      "relinkEllipsis": "Yeniden bağla…"
+    },
+    "sparkline": {
+      "noneLast30Days": "Son 30 günde kodlanan alıntı yok.",
+      "ariaLabel": "{{from}} ile {{to}} arasında {{count, number}} alıntı kodlandı",
+      "total_one": "{{count, number}} toplam",
+      "total_other": "{{count, number}} toplam"
+    },
+    "noExcerptsCodedYet": "Henüz kodlanan alıntı yok.",
+    "showExcerptsCoded": "{{path}} kodlanan alıntıları göster",
+    "coders": "Kodlayıcılar",
+    "showExcerptsCodedBy": "{{name}} tarafından kodlanan alıntıları göster",
+    "youSuffix": "(siz)",
+    "codingCount_one": "{{count, number}} kodlama",
+    "codingCount_other": "{{count, number}} kodlama",
+    "noSetsYet": "Henüz küme yok. Burada görmek için kenar çubuğundan kod veya kayıtları gruplayın.",
+    "codeSets": "Kod kümeleri",
+    "documentSets": "Kayıt kümeleri",
+    "showExcerptsInSet": "\"{{name}}\" kümesindeki alıntıları göster"
   }
 }

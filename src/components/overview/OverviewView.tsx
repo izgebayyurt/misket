@@ -1,5 +1,7 @@
 import { useRef, useState } from "react";
 import { AlertTriangle, Check, Copy, History, Highlighter, Plus, Tag, Upload } from "lucide-react";
+import { useTranslation } from "react-i18next";
+import { currentLocale } from "@/lib/i18n";
 import { useProjectInfo, useProjectStats, useRenameProject } from "@/queries/project";
 import { useDocuments } from "@/queries/documents";
 import { useCodes, useCodeTree } from "@/queries/codes";
@@ -26,6 +28,7 @@ import type { MissingMedia, ProjectStats } from "@/api/types";
 
 /** The project's home screen: identity, memo, statistics and a way in. */
 export function OverviewView() {
+  const { t } = useTranslation();
   const { data: project } = useProjectInfo();
   const { data: stats } = useProjectStats();
   const { data: docs } = useDocuments();
@@ -61,7 +64,7 @@ export function OverviewView() {
   async function copyPath() {
     try {
       await navigator.clipboard.writeText(project!.path);
-      toast.info("Path copied");
+      toast.info(t("overview.pathCopied"));
     } catch (e) {
       toast.error(e);
     }
@@ -87,10 +90,10 @@ export function OverviewView() {
               variant="ghost"
               className="shrink-0"
               onClick={copyPath}
-              title="Copy the project file's path"
+              title={t("overview.copyPathTitle")}
               data-testid="copy-path"
             >
-              <Copy /> Copy path
+              <Copy /> {t("overview.copyPath")}
             </Button>
           </div>
         </header>
@@ -111,14 +114,14 @@ export function OverviewView() {
 
         <section>
           <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-fg-muted">
-            Project memo
+            {t("overview.projectMemo")}
           </h2>
           <ProjectMemo />
         </section>
 
         <section>
           <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-fg-muted">
-            Statistics
+            {t("overview.statistics")}
           </h2>
           <StatGrid stats={stats} />
         </section>
@@ -126,12 +129,12 @@ export function OverviewView() {
         <section>
           <div className="mb-2 flex items-center justify-between gap-2">
             <h2 className="text-xs font-semibold uppercase tracking-wide text-fg-muted">
-              Excerpts coded, last 30 days
+              {t("overview.excerptsCodedLast30Days")}
             </h2>
             <CodePicker
               value={sparklineCodeId}
               onChange={setSparklineCodeId}
-              allLabel="All codes"
+              allLabel={t("analysis.allCodes")}
               testId="overview-sparkline-code-picker"
             />
           </div>
@@ -144,7 +147,7 @@ export function OverviewView() {
 
         <section>
           <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-fg-muted">
-            Top codes
+            {t("overview.topCodes")}
           </h2>
           <TopCodes
             topCodes={stats?.topCodes ?? []}
@@ -158,7 +161,7 @@ export function OverviewView() {
         <section>
           <div className="mb-2 flex items-center justify-between gap-2">
             <h2 className="text-xs font-semibold uppercase tracking-wide text-fg-muted">
-              Activity
+              {t("overview.activity")}
             </h2>
             <Button
               size="sm"
@@ -166,14 +169,16 @@ export function OverviewView() {
               onClick={() => setView({ kind: "history" })}
               data-testid="open-history-from-overview"
             >
-              <History /> Open History
+              <History /> {t("overview.openHistory")}
             </Button>
           </div>
           <ActivityFeed />
         </section>
 
         <section>
-          <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-fg-muted">Sets</h2>
+          <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-fg-muted">
+            {t("overview.sets")}
+          </h2>
           <SetsOverview
             onOpenCodeSet={(id) => openExcerpts({ codeSetIds: [id] })}
             onOpenDocumentSet={(id) => openExcerpts({ documentSetIds: [id] })}
@@ -201,6 +206,7 @@ function ProjectNameHeading({
   onSave: (value: string) => void;
   onCancel: () => void;
 }) {
+  const { t } = useTranslation();
   const inputRef = useRef<HTMLInputElement>(null);
 
   if (editing) {
@@ -216,7 +222,7 @@ function ProjectNameHeading({
         autoFocus
         onFocus={(e) => e.currentTarget.select()}
         className="h-9 max-w-md font-serif text-2xl"
-        aria-label="Project name"
+        aria-label={t("overview.projectNameLabel")}
         data-testid="project-name-input"
       />
     );
@@ -228,7 +234,7 @@ function ProjectNameHeading({
     <div
       tabIndex={0}
       role="button"
-      title="Click or press F2 to rename"
+      title={t("overview.renameHint")}
       onClick={onStartEdit}
       onKeyDown={(e) => {
         if (e.key === "F2" || e.key === "Enter") {
@@ -245,6 +251,7 @@ function ProjectNameHeading({
 }
 
 function ProjectMemo() {
+  const { t } = useTranslation();
   const target = {};
   const { data: memos } = useMemos(target);
   const create = useCreateMemo();
@@ -260,7 +267,7 @@ function ProjectMemo() {
           onClick={() => create.mutateAsync({ target }).catch(toast.error)}
           data-testid="add-project-memo"
         >
-          <Plus /> Add a project memo
+          <Plus /> {t("overview.addProjectMemo")}
         </Button>
       )}
     </div>
@@ -284,20 +291,21 @@ function GettingStarted({
   onCreateCode: () => void;
   onOpenDocument: (id: string) => void;
 }) {
+  const { t } = useTranslation();
   return (
     <section className="rounded-md border border-border bg-panel p-3" data-testid="getting-started">
       <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-fg-muted">
-        Getting started
+        {t("overview.gettingStarted")}
       </h2>
       <ul className="space-y-1.5">
-        <ChecklistItem done={hasDocument} label="Import a document">
+        <ChecklistItem done={hasDocument} label={t("overview.checklistImportDocument")}>
           {!hasDocument ? (
             <Button size="sm" variant="outline" onClick={onImport} data-testid="checklist-import">
-              <Upload /> Import…
+              <Upload /> {t("overview.importEllipsis")}
             </Button>
           ) : null}
         </ChecklistItem>
-        <ChecklistItem done={hasCode} label="Create a code">
+        <ChecklistItem done={hasCode} label={t("overview.checklistCreateCode")}>
           {!hasCode ? (
             <Button
               size="sm"
@@ -305,21 +313,21 @@ function GettingStarted({
               onClick={onCreateCode}
               data-testid="checklist-create-code"
             >
-              <Tag /> New code…
+              <Tag /> {t("overview.newCodeEllipsis")}
             </Button>
           ) : null}
         </ChecklistItem>
-        <ChecklistItem done={hasCodedExcerpt} label="Code an excerpt">
+        <ChecklistItem done={hasCodedExcerpt} label={t("overview.checklistCodeExcerpt")}>
           {!hasCodedExcerpt ? (
             <Button
               size="sm"
               variant="outline"
               disabled={!firstDocumentId}
               onClick={() => firstDocumentId && onOpenDocument(firstDocumentId)}
-              title={firstDocumentId ? undefined : "Import a document first"}
+              title={firstDocumentId ? undefined : t("overview.importDocumentFirst")}
               data-testid="checklist-code-excerpt"
             >
-              <Highlighter /> Open a document
+              <Highlighter /> {t("overview.openADocument")}
             </Button>
           ) : null}
         </ChecklistItem>
@@ -356,13 +364,13 @@ function ChecklistItem({
   );
 }
 
-const STAT_ROWS: { key: keyof ProjectStats; label: string }[] = [
-  { key: "documents", label: "Documents" },
-  { key: "codes", label: "Codes" },
-  { key: "excerpts", label: "Excerpts" },
-  { key: "codedExcerpts", label: "Coded excerpts" },
-  { key: "memos", label: "Memos" },
-  { key: "descriptorFields", label: "Descriptor fields" },
+const STAT_ROWS: { key: keyof ProjectStats; labelKey: string }[] = [
+  { key: "documents", labelKey: "overview.stats.documents" },
+  { key: "codes", labelKey: "overview.stats.codes" },
+  { key: "excerpts", labelKey: "overview.stats.excerpts" },
+  { key: "codedExcerpts", labelKey: "overview.stats.codedExcerpts" },
+  { key: "memos", labelKey: "overview.stats.memos" },
+  { key: "descriptorFields", labelKey: "overview.stats.descriptorFields" },
 ];
 
 /**
@@ -373,18 +381,16 @@ const STAT_ROWS: { key: keyof ProjectStats; label: string }[] = [
  * without opening the document first.
  */
 function MissingMediaSection({ rows }: { rows: MissingMedia[] }) {
+  const { t } = useTranslation();
   const relink = useRelinkMedia();
   const openDocument = useWorkspace((s) => s.openDocument);
   return (
     <section data-testid="overview-missing-media">
       <h2 className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-danger">
         <AlertTriangle className="size-3.5" />
-        {rows.length} recording{rows.length === 1 ? "" : "s"} could not be found
+        {t("overview.missingMedia.heading", { count: rows.length })}
       </h2>
-      <p className="mb-2 text-xs text-fg-muted">
-        Audio and video files are not copied into the project, so they can be moved or renamed
-        outside it. Everything coded from them is still here; point each one at its file again.
-      </p>
+      <p className="mb-2 text-xs text-fg-muted">{t("overview.missingMedia.explanation")}</p>
       <ul className="divide-y divide-border overflow-hidden rounded-md border border-border bg-panel">
         {rows.map((row) => (
           <li key={row.documentId} className="flex items-center gap-3 px-3 py-2">
@@ -395,7 +401,7 @@ function MissingMediaSection({ rows }: { rows: MissingMedia[] }) {
             >
               <div className="truncate text-sm">{row.name}</div>
               <div className="truncate font-mono text-[11px] text-fg-muted">
-                {row.sourcePath ?? "(no path recorded)"}
+                {row.sourcePath ?? t("overview.missingMedia.noPathRecorded")}
               </div>
             </button>
             <Button
@@ -404,7 +410,7 @@ function MissingMediaSection({ rows }: { rows: MissingMedia[] }) {
               disabled={relink.isPending}
               onClick={() => void relink.pickAndRelink(row.documentId)}
             >
-              Relink…
+              {t("overview.missingMedia.relinkEllipsis")}
             </Button>
           </li>
         ))}
@@ -414,6 +420,7 @@ function MissingMediaSection({ rows }: { rows: MissingMedia[] }) {
 }
 
 function StatGrid({ stats }: { stats: ProjectStats | undefined }) {
+  const { t } = useTranslation();
   return (
     <div className="grid grid-cols-2 gap-2 sm:grid-cols-3" data-testid="stat-grid">
       {STAT_ROWS.map((row) => (
@@ -425,39 +432,42 @@ function StatGrid({ stats }: { stats: ProjectStats | undefined }) {
           <div className="text-2xl font-medium tabular-nums text-fg">
             {stats ? formatCount(stats[row.key] as number) : "–"}
           </div>
-          <div className="text-xs text-fg-muted">{row.label}</div>
+          <div className="text-xs text-fg-muted">{t(row.labelKey)}</div>
         </div>
       ))}
       <div className="rounded-md border border-border bg-panel p-3" data-testid="stat-media">
         <div className="text-2xl font-medium tabular-nums text-fg">
           {stats ? formatCount(stats.imageDocuments + stats.mediaDocuments) : "–"}
         </div>
-        <div className="text-xs text-fg-muted">Images and recordings</div>
+        <div className="text-xs text-fg-muted">{t("overview.stats.imagesAndRecordings")}</div>
       </div>
       <div className="rounded-md border border-border bg-panel p-3" data-testid="stat-textLength">
         <div className="text-2xl font-medium tabular-nums text-fg">
           {stats ? formatCount(stats.totalTextLength) : "–"}
         </div>
-        <div className="text-xs text-fg-muted">Characters transcribed</div>
+        <div className="text-xs text-fg-muted">{t("overview.stats.charactersTranscribed")}</div>
       </div>
       <div className="rounded-md border border-border bg-panel p-3" data-testid="stat-lastActivity">
         <div className="text-2xl font-medium text-fg">
-          {stats?.lastActivityAt ? relativeTime(stats.lastActivityAt) : "–"}
+          {stats?.lastActivityAt
+            ? relativeTime(stats.lastActivityAt, undefined, currentLocale())
+            : "–"}
         </div>
-        <div className="text-xs text-fg-muted">Last activity</div>
+        <div className="text-xs text-fg-muted">{t("overview.stats.lastActivity")}</div>
       </div>
     </div>
   );
 }
 
 function formatCount(n: number): string {
-  return n.toLocaleString();
+  return n.toLocaleString(currentLocale());
 }
 
 const SPARK_WIDTH = 300;
 const SPARK_HEIGHT = 48;
 
 function Sparkline({ data }: { data: [string, number][] }) {
+  const { t } = useTranslation();
   const values = data.map(([, c]) => c);
   const total = values.reduce((a, b) => a + b, 0);
   const options = { width: SPARK_WIDTH, height: SPARK_HEIGHT };
@@ -467,7 +477,7 @@ function Sparkline({ data }: { data: [string, number][] }) {
   const to = data[data.length - 1]?.[0];
 
   if (total === 0) {
-    return <p className="text-sm text-fg-muted">No excerpts coded in the last 30 days.</p>;
+    return <p className="text-sm text-fg-muted">{t("overview.sparkline.noneLast30Days")}</p>;
   }
 
   return (
@@ -477,14 +487,14 @@ function Sparkline({ data }: { data: [string, number][] }) {
         className="h-12 w-full"
         preserveAspectRatio="none"
         role="img"
-        aria-label={`${total} excerpts coded from ${from} to ${to}`}
+        aria-label={t("overview.sparkline.ariaLabel", { count: total, from, to })}
       >
         <path d={area} fill="var(--color-accent)" opacity="0.15" />
         <path d={line} fill="none" stroke="var(--color-accent)" strokeWidth="1.5" />
       </svg>
       <div className="mt-1 flex justify-between text-[10px] text-fg-muted">
         <span>{from}</span>
-        <span>{total} total</span>
+        <span>{t("overview.sparkline.total", { count: total })}</span>
         <span>{to}</span>
       </div>
     </div>
@@ -509,6 +519,7 @@ function TopCodes({
   tree: ReturnType<typeof useCodeTree>;
   onOpen: (codeId: string) => void;
 }) {
+  const { t } = useTranslation();
   const rows = topCodes
     .map(([codeId, count]) => ({ codeId, count, code: tree.byId.get(codeId)?.code }))
     .filter((r): r is { codeId: string; count: number; code: NonNullable<typeof r.code> } =>
@@ -516,7 +527,7 @@ function TopCodes({
     );
 
   if (rows.length === 0) {
-    return <p className="text-sm text-fg-muted">No excerpts coded yet.</p>;
+    return <p className="text-sm text-fg-muted">{t("overview.noExcerptsCodedYet")}</p>;
   }
 
   const max = Math.max(...rows.map((r) => r.count));
@@ -528,7 +539,7 @@ function TopCodes({
           <button
             type="button"
             onClick={() => onOpen(codeId)}
-            title={`Show excerpts coded ${pathOf(tree, codeId)}`}
+            title={t("overview.showExcerptsCoded", { path: pathOf(tree, codeId) })}
             className="flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-sm hover:bg-muted"
             data-testid="top-code-row"
           >
@@ -556,26 +567,31 @@ function TopCodes({
  * nothing to compare.
  */
 function CodersOverview({ onOpen }: { onOpen: (coderId: string) => void }) {
+  const { t } = useTranslation();
   const { data: coders } = useCoders();
   if (!coders || coders.length < 2) return null;
   const max = Math.max(...coders.map((c) => c.codingCount), 1);
   return (
     <section data-testid="overview-coders">
-      <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-fg-muted">Coders</h2>
+      <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-fg-muted">
+        {t("overview.coders")}
+      </h2>
       <ul className="space-y-1">
         {coders.map((c) => (
           <li key={c.id}>
             <button
               type="button"
               onClick={() => onOpen(c.id)}
-              title={`Show excerpts coded by ${c.name}`}
+              title={t("overview.showExcerptsCodedBy", { name: c.name })}
               className="flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-sm hover:bg-muted"
               data-testid="coder-row"
             >
               <ColorDot color={c.color} />
               <span className="min-w-0 flex-1 truncate">
                 {c.name}
-                {c.isLocal ? <span className="text-fg-muted"> (you)</span> : null}
+                {c.isLocal ? (
+                  <span className="text-fg-muted"> {t("overview.youSuffix")}</span>
+                ) : null}
               </span>
               <span className="h-1.5 w-20 shrink-0 overflow-hidden rounded-full bg-muted">
                 <span
@@ -584,7 +600,7 @@ function CodersOverview({ onOpen }: { onOpen: (coderId: string) => void }) {
                 />
               </span>
               <span className="w-16 shrink-0 text-right text-xs tabular-nums text-fg-muted">
-                {c.codingCount} coding{c.codingCount === 1 ? "" : "s"}
+                {t("overview.codingCount", { count: c.codingCount })}
               </span>
             </button>
           </li>
@@ -606,6 +622,7 @@ function SetsOverview({
   onOpenCodeSet: (id: string) => void;
   onOpenDocumentSet: (id: string) => void;
 }) {
+  const { t } = useTranslation();
   const { data: codeSets } = useSets("code");
   const { data: docSets } = useSets("document");
   const hasSets = (codeSets?.length ?? 0) > 0 || (docSets?.length ?? 0) > 0;
@@ -613,15 +630,19 @@ function SetsOverview({
   if (!hasSets) {
     return (
       <p className="text-sm text-fg-muted" data-testid="sets-overview-empty">
-        No sets yet. Group codes or documents from the sidebar to see them here.
+        {t("overview.noSetsYet")}
       </p>
     );
   }
 
   return (
     <div className="grid gap-3 sm:grid-cols-2" data-testid="sets-overview">
-      <SetGroupList title="Code sets" sets={codeSets ?? []} onOpen={onOpenCodeSet} />
-      <SetGroupList title="Document sets" sets={docSets ?? []} onOpen={onOpenDocumentSet} />
+      <SetGroupList title={t("overview.codeSets")} sets={codeSets ?? []} onOpen={onOpenCodeSet} />
+      <SetGroupList
+        title={t("overview.documentSets")}
+        sets={docSets ?? []}
+        onOpen={onOpenDocumentSet}
+      />
     </div>
   );
 }
@@ -635,6 +656,7 @@ function SetGroupList({
   sets: { id: string; name: string; memberCount: number }[];
   onOpen: (id: string) => void;
 }) {
+  const { t } = useTranslation();
   if (sets.length === 0) return null;
   return (
     <div className="rounded-md border border-border bg-panel p-3">
@@ -645,7 +667,7 @@ function SetGroupList({
             <button
               type="button"
               onClick={() => onOpen(s.id)}
-              title={`Show excerpts in "${s.name}"`}
+              title={t("overview.showExcerptsInSet", { name: s.name })}
               className="flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-sm hover:bg-muted"
               data-testid="overview-set-row"
             >

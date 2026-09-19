@@ -1388,5 +1388,63 @@
       "toastNothingNew": "Nothing new in {{name}}'s copy",
       "pull": "Pull"
     }
+  },
+  "overview": {
+    "pathCopied": "Path copied",
+    "copyPathTitle": "Copy the project file's path",
+    "copyPath": "Copy path",
+    "projectMemo": "Project memo",
+    "statistics": "Statistics",
+    "excerptsCodedLast30Days": "Excerpts coded, last 30 days",
+    "topCodes": "Top codes",
+    "activity": "Activity",
+    "openHistory": "Open History",
+    "sets": "Sets",
+    "projectNameLabel": "Project name",
+    "renameHint": "Click or press F2 to rename",
+    "addProjectMemo": "Add a project memo",
+    "gettingStarted": "Getting started",
+    "checklistImportDocument": "Import a document",
+    "importEllipsis": "Import…",
+    "checklistCreateCode": "Create a code",
+    "newCodeEllipsis": "New code…",
+    "checklistCodeExcerpt": "Code an excerpt",
+    "importDocumentFirst": "Import a document first",
+    "openADocument": "Open a document",
+    "stats": {
+      "documents": "Documents",
+      "codes": "Codes",
+      "excerpts": "Excerpts",
+      "codedExcerpts": "Coded excerpts",
+      "memos": "Memos",
+      "descriptorFields": "Descriptor fields",
+      "imagesAndRecordings": "Images and recordings",
+      "charactersTranscribed": "Characters transcribed",
+      "lastActivity": "Last activity"
+    },
+    "missingMedia": {
+      "heading_one": "{{count, number}} recording could not be found",
+      "heading_other": "{{count, number}} recordings could not be found",
+      "explanation": "Audio and video files are not copied into the project, so they can be moved or renamed outside it. Everything coded from them is still here; point each one at its file again.",
+      "noPathRecorded": "(no path recorded)",
+      "relinkEllipsis": "Relink…"
+    },
+    "sparkline": {
+      "noneLast30Days": "No excerpts coded in the last 30 days.",
+      "ariaLabel": "{{count, number}} excerpts coded from {{from}} to {{to}}",
+      "total_one": "{{count, number}} total",
+      "total_other": "{{count, number}} total"
+    },
+    "noExcerptsCodedYet": "No excerpts coded yet.",
+    "showExcerptsCoded": "Show excerpts coded {{path}}",
+    "coders": "Coders",
+    "showExcerptsCodedBy": "Show excerpts coded by {{name}}",
+    "youSuffix": "(you)",
+    "codingCount_one": "{{count, number}} coding",
+    "codingCount_other": "{{count, number}} codings",
+    "noSetsYet": "No sets yet. Group codes or documents from the sidebar to see them here.",
+    "codeSets": "Code sets",
+    "documentSets": "Document sets",
+    "showExcerptsInSet": "Show excerpts in \"{{name}}\""
   }
 }
