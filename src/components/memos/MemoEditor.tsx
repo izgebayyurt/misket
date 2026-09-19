@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Trash2 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import type { Memo, MemoTarget } from "@/api/types";
 import { Input, Textarea } from "@/components/ui/input";
 import { pendingMemoFocus, useDeleteMemo, useUpdateMemo } from "@/queries/memos";
@@ -7,6 +8,7 @@ import { toast } from "@/state/toasts";
 
 /** One memo: title + body with debounced autosave and save-on-blur. */
 export function MemoEditor({ memo, target }: { memo: Memo; target: MemoTarget }) {
+  const { t } = useTranslation();
   const update = useUpdateMemo();
   const del = useDeleteMemo();
   const [title, setTitle] = useState(memo.title);
@@ -58,7 +60,7 @@ export function MemoEditor({ memo, target }: { memo: Memo; target: MemoTarget })
             }
           }}
           value={title}
-          placeholder="Title"
+          placeholder={t("memos.titlePlaceholder")}
           onChange={(e) => {
             setTitle(e.target.value);
             scheduleSave(e.target.value, body);
@@ -69,7 +71,7 @@ export function MemoEditor({ memo, target }: { memo: Memo; target: MemoTarget })
         />
         <button
           className="rounded p-1 text-fg-muted opacity-0 hover:bg-muted hover:text-danger focus-visible:opacity-100 group-hover:opacity-100"
-          aria-label="Delete memo"
+          aria-label={t("memos.deleteMemo")}
           tabIndex={-1}
           onClick={() => del.mutateAsync({ memo }).catch(toast.error)}
         >
@@ -78,7 +80,7 @@ export function MemoEditor({ memo, target }: { memo: Memo; target: MemoTarget })
       </div>
       <Textarea
         value={body}
-        placeholder="Write a memo…"
+        placeholder={t("memos.bodyPlaceholder")}
         rows={4}
         onChange={(e) => {
           setBody(e.target.value);

@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
+import i18n from "@/lib/i18n";
 import { parseCodebookFile, previewCodebookImport, sniffCodebookFormat } from "./codebookImport";
+
+const t = i18n.t.bind(i18n);
 
 const jsonDoc = JSON.stringify({
   format: "misket-codebook",
@@ -20,7 +23,7 @@ describe("sniffCodebookFormat", () => {
 
 describe("parseCodebookFile: JSON", () => {
   it("resolves each code's full path via parentId, root to leaf", () => {
-    const { format, entries } = parseCodebookFile(jsonDoc);
+    const { format, entries } = parseCodebookFile(jsonDoc, t);
     expect(format).toBe("json");
     expect(entries).toEqual([
       {
@@ -43,11 +46,11 @@ describe("parseCodebookFile: JSON", () => {
   });
 
   it("rejects a document missing the misket-codebook format tag", () => {
-    expect(() => parseCodebookFile('{"codes":[]}')).toThrow(/misket-codebook/);
+    expect(() => parseCodebookFile('{"codes":[]}', t)).toThrow(/misket-codebook/);
   });
 
   it("rejects invalid JSON", () => {
-    expect(() => parseCodebookFile("{not json")).toThrow(/Invalid JSON/);
+    expect(() => parseCodebookFile("{not json", t)).toThrow(/Invalid JSON/);
   });
 });
 
@@ -57,7 +60,7 @@ describe("parseCodebookFile: CSV", () => {
       "name,parent,color,description,shortcut\n" +
       "Theme,,#5CB85C,A top theme,t\n" +
       "Leaf,Theme / Sub,,Deepest level,\n";
-    const { format, entries } = parseCodebookFile(csv);
+    const { format, entries } = parseCodebookFile(csv, t);
     expect(format).toBe("csv");
     expect(entries).toEqual([
       {
@@ -80,17 +83,20 @@ describe("parseCodebookFile: CSV", () => {
   });
 
   it("rejects a bad header", () => {
-    expect(() => parseCodebookFile("name,parent\nAlpha,\n")).toThrow(/Expected CSV header/);
+    expect(() => parseCodebookFile("name,parent\nAlpha,\n", t)).toThrow(/Expected CSV header/);
   });
 
   it("reports the row number for a missing name", () => {
     expect(() =>
-      parseCodebookFile("name,parent,color,description,shortcut\nAlpha,,,,\n,Alpha,,,\n"),
+      parseCodebookFile("name,parent,color,description,shortcut\nAlpha,,,,\n,Alpha,,,\n", t),
     ).toThrow(/Row 3/);
   });
 
   it("ignores a trailing blank line", () => {
-    const { entries } = parseCodebookFile("name,parent,color,description,shortcut\nAlpha,,,,\n\n");
+    const { entries } = parseCodebookFile(
+      "name,parent,color,description,shortcut\nAlpha,,,,\n\n",
+      t,
+    );
     expect(entries).toHaveLength(1);
   });
 
@@ -98,6 +104,7 @@ describe("parseCodebookFile: CSV", () => {
     const { entries } = parseCodebookFile(
       "name,parent,color,description,inclusion,exclusion,shortcut\n" +
         "Trust,,,Trusting the service,Names trust,Not satisfaction,t\n",
+      t,
     );
     expect(entries[0]).toMatchObject({
       path: ["Trust"],
@@ -109,6 +116,7 @@ describe("parseCodebookFile: CSV", () => {
 
     const legacy = parseCodebookFile(
       "name,parent,color,description,shortcut\nDoubt,,,Hesitation,d\n",
+      t,
     );
     expect(legacy.entries[0]).toMatchObject({
       description: "Hesitation",
@@ -125,7 +133,7 @@ describe("previewCodebookImport", () => {
       "name,parent,color,description,shortcut\n" +
       "greeting,,,,\n" + // matches existing "Greeting" (case-insensitive)
       "Farewell,,,,\n"; // new
-    const preview = previewCodebookImport(csv, ["Greeting", "Greeting / Formal"]);
+    const preview = previewCodebookImport(csv, ["Greeting", "Greeting / Formal"], t);
     expect(preview).toEqual({ format: "csv", totalCodes: 2, matchedCount: 1, newCount: 1 });
   });
 });

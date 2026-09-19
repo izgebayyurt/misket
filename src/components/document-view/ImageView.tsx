@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Maximize2, Minus, Plus } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { mediaUrl } from "@/api/media";
 import { useCodes } from "@/queries/codes";
 import { useApplyCodes, useDeleteExcerpt, useDocumentExcerpts } from "@/queries/excerpts";
@@ -51,6 +52,7 @@ const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v
  * it exactly as they do to selected text.
  */
 export function ImageView({ documentId, focusExcerptId }: Props) {
+  const { t } = useTranslation();
   const { data: doc, error } = useDocument(documentId);
   const { data: excerpts } = useDocumentExcerpts(documentId);
   const { data: codes } = useCodes();
@@ -473,18 +475,18 @@ export function ImageView({ documentId, focusExcerptId }: Props) {
       quickCode: () => {
         const codeId = useWorkspace.getState().lastAppliedCodeId;
         if (!codeId) {
-          toast.info("No code has been applied yet — pick one from the palette first.", {
+          toast.info(t("documentView.noCodeApplied"), {
             key: TOAST_KEYS.quickCode,
           });
           return;
         }
         if (!applyCodeToTarget(codeId))
-          toast.info("Draw a region or focus one to code it first.", {
+          toast.info(t("documentView.drawRegionToCode"), {
             key: TOAST_KEYS.codeTarget,
           });
       },
     });
-  }, [applyCodeToTarget]);
+  }, [applyCodeToTarget, t]);
 
   // --- the floating "Code" button for a freshly drawn rectangle -------------
   const toolbarPos = useMemo(() => {
@@ -532,20 +534,18 @@ export function ImageView({ documentId, focusExcerptId }: Props) {
           </span>
         ) : null}
         <span className="flex-1" />
-        <span className="text-xs text-fg-muted">
-          drag to draw a region · alt-drag to pan · scroll to zoom
-        </span>
+        <span className="text-xs text-fg-muted">{t("documentView.image.dragHint")}</span>
         <div className="flex items-center gap-0.5">
-          <ZoomButton label="Zoom out" onClick={() => zoomCentre(1 / 1.25)}>
+          <ZoomButton label={t("documentView.image.zoomOut")} onClick={() => zoomCentre(1 / 1.25)}>
             <Minus className="size-3.5" />
           </ZoomButton>
           <span className="w-12 text-center text-xs tabular-nums text-fg-muted">
             {view ? Math.round(view.scale * 100) : 100}%
           </span>
-          <ZoomButton label="Zoom in" onClick={() => zoomCentre(1.25)}>
+          <ZoomButton label={t("documentView.image.zoomIn")} onClick={() => zoomCentre(1.25)}>
             <Plus className="size-3.5" />
           </ZoomButton>
-          <ZoomButton label="Fit to window" onClick={fit}>
+          <ZoomButton label={t("documentView.image.fitToWindow")} onClick={fit}>
             <Maximize2 className="size-3.5" />
           </ZoomButton>
         </div>
@@ -643,8 +643,8 @@ export function ImageView({ documentId, focusExcerptId }: Props) {
         ) : null}
         {confirmDeleteId ? (
           <ConfirmDialog
-            title="Delete this excerpt?"
-            description="Its codes and memos go with it. You can undo with Ctrl/⌘+Z."
+            title={t("documentView.deleteExcerptTitle")}
+            description={t("documentView.deleteExcerptDescription")}
             onConfirm={() => {
               deleteExcerpt.mutate({ id: confirmDeleteId, documentId });
               setConfirmDeleteId(null);

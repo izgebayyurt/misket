@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { FrameworkMatrix, FrameworkMatrixInput } from "@/api/types";
 import { flattenTree } from "@/core/codeTree";
 import { useCodeTree } from "@/queries/codes";
@@ -56,6 +57,7 @@ export function FrameworkMatrixDialog({
   onSubmit: (input: FrameworkMatrixInput) => void;
   onClose: () => void;
 }) {
+  const { t } = useTranslation();
   const tree = useCodeTree();
   const { data: fields } = useDescriptorFields();
   const { data: documentSets } = useSets("document");
@@ -97,27 +99,27 @@ export function FrameworkMatrixDialog({
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent
-        title={matrix ? "Configure matrix" : "New framework matrix"}
-        description="Cases down the side, themes across the top; you write the summary in each cell."
+        title={t(matrix ? "analysis.framework.configureMatrix" : "analysis.framework.newMatrix")}
+        description={t("analysis.framework.dialogDescription")}
         className="max-w-lg"
       >
-        <Field label="Name">
+        <Field label={t("analysis.framework.nameLabel")}>
           <Input
             autoFocus
             value={name}
-            placeholder="Access to care, wave 1"
+            placeholder={t("analysis.framework.namePlaceholder")}
             onChange={(e) => setName(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && submit()}
             data-testid="framework-name"
           />
         </Field>
 
-        <Field label="Rows (cases)">
+        <Field label={t("analysis.framework.rowsLabel")}>
           <Radio checked={rowMode === "all"} onChange={() => setRowMode("all")}>
-            Every document
+            {t("analysis.framework.everyDocument")}
           </Radio>
           <Radio checked={rowMode === "set"} onChange={() => setRowMode("set")}>
-            Documents in a set
+            {t("analysis.framework.documentsInSet")}
           </Radio>
           {rowMode === "set" ? (
             <select
@@ -126,7 +128,7 @@ export function FrameworkMatrixDialog({
               onChange={(e) => setRowSetId(e.target.value)}
               data-testid="framework-row-set"
             >
-              <option value="">Choose a document set…</option>
+              <option value="">{t("analysis.framework.chooseDocumentSet")}</option>
               {documentSets?.map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.name}
@@ -135,7 +137,7 @@ export function FrameworkMatrixDialog({
             </select>
           ) : null}
           <Radio checked={rowMode === "descriptor"} onChange={() => setRowMode("descriptor")}>
-            One row per value of a descriptor
+            {t("analysis.framework.rowPerDescriptorValue")}
           </Radio>
           {rowMode === "descriptor" ? (
             <select
@@ -144,7 +146,7 @@ export function FrameworkMatrixDialog({
               onChange={(e) => setRowFieldId(e.target.value)}
               data-testid="framework-row-field"
             >
-              <option value="">Choose a field…</option>
+              <option value="">{t("analysis.framework.chooseField")}</option>
               {fields?.map((f) => (
                 <option key={f.id} value={f.id}>
                   {f.name}
@@ -154,9 +156,9 @@ export function FrameworkMatrixDialog({
           ) : null}
         </Field>
 
-        <Field label="Columns (themes)">
+        <Field label={t("analysis.framework.columnsLabel")}>
           <Radio checked={columnMode === "set"} onChange={() => setColumnMode("set")}>
-            Codes in a set
+            {t("analysis.framework.codesInSet")}
           </Radio>
           {columnMode === "set" ? (
             <select
@@ -165,7 +167,7 @@ export function FrameworkMatrixDialog({
               onChange={(e) => setCodeSetId(e.target.value)}
               data-testid="framework-code-set"
             >
-              <option value="">Choose a code set…</option>
+              <option value="">{t("analysis.framework.chooseCodeSet")}</option>
               {codeSets?.map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.name}
@@ -174,12 +176,12 @@ export function FrameworkMatrixDialog({
             </select>
           ) : null}
           <Radio checked={columnMode === "codes"} onChange={() => setColumnMode("codes")}>
-            Picked codes
+            {t("analysis.framework.pickedCodes")}
           </Radio>
           {columnMode === "codes" ? (
             <div className="mt-1 max-h-48 overflow-y-auto rounded-md border border-border p-1">
               {nodes.length === 0 ? (
-                <p className="p-2 text-sm text-fg-muted">The codebook is empty.</p>
+                <p className="p-2 text-sm text-fg-muted">{t("analysis.framework.emptyCodebook")}</p>
               ) : null}
               {nodes.map((n) => (
                 <label
@@ -209,10 +211,10 @@ export function FrameworkMatrixDialog({
 
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>
-            Cancel
+            {t("common.cancel")}
           </Button>
           <Button onClick={submit} disabled={invalid} data-testid="framework-save">
-            {matrix ? "Save" : "Create"}
+            {t(matrix ? "common.save" : "analysis.clustering.create")}
           </Button>
         </DialogFooter>
       </DialogContent>

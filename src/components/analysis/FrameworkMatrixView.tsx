@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { save } from "@tauri-apps/plugin-dialog";
 import { FileText, Plus, Settings2, Trash2, X } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import type { FrameworkMatrix, FrameworkMatrixInput, FrameworkRow } from "@/api/types";
 import { writeTextFile } from "@/api/project";
 import { pathOf } from "@/core/codeTree";
@@ -48,6 +49,7 @@ function configOf(m: FrameworkMatrix): FrameworkMatrixInput {
  * away in the drawer.
  */
 export function FrameworkMatrixView() {
+  const { t } = useTranslation();
   const { data: matrices, isPending: listPending } = useFrameworkMatrices();
   const [pickedId, setPickedId] = useState<string | null>(null);
   const [dialog, setDialog] = useState<"new" | "edit" | null>(null);
@@ -112,7 +114,7 @@ export function FrameworkMatrixView() {
         path,
         `# ${current.name}\n\n${markdownTable(current.name, columnLabels, exportRows)}\n`,
       );
-      toast.info(`Exported to ${path.split(/[\\/]/).pop()}`);
+      toast.info(t("analysis.exportedTo", { name: path.split(/[\\/]/).pop() }));
     } catch (e) {
       toast.error(e);
     }
@@ -124,10 +126,12 @@ export function FrameworkMatrixView() {
         className="h-7 max-w-56 rounded-md border border-border bg-panel px-1.5 text-xs outline-none focus-visible:ring-2 focus-visible:ring-focus"
         value={current?.id ?? ""}
         onChange={(e) => setPickedId(e.target.value)}
-        aria-label="Framework matrix"
+        aria-label={t("analysis.framework.matrixPicker")}
         data-testid="framework-picker"
       >
-        {matrices?.length ? null : <option value="">No matrices yet</option>}
+        {matrices?.length ? null : (
+          <option value="">{t("analysis.framework.noMatricesYet")}</option>
+        )}
         {matrices?.map((m) => (
           <option key={m.id} value={m.id}>
             {m.name}
@@ -140,7 +144,7 @@ export function FrameworkMatrixView() {
         onClick={() => setDialog("new")}
         data-testid="framework-new"
       >
-        <Plus /> New
+        <Plus /> {t("analysis.framework.new")}
       </Button>
       {current ? (
         <>
@@ -150,7 +154,7 @@ export function FrameworkMatrixView() {
             onClick={() => setDialog("edit")}
             data-testid="framework-configure"
           >
-            <Settings2 /> Configure
+            <Settings2 /> {t("analysis.framework.configure")}
           </Button>
           <Button
             variant="ghost"
@@ -158,11 +162,14 @@ export function FrameworkMatrixView() {
             onClick={() => del.mutateAsync(current).catch(toast.error)}
             data-testid="framework-delete"
           >
-            <Trash2 /> Delete
+            <Trash2 /> {t("common.delete")}
           </Button>
           <span className="text-xs text-fg-muted">
-            {rows.length} row{rows.length === 1 ? "" : "s"} × {columns.length} theme
-            {columns.length === 1 ? "" : "s"} · {written} written
+            {t("analysis.framework.gridSummary", {
+              rows: t("analysis.framework.rowCount", { count: rows.length }),
+              themes: t("analysis.framework.themeCount", { count: columns.length }),
+              written,
+            })}
           </span>
           <span className="ml-auto" />
           <Button
@@ -172,7 +179,7 @@ export function FrameworkMatrixView() {
             disabled={!rows.length || !columns.length}
             data-testid="export-markdown"
           >
-            <FileText /> Markdown
+            <FileText /> {t("analysis.framework.markdown")}
           </Button>
           <ExportCsvButton
             name="framework"
@@ -191,15 +198,13 @@ export function FrameworkMatrixView() {
         <div className="min-w-0 flex-1 overflow-auto">
           {!current ? (
             <EmptyNote>
-              {listPending
-                ? "Loading…"
-                : "A framework matrix is a grid of cases by themes with a written summary in every cell. Create one to start."}
+              {listPending ? t("analysis.framework.loading") : t("analysis.framework.introEmpty")}
             </EmptyNote>
           ) : !rows.length || !columns.length ? (
             <EmptyNote>
               {!columns.length
-                ? "This matrix has no themes yet. Use Configure to pick the codes that become its columns."
-                : "No cases match this matrix's rows. Import a document, or change the rows under Configure."}
+                ? t("analysis.framework.noThemesYet")
+                : t("analysis.framework.noCasesMatch")}
             </EmptyNote>
           ) : (
             <Grid
@@ -257,6 +262,7 @@ function Grid({
   onEvidence: (cell: { rowKey: string; codeId: string }) => void;
   focusCell: (row: number, column: number) => boolean;
 }) {
+  const { t } = useTranslation();
   const tree = useCodeTree();
   return (
     <>
@@ -264,7 +270,7 @@ function Grid({
         <thead>
           <tr>
             <th className="sticky left-0 top-0 z-30 w-44 min-w-44 border-b border-r border-border bg-bg p-2 text-left text-xs font-medium text-fg-muted">
-              Case
+              {t("analysis.framework.caseColumn")}
             </th>
             {columns.map((id) => (
               <th
@@ -292,7 +298,7 @@ function Grid({
                 <span className="block truncate">{row.label}</span>
                 {row.documentIds.length > 1 ? (
                   <span className="block text-xs text-fg-muted">
-                    {row.documentIds.length} documents
+                    {t("excerpts.filters.documentCount", { count: row.documentIds.length })}
                   </span>
                 ) : null}
               </th>
@@ -326,11 +332,7 @@ function Grid({
           ))}
         </tbody>
       </table>
-      <p className="max-w-prose p-3 text-xs text-fg-muted">
-        Write what each case says about each theme. The badge counts the excerpts behind the cell —
-        click it (or press Ctrl/⌘+Enter) to read them beside the summary. Tab and Shift+Tab step
-        through the cells, Ctrl/⌘ with an arrow key moves by one.
-      </p>
+      <p className="max-w-prose p-3 text-xs text-fg-muted">{t("analysis.framework.gridHint")}</p>
     </>
   );
 }
@@ -364,6 +366,7 @@ function SummaryCell({
   /** Move the focus one cell forward (1) or back (-1) in reading order. */
   onStep: (delta: number) => boolean;
 }) {
+  const { t } = useTranslation();
   const setCell = useSetFrameworkCell();
   const [text, setText] = useState(summary);
   const timer = useRef<number | null>(null);
@@ -392,10 +395,16 @@ function SummaryCell({
       dirty.current = false;
       if (value === summary) return;
       setCell
-        .mutateAsync({ matrixId, rowKey, codeId, summary: value, label: `Summary: ${label}` })
+        .mutateAsync({
+          matrixId,
+          rowKey,
+          codeId,
+          summary: value,
+          label: t("analysis.framework.summaryLabel", { label }),
+        })
         .catch(toast.error);
     },
-    [matrixId, rowKey, codeId, summary, label, setCell],
+    [matrixId, rowKey, codeId, summary, label, setCell, t],
   );
   const saveRef = useRef(save);
   useEffect(() => {
@@ -452,8 +461,11 @@ function SummaryCell({
         ref={area}
         value={text}
         rows={2}
-        placeholder="Summarise…"
-        aria-label={`Summary for ${label}, ${count} excerpt${count === 1 ? "" : "s"}`}
+        placeholder={t("analysis.framework.summarisePlaceholder")}
+        aria-label={t("analysis.framework.summaryFor", {
+          label,
+          excerpts: t("analysis.framework.excerptCount", { count }),
+        })}
         className="block max-h-64 w-full resize-none overflow-y-auto bg-transparent p-2 pr-10 text-sm leading-snug outline-none placeholder:text-fg-muted/60 focus:bg-accent/5 focus-visible:ring-1 focus-visible:ring-focus"
         onChange={(e) => {
           dirty.current = true;
@@ -474,8 +486,11 @@ function SummaryCell({
             : "text-fg-muted/60 opacity-0 group-focus-within:opacity-100 group-hover:opacity-100")
         }
         tabIndex={-1}
-        title={`${count} excerpt${count === 1 ? "" : "s"} behind this cell`}
-        aria-label={`Show the ${count} excerpt${count === 1 ? "" : "s"} for ${label}`}
+        title={t("analysis.framework.excerptsBehindCell", { count })}
+        aria-label={t("analysis.framework.showExcerptsFor", {
+          excerpts: t("analysis.framework.excerptCount", { count }),
+          label,
+        })}
         onClick={onEvidence}
         data-testid="framework-evidence"
       >
@@ -498,6 +513,7 @@ function EvidenceDrawer({
   codeId: string;
   onClose: () => void;
 }) {
+  const { t } = useTranslation();
   const tree = useCodeTree();
   const openDocument = useWorkspace((s) => s.openDocument);
   const openExcerpts = useWorkspace((s) => s.openExcerpts);
@@ -525,7 +541,7 @@ function EvidenceDrawer({
         </div>
         <button
           className="rounded p-1 text-fg-muted hover:bg-muted hover:text-fg"
-          aria-label="Close evidence"
+          aria-label={t("analysis.framework.closeEvidence")}
           onClick={onClose}
         >
           <X className="size-4" />
@@ -533,10 +549,7 @@ function EvidenceDrawer({
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto">
         {data && rows.length === 0 ? (
-          <p className="p-4 text-sm text-fg-muted">
-            Nothing is coded here yet, so this summary rests on your reading rather than on coded
-            passages.
-          </p>
+          <p className="p-4 text-sm text-fg-muted">{t("analysis.framework.nothingCodedYet")}</p>
         ) : null}
         <ul className="divide-y divide-border">
           {rows.map((r) => (
@@ -546,7 +559,7 @@ function EvidenceDrawer({
         {data && data.total > rows.length ? (
           <div className="p-3">
             <Button variant="outline" size="sm" onClick={() => openExcerpts(filter)}>
-              Open all {data.total} in the browser
+              {t("analysis.framework.openAllInBrowser", { count: data.total })}
             </Button>
           </div>
         ) : null}

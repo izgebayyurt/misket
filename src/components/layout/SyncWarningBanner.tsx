@@ -29,8 +29,6 @@ function rememberDismissed(path: string): void {
   }
 }
 
-const FILTER = [{ name: "Misket project", extensions: ["misket"] }];
-
 /**
  * Shown once per project (dismissal remembered by path) when the open
  * project file lives inside a folder a cloud sync client manages — a
@@ -55,7 +53,10 @@ export function SyncWarningBanner({ project }: { project: ProjectInfo }) {
 
   async function onMove() {
     try {
-      const path = await save({ defaultPath: `${project.name}.misket`, filters: FILTER });
+      const path = await save({
+        defaultPath: `${project.name}.misket`,
+        filters: [{ name: t("common.fileFilters.misketProject"), extensions: ["misket"] }],
+      });
       if (!path) return;
       const withExt = path.endsWith(".misket") ? path : `${path}.misket`;
       setMoving(true);

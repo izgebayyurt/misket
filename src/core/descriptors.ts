@@ -4,30 +4,36 @@
 
 import type { DescriptorField, DescriptorFilter, DescriptorKind, DescriptorOp } from "@/api/types";
 
-export const KIND_LABELS: Record<DescriptorKind, string> = {
-  text: "Text",
-  number: "Number",
-  choice: "Choice",
-  date: "Date",
+/** A translator, so this module can hand back localized labels and
+ * sentences without importing react/i18next itself (src/core stays
+ * framework-free — see CLAUDE.md). The caller passes `useTranslation()`'s
+ * `t`. */
+export type DescriptorsT = (key: string, params?: Record<string, unknown>) => string;
+
+export const KIND_LABEL_KEYS: Record<DescriptorKind, string> = {
+  text: "descriptors.kind.text",
+  number: "descriptors.kind.number",
+  choice: "descriptors.kind.choice",
+  date: "descriptors.kind.date",
 };
 
-export const OP_LABELS: Record<DescriptorOp, string> = {
-  eq: "is",
-  neq: "is not",
-  contains: "contains",
-  gt: "is after",
-  lt: "is before",
-  between: "is between",
-  in: "is any of",
-  empty: "is empty",
-  notEmpty: "has any value",
+export const OP_LABEL_KEYS: Record<DescriptorOp, string> = {
+  eq: "descriptors.op.eq",
+  neq: "descriptors.op.neq",
+  contains: "descriptors.op.contains",
+  gt: "descriptors.op.gt",
+  lt: "descriptors.op.lt",
+  between: "descriptors.op.between",
+  in: "descriptors.op.in",
+  empty: "descriptors.op.empty",
+  notEmpty: "descriptors.op.notEmpty",
 };
 
 /** `gt`/`lt` read differently on numbers than on dates. */
-export function opLabel(op: DescriptorOp, kind: DescriptorKind): string {
-  if (kind === "number" && op === "gt") return "is more than";
-  if (kind === "number" && op === "lt") return "is less than";
-  return OP_LABELS[op];
+export function opLabel(op: DescriptorOp, kind: DescriptorKind, t: DescriptorsT): string {
+  if (kind === "number" && op === "gt") return t("descriptors.op.gtNumber");
+  if (kind === "number" && op === "lt") return t("descriptors.op.ltNumber");
+  return t(OP_LABEL_KEYS[op]);
 }
 
 const OPS: Record<DescriptorKind, DescriptorOp[]> = {
@@ -86,10 +92,14 @@ export function defaultCondition(field: DescriptorField): DescriptorFilter {
 }
 
 /** "Site is any of North, South" — the label of a filter chip. */
-export function describeCondition(c: DescriptorFilter, fields: DescriptorField[]): string {
+export function describeCondition(
+  c: DescriptorFilter,
+  fields: DescriptorField[],
+  t: DescriptorsT,
+): string {
   const field = fields.find((f) => f.id === c.fieldId);
-  const name = field?.name ?? "Descriptor";
-  const label = opLabel(c.op, field?.kind ?? "text");
+  const name = field?.name ?? t("descriptors.genericName");
+  const label = opLabel(c.op, field?.kind ?? "text", t);
   const n = operandCount(c.op);
   if (n === 0) return `${name} ${label}`;
   if (c.op === "between") return `${name} ${label} ${c.values[0] ?? ""}–${c.values[1] ?? ""}`;

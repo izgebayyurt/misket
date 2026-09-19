@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { ChevronDown, ChevronUp, Pencil, Plus, Trash2 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import type { DescriptorField } from "@/api/types";
-import { KIND_LABELS } from "@/core/descriptors";
+import { KIND_LABEL_KEYS } from "@/core/descriptors";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter } from "@/components/ui/dialog";
 import {
@@ -16,6 +17,7 @@ import { DescriptorFieldForm } from "./DescriptorFieldForm";
 
 /** Manage the project's document attributes: add, rename, reorder, delete. */
 export function DescriptorsDialog({ onClose }: { onClose: () => void }) {
+  const { t } = useTranslation();
   const { data: fields } = useDescriptorFields();
   const create = useCreateDescriptorField();
   const update = useUpdateDescriptorField();
@@ -44,23 +46,20 @@ export function DescriptorsDialog({ onClose }: { onClose: () => void }) {
     <>
       <Dialog open onOpenChange={(o) => !o && onClose()}>
         <DialogContent
-          title="Descriptors"
-          description="Attributes you can set on each document and filter excerpts by."
+          title={t("descriptors.title")}
+          description={t("descriptors.dialogDescription")}
           className="max-w-lg"
         >
           <div className="max-h-[50vh] space-y-1 overflow-y-auto" data-testid="descriptor-list">
             {list.length === 0 && !adding ? (
-              <p className="py-2 text-sm text-fg-muted">
-                No descriptors yet. Add one for the attributes you compare across, such as site,
-                interview wave or age group.
-              </p>
+              <p className="py-2 text-sm text-fg-muted">{t("descriptors.dialogEmpty")}</p>
             ) : null}
             {list.map((f, i) =>
               editingId === f.id ? (
                 <div key={f.id} className="rounded-md border border-border p-2">
                   <DescriptorFieldForm
                     field={f}
-                    submitLabel="Save"
+                    submitLabel={t("common.save")}
                     busy={update.isPending}
                     onCancel={() => setEditingId(null)}
                     onSubmit={async (v) => {
@@ -84,7 +83,7 @@ export function DescriptorsDialog({ onClose }: { onClose: () => void }) {
                 >
                   <span className="truncate font-medium">{f.name}</span>
                   <span className="shrink-0 rounded border border-border px-1 text-[10px] uppercase text-fg-muted">
-                    {KIND_LABELS[f.kind]}
+                    {t(KIND_LABEL_KEYS[f.kind])}
                   </span>
                   {f.kind === "choice" ? (
                     <span className="truncate text-xs text-fg-muted">{f.options.join(", ")}</span>
@@ -96,7 +95,7 @@ export function DescriptorsDialog({ onClose }: { onClose: () => void }) {
                     className="rounded p-1 text-fg-muted hover:bg-border disabled:opacity-30"
                     onClick={() => move(i, -1)}
                     disabled={i === 0}
-                    aria-label={`Move ${f.name} up`}
+                    aria-label={t("descriptors.moveUp", { name: f.name })}
                   >
                     <ChevronUp className="size-4" />
                   </button>
@@ -104,7 +103,7 @@ export function DescriptorsDialog({ onClose }: { onClose: () => void }) {
                     className="rounded p-1 text-fg-muted hover:bg-border disabled:opacity-30"
                     onClick={() => move(i, 1)}
                     disabled={i === list.length - 1}
-                    aria-label={`Move ${f.name} down`}
+                    aria-label={t("descriptors.moveDown", { name: f.name })}
                   >
                     <ChevronDown className="size-4" />
                   </button>
@@ -114,14 +113,14 @@ export function DescriptorsDialog({ onClose }: { onClose: () => void }) {
                       setAdding(false);
                       setEditingId(f.id);
                     }}
-                    aria-label={`Edit ${f.name}`}
+                    aria-label={t("descriptors.editField", { name: f.name })}
                   >
                     <Pencil className="size-4" />
                   </button>
                   <button
                     className="rounded p-1 text-fg-muted hover:bg-border hover:text-danger"
                     onClick={() => setDeleting(f)}
-                    aria-label={`Delete ${f.name}`}
+                    aria-label={t("descriptors.deleteField", { name: f.name })}
                   >
                     <Trash2 className="size-4" />
                   </button>
@@ -132,7 +131,7 @@ export function DescriptorsDialog({ onClose }: { onClose: () => void }) {
           {adding ? (
             <div className="mt-3 rounded-md border border-border p-2">
               <DescriptorFieldForm
-                submitLabel="Add"
+                submitLabel={t("descriptors.add")}
                 busy={create.isPending}
                 onCancel={() => setAdding(false)}
                 onSubmit={async (v) => {
@@ -160,12 +159,12 @@ export function DescriptorsDialog({ onClose }: { onClose: () => void }) {
               }}
               data-testid="add-descriptor"
             >
-              <Plus /> Add descriptor
+              <Plus /> {t("descriptors.addDescriptor")}
             </Button>
           )}
           <DialogFooter>
             <Button variant="ghost" onClick={onClose}>
-              Done
+              {t("common.done")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -184,20 +183,21 @@ function DeleteDescriptorDialog({
   field: DescriptorField;
   onClose: () => void;
 }) {
+  const { t } = useTranslation();
   const del = useDeleteDescriptorField();
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent
-        title={`Delete "${field.name}"?`}
+        title={t("descriptors.deleteDialogTitle", { name: field.name })}
         description={
           field.valueCount > 0
-            ? `${field.valueCount} document${field.valueCount === 1 ? "" : "s"} will lose this value. You can undo this from History.`
-            : "No document uses it. You can undo this from History."
+            ? t("descriptors.deleteDialogWillLose", { count: field.valueCount })
+            : t("descriptors.deleteDialogNoneUse")
         }
       >
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>
-            Cancel
+            {t("common.cancel")}
           </Button>
           <Button
             variant="danger"
@@ -212,7 +212,7 @@ function DeleteDescriptorDialog({
               }
             }}
           >
-            Delete
+            {t("common.delete")}
           </Button>
         </DialogFooter>
       </DialogContent>

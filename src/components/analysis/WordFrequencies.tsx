@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { ChevronDown, ChevronUp, Settings2 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import type { WordFrequency, WordFrequencyOptions, WordFrequencyScope } from "@/api/types";
 import { DEFAULT_WORD_FREQUENCY_OPTIONS } from "@/api/types";
 import { toCsv } from "@/core/csv";
@@ -19,6 +20,7 @@ type ViewMode = "table" | "cloud";
 const WORD_CLOUD_LIMIT = 100;
 
 export function WordFrequencies() {
+  const { t } = useTranslation();
   const [documentIds, setDocumentIds] = useState<string[]>([]);
   const { data: allDocuments } = useDocuments();
   const [documentSetIds, setDocumentSetIds] = useState<string[]>([]);
@@ -106,7 +108,7 @@ export function WordFrequencies() {
         <Input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Filter words…"
+          placeholder={t("analysis.words.filterWords")}
           className="h-7 w-40 text-xs"
           data-testid="word-frequencies-search"
         />
@@ -117,7 +119,7 @@ export function WordFrequencies() {
             onChange={(e) => setStopWordsOn(e.target.checked)}
             data-testid="word-frequencies-stop-words"
           />
-          Stop words
+          {t("analysis.words.stopWords")}
         </label>
         <label className="flex items-center gap-1.5 text-xs">
           <input
@@ -126,12 +128,12 @@ export function WordFrequencies() {
             onChange={(e) => setStem(e.target.checked)}
             data-testid="word-frequencies-stem"
           />
-          Group by stem
+          {t("analysis.words.groupByStem")}
         </label>
         <StopWordsEditor />
         <div className="ml-auto flex items-center gap-2">
           <span className="text-xs text-fg-muted">
-            {rows.length} word{rows.length === 1 ? "" : "s"}
+            {t("analysis.words.wordCount", { count: rows.length })}
           </span>
           <div className="flex overflow-hidden rounded-md border border-border text-xs">
             <button
@@ -143,7 +145,7 @@ export function WordFrequencies() {
               onClick={() => setView("table")}
               data-testid="word-frequencies-view-table"
             >
-              Table
+              {t("analysis.words.viewTable")}
             </button>
             <button
               type="button"
@@ -154,7 +156,7 @@ export function WordFrequencies() {
               onClick={() => setView("cloud")}
               data-testid="word-frequencies-view-cloud"
             >
-              Cloud
+              {t("analysis.words.viewCloud")}
             </button>
           </div>
           <ExportCsvButton name="word-frequencies" build={csv} disabled={!rows.length} />
@@ -164,10 +166,10 @@ export function WordFrequencies() {
         {!rows.length ? (
           <EmptyNote>
             {isPending
-              ? "Counting…"
+              ? t("analysis.counting")
               : onlyRecordings
-                ? "Counting words needs a transcript: audio and video have no text to count. Import the transcript of a recording as a document and count that."
-                : "No words to show for this selection."}
+                ? t("analysis.words.needsTranscript")
+                : t("analysis.words.noneForSelection")}
           </EmptyNote>
         ) : view === "cloud" ? (
           <WordCloud
@@ -179,9 +181,9 @@ export function WordFrequencies() {
           <table className="w-full min-w-[420px] border-collapse text-sm">
             <thead className="sticky top-0 z-10 bg-panel text-left text-xs text-fg-muted shadow-[0_1px_0_var(--border)]">
               <tr>
-                {header("term", "Term")}
-                {header("count", "Count", "w-24 text-right")}
-                {header("documents", "Documents", "w-28 text-right")}
+                {header("term", t("analysis.words.colTerm"))}
+                {header("count", t("analysis.words.colCount"), "w-24 text-right")}
+                {header("documents", t("analysis.frequencies.colDocuments"), "w-28 text-right")}
               </tr>
             </thead>
             <tbody>
@@ -190,7 +192,7 @@ export function WordFrequencies() {
                   key={r.term}
                   className="cursor-default border-b border-border hover:bg-muted"
                   onClick={() => openInSearch(r.term)}
-                  title={`Find “${r.term}” across the project`}
+                  title={t("analysis.words.findAcrossProject", { term: r.term })}
                   data-testid="word-frequency-row"
                 >
                   <td className="truncate px-3 py-1.5">{r.term}</td>
@@ -217,6 +219,7 @@ function WordCloud({
   maxCount: number;
   onPick: (term: string) => void;
 }) {
+  const { t } = useTranslation();
   const MIN_PX = 12;
   const MAX_PX = 40;
   return (
@@ -234,7 +237,11 @@ function WordCloud({
             className="rounded px-1 text-accent hover:bg-muted hover:underline"
             style={{ fontSize: `${size}px` }}
             onClick={() => onPick(r.term)}
-            title={`${r.term} — ${r.count} occurrence${r.count === 1 ? "" : "s"} in ${r.documents} document${r.documents === 1 ? "" : "s"}`}
+            title={t("analysis.words.cloudTitle", {
+              term: r.term,
+              occurrences: t("analysis.words.occurrenceCount", { count: r.count }),
+              documents: t("excerpts.filters.documentCount", { count: r.documents }),
+            })}
             data-testid="word-cloud-term"
           >
             {r.term}
@@ -248,6 +255,7 @@ function WordCloud({
 /** A popover editor for the project's custom stop-word list, on top of the
  * built-in English list. */
 function StopWordsEditor() {
+  const { t } = useTranslation();
   const { data: words } = useStopWords();
   const setStopWords = useSetStopWords();
   const [text, setText] = useState<string | null>(null);
@@ -260,7 +268,7 @@ function StopWordsEditor() {
         .map((w) => w.trim())
         .filter(Boolean);
       await setStopWords.mutateAsync(list);
-      toast.info("Stop words updated");
+      toast.info(t("analysis.words.stopWordsUpdated"));
     } catch (e) {
       toast.error(e);
     }
@@ -270,13 +278,11 @@ function StopWordsEditor() {
     <Popover onOpenChange={(open) => !open && setText(null)}>
       <PopoverTrigger asChild>
         <Button variant="outline" size="sm" data-testid="stop-words-editor-trigger">
-          <Settings2 /> Stop words…
+          <Settings2 /> {t("analysis.words.stopWordsEllipsis")}
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-96">
-        <p className="mb-2 text-xs text-fg-muted">
-          Extra words to drop, on top of the built-in English list. Comma- or newline-separated.
-        </p>
+        <p className="mb-2 text-xs text-fg-muted">{t("analysis.words.stopWordsHint")}</p>
         <textarea
           className="h-28 w-full resize-none rounded-md border border-border bg-bg p-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-focus"
           value={value}
@@ -285,7 +291,7 @@ function StopWordsEditor() {
         />
         <div className="mt-2 flex justify-end">
           <Button size="sm" onClick={() => void save()} disabled={setStopWords.isPending}>
-            Save
+            {t("common.save")}
           </Button>
         </div>
       </PopoverContent>

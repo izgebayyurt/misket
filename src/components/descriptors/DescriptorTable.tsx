@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Settings2 } from "lucide-react";
-import { KIND_LABELS } from "@/core/descriptors";
+import { useTranslation } from "react-i18next";
+import { KIND_LABEL_KEYS } from "@/core/descriptors";
 import { Button } from "@/components/ui/button";
 import { useDescriptorFields, useDescriptorMatrix } from "@/queries/descriptors";
 import { useWorkspace } from "@/state/workspace";
@@ -9,6 +10,7 @@ import { DescriptorValueInput } from "./DescriptorValueInput";
 
 /** Every document against every descriptor, editable in place. */
 export function DescriptorTable() {
+  const { t } = useTranslation();
   const { data: fields } = useDescriptorFields();
   const { data: matrix } = useDescriptorMatrix();
   const openDocument = useWorkspace((s) => s.openDocument);
@@ -18,30 +20,29 @@ export function DescriptorTable() {
   return (
     <div className="flex h-full flex-col" data-testid="descriptor-table">
       <div className="flex items-center gap-2 border-b border-border bg-panel px-4 py-2">
-        <h2 className="mr-2 font-serif text-lg font-medium">Descriptors</h2>
+        <h2 className="mr-2 font-serif text-lg font-medium">{t("descriptors.title")}</h2>
         <Button variant="outline" size="sm" onClick={() => setManage(true)}>
-          <Settings2 /> Manage fields
+          <Settings2 /> {t("descriptors.manageFields")}
         </Button>
         <span className="ml-auto text-xs text-fg-muted">
-          {matrix?.rows.length ?? 0} document{matrix?.rows.length === 1 ? "" : "s"}
+          {t("excerpts.filters.documentCount", { count: matrix?.rows.length ?? 0 })}
         </span>
       </div>
       <div className="min-h-0 flex-1 overflow-auto">
         {list.length === 0 ? (
-          <p className="p-6 text-sm text-fg-muted">
-            No descriptors yet. Add fields for the attributes you compare across, such as site,
-            interview wave or age group.
-          </p>
+          <p className="p-6 text-sm text-fg-muted">{t("descriptors.tableEmpty")}</p>
         ) : (
           <table className="w-full border-collapse text-sm">
             <thead className="sticky top-0 bg-panel">
               <tr>
-                <th className="border-b border-border px-3 py-2 text-left font-medium">Document</th>
+                <th className="border-b border-border px-3 py-2 text-left font-medium">
+                  {t("descriptors.documentColumn")}
+                </th>
                 {list.map((f) => (
                   <th key={f.id} className="border-b border-border px-3 py-2 text-left font-medium">
                     {f.name}
                     <span className="ml-1 text-[10px] uppercase text-fg-muted">
-                      {KIND_LABELS[f.kind]}
+                      {t(KIND_LABEL_KEYS[f.kind])}
                     </span>
                   </th>
                 ))}

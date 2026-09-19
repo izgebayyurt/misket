@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import type { AnalysisTab } from "@/state/workspace";
 import { useWorkspace } from "@/state/workspace";
 import { cn } from "@/lib/utils";
@@ -28,6 +29,7 @@ function readCollapsed(): boolean {
  * numbers they narrow.
  */
 export function AnalysisView({ tab }: { tab: AnalysisTab }) {
+  const { t } = useTranslation();
   const setView = useWorkspace((s) => s.setView);
   const [collapsed, setCollapsed] = useState(readCollapsed);
   const entry = analysisEntry(tab);
@@ -48,7 +50,7 @@ export function AnalysisView({ tab }: { tab: AnalysisTab }) {
           "flex shrink-0 flex-col overflow-y-auto border-r border-border bg-panel",
           collapsed ? "w-12" : "w-48",
         )}
-        aria-label="Analyses"
+        aria-label={t("analysis.title")}
         data-testid="analysis-nav"
         data-collapsed={collapsed || undefined}
       >
@@ -59,14 +61,16 @@ export function AnalysisView({ tab }: { tab: AnalysisTab }) {
           )}
         >
           {collapsed ? null : (
-            <h2 className="min-w-0 flex-1 truncate font-serif text-base font-medium">Analysis</h2>
+            <h2 className="min-w-0 flex-1 truncate font-serif text-base font-medium">
+              {t("analysis.title")}
+            </h2>
           )}
           <button
             type="button"
             onClick={() => setCollapsed((c) => !c)}
             className="rounded p-1 text-fg-muted hover:bg-muted hover:text-fg"
-            title={collapsed ? "Show analysis names" : "Collapse to icons"}
-            aria-label={collapsed ? "Show analysis names" : "Collapse to icons"}
+            title={collapsed ? t("analysis.showNames") : t("analysis.collapseToIcons")}
+            aria-label={collapsed ? t("analysis.showNames") : t("analysis.collapseToIcons")}
             data-testid="analysis-nav-collapse"
           >
             {collapsed ? (
@@ -86,20 +90,21 @@ export function AnalysisView({ tab }: { tab: AnalysisTab }) {
                   <div className="mx-2 my-1 border-t border-border" aria-hidden />
                 ) : (
                   <h3 className="px-3 pb-0.5 pt-2 text-[10px] font-medium uppercase tracking-wide text-fg-muted">
-                    {group.label}
+                    {t(group.labelKey)}
                   </h3>
                 )}
                 <ul>
                   {items.map((a) => {
                     const Icon = a.icon;
                     const selected = a.id === entry.id;
+                    const label = t(a.labelKey);
                     return (
                       <li key={a.id}>
                         <button
                           type="button"
                           onClick={() => setView({ kind: "analysis", tab: a.id })}
                           aria-current={selected ? "true" : undefined}
-                          title={collapsed ? a.label : undefined}
+                          title={collapsed ? label : undefined}
                           className={cn(
                             "flex w-full items-center gap-2 border-l-2 border-transparent py-1.5 text-left text-sm text-fg-muted hover:bg-muted hover:text-fg",
                             collapsed ? "justify-center px-0" : "px-3",
@@ -109,10 +114,10 @@ export function AnalysisView({ tab }: { tab: AnalysisTab }) {
                         >
                           <Icon className="size-4 shrink-0" />
                           {collapsed ? (
-                            <span className="sr-only">{a.label}</span>
+                            <span className="sr-only">{label}</span>
                           ) : (
                             <>
-                              <span className="min-w-0 flex-1 truncate">{a.label}</span>
+                              <span className="min-w-0 flex-1 truncate">{label}</span>
                               {a.shortcut ? (
                                 <span className="shrink-0 text-[10px] text-fg-muted">
                                   {a.shortcut}

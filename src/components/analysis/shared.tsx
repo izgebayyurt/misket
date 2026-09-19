@@ -1,5 +1,6 @@
 import { save } from "@tauri-apps/plugin-dialog";
 import { Download, Image as ImageIcon } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { writeBinaryFile, writeTextFile } from "@/api/project";
 import { flattenTree, pathOf } from "@/core/codeTree";
 import { useCodeTree } from "@/queries/codes";
@@ -31,6 +32,7 @@ export function DocumentFilter({
   documentSetIds: string[];
   onSetIdsChange: (ids: string[]) => void;
 }) {
+  const { t } = useTranslation();
   const { data: docs } = useDocuments();
   const { data: docSets } = useSets("document");
   const count = documentIds.length + documentSetIds.length;
@@ -38,8 +40,13 @@ export function DocumentFilter({
     <FilterPicker
       label={
         count
-          ? `${count} document${count > 1 ? "s" : ""}${documentSetIds.length ? " / set" : ""}`
-          : "All documents"
+          ? t(
+              documentSetIds.length
+                ? "excerpts.filters.documentCountWithSet"
+                : "excerpts.filters.documentCount",
+              { count },
+            )
+          : t("analysis.allDocuments")
       }
       active={count > 0}
       onClear={() => {
@@ -100,12 +107,13 @@ export function CodeFilter({
   codeIds: string[];
   onChange: (ids: string[]) => void;
 }) {
+  const { t } = useTranslation();
   const tree = useCodeTree();
   const nodes = flattenTree(tree);
   const count = codeIds.length;
   return (
     <FilterPicker
-      label={count ? `${count} code${count > 1 ? "s" : ""}` : "Any code"}
+      label={count ? t("excerpts.filters.codeCount", { count }) : t("excerpts.filters.anyCode")}
       active={count > 0}
       onClear={() => onChange([])}
       testId="analysis-filter-codes"
@@ -144,7 +152,7 @@ export function CodeFilter({
 export function CodePicker({
   value,
   onChange,
-  allLabel = "All codes",
+  allLabel,
   testId = "code-picker",
 }: {
   value: string | null;
@@ -152,6 +160,8 @@ export function CodePicker({
   allLabel?: string;
   testId?: string;
 }) {
+  const { t } = useTranslation();
+  const allLabelText = allLabel ?? t("analysis.allCodes");
   const tree = useCodeTree();
   const nodes = flattenTree(tree);
   const selected = value ? tree.byId.get(value) : undefined;
@@ -172,14 +182,14 @@ export function CodePicker({
   );
   return (
     <FilterPicker
-      label={selected ? selected.code.name : allLabel}
+      label={selected ? selected.code.name : allLabelText}
       active={!!value}
       onClear={() => onChange(null)}
       testId={testId}
     >
       {(query) => (
         <>
-          {!query ? row(allLabel, !value, () => onChange(null)) : null}
+          {!query ? row(allLabelText, !value, () => onChange(null)) : null}
           {nodes
             .filter((n) => pathOf(tree, n.code.id).toLowerCase().includes(query.toLowerCase()))
             .map((n) =>
@@ -211,6 +221,7 @@ export function ExportCsvButton({
   build: () => string;
   disabled?: boolean;
 }) {
+  const { t } = useTranslation();
   const { data: project } = useProjectInfo();
   async function run() {
     try {
@@ -221,7 +232,7 @@ export function ExportCsvButton({
       });
       if (!path) return;
       await writeTextFile(path, build());
-      toast.info(`Exported to ${path.split(/[\\/]/).pop()}`);
+      toast.info(t("analysis.exportedTo", { name: path.split(/[\\/]/).pop() }));
     } catch (e) {
       toast.error(e);
     }
@@ -248,6 +259,7 @@ export function ExportPngButton({
   svgRef: React.RefObject<SVGSVGElement | null>;
   disabled?: boolean;
 }) {
+  const { t } = useTranslation();
   const { data: project } = useProjectInfo();
   async function run() {
     try {
@@ -261,7 +273,7 @@ export function ExportPngButton({
       });
       if (!path) return;
       await writeBinaryFile(path, png);
-      toast.info(`Exported to ${path.split(/[\\/]/).pop()}`);
+      toast.info(t("analysis.exportedTo", { name: path.split(/[\\/]/).pop() }));
     } catch (e) {
       toast.error(e);
     }

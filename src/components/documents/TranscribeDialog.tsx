@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Trans, useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter } from "@/components/ui/dialog";
 import { useTranscriptionSupport, useWhisperModels } from "@/queries/transcribe";
@@ -20,6 +21,7 @@ import type { DocumentSummary } from "@/api/types";
  * into a paragraph.
  */
 export function TranscribeDialog({ doc, onClose }: { doc: DocumentSummary; onClose: () => void }) {
+  const { t } = useTranslation();
   const { data: support } = useTranscriptionSupport();
   const { data: library, isLoading } = useWhisperModels();
   const settings = useSettings((s) => s.settings);
@@ -77,24 +79,24 @@ export function TranscribeDialog({ doc, onClose }: { doc: DocumentSummary; onClo
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent
-        title="Transcribe"
+        title={t("documents.transcribe.title")}
         description={doc.name}
         className="max-w-lg"
         data-testid="transcribe-dialog"
       >
         {support && !support.available ? (
           <p className="text-sm text-fg-muted" data-testid="transcribe-unavailable">
-            This build of Misket was compiled without transcription support.
+            {t("layout.transcription.noBuildSupport")}
           </p>
         ) : isLoading ? (
-          <p className="text-sm text-fg-muted">Looking for models…</p>
+          <p className="text-sm text-fg-muted">{t("documents.transcribe.lookingForModels")}</p>
         ) : installed.length === 0 ? (
           <NoModelNotice />
         ) : (
           <div className="space-y-4">
             <label className="block">
               <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-fg-muted">
-                Model
+                {t("documents.transcribe.model")}
               </span>
               <select
                 className="w-full rounded border border-border bg-bg px-2 py-1 text-sm text-fg"
@@ -114,7 +116,7 @@ export function TranscribeDialog({ doc, onClose }: { doc: DocumentSummary; onClo
             <div className="grid grid-cols-2 gap-3">
               <label className="block">
                 <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-fg-muted">
-                  Language
+                  {t("documents.transcribe.language")}
                 </span>
                 <select
                   className="w-full rounded border border-border bg-bg px-2 py-1 text-sm text-fg"
@@ -122,7 +124,7 @@ export function TranscribeDialog({ doc, onClose }: { doc: DocumentSummary; onClo
                   onChange={(e) => setLanguage(e.target.value)}
                   data-testid="transcribe-language"
                 >
-                  <option value="auto">Detect automatically</option>
+                  <option value="auto">{t("documents.transcribe.detectAutomatically")}</option>
                   {(support?.languages ?? []).map((l) => (
                     <option
                       key={l.code}
@@ -136,7 +138,7 @@ export function TranscribeDialog({ doc, onClose }: { doc: DocumentSummary; onClo
               </label>
               <label className="block">
                 <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-fg-muted">
-                  Paragraphs
+                  {t("documents.transcribe.paragraphs")}
                 </span>
                 <select
                   className="w-full rounded border border-border bg-bg px-2 py-1 text-sm text-fg"
@@ -147,8 +149,8 @@ export function TranscribeDialog({ doc, onClose }: { doc: DocumentSummary; onClo
                   data-testid="transcribe-paragraphs"
                 >
                   {PARAGRAPH_OPTIONS.map((o) => (
-                    <option key={o.label} value={o.value === null ? "segment" : String(o.value)}>
-                      {o.label}
+                    <option key={o.labelKey} value={o.value === null ? "segment" : String(o.value)}>
+                      {t(o.labelKey)}
                     </option>
                   ))}
                 </select>
@@ -163,7 +165,10 @@ export function TranscribeDialog({ doc, onClose }: { doc: DocumentSummary; onClo
                   onChange={(e) => setTimestamps(e.target.checked)}
                   data-testid="transcribe-timestamps"
                 />
-                Start every paragraph with its <code>[mm:ss]</code> timestamp
+                <Trans
+                  i18nKey="documents.transcribe.timestampHint"
+                  components={{ code: <code /> }}
+                />
               </label>
               <label className="flex items-center gap-2 text-sm">
                 <input
@@ -173,41 +178,42 @@ export function TranscribeDialog({ doc, onClose }: { doc: DocumentSummary; onClo
                   onChange={(e) => setTranslate(e.target.checked)}
                   data-testid="transcribe-translate"
                 />
-                Translate to English
+                {t("documents.transcribe.translateToEnglish")}
                 {!multilingual ? (
-                  <span className="text-xs text-fg-muted">(English-only model)</span>
+                  <span className="text-xs text-fg-muted">
+                    {t("documents.transcribe.englishOnlyModel")}
+                  </span>
                 ) : null}
               </label>
             </div>
 
             {!languageOk ? (
               <p className="text-xs text-danger" data-testid="transcribe-language-warning">
-                This model only knows English. Pick a multilingual model, or set the language back
-                to English.
+                {t("documents.transcribe.languageWarning")}
               </p>
             ) : null}
             {needsFfmpeg ? (
               <p className="text-xs text-fg-muted" data-testid="transcribe-ffmpeg-note">
-                This is a video. Misket reads the audio out of most mp4 and mkv files on its own,
-                but if it cannot, it needs <code>ffmpeg</code> on your PATH — it did not find one.
+                <Trans i18nKey="documents.transcribe.ffmpegNote" components={{ code: <code /> }} />
               </p>
             ) : null}
             <p className="text-xs text-fg-muted">
-              Everything happens on this machine. The transcript arrives as a new text document
-              called “{doc.name} (transcript)”, which you can undo like any other import.
+              {t("documents.transcribe.runsLocallyNote", { name: doc.name })}
             </p>
           </div>
         )}
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>
-            Cancel
+            {t("common.cancel")}
           </Button>
           <Button
             onClick={() => void run()}
             disabled={!chosen || !languageOk || starting || support?.available === false}
             data-testid="transcribe-start"
           >
-            {starting ? "Starting…" : "Transcribe"}
+            {starting
+              ? t("documents.transcribe.startingEllipsis")
+              : t("documents.transcribe.title")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -217,15 +223,19 @@ export function TranscribeDialog({ doc, onClose }: { doc: DocumentSummary; onClo
 
 /** What to do when nothing has been downloaded yet — the default state. */
 function NoModelNotice() {
+  const { t } = useTranslation();
   return (
     <div className="space-y-2 text-sm" data-testid="transcribe-no-model">
-      <p>Misket has no transcription model yet.</p>
+      <p>{t("documents.transcribe.noModelYet")}</p>
       <p className="text-fg-muted">
-        Transcription runs entirely on this machine, so it needs a Whisper model file on disk. Open{" "}
-        <strong>Settings → Transcription</strong> and download one — <em>Tiny</em> is 75 MiB and
-        enough to see whether this works for your audio; <em>Small</em> is the usual choice for
-        interviews. On a machine with no network, copy a <code>ggml-*.bin</code> across and use “Add
-        model file…”.
+        <Trans
+          i18nKey="documents.transcribe.noModelHint"
+          components={{
+            strong: <strong />,
+            em: <em />,
+            code: <code />,
+          }}
+        />
       </p>
     </div>
   );

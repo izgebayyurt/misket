@@ -1,4 +1,5 @@
 import { Check, Plus } from "lucide-react";
+import { Trans, useTranslation } from "react-i18next";
 import type { Code } from "@/api/types";
 import { Button } from "@/components/ui/button";
 import { ColorDot } from "@/components/codebook/ColorSwatch";
@@ -33,19 +34,24 @@ export function ReviewBar({
   onNewChild,
   onDone,
 }: Props) {
+  const { t } = useTranslation();
   return (
     <div
       className="flex flex-wrap items-center gap-1.5 border-b border-border bg-panel px-3 py-2"
       data-testid="review-bar"
     >
       <span className="mr-1 text-sm">
-        Reviewing <span className="font-medium">{parent.name}</span>
-        <span className="ml-1.5 tabular-nums text-fg-muted">{remaining} left</span>
+        <Trans
+          i18nKey="excerpts.reviewing"
+          values={{ name: parent.name }}
+          components={{ b: <span className="font-medium" /> }}
+        />
+        <span className="ml-1.5 tabular-nums text-fg-muted">
+          {t("excerpts.reviewingLeft", { count: remaining })}
+        </span>
       </span>
       {childCodes.length === 0 ? (
-        <span className="text-sm text-fg-muted">
-          No sub-codes yet — create one to file these under.
-        </span>
+        <span className="text-sm text-fg-muted">{t("excerpts.reviewNoChildren")}</span>
       ) : (
         childCodes.map((c, i) => (
           <Button
@@ -55,7 +61,9 @@ export function ReviewBar({
             disabled={busy || !hasTarget}
             onClick={() => onPushDown(c.id)}
             title={
-              hasTarget ? `Move the selected excerpt to "${c.name}"` : "Select an excerpt first"
+              hasTarget
+                ? t("excerpts.reviewMoveTo", { name: c.name })
+                : t("excerpts.reviewSelectFirst")
             }
             data-testid="review-child"
           >
@@ -70,11 +78,11 @@ export function ReviewBar({
         ))
       )}
       <Button size="sm" variant="ghost" onClick={onNewChild} disabled={busy}>
-        <Plus /> New child…
+        <Plus /> {t("excerpts.reviewNewChild")}
       </Button>
       <span className="flex-1" />
       <Button size="sm" variant="outline" onClick={onDone}>
-        <Check /> Done
+        <Check /> {t("common.done")}
       </Button>
     </div>
   );

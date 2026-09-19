@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { ChildrenStrategy, Code, CodeImpact } from "@/api/types";
 import { countCodeImpact } from "@/api/codes";
 import { Button } from "@/components/ui/button";
@@ -8,6 +9,7 @@ import { toast } from "@/state/toasts";
 import { useWorkspace } from "@/state/workspace";
 
 export function DeleteCodeDialog({ code, onClose }: { code: Code; onClose: () => void }) {
+  const { t } = useTranslation();
   const [impact, setImpact] = useState<CodeImpact | null>(null);
   const [strategy, setStrategy] = useState<ChildrenStrategy>("promote");
   const del = useDeleteCode();
@@ -18,18 +20,28 @@ export function DeleteCodeDialog({ code, onClose }: { code: Code; onClose: () =>
   const hasChildren = (impact?.descendantCount ?? 0) > 0;
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent title={`Delete "${code.name}"?`} description="You can undo this.">
+      <DialogContent
+        title={t("codebook.deleteDialog.title", { name: code.name })}
+        description={t("codebook.deleteDialog.description")}
+      >
         {impact ? (
           <div className="space-y-3 text-sm">
             <p>
               {impact.excerptCount === 0
-                ? "No excerpts use this code."
-                : `${impact.excerptCount} excerpt${impact.excerptCount === 1 ? "" : "s"} will lose ${hasChildren && strategy === "delete" ? "these codes" : "this code"}. The excerpts themselves are kept.`}
+                ? t("codebook.deleteDialog.noExcerpts")
+                : t("codebook.deleteDialog.willLose", {
+                    count: impact.excerptCount,
+                    what: t(
+                      hasChildren && strategy === "delete"
+                        ? "codebook.deleteDialog.theseCodes"
+                        : "codebook.deleteDialog.thisCode",
+                    ),
+                  })}
             </p>
             {hasChildren ? (
               <fieldset className="space-y-1.5">
                 <legend className="text-xs font-medium text-fg-muted">
-                  It has {impact.descendantCount} sub-code{impact.descendantCount === 1 ? "" : "s"}
+                  {t("codebook.deleteDialog.hasSubcodes", { count: impact.descendantCount })}
                 </legend>
                 <label className="flex items-center gap-2">
                   <input
@@ -37,7 +49,7 @@ export function DeleteCodeDialog({ code, onClose }: { code: Code; onClose: () =>
                     checked={strategy === "promote"}
                     onChange={() => setStrategy("promote")}
                   />
-                  Keep sub-codes and move them up one level
+                  {t("codebook.deleteDialog.keepPromote")}
                 </label>
                 <label className="flex items-center gap-2">
                   <input
@@ -45,17 +57,17 @@ export function DeleteCodeDialog({ code, onClose }: { code: Code; onClose: () =>
                     checked={strategy === "delete"}
                     onChange={() => setStrategy("delete")}
                   />
-                  Delete the sub-codes too
+                  {t("codebook.deleteDialog.deleteSubcodesToo")}
                 </label>
               </fieldset>
             ) : null}
           </div>
         ) : (
-          <p className="text-sm text-fg-muted">Checking…</p>
+          <p className="text-sm text-fg-muted">{t("codebook.deleteDialog.checking")}</p>
         )}
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>
-            Cancel
+            {t("common.cancel")}
           </Button>
           <Button
             variant="danger"
@@ -71,7 +83,7 @@ export function DeleteCodeDialog({ code, onClose }: { code: Code; onClose: () =>
               }
             }}
           >
-            Delete
+            {t("common.delete")}
           </Button>
         </DialogFooter>
       </DialogContent>

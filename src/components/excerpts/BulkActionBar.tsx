@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { TagPlus, TagX, Trash2, X } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -24,6 +25,7 @@ interface Props {
 
 /** Floating bar over the excerpt list while a multi-selection is active. */
 export function BulkActionBar({ ids, codeIds, onClear }: Props) {
+  const { t } = useTranslation();
   const tree = useCodeTree();
   const openCodePicker = useWorkspace((s) => s.openCodePicker);
   const addCodes = useAddCodesToExcerpts();
@@ -33,24 +35,24 @@ export function BulkActionBar({ ids, codeIds, onClear }: Props) {
   const [removeOpen, setRemoveOpen] = useState(false);
 
   const count = ids.length;
-  const excerpts = `${count} excerpt${count === 1 ? "" : "s"}`;
   const busy = addCodes.isPending || removeCodes.isPending || deleteExcerpts.isPending;
-  const nameOf = (codeId: string) => tree.byId.get(codeId)?.code.name ?? "code";
+  const nameOf = (codeId: string) =>
+    tree.byId.get(codeId)?.code.name ?? t("excerpts.bulk.genericCode");
 
   function addCode() {
     openCodePicker({
-      label: `Add to ${excerpts}`,
+      label: t("excerpts.bulk.addToLabel", { count }),
       onPick: async (codeId) => {
         try {
           const affected = await addCodes.mutateAsync({
             ids,
             codeIds: [codeId],
-            label: `Add ${nameOf(codeId)} to ${excerpts}`,
+            label: t("excerpts.bulk.addMutationLabel", { count, name: nameOf(codeId) }),
           });
           toast.info(
             affected
-              ? `Added ${nameOf(codeId)} to ${affected} excerpt${affected === 1 ? "" : "s"}.`
-              : `Every selected excerpt already has ${nameOf(codeId)}.`,
+              ? t("excerpts.bulk.added", { count: affected, name: nameOf(codeId) })
+              : t("excerpts.bulk.alreadyHas", { name: nameOf(codeId) }),
           );
         } catch (e) {
           toast.error(e);
@@ -65,9 +67,9 @@ export function BulkActionBar({ ids, codeIds, onClear }: Props) {
       const affected = await removeCodes.mutateAsync({
         ids,
         codeIds: [codeId],
-        label: `Remove ${nameOf(codeId)} from ${excerpts}`,
+        label: t("excerpts.bulk.removeMutationLabel", { count, name: nameOf(codeId) }),
       });
-      toast.info(`Removed ${nameOf(codeId)} from ${affected} excerpt${affected === 1 ? "" : "s"}.`);
+      toast.info(t("excerpts.bulk.removed", { count: affected, name: nameOf(codeId) }));
     } catch (e) {
       toast.error(e);
     }
@@ -78,7 +80,7 @@ export function BulkActionBar({ ids, codeIds, onClear }: Props) {
     try {
       const deleted = await deleteExcerpts.mutateAsync({ ids });
       onClear();
-      toast.info(`Deleted ${deleted} excerpt${deleted === 1 ? "" : "s"}.`);
+      toast.info(t("excerpts.bulk.deleted", { count: deleted }));
     } catch (e) {
       toast.error(e);
     }
@@ -91,19 +93,19 @@ export function BulkActionBar({ ids, codeIds, onClear }: Props) {
         data-testid="bulk-action-bar"
       >
         <span className="whitespace-nowrap px-1 text-sm font-medium tabular-nums">
-          {excerpts} selected
+          {t("excerpts.bulk.selected", { count })}
         </span>
         <Button size="sm" variant="outline" onClick={addCode} disabled={busy}>
-          <TagPlus /> Add code…
+          <TagPlus /> {t("excerpts.bulk.addCode")}
         </Button>
         <Popover open={removeOpen} onOpenChange={setRemoveOpen}>
           <PopoverTrigger asChild>
             <Button size="sm" variant="outline" disabled={busy || codeIds.length === 0}>
-              <TagX /> Remove code…
+              <TagX /> {t("excerpts.bulk.removeCode")}
             </Button>
           </PopoverTrigger>
           <PopoverContent className="w-64 p-1">
-            <p className="px-2 py-1 text-xs text-fg-muted">Codes in this selection</p>
+            <p className="px-2 py-1 text-xs text-fg-muted">{t("excerpts.bulk.codesInSelection")}</p>
             <ul className="max-h-64 overflow-y-auto">
               {codeIds.map((codeId) => (
                 <li key={codeId}>
@@ -127,17 +129,17 @@ export function BulkActionBar({ ids, codeIds, onClear }: Props) {
           disabled={busy}
           data-testid="bulk-delete"
         >
-          <Trash2 /> Delete
+          <Trash2 /> {t("excerpts.bulk.delete")}
         </Button>
         <Button size="sm" variant="ghost" onClick={onClear} disabled={busy}>
-          <X /> Clear selection
+          <X /> {t("excerpts.bulk.clearSelection")}
         </Button>
       </div>
       {confirmingDelete ? (
         <ConfirmDialog
-          title={`Delete ${excerpts}?`}
-          description="The text stays in the document; only the coded excerpts and their memos are removed. This can be undone."
-          confirmLabel={`Delete ${excerpts}`}
+          title={t("excerpts.bulk.deleteTitle", { count })}
+          description={t("excerpts.bulk.deleteDescription")}
+          confirmLabel={t("excerpts.bulk.deleteConfirm", { count })}
           onConfirm={() => void confirmDelete()}
           onCancel={() => setConfirmingDelete(false)}
         />

@@ -12,17 +12,17 @@ describe("the analysis registry", () => {
     for (const a of ANALYSES) expect(groups).toContain(a.group);
   });
 
-  it("gives every analysis a label, an icon and a component", () => {
+  it("gives every analysis a label key, an icon and a component", () => {
     for (const a of ANALYSES) {
-      expect(a.label.trim()).not.toBe("");
+      expect(a.labelKey.trim()).not.toBe("");
       expect(a.icon).toBeTruthy();
       expect(a.component).toBeTruthy();
     }
   });
 
   it("finds an analysis by its tab name", () => {
-    expect(analysisEntry("reliability").label).toBe("Reliability");
-    expect(analysisEntry("frequencies").label).toBe("Frequencies");
+    expect(analysisEntry("reliability").labelKey).toBe("analysis.tabs.reliability");
+    expect(analysisEntry("frequencies").labelKey).toBe("analysis.tabs.frequencies");
   });
 
   it("falls back to the first analysis for a tab this build does not have", () => {

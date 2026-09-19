@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { Trans, useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter } from "@/components/ui/dialog";
 import {
@@ -34,6 +35,7 @@ export function TidyImportDialog() {
 }
 
 function TidyImportDialogContent({ files }: { files: TidyFileInfo[] }) {
+  const { t } = useTranslation();
   const [options, setOptions] = useState<TidyOptions>(DEFAULT_TIDY_OPTIONS);
   const [remember, setRemember] = useState(false);
   const respond = useTidyPromptStore((s) => s.respond);
@@ -54,8 +56,8 @@ function TidyImportDialogContent({ files }: { files: TidyFileInfo[] }) {
   return (
     <Dialog open onOpenChange={(o) => !o && decide({ apply: false })}>
       <DialogContent
-        title="Tidy up whitespace before importing?"
-        description="These files have blank-line gaps, trailing spaces or other whitespace that's usually accidental. Choose what to clean up, or import them exactly as they are."
+        title={t("documents.tidy.title")}
+        description={t("documents.tidy.description")}
         className="max-w-2xl"
       >
         <div className="space-y-4">
@@ -63,7 +65,7 @@ function TidyImportDialogContent({ files }: { files: TidyFileInfo[] }) {
             {files.map((f) => (
               <li key={f.name}>
                 <span className="font-medium">{f.name}</span>:{" "}
-                {summarizeWhitespace(f.report).join(", ") || "no issues"}
+                {summarizeWhitespace(f.report, t).join(", ") || t("documents.tidy.noIssues")}
               </li>
             ))}
           </ul>
@@ -75,7 +77,7 @@ function TidyImportDialogContent({ files }: { files: TidyFileInfo[] }) {
                 checked={options.collapseBlankLines}
                 onChange={(e) => setOptions({ ...options, collapseBlankLines: e.target.checked })}
               />
-              Collapse blank-line runs
+              {t("documents.tidy.collapseBlankLineRuns")}
             </label>
             <label className="flex items-center gap-2">
               <input
@@ -83,7 +85,7 @@ function TidyImportDialogContent({ files }: { files: TidyFileInfo[] }) {
                 checked={options.trimTrailingSpaces}
                 onChange={(e) => setOptions({ ...options, trimTrailingSpaces: e.target.checked })}
               />
-              Trim trailing spaces
+              {t("documents.tidy.trimTrailingSpaces")}
             </label>
             <label className="flex items-center gap-2">
               <input
@@ -91,7 +93,7 @@ function TidyImportDialogContent({ files }: { files: TidyFileInfo[] }) {
                 checked={options.normalizeSpaces}
                 onChange={(e) => setOptions({ ...options, normalizeSpaces: e.target.checked })}
               />
-              Normalize spaces &amp; tabs
+              {t("documents.tidy.normalizeSpacesAndTabs")}
             </label>
             <label className="flex items-center gap-2">
               <input
@@ -99,29 +101,29 @@ function TidyImportDialogContent({ files }: { files: TidyFileInfo[] }) {
                 checked={options.unwrapHardBreaks}
                 onChange={(e) => setOptions({ ...options, unwrapHardBreaks: e.target.checked })}
               />
-              Unwrap hard-wrapped lines
+              {t("documents.tidy.unwrapHardWrappedLines")}
             </label>
           </fieldset>
           {options.unwrapHardBreaks ? (
-            <p className="text-xs text-fg-muted">
-              Unwrapping can merge lines that were meant to stay separate (e.g. list items or short
-              turns in a transcript). Check the preview below before relying on it.
-            </p>
+            <p className="text-xs text-fg-muted">{t("documents.tidy.unwrapWarning")}</p>
           ) : null}
 
           {preview ? (
             <div>
               <p className="mb-1 text-xs text-fg-muted">
-                Preview of <span className="font-medium">{preview.name}</span> around line{" "}
-                {preview.diff.startLine + 1}:
+                <Trans
+                  i18nKey="documents.tidy.previewOf"
+                  values={{ name: preview.name, line: preview.diff.startLine + 1 }}
+                  components={{ bold: <span className="font-medium" /> }}
+                />
               </p>
               <div className="grid grid-cols-2 gap-2">
-                <DiffColumn label="Before" lines={preview.diff.before} />
-                <DiffColumn label="After" lines={preview.diff.after} />
+                <DiffColumn label={t("documents.tidy.before")} lines={preview.diff.before} />
+                <DiffColumn label={t("documents.tidy.after")} lines={preview.diff.after} />
               </div>
             </div>
           ) : (
-            <p className="text-xs text-fg-muted">Nothing would change with the current options.</p>
+            <p className="text-xs text-fg-muted">{t("documents.tidy.nothingWouldChange")}</p>
           )}
 
           <div className="flex items-center justify-between border-t border-border pt-3">
@@ -131,22 +133,24 @@ function TidyImportDialogContent({ files }: { files: TidyFileInfo[] }) {
                 checked={remember}
                 onChange={(e) => setRemember(e.target.checked)}
               />
-              Remember my choice and don&apos;t ask again
+              {t("documents.tidy.rememberChoice")}
             </label>
             <button
               type="button"
               className="text-xs text-accent underline-offset-4 hover:underline"
               onClick={() => clearRememberedTidyChoice()}
             >
-              Ask again on import
+              {t("documents.tidy.askAgainOnImport")}
             </button>
           </div>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => decide({ apply: false })}>
-            Import as is
+            {t("documents.tidy.importAsIs")}
           </Button>
-          <Button onClick={() => decide({ apply: true, options })}>Import cleaned</Button>
+          <Button onClick={() => decide({ apply: true, options })}>
+            {t("documents.tidy.importCleaned")}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -154,12 +158,13 @@ function TidyImportDialogContent({ files }: { files: TidyFileInfo[] }) {
 }
 
 function DiffColumn({ label, lines }: { label: string; lines: string[] }) {
+  const { t } = useTranslation();
   return (
     <div className="min-w-0">
       <p className="mb-0.5 text-[10px] font-medium uppercase text-fg-muted">{label}</p>
       <div className="max-h-40 overflow-auto rounded-md border border-border bg-panel p-2 font-mono text-[11px] leading-tight">
         {lines.length === 0 ? (
-          <p className="text-fg-muted">(empty)</p>
+          <p className="text-fg-muted">{t("documents.tidy.empty")}</p>
         ) : (
           lines.map((l, i) => (
             <div key={i} className="whitespace-pre">

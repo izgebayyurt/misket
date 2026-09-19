@@ -54,16 +54,24 @@ export function looksScanned(stats: PdfQualityStats): boolean {
 }
 
 /**
- * The sentence shown in the import dialog for a scanned-looking PDF. Most
- * scanned PDFs have literally empty pages, which is the wording the brief
- * asks for; the rare case where every page has a sliver of text (embedded
- * captions, a watermark) but not enough to be useful gets its own phrasing.
+ * What the import dialog should say about a scanned-looking PDF, as
+ * structured data rather than a sentence — this module is pure (no
+ * react/i18next import; see CLAUDE.md), so the caller turns it into text
+ * with `t()`. Most scanned PDFs have literally empty pages; the rare case
+ * where every page has a sliver of text (embedded captions, a watermark)
+ * but not enough to be useful gets its own phrasing.
  */
-export function scannedPdfMessage(stats: PdfQualityStats): string {
+export type ScannedPdfMessage =
+  | { kind: "emptyPages"; emptyPages: number; totalPages: number }
+  | { kind: "sparseText"; totalPages: number; avgCharsPerPage: number };
+
+export function scannedPdfMessage(stats: PdfQualityStats): ScannedPdfMessage {
   if (stats.emptyPages > 0) {
-    return `This PDF looks scanned: ${stats.emptyPages} of ${stats.totalPages} pages have no text layer.`;
+    return { kind: "emptyPages", emptyPages: stats.emptyPages, totalPages: stats.totalPages };
   }
-  return `This PDF looks scanned: its ${stats.totalPages} page${
-    stats.totalPages === 1 ? "" : "s"
-  } have only about ${Math.round(stats.avgCharsPerPage)} characters of text each.`;
+  return {
+    kind: "sparseText",
+    totalPages: stats.totalPages,
+    avgCharsPerPage: Math.round(stats.avgCharsPerPage),
+  };
 }

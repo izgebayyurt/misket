@@ -1,6 +1,7 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { DescriptorField, DescriptorKind } from "@/api/types";
-import { KIND_LABELS, parseOptions } from "@/core/descriptors";
+import { KIND_LABEL_KEYS, parseOptions } from "@/core/descriptors";
 import { Button } from "@/components/ui/button";
 import { Input, Textarea } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -24,6 +25,7 @@ export function DescriptorFieldForm({
   onCancel?: () => void;
   busy?: boolean;
 }) {
+  const { t } = useTranslation();
   const [name, setName] = useState(field?.name ?? "");
   const [kind, setKind] = useState<DescriptorKind>(field?.kind ?? "text");
   const [optionsText, setOptionsText] = useState((field?.options ?? []).join("\n"));
@@ -43,21 +45,21 @@ export function DescriptorFieldForm({
       <div className="flex gap-2">
         <div className="min-w-0 flex-1">
           <label className="text-xs font-medium text-fg-muted" htmlFor="descriptor-name">
-            Name
+            {t("descriptors.form.nameLabel")}
           </label>
           <Input
             id="descriptor-name"
             autoFocus
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="Age group"
+            placeholder={t("descriptors.form.namePlaceholder")}
             className="mt-1"
             data-testid="descriptor-name"
           />
         </div>
         <div className="w-32">
           <label className="text-xs font-medium text-fg-muted" htmlFor="descriptor-kind">
-            Type
+            {t("descriptors.form.typeLabel")}
           </label>
           <select
             id="descriptor-kind"
@@ -66,7 +68,7 @@ export function DescriptorFieldForm({
             disabled={frozenKind}
             title={
               frozenKind
-                ? `${field?.valueCount} document${field?.valueCount === 1 ? " has" : "s have"} a value; clear them to change the type`
+                ? t("descriptors.form.frozenKindHint", { count: field?.valueCount ?? 0 })
                 : undefined
             }
             onChange={(e) => setKind(e.target.value as DescriptorKind)}
@@ -74,7 +76,7 @@ export function DescriptorFieldForm({
           >
             {KINDS.map((k) => (
               <option key={k} value={k}>
-                {KIND_LABELS[k]}
+                {t(KIND_LABEL_KEYS[k])}
               </option>
             ))}
           </select>
@@ -83,7 +85,7 @@ export function DescriptorFieldForm({
       {kind === "choice" ? (
         <div>
           <label className="text-xs font-medium text-fg-muted" htmlFor="descriptor-options">
-            Options, one per line
+            {t("descriptors.form.optionsLabel")}
           </label>
           <Textarea
             id="descriptor-options"
@@ -99,7 +101,7 @@ export function DescriptorFieldForm({
       <div className="flex justify-end gap-2">
         {onCancel ? (
           <Button type="button" variant="ghost" size="sm" onClick={onCancel}>
-            Cancel
+            {t("common.cancel")}
           </Button>
         ) : null}
         <Button type="submit" size="sm" disabled={!valid || busy} data-testid="descriptor-submit">

@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
+import { useTranslation } from "react-i18next";
 import { Dialog, DialogContent, DialogFooter } from "@/components/ui/dialog";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Button } from "@/components/ui/button";
@@ -14,11 +15,11 @@ const LOGS_QUERY_KEY = ["diagnostics", "logs"] as const;
 
 type LevelFilter = "all" | "info" | "warn" | "error";
 
-const LEVEL_OPTIONS: { value: LevelFilter; label: string }[] = [
-  { value: "all", label: "All" },
-  { value: "info", label: "Info" },
-  { value: "warn", label: "Warnings" },
-  { value: "error", label: "Errors" },
+const LEVEL_OPTIONS: { value: LevelFilter; labelKey: string }[] = [
+  { value: "all", labelKey: "layout.logs.levelAll" },
+  { value: "info", labelKey: "layout.logs.levelInfo" },
+  { value: "warn", labelKey: "layout.logs.levelWarnings" },
+  { value: "error", labelKey: "layout.logs.levelErrors" },
 ];
 
 interface ParsedLine {
@@ -46,6 +47,7 @@ function parseLine(raw: string): ParsedLine {
 }
 
 export function LogViewerDialog({ onClose }: { onClose: () => void }) {
+  const { t } = useTranslation();
   const qc = useQueryClient();
   const { data, isLoading, refetch } = useQuery({ queryKey: LOGS_QUERY_KEY, queryFn: readLogs });
   const clear = useMutation({ mutationFn: clearLogs });
@@ -66,7 +68,7 @@ export function LogViewerDialog({ onClose }: { onClose: () => void }) {
   async function copyVisible() {
     try {
       await navigator.clipboard.writeText(filtered.map((l) => l.raw).join("\n"));
-      toast.info("Copied to clipboard");
+      toast.info(t("layout.logs.copiedToClipboard"));
     } catch (e) {
       toast.error(e);
     }
@@ -86,7 +88,7 @@ export function LogViewerDialog({ onClose }: { onClose: () => void }) {
     setConfirmClear(false);
     try {
       await clear.mutateAsync();
-      toast.info("Logs cleared");
+      toast.info(t("layout.logs.logsCleared"));
       await qc.invalidateQueries({ queryKey: LOGS_QUERY_KEY });
     } catch (e) {
       toast.error(e);
@@ -96,8 +98,8 @@ export function LogViewerDialog({ onClose }: { onClose: () => void }) {
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent
-        title="Logs"
-        description="Kept for 7 days, on this computer only. Nothing here is sent anywhere unless you turn on crash reporting below and send a report."
+        title={t("layout.logs.title")}
+        description={t("layout.logs.description")}
         className="max-w-2xl"
       >
         <div className="space-y-3">
@@ -116,12 +118,16 @@ export function LogViewerDialog({ onClose }: { onClose: () => void }) {
               onClick={() => void reveal()}
               disabled={!data?.dir}
             >
-              Reveal in folder
+              {t("layout.logs.revealInFolder")}
             </Button>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <div className="flex gap-1" role="radiogroup" aria-label="Level">
+            <div
+              className="flex gap-1"
+              role="radiogroup"
+              aria-label={t("layout.logs.levelGroupLabel")}
+            >
               {LEVEL_OPTIONS.map((o) => (
                 <Button
                   key={o.value}
@@ -132,14 +138,14 @@ export function LogViewerDialog({ onClose }: { onClose: () => void }) {
                   aria-checked={level === o.value}
                   onClick={() => setLevel(o.value)}
                 >
-                  {o.label}
+                  {t(o.labelKey)}
                 </Button>
               ))}
             </div>
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search…"
+              placeholder={t("layout.logs.searchPlaceholder")}
               className="min-w-0 flex-1"
               data-testid="log-search"
             />
@@ -150,10 +156,12 @@ export function LogViewerDialog({ onClose }: { onClose: () => void }) {
             data-testid="log-lines"
           >
             {isLoading ? (
-              <p className="text-fg-muted">Loading…</p>
+              <p className="text-fg-muted">{t("common.loading")}</p>
             ) : filtered.length === 0 ? (
               <p className="text-fg-muted">
-                {parsed.length === 0 ? "Nothing logged yet." : "No lines match."}
+                {parsed.length === 0
+                  ? t("layout.logs.nothingLoggedYet")
+                  : t("layout.logs.noLinesMatch")}
               </p>
             ) : (
               <ul className="space-y-0.5">
@@ -178,23 +186,23 @@ export function LogViewerDialog({ onClose }: { onClose: () => void }) {
 
         <DialogFooter className="justify-between sm:justify-between">
           <Button type="button" variant="outline" size="sm" onClick={() => setConfirmClear(true)}>
-            Clear logs
+            {t("layout.logs.clearLogs")}
           </Button>
           <div className="flex gap-2">
             <Button type="button" variant="outline" size="sm" onClick={() => void copyVisible()}>
-              Copy
+              {t("common.copy")}
             </Button>
             <Button type="button" variant="outline" size="sm" onClick={() => void refetch()}>
-              Refresh
+              {t("common.refresh")}
             </Button>
           </div>
         </DialogFooter>
       </DialogContent>
       {confirmClear ? (
         <ConfirmDialog
-          title="Clear logs?"
-          description="Deletes every log file on this computer. This cannot be undone."
-          confirmLabel="Clear"
+          title={t("layout.logs.clearLogsConfirmTitle")}
+          description={t("layout.logs.clearLogsConfirmDescription")}
+          confirmLabel={t("common.clear")}
           onConfirm={() => void confirmClearLogs()}
           onCancel={() => setConfirmClear(false)}
         />

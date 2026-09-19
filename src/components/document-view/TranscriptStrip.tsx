@@ -1,4 +1,5 @@
 import { AlertTriangle, Film, MapPin, Pause, Play } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { formatTimecode, isVideoMime } from "@/core/media";
 import type { DocumentSummary } from "@/api/types";
 import { useWorkspace } from "@/state/workspace";
@@ -42,6 +43,7 @@ export function TranscriptStrip({
   onPlaybackError,
   anchorCount,
 }: Props) {
+  const { t } = useTranslation();
   const openDocument = useWorkspace((s) => s.openDocument);
   const { ref: playerRef, src, elementProps } = playback;
   const isVideo = isVideoMime(media.media?.mime ?? "");
@@ -55,7 +57,7 @@ export function TranscriptStrip({
       {media.mediaMissing ? (
         <span className="inline-flex items-center gap-1 text-danger">
           <AlertTriangle className="size-3.5" />
-          The recording’s file is missing
+          {t("documentView.transcript.fileIsMissing")}
         </span>
       ) : (
         <>
@@ -63,7 +65,7 @@ export function TranscriptStrip({
             type="button"
             className="rounded p-1 text-fg-muted hover:bg-muted hover:text-fg"
             onClick={playback.togglePlay}
-            aria-label={playback.playing ? "Pause" : "Play"}
+            aria-label={playback.playing ? t("documentView.pause") : t("documentView.play")}
             data-testid="transcript-play"
           >
             {playback.playing ? <Pause className="size-4" /> : <Play className="size-4" />}
@@ -72,12 +74,12 @@ export function TranscriptStrip({
             {formatTimecode(playback.positionMs)} / {formatTimecode(durationMs)}
           </span>
           <label className="flex items-center gap-1 text-fg-muted">
-            Speed
+            {t("documentView.speed")}
             <select
               className="rounded border border-border bg-bg px-1 py-0.5 text-xs text-fg"
               value={playback.speed}
               onChange={(e) => playback.setSpeed(Number(e.target.value))}
-              aria-label="Playback speed"
+              aria-label={t("documentView.playbackSpeed")}
               data-testid="transcript-speed"
             >
               {SPEEDS.map((s) => (
@@ -94,21 +96,21 @@ export function TranscriptStrip({
               onChange={(e) => onFollowPlaybackChange(e.target.checked)}
               data-testid="transcript-follow"
             />
-            Follow playback
+            {t("documentView.transcript.followPlayback")}
           </label>
           <Button
             size="sm"
             variant="ghost"
             onClick={onAlignHere}
-            title={`Line the cursor up with the playhead (${describe("alignHere")})`}
+            title={t("documentView.transcript.alignHereHint", { chord: describe("alignHere") })}
             data-testid="transcript-align-here"
           >
-            <MapPin className="size-3.5" /> Align here
+            <MapPin className="size-3.5" /> {t("documentView.transcript.alignHere")}
           </Button>
           <span className="text-fg-muted" data-testid="transcript-anchor-count">
             {anchorCount === 0
-              ? "not aligned yet"
-              : `${anchorCount} alignment point${anchorCount === 1 ? "" : "s"}`}
+              ? t("documentView.transcript.notAlignedYet")
+              : t("documentView.transcript.alignmentPointCount", { count: anchorCount })}
           </span>
         </>
       )}
@@ -117,7 +119,7 @@ export function TranscriptStrip({
         type="button"
         className="flex min-w-0 items-center gap-1 rounded px-1 py-0.5 text-fg-muted hover:bg-muted hover:text-fg"
         onClick={() => openDocument(media.id)}
-        title="Open the recording’s own viewer"
+        title={t("documentView.transcript.openOwnViewer")}
         data-testid="transcript-open-recording"
       >
         <Film className="size-3.5 shrink-0" />

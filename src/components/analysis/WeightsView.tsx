@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { flattenTree } from "@/core/codeTree";
 import { formatWeight, formatWeightWithLabel, weightScaleValues } from "@/core/weights";
 import { useWeightSummary } from "@/queries/analysis";
@@ -15,6 +16,7 @@ import { AnalysisToolbar, DocumentFilter, EmptyNote } from "./shared";
  * picked — the mixed-methods complement to the plain frequency table.
  */
 export function WeightsView() {
+  const { t } = useTranslation();
   const tree = useCodeTree();
   const openExcerpts = useWorkspace((s) => s.openExcerpts);
   const weightedCodes = useMemo(() => flattenTree(tree).filter((n) => n.code.weightScale), [tree]);
@@ -61,7 +63,7 @@ export function WeightsView() {
           className="rounded-md border border-border bg-bg px-2 py-1 text-xs"
           value={code?.id ?? ""}
           onChange={(e) => setCodeId(e.target.value)}
-          aria-label="Weighted code"
+          aria-label={t("analysis.weights.pickerLabel")}
           data-testid="weights-code-picker"
         >
           {weightedCodes.map((n) => (
@@ -79,17 +81,11 @@ export function WeightsView() {
         <CoderFilter coderIds={coderIds} onChange={setCoderIds} />
       </AnalysisToolbar>
       {!weightedCodes.length ? (
-        <EmptyNote>
-          No code has a weight scale yet. Open a code and turn on “Weight scale” to rate its
-          applications on a numeric scale.
-        </EmptyNote>
+        <EmptyNote>{t("analysis.weights.noScale")}</EmptyNote>
       ) : !summary || isPending ? (
-        <EmptyNote>Counting…</EmptyNote>
+        <EmptyNote>{t("analysis.counting")}</EmptyNote>
       ) : summary.count === 0 ? (
-        <EmptyNote>
-          Nobody has rated a coding of “{code?.name}” yet — the inspector's weight control, or the
-          1–9 keys with an excerpt focused, set one.
-        </EmptyNote>
+        <EmptyNote>{t("analysis.weights.noneRated", { name: code?.name })}</EmptyNote>
       ) : (
         <div className="min-h-0 flex-1 overflow-auto p-4">
           <div className="mb-4 flex items-center gap-2">
@@ -102,14 +98,14 @@ export function WeightsView() {
           >
             {(
               [
-                ["Rated", summary.count, null],
-                ["Mean", summary.mean, scale],
-                ["Median", summary.median, scale],
-                ["Range", null, null],
+                ["analysis.weights.statRated", summary.count, null],
+                ["analysis.weights.statMean", summary.mean, scale],
+                ["analysis.weights.statMedian", summary.median, scale],
+                ["analysis.weights.statRange", null, null],
               ] as const
-            ).map(([label, value, s], i) => (
-              <div key={label} className="rounded-md border border-border p-2">
-                <dt className="text-[11px] uppercase tracking-wide text-fg-muted">{label}</dt>
+            ).map(([labelKey, value, s], i) => (
+              <div key={labelKey} className="rounded-md border border-border p-2">
+                <dt className="text-[11px] uppercase tracking-wide text-fg-muted">{t(labelKey)}</dt>
                 <dd className="mt-0.5 font-medium tabular-nums">
                   {i === 3
                     ? summary.min != null && summary.max != null
@@ -125,7 +121,7 @@ export function WeightsView() {
             ))}
           </dl>
           <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-fg-muted">
-            Distribution
+            {t("analysis.weights.distribution")}
           </h4>
           <ul className="max-w-lg space-y-1.5" data-testid="weight-histogram">
             {values.map((v) => {
@@ -141,7 +137,10 @@ export function WeightsView() {
                     style={{ width: `${Math.max(2, (count / maxCount) * 100)}%` }}
                     disabled={count === 0}
                     onClick={() => openForValue(v)}
-                    title={`${count} coding${count === 1 ? "" : "s"} rated ${formatWeight(v)}`}
+                    title={t("analysis.weights.histogramBarTitle", {
+                      count,
+                      value: formatWeight(v),
+                    })}
                     data-testid="weight-histogram-bar"
                   />
                   <span className="w-6 shrink-0 tabular-nums text-fg-muted">{count}</span>

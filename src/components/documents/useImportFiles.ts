@@ -1,5 +1,6 @@
 import { useCallback } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
+import { useTranslation } from "react-i18next";
 import { readSourceFile } from "@/api/project";
 import { listDocuments, stageMediaProbe } from "@/api/documents";
 import { loadMediaServer, probeUrl } from "@/api/media";
@@ -52,6 +53,7 @@ type Planned =
 
 /** Import files by path: read bytes, parse or measure, and create documents. */
 export function useImportFiles() {
+  const { t } = useTranslation();
   const create = useCreateDocument();
   const createImage = useCreateImageDocument();
   const createMedia = useCreateMediaDocument();
@@ -80,7 +82,7 @@ export function useImportFiles() {
             const name = uniqueName(baseName(path), taken);
             const media = await measureMedia(path);
             if (!media) {
-              toast.error(new Error(unsupportedHint(name, extensionOf(path))));
+              toast.error(new Error(unsupportedHint(name, extensionOf(path), t)));
               continue;
             }
             taken.add(name);
@@ -90,12 +92,12 @@ export function useImportFiles() {
           const bytes = await readSourceFile(path);
           const mime = imageMimeForPath(path);
           if (mime) {
-            const { width, height } = await readImageSize(bytes, mime);
+            const { width, height } = await readImageSize(bytes, mime, t);
             const name = uniqueName(baseName(path), taken);
             taken.add(name);
             if (bytes.length > 20_000_000) {
               toast.info(
-                `${name} is ${Math.round(bytes.length / 1_000_000)} MB; it is copied into the project file.`,
+                t("documents.importLargeImage", { name, mb: Math.round(bytes.length / 1_000_000) }),
               );
             }
             planned.push({ kind: "image", path, name, mime, width, height });
@@ -110,9 +112,9 @@ export function useImportFiles() {
         }
       }
 
-      const { kept: withOcrDecided, ocrCount, skipped } = await resolveScannedPdfs(planned);
+      const { kept: withOcrDecided, ocrCount, skipped } = await resolveScannedPdfs(planned, t);
       planned = withOcrDecided;
-      for (const name of skipped) toast.info(`Skipped ${name}: no text was imported.`);
+      for (const name of skipped) toast.info(t("documents.skippedNoText", { name }));
 
       await maybeTidy(
         planned
@@ -146,8 +148,8 @@ export function useImportFiles() {
       if (planned.length) {
         const what =
           planned.length === 1
-            ? `Imported "${nameOf(planned[0]!)}"`
-            : `Imported ${planned.length} documents`;
+            ? t("documents.importedOne", { name: nameOf(planned[0]!) })
+            : t("documents.importedMany", { count: planned.length });
         await historyBeginGroup(what);
       }
       try {
@@ -177,7 +179,7 @@ export function useImportFiles() {
               createdIds.push(doc.id);
             } else {
               if (file.parsed.text.length > 2_000_000) {
-                toast.info(`${file.parsed.name} is very large; the document view may be slow.`);
+                toast.info(t("documents.veryLargeDocument", { name: file.parsed.name }));
               }
               const doc = await create.mutateAsync({
                 name: file.parsed.name,
@@ -194,9 +196,7 @@ export function useImportFiles() {
             imported++;
           } catch (e) {
             if (isAppError(e, "Conflict")) {
-              toast.info(
-                `Skipped ${file.path.split(/[\\/]/).pop()}: identical document already imported.`,
-              );
+              toast.info(t("documents.skippedDuplicate", { name: file.path.split(/[\\/]/).pop() }));
             } else {
               toast.error(e);
             }
@@ -206,16 +206,12 @@ export function useImportFiles() {
         if (planned.length) await historyEndGroup();
       }
       if (ocrCount > 0) {
-        toast.info(
-          ocrCount === 1
-            ? "Recognised text in 1 scanned PDF with OCR."
-            : `Recognised text in ${ocrCount} scanned PDFs with OCR.`,
-        );
+        toast.info(t("documents.recognisedOcr", { count: ocrCount }));
       }
       if (imported > 0 && lastId && openAfter) openDocument(lastId);
       return createdIds;
     },
-    [create, createImage, createMedia, openDocument],
+    [create, createImage, createMedia, openDocument, t],
   );
 
   const pickAndImport = useCallback(async () => {
@@ -223,15 +219,15 @@ export function useImportFiles() {
       multiple: true,
       directory: false,
       filters: [
-        { name: "Everything Misket reads", extensions: [...SUPPORTED_EXTENSIONS] },
-        { name: "Documents", extensions: [...TEXT_EXTENSIONS] },
-        { name: "Images", extensions: [...IMAGE_EXTENSIONS] },
-        { name: "Audio and video", extensions: [...MEDIA_EXTENSIONS] },
+        { name: t("documents.filterEverything"), extensions: [...SUPPORTED_EXTENSIONS] },
+        { name: t("documents.filterDocuments"), extensions: [...TEXT_EXTENSIONS] },
+        { name: t("documents.filterImages"), extensions: [...IMAGE_EXTENSIONS] },
+        { name: t("documents.filterMedia"), extensions: [...MEDIA_EXTENSIONS] },
       ],
     });
     if (!picked) return;
     await importPaths(Array.isArray(picked) ? picked : [picked]);
-  }, [importPaths]);
+  }, [importPaths, t]);
 
   /** Ask for a folder; the caller then lists and imports what is inside it. */
   const pickFolder = useCallback(async () => {
@@ -255,6 +251,7 @@ export function useImportFiles() {
 async function readImageSize(
   bytes: Uint8Array,
   mime: string,
+  t: (key: string) => string,
 ): Promise<{ width: number; height: number }> {
   const blob = new Blob([bytes as BlobPart], { type: mime });
   if (typeof createImageBitmap === "function") {
@@ -274,8 +271,8 @@ async function readImageSize(
       img.onload = () =>
         img.naturalWidth > 0
           ? resolve({ width: img.naturalWidth, height: img.naturalHeight })
-          : reject(new Error("The image has no size."));
-      img.onerror = () => reject(new Error("This image could not be read."));
+          : reject(new Error(t("documents.imageNoSize")));
+      img.onerror = () => reject(new Error(t("documents.imageUnreadable")));
       img.src = url;
     });
   } finally {
@@ -387,6 +384,7 @@ async function measureMedia(path: string): Promise<MediaInfo | null> {
  */
 async function resolveScannedPdfs(
   planned: Planned[],
+  t: (key: string, params?: Record<string, unknown>) => string,
 ): Promise<{ kept: Planned[]; ocrCount: number; skipped: string[] }> {
   const scanned = planned.filter(
     (f): f is Extract<Planned, { kind: "text" }> =>
@@ -409,6 +407,8 @@ async function resolveScannedPdfs(
     } else {
       const choice = await useOcrPromptStore.getState().prompt({
         file: { name: file.parsed.name, stats, message: scannedPdfMessage(stats) },
+        // `message` is structured data (ScannedPdfMessage), not a sentence —
+        // OcrPromptDialog turns it into text with `t()`.
         moreInBatch: i < scanned.length - 1,
       });
       decision = choice.decision;
@@ -438,13 +438,14 @@ async function resolveScannedPdfs(
         languages,
         onProgress: ({ page, pages }) => useOcrProgressStore.getState().update(page, pages),
         signal: controller.signal,
+        t,
       });
       file.parsed.text = text;
       file.parsed.sourceFormat = OCR_SOURCE_FORMAT;
       ocrCount++;
     } catch (e) {
       if (e instanceof OcrCancelledError) {
-        toast.info(`OCR cancelled for ${file.parsed.name}; imported the text that was found.`);
+        toast.info(t("documents.ocrCancelled", { name: file.parsed.name }));
       } else {
         toast.error(e);
       }

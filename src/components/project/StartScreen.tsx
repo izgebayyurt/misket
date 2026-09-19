@@ -17,8 +17,6 @@ import { isAppError } from "@/api/client";
 import { UpdateBanner } from "@/components/layout/UpdateBanner";
 import { useUpdateCheckOnMount } from "@/hooks/useUpdateCheck";
 
-const FILTER = [{ name: "Misket project", extensions: ["misket"] }];
-
 export function StartScreen() {
   const { t } = useTranslation();
   const recent = useRecentProjects();
@@ -29,10 +27,11 @@ export function StartScreen() {
   const [newName, setNewName] = useState("");
   const [creating, setCreating] = useState(false);
   useUpdateCheckOnMount();
+  const filter = [{ name: t("common.fileFilters.misketProject"), extensions: ["misket"] }];
 
   async function handleOpen() {
     try {
-      const path = await open({ multiple: false, directory: false, filters: FILTER });
+      const path = await open({ multiple: false, directory: false, filters: filter });
       if (path) await openProject.mutateAsync(path);
     } catch (e) {
       toast.error(e);
@@ -56,7 +55,7 @@ export function StartScreen() {
     const name = newName.trim();
     if (!name) return;
     try {
-      const path = await save({ defaultPath: `${name}.misket`, filters: FILTER });
+      const path = await save({ defaultPath: `${name}.misket`, filters: filter });
       if (!path) return;
       const withExt = path.endsWith(".misket") ? path : `${path}.misket`;
       await createProject.mutateAsync({ path: withExt, name });

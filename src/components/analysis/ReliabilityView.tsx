@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { save } from "@tauri-apps/plugin-dialog";
 import { ChevronDown, ChevronUp, Download, Minus, Plus } from "lucide-react";
+import { Trans, useTranslation } from "react-i18next";
 import type { IrrDisagreement, IrrReport, IrrRequest, IrrUnit } from "@/api/types";
 import { irrExportCsv } from "@/api/irr";
 import { describeScope, formatKappa, formatPercent, kappaBand, kappaShade } from "@/core/irr";
@@ -17,10 +18,10 @@ import { AnalysisToolbar, CodeFilter, DocumentFilter, EmptyNote } from "./shared
 
 type SortKey = "code" | "units" | "both" | "aOnly" | "bOnly" | "percentAgreement" | "kappa";
 
-const UNITS: { id: IrrUnit; label: string }[] = [
-  { id: "paragraph", label: "Paragraph" },
-  { id: "turn", label: "Speaker turn" },
-  { id: "excerpt", label: "Excerpt" },
+const UNITS: { id: IrrUnit; labelKey: string }[] = [
+  { id: "paragraph", labelKey: "analysis.reliability.unitOptionParagraph" },
+  { id: "turn", labelKey: "analysis.reliability.unitOptionTurn" },
+  { id: "excerpt", labelKey: "analysis.reliability.unitOptionExcerpt" },
 ];
 
 /**
@@ -32,6 +33,7 @@ const UNITS: { id: IrrUnit; label: string }[] = [
  * for each unit; this view only picks the scope and lays the answer out.
  */
 export function ReliabilityView() {
+  const { t } = useTranslation();
   const { data: coders } = useCoders();
   const me = coders?.find((c) => c.isLocal);
   // Me against whoever else has done the most coding: the comparison you
@@ -117,8 +119,7 @@ export function ReliabilityView() {
       >
         {(coders ?? []).map((c) => (
           <option key={c.id} value={c.id}>
-            {c.name}
-            {c.isLocal ? " (you)" : ""}
+            {c.isLocal ? t("analysis.reliability.coderYou", { name: c.name }) : c.name}
           </option>
         ))}
       </select>
@@ -134,21 +135,21 @@ export function ReliabilityView() {
           className="rounded-md border border-border bg-bg px-2 py-1 text-xs"
           value={unit}
           onChange={(e) => setUnit(e.target.value as IrrUnit)}
-          aria-label="Unit of analysis"
+          aria-label={t("analysis.reliability.unitOfAnalysis")}
           data-testid="irr-unit"
         >
           {UNITS.map((u) => (
             <option key={u.id} value={u.id}>
-              {u.label}
+              {t(u.labelKey)}
             </option>
           ))}
         </select>
         {unit === "excerpt" ? null : (
           <label
             className="flex items-center gap-1.5 text-xs text-fg-muted"
-            title="How much of a unit an excerpt must cover — or how much of the excerpt the unit must cover — for its code to count as present there."
+            title={t("analysis.reliability.overlapHint")}
           >
-            Overlap
+            {t("analysis.reliability.overlap")}
             <input
               type="range"
               min={5}
@@ -177,11 +178,15 @@ export function ReliabilityView() {
         {error ? (
           <EmptyNote>{error instanceof Error ? error.message : String(error)}</EmptyNote>
         ) : !data ? (
-          <EmptyNote>{isPending ? "Comparing…" : "Pick two coders to compare."}</EmptyNote>
+          <EmptyNote>
+            {isPending ? t("analysis.reliability.comparing") : t("analysis.reliability.pickTwo")}
+          </EmptyNote>
         ) : data.units === 0 ? (
           <EmptyNote>
-            {data.coderAName} and {data.coderBName} have no document in common yet. Pick documents
-            explicitly above to compare them anyway.
+            {t("analysis.reliability.noCommonDocument", {
+              coderA: data.coderAName,
+              coderB: data.coderBName,
+            })}
           </EmptyNote>
         ) : (
           <>
@@ -189,35 +194,48 @@ export function ReliabilityView() {
               pooledKappa={data.pooledKappa}
               meanKappa={data.meanKappa}
               percentAgreement={data.percentAgreement}
-              scope={describeScope({
-                unit: data.unit,
-                units: data.units,
-                documents: data.documents.length,
-                codes: data.codes.length,
-              })}
+              scope={describeScope(
+                {
+                  unit: data.unit,
+                  units: data.units,
+                  documents: data.documents.length,
+                  codes: data.codes.length,
+                },
+                t,
+              )}
               note={
                 data.unit === "excerpt"
-                  ? "Excerpt units: ranges must match exactly."
-                  : `A code counts as present when an excerpt covers ${Math.round(
-                      data.overlapThreshold * 100,
-                    )}% of the unit, or the unit covers ${Math.round(
-                      data.overlapThreshold * 100,
-                    )}% of the excerpt.`
+                  ? t("analysis.reliability.excerptUnitsNote")
+                  : t("analysis.reliability.overlapNote", {
+                      percent: Math.round(data.overlapThreshold * 100),
+                    })
               }
             />
 
             <table className="w-full min-w-[720px] border-collapse text-sm">
               <thead className="sticky top-0 z-10 bg-panel text-left text-xs text-fg-muted shadow-[0_1px_0_var(--border)]">
                 <tr>
-                  {header("code", "Code")}
-                  {header("units", "Units", "w-20 text-right")}
-                  {header("both", "Both", "w-20 text-right")}
-                  {header("aOnly", `Only ${data.coderAName}`, "w-28 text-right")}
-                  {header("bOnly", `Only ${data.coderBName}`, "w-28 text-right")}
-                  {header("percentAgreement", "Agreement", "w-28 text-right")}
+                  {header("code", t("analysis.frequencies.colCode"))}
+                  {header("units", t("analysis.reliability.colUnits"), "w-20 text-right")}
+                  {header("both", t("analysis.reliability.colBoth"), "w-20 text-right")}
+                  {header(
+                    "aOnly",
+                    t("analysis.reliability.colOnly", { name: data.coderAName }),
+                    "w-28 text-right",
+                  )}
+                  {header(
+                    "bOnly",
+                    t("analysis.reliability.colOnly", { name: data.coderBName }),
+                    "w-28 text-right",
+                  )}
+                  {header(
+                    "percentAgreement",
+                    t("analysis.reliability.colAgreement"),
+                    "w-28 text-right",
+                  )}
                   {header("kappa", "κ", "w-20 text-right")}
                   <th className="w-32 px-3 py-1.5 font-medium" scope="col">
-                    Interpretation
+                    {t("analysis.reliability.colInterpretation")}
                   </th>
                 </tr>
               </thead>
@@ -245,15 +263,15 @@ export function ReliabilityView() {
                       className="px-3 py-1.5 text-right tabular-nums"
                       style={kappaShade(r.kappa)}
                       title={
-                        r.kappa === null
-                          ? "Undefined: neither coder applied it, or both applied it everywhere."
-                          : undefined
+                        r.kappa === null ? t("analysis.reliability.undefinedKappaHint") : undefined
                       }
                     >
                       {formatKappa(r.kappa)}
                     </td>
                     <td className="px-3 py-1.5 text-xs text-fg-muted">
-                      {r.kappa === null ? "Undefined" : kappaBand(r.kappa).label}
+                      {r.kappa === null
+                        ? t("analysis.reliability.undefined")
+                        : t(kappaBand(r.kappa).labelKey)}
                     </td>
                   </tr>
                 ))}
@@ -281,6 +299,7 @@ function SummaryStrip({
   scope: string;
   note: string;
 }) {
+  const { t } = useTranslation();
   // The labels are uppercased by CSS, where a "κ" would come out as a capital
   // kappa nobody reads as the same letter; they are spelled out instead.
   const figure = (label: string, value: string, sub?: string, testId?: string) => (
@@ -294,13 +313,23 @@ function SummaryStrip({
     <div className="border-b border-border bg-panel px-4 py-3">
       <div className="flex flex-wrap items-end gap-8">
         {figure(
-          "Pooled kappa",
+          t("analysis.reliability.pooledKappa"),
           formatKappa(pooledKappa),
-          pooledKappa === null ? "Undefined" : kappaBand(pooledKappa).label,
+          pooledKappa === null
+            ? t("analysis.reliability.undefined")
+            : t(kappaBand(pooledKappa).labelKey),
           "irr-pooled-kappa",
         )}
-        {figure("Mean kappa per code", formatKappa(meanKappa), "unweighted")}
-        {figure("Agreement", formatPercent(percentAgreement), "over every decision")}
+        {figure(
+          t("analysis.reliability.meanKappaPerCode"),
+          formatKappa(meanKappa),
+          t("analysis.reliability.unweighted"),
+        )}
+        {figure(
+          t("analysis.reliability.agreement"),
+          formatPercent(percentAgreement),
+          t("analysis.reliability.overEveryDecision"),
+        )}
       </div>
       <p className="mt-2 text-xs text-fg-muted">
         {scope}. {note}
@@ -315,6 +344,7 @@ function SummaryStrip({
  * undoable codings.
  */
 function Disagreements({ report }: { report: IrrReport }) {
+  const { t } = useTranslation();
   const openDocument = useWorkspace((s) => s.openDocument);
   const applyCodes = useApplyCodes();
   const addCodes = useAddExcerptCodes();
@@ -357,7 +387,7 @@ function Disagreements({ report }: { report: IrrReport }) {
           codeIds: [d.codeId],
         });
       }
-      toast.info(`Added ${d.codeName} to your coding`);
+      toast.info(t("analysis.reliability.addedToYourCoding", { name: d.codeName }));
     } catch (e) {
       toast.error(e);
     }
@@ -373,7 +403,7 @@ function Disagreements({ report }: { report: IrrReport }) {
           coderId: d.coderId,
         });
       }
-      toast.info(`Removed your ${d.codeName}`);
+      toast.info(t("analysis.reliability.removedYours", { name: d.codeName }));
     } catch (e) {
       toast.error(e);
     }
@@ -382,7 +412,7 @@ function Disagreements({ report }: { report: IrrReport }) {
   if (!report.disagreements.length) {
     return (
       <p className="p-6 text-sm text-fg-muted" data-testid="irr-no-disagreements">
-        No disagreements: every unit is coded the same way by both of them.
+        {t("analysis.reliability.noDisagreements")}
       </p>
     );
   }
@@ -390,10 +420,10 @@ function Disagreements({ report }: { report: IrrReport }) {
   return (
     <section className="border-t border-border" data-testid="irr-disagreements">
       <h3 className="px-4 pb-1 pt-4 font-serif text-base">
-        {report.disagreementCount} disagreement{report.disagreementCount === 1 ? "" : "s"}
+        {t("analysis.reliability.disagreementCount", { count: report.disagreementCount })}
         {report.disagreements.length < report.disagreementCount ? (
           <span className="ml-2 text-xs font-normal text-fg-muted">
-            showing the first {report.disagreements.length}
+            {t("analysis.reliability.showingFirst", { count: report.disagreements.length })}
           </span>
         ) : null}
       </h3>
@@ -415,16 +445,18 @@ function Disagreements({ report }: { report: IrrReport }) {
                   <button
                     className="min-w-0 flex-1 text-left"
                     onClick={() => jump(d)}
-                    title="Open the document here"
+                    title={t("analysis.reliability.openDocumentHere")}
                     data-testid="irr-jump"
                   >
                     <span className="mr-2 inline-flex items-center gap-1 rounded-full border border-border px-1.5 py-0.5 text-xs">
                       <ColorDot color={d.color} />
                       {d.codeName}
                     </span>
-                    <span className="text-xs text-fg-muted">Only {whose}</span>
+                    <span className="text-xs text-fg-muted">
+                      {t("analysis.reliability.onlyWhose", { whose })}
+                    </span>
                     <span className="mt-0.5 block truncate text-fg-muted">
-                      {d.snippet || "(image region)"}
+                      {d.snippet || t("analysis.reliability.imageRegion")}
                     </span>
                   </button>
                   {mine ? (
@@ -432,20 +464,20 @@ function Disagreements({ report }: { report: IrrReport }) {
                       variant="ghost"
                       size="sm"
                       onClick={() => void removeMine(d)}
-                      title={`Take ${d.codeName} off this passage`}
+                      title={t("analysis.reliability.takeOffPassage", { name: d.codeName })}
                       data-testid="irr-remove-mine"
                     >
-                      <Minus /> Remove mine
+                      <Minus /> {t("analysis.reliability.removeMine")}
                     </Button>
                   ) : (
                     <Button
                       variant="ghost"
                       size="sm"
                       onClick={() => void adopt(d)}
-                      title={`Apply ${d.codeName} here as well`}
+                      title={t("analysis.reliability.applyHereAsWell", { name: d.codeName })}
                       data-testid="irr-adopt"
                     >
-                      <Plus /> Adopt
+                      <Plus /> {t("analysis.reliability.adopt")}
                     </Button>
                   )}
                 </li>
@@ -459,6 +491,7 @@ function Disagreements({ report }: { report: IrrReport }) {
 }
 
 function ExportButton({ request, disabled }: { request: IrrRequest | null; disabled?: boolean }) {
+  const { t } = useTranslation();
   const { data: project } = useProjectInfo();
   async function run() {
     if (!request) return;
@@ -470,7 +503,7 @@ function ExportButton({ request, disabled }: { request: IrrRequest | null; disab
       });
       if (!path) return;
       await irrExportCsv(request, path);
-      toast.info(`Exported to ${path.split(/[\\/]/).pop()}`);
+      toast.info(t("analysis.exportedTo", { name: path.split(/[\\/]/).pop() }));
     } catch (e) {
       toast.error(e);
     }
@@ -489,17 +522,18 @@ function ExportButton({ request, disabled }: { request: IrrRequest | null; disab
 }
 
 function OneCoderEmptyState() {
+  const { t } = useTranslation();
   return (
     <div
       className="flex h-full flex-col items-center justify-center px-8 text-center"
       data-testid="reliability-empty"
     >
-      <p className="font-serif text-2xl">Only one coder so far</p>
+      <p className="font-serif text-2xl">{t("analysis.reliability.onlyOneCoder")}</p>
       <p className="mt-2 max-w-md text-sm text-fg-muted">
-        Inter-rater reliability needs two people&apos;s codings of the same material. A second coder
-        appears once you pull their copy of this project in with{" "}
-        <span className="font-medium text-fg">File → Pull from another copy…</span> — every coding
-        carries the id of the install that made it, so Misket can tell your work from theirs.
+        <Trans
+          i18nKey="analysis.reliability.onlyOneCoderHint"
+          components={{ menu: <span className="font-medium text-fg" /> }}
+        />
       </p>
     </div>
   );

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { Input } from "@/components/ui/input";
 
 interface Props {
@@ -15,6 +16,7 @@ interface Props {
  * styled like the find bar. Enter jumps, Escape closes.
  */
 export function GoToParagraphBar({ total, onGo, onClose }: Props) {
+  const { t } = useTranslation();
   const inputRef = useRef<HTMLInputElement>(null);
   const [value, setValue] = useState("");
 
@@ -55,20 +57,20 @@ export function GoToParagraphBar({ total, onGo, onClose }: Props) {
         inputMode="numeric"
         onChange={(e) => setValue(e.target.value.replace(/[^0-9]/g, ""))}
         onKeyDown={onKeyDown}
-        placeholder="Go to paragraph"
-        aria-label="Go to paragraph"
+        placeholder={t("documentView.goToParagraph")}
+        aria-label={t("documentView.goToParagraph")}
         className="h-7 max-w-40 text-sm"
         data-testid="goto-input"
       />
       <span className="shrink-0 text-xs text-fg-muted" data-testid="goto-total">
-        of {total}
+        {t("documentView.ofTotal", { total })}
       </span>
       <span className="flex-1" />
       <button
         type="button"
         className="ml-1 rounded p-1 text-fg-muted hover:bg-muted"
         onClick={onClose}
-        aria-label="Close go to paragraph"
+        aria-label={t("documentView.closeGoToParagraph")}
         data-testid="goto-close"
       >
         <X className="size-4" />

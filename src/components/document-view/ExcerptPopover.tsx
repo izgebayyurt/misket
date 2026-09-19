@@ -1,4 +1,5 @@
 import { Merge, Plus, Scissors, Trash2, X } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import type { ExcerptWithCodes } from "@/api/types";
 import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
@@ -37,6 +38,7 @@ export function ExcerptPopover({
   onMergePrevious,
   onMergeNext,
 }: Props) {
+  const { t } = useTranslation();
   const tree = useCodeTree();
   const removeCode = useRemoveExcerptCode();
   const setPaletteOpen = useWorkspace((s) => s.setPaletteOpen);
@@ -54,12 +56,12 @@ export function ExcerptPopover({
       >
         <div className="mb-1 flex items-center justify-between px-1">
           <span className="text-xs font-semibold uppercase tracking-wide text-fg-muted">
-            Excerpt
+            {t("excerpts.excerpt")}
           </span>
           <button
             className="rounded p-0.5 text-fg-muted hover:bg-muted"
             onClick={onClose}
-            aria-label="Close"
+            aria-label={t("common.close")}
           >
             <X className="size-3.5" />
           </button>
@@ -72,12 +74,12 @@ export function ExcerptPopover({
             >
               <ColorDot color={tree.byId.get(id)?.code.color ?? "#999"} />
               <span className="min-w-0 flex-1 truncate">
-                {pathOf(tree, id) || "(deleted code)"}
+                {pathOf(tree, id) || t("documentView.deletedCode")}
               </span>
               <UseAsExampleButton codeId={id} excerptId={excerpt.id} />
               <button
                 className="rounded p-0.5 text-fg-muted opacity-0 hover:bg-border group-hover:opacity-100"
-                aria-label="Remove code"
+                aria-label={t("excerpts.removeCode")}
                 onClick={() =>
                   removeCode
                     .mutateAsync({ id: excerpt.id, documentId: excerpt.documentId, codeId: id })
@@ -89,7 +91,7 @@ export function ExcerptPopover({
             </li>
           ))}
           {excerpt.codeIds.length === 0 ? (
-            <li className="px-1 py-1 text-sm text-fg-muted">No codes yet.</li>
+            <li className="px-1 py-1 text-sm text-fg-muted">{t("documentView.noCodesYet")}</li>
           ) : null}
         </ul>
         {canSplitHere && onSplit ? (
@@ -97,7 +99,7 @@ export function ExcerptPopover({
             className="mt-1 flex w-full items-center gap-2 rounded px-1 py-1 text-sm hover:bg-muted"
             onClick={onSplit}
           >
-            <Scissors className="size-3.5 text-fg-muted" /> Split here
+            <Scissors className="size-3.5 text-fg-muted" /> {t("documentView.splitHere")}
             <kbd className="ml-auto text-xs text-fg-muted">{describe("splitExcerpt")}</kbd>
           </button>
         ) : null}
@@ -106,7 +108,7 @@ export function ExcerptPopover({
             className="flex w-full items-center gap-2 rounded px-1 py-1 text-sm hover:bg-muted"
             onClick={onMergePrevious}
           >
-            <Merge className="size-3.5 text-fg-muted" /> Merge with previous
+            <Merge className="size-3.5 text-fg-muted" /> {t("documentView.mergeWithPrevious")}
           </button>
         ) : null}
         {onMergeNext ? (
@@ -114,17 +116,17 @@ export function ExcerptPopover({
             className="flex w-full items-center gap-2 rounded px-1 py-1 text-sm hover:bg-muted"
             onClick={onMergeNext}
           >
-            <Merge className="size-3.5 text-fg-muted" /> Merge with next
+            <Merge className="size-3.5 text-fg-muted" /> {t("documentView.mergeWithNext")}
             <kbd className="ml-auto text-xs text-fg-muted">{describe("mergeExcerpt")}</kbd>
           </button>
         ) : null}
         <div className="mt-2 flex items-center gap-1">
           <Button size="sm" variant="outline" onClick={() => setPaletteOpen(true)}>
-            <Plus /> Add code
+            <Plus /> {t("documentView.addCode")}
           </Button>
           <span className="flex-1" />
           <Button size="sm" variant="ghost" className="text-danger" onClick={onDelete}>
-            <Trash2 /> Delete
+            <Trash2 /> {t("common.delete")}
           </Button>
         </div>
       </PopoverContent>

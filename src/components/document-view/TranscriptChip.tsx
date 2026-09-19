@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { MessagesSquare } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { useTranscript } from "@/queries/transcripts";
 import { useDocument } from "@/queries/documents";
 import { useBuildTranscriptAnchors, useSetTranscriptAnchors } from "@/queries/align";
@@ -27,6 +28,7 @@ import { TranscriptFormatDialog } from "./TranscriptFormatDialog";
  * nothing, so a transcript Misket failed to recognize is never a dead end.
  */
 export function TranscriptChip({ documentId }: { documentId: string }) {
+  const { t } = useTranslation();
   const { data } = useTranscript(documentId);
   const { data: doc } = useDocument(documentId);
   const build = useBuildTranscriptAnchors();
@@ -38,10 +40,12 @@ export function TranscriptChip({ documentId }: { documentId: string }) {
   const speakers = data.speakers.length;
   const summary =
     data.format.kind === "none" || turns === 0
-      ? "Not a transcript"
-      : `${formatLabel(data.format)}, ${turns} turn${turns === 1 ? "" : "s"}, ${speakers} speaker${
-          speakers === 1 ? "" : "s"
-        }`;
+      ? t("documentView.transcript.notATranscript")
+      : t("documentView.transcript.summary", {
+          format: formatLabel(data.format, t),
+          turnsPart: t("documentView.transcript.turnsCount", { count: turns }),
+          speakersPart: t("documentView.transcript.speakersCount", { count: speakers }),
+        });
 
   const timed = data.turns.filter((t) => t.time).length;
   const linked = !!doc?.linkedMediaId;
@@ -53,16 +57,18 @@ export function TranscriptChip({ documentId }: { documentId: string }) {
         <DropdownMenuTrigger asChild>
           <button
             className="flex shrink-0 items-center gap-1 rounded-md border border-border px-2 py-1 text-xs text-fg-muted hover:bg-muted"
-            title="How this document marks who is speaking"
+            title={t("documentView.transcript.speakerMarkingHint")}
             data-testid="transcript-chip"
           >
             <MessagesSquare className="size-3" />
-            <span className="max-w-64 truncate">Transcript: {summary}</span>
+            <span className="max-w-64 truncate">
+              {t("documentView.transcript.chipLabel", { summary })}
+            </span>
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-72">
           <DropdownMenuItem onSelect={() => setOpen(true)} data-testid="transcript-format-item">
-            Transcript format…
+            {t("documentView.transcript.formatEllipsis")}
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           {timed > 0 ? (
@@ -72,16 +78,14 @@ export function TranscriptChip({ documentId }: { documentId: string }) {
                   .mutateAsync(documentId)
                   .then((anchors) =>
                     toast.info(
-                      `Built ${anchors.length} alignment point${
-                        anchors.length === 1 ? "" : "s"
-                      } from the timestamps.`,
+                      t("documentView.transcript.builtAnchors", { count: anchors.length }),
                     ),
                   )
                   .catch(toast.error)
               }
               data-testid="build-anchors"
             >
-              Build anchors from timestamps ({timed})
+              {t("documentView.transcript.buildAnchors", { count: timed })}
             </DropdownMenuItem>
           ) : null}
           {anchorCount > 0 ? (
@@ -90,22 +94,22 @@ export function TranscriptChip({ documentId }: { documentId: string }) {
               onSelect={() =>
                 void setAnchors
                   .mutateAsync({ documentId, anchors: [] })
-                  .then(() => toast.info("Cleared the alignment. Undo with Ctrl/⌘+Z."))
+                  .then(() => toast.info(t("documentView.transcript.clearedAlignment")))
                   .catch(toast.error)
               }
               data-testid="clear-anchors"
             >
-              Clear the alignment ({anchorCount})
+              {t("documentView.transcript.clearAlignment", { count: anchorCount })}
             </DropdownMenuItem>
           ) : null}
           <p className="px-2 py-1 text-[11px] text-fg-muted">
             {!linked
-              ? "Link a recording from the document’s menu to play along with the text."
+              ? t("documentView.transcript.hintLinkRecording")
               : anchorCount > 0
-                ? "Click a paragraph to seek the recording; Ctrl/⌘+click for the exact spot."
+                ? t("documentView.transcript.hintSeek")
                 : timed > 0
-                  ? "This transcript carries timestamps — build the anchors and it lines up with the recording."
-                  : "Play the recording and press Alt+A to line the cursor up with it."}
+                  ? t("documentView.transcript.hintBuildAnchors")
+                  : t("documentView.transcript.hintAlignHere")}
           </p>
         </DropdownMenuContent>
       </DropdownMenu>

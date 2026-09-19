@@ -1,9 +1,11 @@
 import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter } from "@/components/ui/dialog";
 import { onTranscriptionDone, onTranscriptionProgress } from "@/api/transcribe";
 import { formatElapsed, formatEta } from "@/core/transcription";
+import { describe } from "@/core/keymap";
 import { keys } from "@/queries/keys";
 import { useTranscription } from "@/state/transcription";
 import { useWorkspace } from "@/state/workspace";
@@ -18,6 +20,7 @@ import { toast } from "@/state/toasts";
  * open.
  */
 export function TranscriptionProgressDialog() {
+  const { t } = useTranslation();
   const run = useTranscription((s) => s.run);
   const qc = useQueryClient();
   const openDocument = useWorkspace((s) => s.openDocument);
@@ -36,11 +39,11 @@ export function TranscriptionProgressDialog() {
     void onTranscriptionDone((e) => {
       useTranscription.getState().finish(e.documentId);
       if (e.status === "cancelled") {
-        toast.info("Transcription stopped.");
+        toast.info(t("documents.transcribe.stopped"));
         return;
       }
       if (e.status === "failed") {
-        toast.error(e.message ?? "Transcription failed.");
+        toast.error(e.message ?? t("documents.transcribe.failed"));
         return;
       }
       // The transcript is a new document, linked to the recording and
@@ -51,7 +54,10 @@ export function TranscriptionProgressDialog() {
       void qc.invalidateQueries({ queryKey: keys.allTranscriptAnchors });
       void qc.invalidateQueries({ queryKey: keys.history });
       toast.info(
-        `Transcribed in ${formatElapsed(e.elapsedMs)}. Undo with Ctrl/⌘+Z if it is not what you wanted.`,
+        t("documents.transcribe.toastDone", {
+          elapsed: formatElapsed(e.elapsedMs, t),
+          shortcut: describe("undo"),
+        }),
       );
       if (e.transcriptDocumentId) openDocument(e.transcriptDocumentId);
     })
@@ -62,26 +68,30 @@ export function TranscriptionProgressDialog() {
       cancelled = true;
       unlisteners.forEach((fn) => fn());
     };
-  }, [qc, openDocument]);
+  }, [qc, openDocument, t]);
 
   if (!run) return null;
-  const eta = formatEta(run.eta);
+  const eta = formatEta(run.eta, t);
 
   return (
     <Dialog open onOpenChange={() => useTranscription.getState().stop()}>
-      <DialogContent title="Transcribing" description={run.name} className="max-w-sm">
+      <DialogContent
+        title={t("documents.transcribe.progressTitle")}
+        description={run.name}
+        className="max-w-sm"
+      >
         <div className="space-y-2">
           <p className="text-sm text-fg-muted" data-testid="transcription-progress-label">
-            {run.percent > 0 ? `${run.percent}%` : "Reading the recording…"}
+            {run.percent > 0 ? `${run.percent}%` : t("documents.transcribe.readingRecording")}
             {run.segmentsDone > 0
-              ? ` · ${run.segmentsDone} segment${run.segmentsDone === 1 ? "" : "s"}`
+              ? ` · ${t("documents.transcribe.segmentCount", { count: run.segmentsDone })}`
               : ""}
             {eta ? ` · ${eta}` : ""}
           </p>
           <div
             className="h-2 w-full overflow-hidden rounded-full bg-muted"
             role="progressbar"
-            aria-label={`Transcribing ${run.name}`}
+            aria-label={t("documents.transcribe.transcribingAriaLabel", { name: run.name })}
             aria-valuenow={run.percent}
             aria-valuemin={0}
             aria-valuemax={100}
@@ -91,9 +101,7 @@ export function TranscriptionProgressDialog() {
               style={{ width: `${run.percent}%` }}
             />
           </div>
-          <p className="text-xs text-fg-muted">
-            Running on this machine. You can keep working in other documents.
-          </p>
+          <p className="text-xs text-fg-muted">{t("documents.transcribe.runningLocallyHint")}</p>
         </div>
         <DialogFooter>
           <Button
@@ -102,7 +110,9 @@ export function TranscriptionProgressDialog() {
             onClick={() => useTranscription.getState().stop()}
             data-testid="transcription-cancel"
           >
-            {run.stopping ? "Stopping…" : "Stop"}
+            {run.stopping
+              ? t("documents.transcribe.stoppingEllipsis")
+              : t("documents.transcribe.stop")}
           </Button>
         </DialogFooter>
       </DialogContent>

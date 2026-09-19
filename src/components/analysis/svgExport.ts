@@ -3,6 +3,7 @@
  * for `ExportPngButton`. DOM/canvas work, so this lives next to the
  * components rather than in `src/core`, which stays free of it.
  */
+import i18next from "@/lib/i18n";
 
 /** Rasterize `svg` to PNG bytes at `scale`× its rendered size, painting
  * `background` first so a transparent SVG doesn't turn black on export and
@@ -29,7 +30,7 @@ export async function svgToPng(
     const image = await new Promise<HTMLImageElement>((resolve, reject) => {
       const img = new Image();
       img.onload = () => resolve(img);
-      img.onerror = () => reject(new Error("Could not rasterize the chart."));
+      img.onerror = () => reject(new Error(i18next.t("analysis.exportRasterizeError")));
       img.src = url;
     });
 
@@ -37,14 +38,14 @@ export async function svgToPng(
     canvas.width = width;
     canvas.height = height;
     const ctx = canvas.getContext("2d");
-    if (!ctx) throw new Error("Could not get a 2D canvas context.");
+    if (!ctx) throw new Error(i18next.t("analysis.exportCanvasError"));
     ctx.fillStyle = background;
     ctx.fillRect(0, 0, width, height);
     ctx.drawImage(image, 0, 0, width, height);
 
     const blob = await new Promise<Blob>((resolve, reject) => {
       canvas.toBlob(
-        (b) => (b ? resolve(b) : reject(new Error("Could not encode the PNG."))),
+        (b) => (b ? resolve(b) : reject(new Error(i18next.t("analysis.exportEncodeError")))),
         "image/png",
       );
     });

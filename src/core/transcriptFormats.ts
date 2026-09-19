@@ -23,10 +23,23 @@ export const TRANSCRIPT_PRESETS: PresetInfo[] = [
   { id: "time_name", label: "00:12:03 Name:", example: "00:12:03 P1: Well, it started…" },
 ];
 
+/** A translator, so this module can hand back a localized label without
+ * importing react/i18next itself (src/core stays framework-free — see
+ * CLAUDE.md). The caller passes `useTranslation()`'s `t`. A preset's own
+ * `label` (`"Name:"`, `"[Name]"`, …) is the literal shape of the pattern,
+ * not a sentence, so it is never translated. */
+export type TranscriptFormatT = (key: string) => string;
+
 /** A format's name for a chip or a heading. */
-export function formatLabel(format: TranscriptFormat | null | undefined): string {
-  if (!format) return "Detect automatically";
-  if (format.kind === "none") return "Not a transcript";
-  if (format.kind === "regex") return "Custom pattern";
-  return TRANSCRIPT_PRESETS.find((p) => p.id === format.preset)?.label ?? "Unknown";
+export function formatLabel(
+  format: TranscriptFormat | null | undefined,
+  t: TranscriptFormatT,
+): string {
+  if (!format) return t("documentView.transcript.detectAutomatically");
+  if (format.kind === "none") return t("documentView.transcript.notATranscript");
+  if (format.kind === "regex") return t("documentView.transcript.customPattern");
+  return (
+    TRANSCRIPT_PRESETS.find((p) => p.id === format.preset)?.label ??
+    t("documentView.transcript.unknownFormat")
+  );
 }

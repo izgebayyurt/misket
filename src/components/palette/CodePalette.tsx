@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Command } from "cmdk";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
+import { useTranslation } from "react-i18next";
 import { useWorkspace } from "@/state/workspace";
 import { useCodes, useCodeTree, useCreateCode } from "@/queries/codes";
 import { useAddExcerptCodes, useApplyCodes } from "@/queries/excerpts";
@@ -20,6 +21,7 @@ import { useDocumentExcerpts } from "@/queries/excerpts";
  * browser's bulk "Add code…" reuses it.
  */
 export function CodePalette() {
+  const { t } = useTranslation();
   const open = useWorkspace((s) => s.paletteOpen);
   const setOpen = useWorkspace((s) => s.setPaletteOpen);
   return (
@@ -32,7 +34,9 @@ export function CodePalette() {
           aria-describedby={undefined}
           data-testid="code-palette"
         >
-          <DialogPrimitive.Title className="sr-only">Pick a code</DialogPrimitive.Title>
+          <DialogPrimitive.Title className="sr-only">
+            {t("codePalette.pickACode")}
+          </DialogPrimitive.Title>
           {open ? <PaletteBody close={() => setOpen(false)} /> : null}
         </DialogPrimitive.Content>
       </DialogPrimitive.Portal>
@@ -42,6 +46,7 @@ export function CodePalette() {
 
 /** Mounted only while open, so the query resets on every open. */
 function PaletteBody({ close }: { close: () => void }) {
+  const { t } = useTranslation();
   const picker = useWorkspace((s) => s.paletteTarget);
   const pending = useWorkspace((s) => s.pendingSelection);
   const focusedId = useWorkspace((s) => s.focusedExcerptId);
@@ -82,13 +87,13 @@ function PaletteBody({ close }: { close: () => void }) {
     ? picker.label
     : pending
       ? pending.kind === "image"
-        ? "Code region"
+        ? t("codePalette.targetCodeRegion")
         : pending.kind === "media"
-          ? "Code stretch"
-          : "Code selection"
+          ? t("codePalette.targetCodeStretch")
+          : t("codePalette.targetCodeSelection")
       : focused
-        ? "Add to excerpt"
-        : "No target";
+        ? t("codePalette.targetAddToExcerpt")
+        : t("codePalette.targetNone");
   const items = useMemo(() => flattenTree(tree), [tree]);
   const creating = query.startsWith(">") && query.slice(1).trim().length > 0;
 
@@ -130,7 +135,7 @@ function PaletteBody({ close }: { close: () => void }) {
           codeIds: [codeId],
         });
       } else {
-        toast.info("Select some text, draw a region, mark a stretch, or focus an excerpt first.", {
+        toast.info(t("codePalette.noTargetHint"), {
           key: TOAST_KEYS.codeTarget,
         });
       }
@@ -154,7 +159,7 @@ function PaletteBody({ close }: { close: () => void }) {
 
   return (
     <Command
-      label={picker ? picker.label : "Apply a code"}
+      label={picker ? picker.label : t("codePalette.applyACode")}
       shouldFilter={!creating}
       onKeyDown={(e) => {
         if (e.key === "Enter" && creating) {
@@ -169,7 +174,7 @@ function PaletteBody({ close }: { close: () => void }) {
           autoFocus
           value={query}
           onValueChange={onQueryChange}
-          placeholder="Type a code name, or >new code"
+          placeholder={t("codePalette.inputPlaceholder")}
           className="h-11 flex-1 bg-transparent text-sm outline-none placeholder:text-fg-muted"
           data-testid="palette-input"
         />
@@ -181,15 +186,15 @@ function PaletteBody({ close }: { close: () => void }) {
             onSelect={() => createAndApply(false)}
             className="flex cursor-default items-center gap-2 rounded px-2 py-1.5 text-sm data-[selected=true]:bg-muted"
           >
-            <span className="text-fg-muted">Create code</span>
+            <span className="text-fg-muted">{t("codePalette.createCode")}</span>
             <span className="font-medium">{query.slice(1).trim()}</span>
           </Command.Item>
         ) : (
           <>
             <Command.Empty className="px-2 py-3 text-sm text-fg-muted">
               {codes && codes.length === 0
-                ? "No codes yet. Type >name to create one."
-                : "No matching code. Type >name to create it."}
+                ? t("codePalette.emptyNoCodesYet")
+                : t("codePalette.emptyNoMatch")}
             </Command.Empty>
             {items.map((n) => {
               const applied = !picker && !pending && focused?.codeIds.includes(n.code.id);
@@ -223,7 +228,9 @@ function PaletteBody({ close }: { close: () => void }) {
                       </span>
                     ) : null}
                   </span>
-                  {applied ? <span className="text-xs text-fg-muted">applied</span> : null}
+                  {applied ? (
+                    <span className="text-xs text-fg-muted">{t("codePalette.applied")}</span>
+                  ) : null}
                   {n.code.shortcut ? (
                     <kbd className="rounded border border-border px-1 font-mono text-[10px] text-fg-muted">
                       {n.code.shortcut}
@@ -236,10 +243,16 @@ function PaletteBody({ close }: { close: () => void }) {
         )}
       </Command.List>
       <div className="flex gap-3 border-t border-border px-3 py-1.5 text-[11px] text-fg-muted">
-        <span>↵ {picker ? "pick" : "apply"}</span>
-        <span>⇧↵ {picker ? "pick" : "apply"} and keep open</span>
-        <span>{selectionName ? "> names a code after the selection" : ">name creates"}</span>
-        <span>esc close</span>
+        <span>↵ {picker ? t("codePalette.hintPick") : t("codePalette.hintApply")}</span>
+        <span>
+          ⇧↵ {picker ? t("codePalette.hintPickAndKeepOpen") : t("codePalette.hintApplyAndKeepOpen")}
+        </span>
+        <span>
+          {selectionName
+            ? t("codePalette.hintNamesAfterSelection")
+            : t("codePalette.hintNameCreates")}
+        </span>
+        <span>{t("codePalette.hintEscClose")}</span>
       </div>
     </Command>
   );

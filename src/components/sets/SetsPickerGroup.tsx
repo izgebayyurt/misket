@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import type { SetInfo } from "@/api/types";
 
 /**
@@ -16,12 +17,13 @@ export function SetsPickerGroup({
   picked: string[];
   onToggle: (id: string) => void;
 }) {
+  const { t } = useTranslation();
   const shown = (sets ?? []).filter((s) => s.name.toLowerCase().includes(query.toLowerCase()));
   if (shown.length === 0) return null;
   return (
     <>
       <p className="px-2 pt-1 text-[10px] font-medium uppercase tracking-wide text-fg-muted">
-        Sets
+        {t("sets.groupTitle")}
       </p>
       {shown.map((s) => (
         <label

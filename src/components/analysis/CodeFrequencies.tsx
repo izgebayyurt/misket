@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import type { CodeFrequency } from "@/api/types";
 import { flattenTree, pathOf } from "@/core/codeTree";
 import { toCsv } from "@/core/csv";
@@ -24,6 +25,7 @@ interface Row extends CodeFrequency {
 }
 
 export function CodeFrequencies() {
+  const { t } = useTranslation();
   const [documentIds, setDocumentIds] = useState<string[]>([]);
   const [documentSetIds, setDocumentSetIds] = useState<string[]>([]);
   const [coderIds, setCoderIds] = useState<string[]>([]);
@@ -110,7 +112,7 @@ export function CodeFrequencies() {
         />
         <CoderFilter coderIds={coderIds} onChange={setCoderIds} />
         <span className="text-xs text-fg-muted">
-          {rows.length} code{rows.length === 1 ? "" : "s"}
+          {t("analysis.frequencies.codeCount", { count: rows.length })}
         </span>
         <span className="ml-auto" />
         <ExportCsvButton name="code-frequencies" build={csv} disabled={!rows.length} />
@@ -118,18 +120,22 @@ export function CodeFrequencies() {
       <div className="min-h-0 flex-1 overflow-auto">
         {!rows.length ? (
           <EmptyNote>
-            {isPending ? "Counting…" : "No codes yet. Build a codebook and code some text first."}
+            {isPending ? t("analysis.counting") : t("analysis.frequencies.empty")}
           </EmptyNote>
         ) : (
           <table className="w-full min-w-[520px] border-collapse text-sm">
             <thead className="sticky top-0 z-10 bg-panel text-left text-xs text-fg-muted shadow-[0_1px_0_var(--border)]">
               <tr>
-                {header("code", "Code")}
-                {header("own", "Own", "w-24 text-right")}
-                {header("withDescendants", "With sub-codes", "w-32 text-right")}
-                {header("documentCount", "Documents", "w-28 text-right")}
+                {header("code", t("analysis.frequencies.colCode"))}
+                {header("own", t("analysis.frequencies.colOwn"), "w-24 text-right")}
+                {header(
+                  "withDescendants",
+                  t("analysis.frequencies.colWithSubcodes"),
+                  "w-32 text-right",
+                )}
+                {header("documentCount", t("analysis.frequencies.colDocuments"), "w-28 text-right")}
                 <th className="w-28 px-3 py-1.5 text-right font-medium" scope="col">
-                  Last 30 days
+                  {t("analysis.frequencies.colLast30Days")}
                 </th>
               </tr>
             </thead>
@@ -139,7 +145,7 @@ export function CodeFrequencies() {
                   key={r.codeId}
                   className="cursor-default border-b border-border hover:bg-muted"
                   onClick={() => openExcerpts({ codeIds: [r.codeId], includeDescendants: true })}
-                  title={`Show excerpts coded ${r.path} (with sub-codes)`}
+                  title={t("analysis.frequencies.showExcerptsCoded", { path: r.path })}
                   data-testid="frequency-row"
                 >
                   <td className="px-3 py-1.5">
@@ -180,6 +186,7 @@ const MINI_SPARK_HEIGHT = 22;
 /** A tiny, label-free 30-day coding-activity sparkline for one code (with
  * its sub-codes), for the frequencies table's rightmost column. */
 function CodeTimelineCell({ codeId }: { codeId: string }) {
+  const { t } = useTranslation();
   const { data } = useCodeTimeline(codeId, true, "day");
   const values = useMemo(() => zeroFillDays(data ?? [], 30).map(([, c]) => c), [data]);
   const total = values.reduce((a, b) => a + b, 0);
@@ -193,7 +200,7 @@ function CodeTimelineCell({ codeId }: { codeId: string }) {
       className="ml-auto block h-5 w-[90px]"
       preserveAspectRatio="none"
       role="img"
-      aria-label={`${total} excerpts coded in the last 30 days`}
+      aria-label={t("analysis.frequencies.codedLast30Days", { count: total })}
       data-testid="code-timeline-sparkline"
     >
       <path d={sparklineAreaPath(values, options)} fill="var(--color-accent)" opacity="0.15" />

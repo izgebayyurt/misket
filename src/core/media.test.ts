@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import i18n from "@/lib/i18n";
 import {
   clampPosition,
   downsamplePeaks,
@@ -191,9 +192,10 @@ describe("file types", () => {
   });
 
   it("explains a file that will not play instead of showing a black player", () => {
-    expect(unsupportedHint("a.mkv", "mkv")).toContain("container");
-    expect(unsupportedHint("a.mkv", "mkv")).toContain("MP4");
-    expect(unsupportedHint("a.mp4", "mp4")).toContain("codec");
-    expect(unsupportedHint("a.rtf", "rtf")).toContain("not an audio or video file");
+    const t = i18n.t.bind(i18n);
+    expect(unsupportedHint("a.mkv", "mkv", t)).toContain("container");
+    expect(unsupportedHint("a.mkv", "mkv", t)).toContain("MP4");
+    expect(unsupportedHint("a.mp4", "mp4", t)).toContain("codec");
+    expect(unsupportedHint("a.rtf", "rtf", t)).toContain("not an audio or video file");
   });
 });

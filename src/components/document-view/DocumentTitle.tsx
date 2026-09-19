@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useRenameDocument } from "@/queries/documents";
 import { toast } from "@/state/toasts";
 import { cn } from "@/lib/utils";
@@ -19,6 +20,7 @@ interface Props {
  * usual rename mutation, Escape cancels.
  */
 export function DocumentTitle({ documentId, name, editing, onEditingChange, className }: Props) {
+  const { t } = useTranslation();
   const rename = useRenameDocument();
 
   function commit(next: string) {
@@ -45,7 +47,7 @@ export function DocumentTitle({ documentId, name, editing, onEditingChange, clas
     <h1
       className={className}
       onDoubleClick={() => onEditingChange(true)}
-      title="Double-click to rename (F2)"
+      title={t("documentView.doubleClickToRename")}
       data-testid="document-title"
     >
       {name}
@@ -61,6 +63,7 @@ interface TitleInputProps {
 }
 
 function TitleInput({ initial, className, onCommit, onCancel }: TitleInputProps) {
+  const { t } = useTranslation();
   const [value, setValue] = useState(initial);
   // Enter saves and then blurs; without this the blur would save a second time.
   const settled = useRef(false);
@@ -80,7 +83,7 @@ function TitleInput({ initial, className, onCommit, onCancel }: TitleInputProps)
       <input
         autoFocus
         value={value}
-        aria-label="Document name"
+        aria-label={t("documentView.documentName")}
         data-testid="document-title-input"
         className="w-full rounded-md border border-border bg-panel px-1.5 outline-none focus-visible:ring-2 focus-visible:ring-focus"
         onChange={(e) => setValue(e.target.value)}

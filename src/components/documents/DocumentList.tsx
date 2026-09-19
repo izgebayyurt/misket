@@ -1,5 +1,6 @@
 import { describe } from "@/core/keymap";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   AlertTriangle,
   ChevronDown,
@@ -40,6 +41,7 @@ import { toast } from "@/state/toasts";
 import type { DocumentSummary } from "@/api/types";
 
 export function DocumentList() {
+  const { t } = useTranslation();
   const { data: docs } = useDocuments();
   const view = useWorkspace((s) => s.view);
   const openDocument = useWorkspace((s) => s.openDocument);
@@ -65,7 +67,7 @@ export function DocumentList() {
           disabled={isPending}
           data-testid="import-documents"
         >
-          <Upload /> Import…
+          <Upload /> {t("documents.import")}
           <span className="ml-auto text-xs text-fg-muted">{describe("import")}</span>
         </Button>
         <DropdownMenu>
@@ -73,7 +75,7 @@ export function DocumentList() {
             <Button
               variant="outline"
               size="icon"
-              aria-label="More import options"
+              aria-label={t("documents.moreImportOptions")}
               data-testid="import-menu"
             >
               <ChevronDown />
@@ -81,18 +83,16 @@ export function DocumentList() {
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuItem onSelect={() => void pickAndImport()}>
-              <Upload /> Import files…
+              <Upload /> {t("documents.importFiles")}
             </DropdownMenuItem>
             <DropdownMenuItem onSelect={() => void chooseFolder()} data-testid="import-folder">
-              <FolderOpen /> Import folder…
+              <FolderOpen /> {t("documents.importFolder")}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
       {docs && docs.length === 0 ? (
-        <p className="px-3 py-2 text-xs text-fg-muted">
-          No documents yet. Import txt, md, docx, pdf, images, audio or video.
-        </p>
+        <p className="px-3 py-2 text-xs text-fg-muted">{t("documents.empty")}</p>
       ) : null}
       <ul>
         {docs?.map((d) => {
@@ -126,34 +126,34 @@ export function DocumentList() {
                       {d.mediaMissing ? (
                         <AlertTriangle
                           className="size-3.5 shrink-0 text-danger"
-                          aria-label="Its file is missing"
+                          aria-label={t("documents.mediaMissing")}
                           data-testid="document-media-missing"
                         />
                       ) : null}
                       {d.transcriptId ? (
                         <span
                           className="shrink-0 rounded border border-border px-1 text-[10px] uppercase text-fg-muted"
-                          title="A transcript is linked to this recording"
+                          title={t("documents.transcriptLinked")}
                           data-testid="document-transcript-badge"
                         >
-                          transcript
+                          {t("documents.transcriptBadge")}
                         </span>
                       ) : null}
                       {d.linkedMediaId ? (
                         <span
                           className="shrink-0 rounded border border-border px-1 text-[10px] uppercase text-fg-muted"
-                          title="Linked to a recording"
+                          title={t("documents.linkedToRecording")}
                           data-testid="document-linked-badge"
                         >
-                          aligned
+                          {t("documents.alignedBadge")}
                         </span>
                       ) : null}
                       {d.sourceFormat ? (
                         <span
                           className="shrink-0 rounded border border-border px-1 text-[10px] uppercase text-fg-muted"
-                          title={formatBadgeTitle(d.sourceFormat)}
+                          title={formatBadgeTitle(d.sourceFormat, t)}
                         >
-                          {formatBadgeLabel(d.sourceFormat)}
+                          {formatBadgeLabel(d.sourceFormat, t)}
                         </span>
                       ) : null}
                       <span className="ml-auto shrink-0 text-xs text-fg-muted">
@@ -164,7 +164,7 @@ export function DocumentList() {
                       <DropdownMenuTrigger asChild>
                         <button
                           className="rounded p-0.5 text-fg-muted opacity-0 hover:bg-border group-hover:opacity-100 data-[state=open]:opacity-100"
-                          aria-label="Document actions"
+                          aria-label={t("documents.actions")}
                         >
                           <MoreHorizontal className="size-4" />
                         </button>
@@ -225,26 +225,29 @@ function DocumentRowMenuItems({
   onLinkRecording: () => void;
   menu: MenuPrimitives;
 }) {
+  const { t } = useTranslation();
   const { Item } = menu;
   const relink = useRelinkMedia();
   const link = useLinkMediaDocument();
   const openDocument = useWorkspace((s) => s.openDocument);
   return (
     <>
-      <Item onSelect={onRename}>Rename…</Item>
+      <Item onSelect={onRename}>{t("documents.renameEllipsis")}</Item>
       {doc.kind === "video" ? (
         <Item onSelect={onTranscribe} disabled={doc.mediaMissing}>
-          Transcribe…
+          {t("documents.transcribeEllipsis")}
         </Item>
       ) : null}
       {doc.kind === "video" ? (
         <Item onSelect={() => void relink.pickAndRelink(doc.id)}>
-          {doc.mediaMissing ? "Relink the missing file…" : "Relink…"}
+          {doc.mediaMissing ? t("documents.relinkMissing") : t("documents.relink")}
         </Item>
       ) : null}
       {doc.kind === "text" ? (
         <Item onSelect={onLinkRecording} data-testid="document-link-recording">
-          {doc.linkedMediaId ? "Link another recording…" : "Link recording…"}
+          {doc.linkedMediaId
+            ? t("documents.linkAnotherRecording")
+            : t("documents.linkRecordingEllipsis")}
         </Item>
       ) : null}
       {doc.kind === "text" && doc.linkedMediaId ? (
@@ -252,31 +255,34 @@ function DocumentRowMenuItems({
           onSelect={() =>
             link
               .mutateAsync({ documentId: doc.id, mediaId: null })
-              .then(() => toast.info("Unlinked. Undo with Ctrl/⌘+Z."))
+              .then(() => toast.info(t("documents.unlinked")))
               .catch(toast.error)
           }
           data-testid="document-unlink-recording"
         >
-          Unlink the recording
+          {t("documents.unlinkRecording")}
         </Item>
       ) : null}
       {doc.kind === "video" && doc.transcriptId ? (
-        <Item onSelect={() => openDocument(doc.transcriptId!)}>Open its transcript</Item>
+        <Item onSelect={() => openDocument(doc.transcriptId!)}>
+          {t("documents.openTranscript")}
+        </Item>
       ) : null}
       <AddToSetMenu kind="document" memberId={doc.id} memberLabel={doc.name} menu={menu} />
       <Item danger onSelect={onDelete}>
-        Delete…
+        {t("common.deleteEllipsis")}
       </Item>
     </>
   );
 }
 
 function RenameDialog({ doc, onClose }: { doc: DocumentSummary; onClose: () => void }) {
+  const { t } = useTranslation();
   const [name, setName] = useState(doc.name);
   const rename = useRenameDocument();
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent title="Rename document">
+      <DialogContent title={t("documents.renameDialogTitle")}>
         <form
           onSubmit={async (e) => {
             e.preventDefault();
@@ -291,10 +297,10 @@ function RenameDialog({ doc, onClose }: { doc: DocumentSummary; onClose: () => v
           <Input autoFocus value={name} onChange={(e) => setName(e.target.value)} />
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={onClose}>
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button type="submit" disabled={!name.trim()}>
-              Rename
+              {t("common.rename")}
             </Button>
           </DialogFooter>
         </form>
@@ -304,40 +310,40 @@ function RenameDialog({ doc, onClose }: { doc: DocumentSummary; onClose: () => v
 }
 
 /** What a badge means, where the three letters do not say it. */
-function formatBadgeTitle(sourceFormat: string): string | undefined {
-  if (sourceFormat === "pdf-ocr") return "Text recognised from a scanned PDF with OCR";
-  if (sourceFormat === "whisper")
-    return "Transcribed automatically from the recording with Whisper — worth reading against the audio";
+function formatBadgeTitle(sourceFormat: string, t: (key: string) => string): string | undefined {
+  if (sourceFormat === "pdf-ocr") return t("documents.badgeOcr");
+  if (sourceFormat === "whisper") return t("documents.badgeWhisper");
   return undefined;
 }
 
 /** `sourceFormat` values that need a friendlier badge than their raw string. */
-function formatBadgeLabel(sourceFormat: string): string {
-  if (sourceFormat === "pdf-ocr") return "OCR";
+function formatBadgeLabel(sourceFormat: string, t: (key: string) => string): string {
+  if (sourceFormat === "pdf-ocr") return t("documents.badgeOcrLabel");
   // "WHISPER" is seven characters in a row that has to leave room for the
   // document's name; "AUTO" says the thing that matters — this text came out
   // of a machine and wants checking.
-  if (sourceFormat === "whisper") return "AUTO";
+  if (sourceFormat === "whisper") return t("documents.badgeAutoLabel");
   return sourceFormat;
 }
 
 function DeleteDialog({ doc, onClose }: { doc: DocumentSummary; onClose: () => void }) {
+  const { t } = useTranslation();
   const del = useDeleteDocument();
   const view = useWorkspace((s) => s.view);
   const setView = useWorkspace((s) => s.setView);
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent
-        title={`Delete "${doc.name}"?`}
+        title={t("documents.deleteDialogTitle", { name: doc.name })}
         description={
           doc.excerptCount > 0
-            ? `This also deletes its ${doc.excerptCount} excerpt${doc.excerptCount === 1 ? "" : "s"} and their memos. You can undo this from History.`
-            : "You can undo this from History."
+            ? t("documents.deleteDialogDescriptionWithExcerpts", { count: doc.excerptCount })
+            : t("documents.deleteDialogDescriptionPlain")
         }
       >
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>
-            Cancel
+            {t("common.cancel")}
           </Button>
           <Button
             variant="danger"
@@ -352,7 +358,7 @@ function DeleteDialog({ doc, onClose }: { doc: DocumentSummary; onClose: () => v
               }
             }}
           >
-            Delete
+            {t("common.delete")}
           </Button>
         </DialogFooter>
       </DialogContent>
